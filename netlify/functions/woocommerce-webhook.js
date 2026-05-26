@@ -1,10 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
-
-// REQUIRED: Tell Netlify to pass rawBody
+// MUST BE FIRST for Netlify to pass rawBody
 export const config = {
     rawBody: true
 }
+
+import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -16,6 +16,14 @@ export const handler = async (event) => {
     try {
         // 1. Get RAW body exactly as WooCommerce sent it
         const rawBody = event.rawBody
+
+        if (!rawBody) {
+            console.log("ERROR: rawBody is missing")
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: 'rawBody missing' })
+            }
+        }
 
         // 2. Normalize signature header
         const signature =
