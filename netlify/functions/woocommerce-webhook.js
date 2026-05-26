@@ -1,38 +1,48 @@
-// File: netlify/functions/woocommerce-webhook.js
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
+// Initialize Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY // required for secure inserts
+    process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 export const handler = async (event) => {
     try {
-        // 1. Verify WooCommerce signature
-        const signature = event.headers['x-wc-webhook-signature']
+        // 1. Get RAW body exactly as WooCommerce sent it
+        const rawBody = event.rawBody || event.body
+
+        // 2. Normalize signature header (Netlify sometimes lowercases headers)
+        const signature =
+            event.headers['x-wc-webhook-signature'] ||
+            event.headers['X-Wc-Webhook-Signature'] ||
+            event.headers['x-wc-webhook-signature'.toLowerCase()]
+
         const secret = process.env.WC_WEBHOOK_SECRET
 
+        // 3. Compute expected signature using RAW BODY
         const expected = crypto
             .createHmac('sha256', secret)
-            .update(event.body, 'utf8')
+            .update(rawBody, 'utf8')
             .digest('base64')
 
+        // 4. Reject if signature mismatch
         if (signature !== expected) {
+            console.log('Invalid signature')
             return {
                 statusCode: 401,
                 body: JSON.stringify({ error: 'Invalid signature' })
             }
         }
 
-        // 2. Parse WooCommerce order payload
-        const order = JSON.parse(event.body)
+        // 5. Parse JSON ONLY AFTER signature is verified
+        const order = JSON.parse(rawBody)
 
         const orderId = order.id
-        const customerName = order.billing.first_name + ' ' + order.billing.last_name
+        const customerName = `${order.billing.first_name} ${order.billing.last_name}`
         const lineItems = order.line_items
 
-        // 3. Create job record
+        // 6. Create job record
         const { data: job, error: jobError } = await supabase
             .from('jobs')
             .insert({
@@ -46,46 +56,41 @@ export const handler = async (event) => {
             .single()
 
         if (jobError) {
-            console.error(jobError)
+            console.error('Job insert error:', jobError)
             return {
                 statusCode: 500,
                 body: JSON.stringify({ error: 'Failed to create job' })
             }
         }
 
-        // 4. Loop through line items → create job_items
-        for (const item of lineItems) {
-            const sku = item.sku
-            const qty = item.quantity
+        // 7. Insert job items
+        const jobItems = lineItems.map((item) => ({
+            job_id: job.id,
+            sku: item.sku,
+            quantity: item.quantity,
+            description: item.name
+        }))
 
-            // Match SKU to product
-            const { data: product } = await supabase
-                .from('products')
-                .select('id')
-                .eq('sku', sku)
-                .single()
+        const { error: itemsError } = await supabase
+            .from('job_items')
+            .insert(jobItems)
 
-            if (!product) {
-                console.warn(`SKU not found: ${sku}`)
-                continue
+        if (itemsError) {
+            console.error('Job items insert error:', itemsError)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: 'Failed to create job items' })
             }
-
-            // Insert job item
-            await supabase.from('job_items').insert({
-                job_id: job.id,
-                product_id: product.id,
-                quantity_needed: qty,
-                quantity_pulled: 0
-            })
         }
 
+        // 8. Success response
         return {
             statusCode: 200,
             body: JSON.stringify({ success: true, job_id: job.id })
         }
 
     } catch (err) {
-        console.error(err)
+        console.error('Unhandled error:', err)
         return {
             statusCode: 500,
             body: JSON.stringify({ error: 'Server error' })
