@@ -4,4 +4,6 @@
 
 [functions]
   node_bundler = "esbuild"
-  parse_body = false
+
+  [functions.parse_body]
+    enabled = false
