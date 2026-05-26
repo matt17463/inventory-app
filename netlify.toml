@@ -1,6 +1,7 @@
 [build]
-functions = "netlify/functions"
-publish = "dist"
+  functions = "netlify/functions"
+  publish = "dist"
 
 [functions]
-node_bundler = "esbuild"
+  node_bundler = "esbuild"
+  parse_body = false
