@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
+// REQUIRED: Tell Netlify to pass rawBody
+export const config = {
+    rawBody: true
+}
+
 // Initialize Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -10,9 +15,9 @@ const supabase = createClient(
 export const handler = async (event) => {
     try {
         // 1. Get RAW body exactly as WooCommerce sent it
-        const rawBody = event.rawBody || event.body
+        const rawBody = event.rawBody
 
-        // 2. Normalize signature header (Netlify sometimes lowercases headers)
+        // 2. Normalize signature header
         const signature =
             event.headers['x-wc-webhook-signature'] ||
             event.headers['X-Wc-Webhook-Signature'] ||
