@@ -66,10 +66,7 @@ export default function CreateProduct() {
         }
     }, [customerId, productTypeId, colorId, sizeId, customers, productTypes, colors, sizes]);
     
-console.log("DEBUG payload:", {
-  customer_id: customerId ? Number(customerId) : null,
-  // include other fields if needed
-});
+
 
     // Image upload handler
     async function handleImageUpload(e) {
