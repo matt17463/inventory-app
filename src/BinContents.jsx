@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 export default function BinContents() {
-  const [searchParams] = useSearchParams();
-  const binId = searchParams.get("bin_id");
+  const { binId } = useParams();
 
   const [bin, setBin] = useState(null);
   const [items, setItems] = useState([]);
@@ -14,20 +13,15 @@ export default function BinContents() {
     const loadBin = async () => {
       setLoading(true);
 
-      // Load bin info
       const { data: binData, error: binError } = await supabase
         .from("bins")
         .select("*")
         .eq("id", binId)
         .single();
 
-      if (binError) {
-        console.error("Error loading bin:", binError);
-      } else {
-        setBin(binData);
-      }
+      if (binError) console.error("Error loading bin:", binError);
+      else setBin(binData);
 
-      // Load items in this bin, including product image
       const { data: itemData, error: itemError } = await supabase
         .from("bin_items")
         .select(`
@@ -42,11 +36,8 @@ export default function BinContents() {
         `)
         .eq("bin_id", binId);
 
-      if (itemError) {
-        console.error("Error loading bin items:", itemError);
-      } else {
-        setItems(itemData);
-      }
+      if (itemError) console.error("Error loading bin items:", itemError);
+      else setItems(itemData);
 
       setLoading(false);
     };
