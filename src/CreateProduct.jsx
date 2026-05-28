@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseClient"; // ← SAME FOLDER IMPORT
 import { useNavigate } from "react-router-dom";
 
 export default function CreateProduct() {
@@ -95,6 +95,8 @@ export default function CreateProduct() {
       image_url: imageUrl || null,
     };
 
+    // ⭐ DEBUG OUTPUT
+    console.log("DEBUG customerId raw:", customerId, "converted:", safeNumber(customerId));
     console.log("DEBUG payload:", payload);
 
     const { data, error } = await supabase.from("products").insert(payload).select();
