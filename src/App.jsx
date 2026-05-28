@@ -7,6 +7,8 @@ import AssignBin from './AssignBin';
 import BinContents from './BinContents';
 import BinsDashboard from './BinsDashboard';
 import NfcWriter from './NfcWriter';
+import PullSheetView from './PullSheetView';
+
 import TestTag from './TestTag';
 import Home from './Home';
 import SelectProduct from './SelectProduct';
@@ -40,6 +42,8 @@ function App() {
                     <Route path="/test-tag" element={<TestTag />} />
 
                     {/* Pullsheet builder (HTML inside iframe) */}
+                    <Route path="/pullsheet/:jobId" element={<PullSheetView />} />
+
                     <Route
                         path="/pullsheet"
                         element={
