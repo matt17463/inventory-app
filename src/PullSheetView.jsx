@@ -60,7 +60,26 @@ export default function PullSheetView() {
     if (!job) return <p style={{ padding: "20px" }}>Pull sheet not found.</p>;
 
     return (
-        <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto" }}>
+        <div style={{ padding: "20px", maxWidth: "900px", margin: "0 auto" }}>
+
+            {/* PRINT BUTTON — hidden when printing */}
+            <div className="no-print" style={{ marginBottom: "20px" }}>
+                <button
+                    onClick={() => window.print()}
+                    style={{
+                        padding: "10px 16px",
+                        fontSize: "16px",
+                        cursor: "pointer",
+                        background: "#007bff",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px"
+                    }}
+                >
+                    Print Pull Sheet
+                </button>
+            </div>
+
             <h2>Pull Sheet</h2>
 
             <div style={{ marginBottom: "20px" }}>
@@ -84,20 +103,22 @@ export default function PullSheetView() {
                         return (
                             <div
                                 key={item.id}
+                                className="item-row"
                                 style={{
                                     display: "flex",
                                     alignItems: "center",
                                     gap: "16px",
-                                    padding: "10px 0",
-                                    borderBottom: "1px solid #ddd"
+                                    padding: "12px 0",
+                                    borderBottom: "1px solid #ddd",
+                                    pageBreakInside: "avoid"
                                 }}
                             >
                                 <img
                                     src={img}
                                     alt={item.product.name}
                                     style={{
-                                        width: "80px",
-                                        height: "80px",
+                                        width: "90px",
+                                        height: "90px",
                                         objectFit: "cover",
                                         borderRadius: "6px",
                                         border: "1px solid #ccc"
@@ -105,17 +126,43 @@ export default function PullSheetView() {
                                 />
 
                                 <div>
-                                    <strong>{item.product.name}</strong>
+                                    <strong style={{ fontSize: "18px" }}>
+                                        {item.product.name}
+                                    </strong>
                                     <br />
                                     SKU: {item.product.sku}
                                     <br />
-                                    Quantity: {item.quantity}
+                                    <strong>Qty: {item.quantity}</strong>
                                 </div>
                             </div>
                         );
                     })}
                 </div>
             )}
+
+            {/* PRINT CSS */}
+            <style>
+                {`
+                @media print {
+                    .no-print {
+                        display: none !important;
+                    }
+
+                    body {
+                        margin: 0;
+                        padding: 0;
+                    }
+
+                    img {
+                        print-color-adjust: exact;
+                    }
+
+                    .item-row {
+                        page-break-inside: avoid;
+                    }
+                }
+                `}
+            </style>
         </div>
     );
 }
