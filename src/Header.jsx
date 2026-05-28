@@ -35,6 +35,8 @@ export default function Header() {
         <Link to="/select-product" style={{ textDecoration: "none" }}>Add Item</Link>
         <Link to="/nfc-writer" style={{ textDecoration: "none" }}>Write Tag</Link>
         <Link to="/test-tag" style={{ textDecoration: "none" }}>Test Tag</Link>
+        <Link to="/pullsheets" style={{ textDecoration: "none" }}>Pull Sheets</Link>
+
       </nav>
     </header>
   );
