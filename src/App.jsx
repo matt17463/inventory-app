@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import Header from './Header';
+import PullSheetList from './PullSheetList';
 
 import CreateProduct from './CreateProduct';
 import AssignBin from './AssignBin';
@@ -43,6 +44,7 @@ function App() {
 
                     {/* Pullsheet builder (HTML inside iframe) */}
                     <Route path="/pullsheet/:jobId" element={<PullSheetView />} />
+<Route path="/pullsheets" element={<PullSheetList />} />
 
                     <Route
                         path="/pullsheet"
