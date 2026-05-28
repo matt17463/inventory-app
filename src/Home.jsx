@@ -1,11 +1,42 @@
 import { Link } from 'react-router-dom';
+import logo from './assets/logo.png'; // <-- Add your logo here
 
 export default function Home() {
     return (
         <div style={{ padding: "20px" }}>
-            <h2>Inventory Home</h2>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "20px" }}>
+            {/* Header with logo */}
+            <div 
+                style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    marginBottom: "20px" 
+                }}
+            >
+                <Link to="/" style={{ textDecoration: "none" }}>
+                    <img 
+                        src={logo} 
+                        alt="Skilled Crafting Logo" 
+                        style={{ 
+                            height: "60px", 
+                            width: "auto", 
+                            objectFit: "contain" 
+                        }} 
+                    />
+                </Link>
+
+                <h2 style={{ marginLeft: "12px" }}>Inventory Home</h2>
+            </div>
+
+            {/* Menu buttons */}
+            <div 
+                style={{ 
+                    display: "flex", 
+                    flexDirection: "column", 
+                    gap: "16px", 
+                    marginTop: "20px" 
+                }}
+            >
 
                 <Link
                     to="/select-product"
@@ -21,8 +52,6 @@ export default function Home() {
                 >
                     Add Item to Bin
                 </Link>
-
-             
 
                 <Link
                     to="/bins"
