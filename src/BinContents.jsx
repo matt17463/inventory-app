@@ -54,16 +54,29 @@ export default function BinContents() {
                 <p>This bin is empty.</p>
             ) : (
                 <ul>
-                    {items.map(item => (
-                        <li key={item.id}>
-                            <strong>{item.product.name}</strong>
-                            <br />
-                            SKU: {item.product.sku}
-                            <br />
-                            Quantity: {item.quantity}
-                        </li>
-                    ))}
-                </ul>
+  {items.map(item => {
+    const img = item.product.image_url 
+      ? item.product.image_url 
+      : "https://placehold.co/100x100?text=No+Image";
+
+    return (
+      <li key={item.id} style={{ marginBottom: "1rem", display: "flex", gap: "1rem", alignItems: "center" }}>
+        <img 
+          src={img} 
+          alt={item.product.name} 
+          style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "6px", border: "1px solid #ccc" }}
+        />
+
+        <div>
+          <strong>{item.product.name}</strong><br />
+          SKU: {item.product.sku}<br />
+          Quantity: {item.quantity}
+        </div>
+      </li>
+    );
+  })}
+</ul>
+
             )}
         </div>
     );
