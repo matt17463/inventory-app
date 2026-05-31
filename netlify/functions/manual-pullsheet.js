@@ -526,17 +526,21 @@ async function processOrder(order) {
       } else {
         orderResult.items_existing += 1;
       }
-    } catch (err) {
-      orderResult.errors.push({
-        line_item_id: lineItem.line_item_id || lineItem.id || null,
-        sku: lineItem.sku || null,
-        product_id: lineItem.product_id || null,
-        variation_id: lineItem.variation_id || null,
-        error: err.message,
-      });
-    }
-  }
+catch (err) {
+  console.error('FULL ERROR', JSON.stringify(err, null, 2));
 
+  orderResult.errors.push({
+    line_item_id: lineItem.line_item_id || lineItem.id || null,
+    sku: lineItem.sku || null,
+    product_id: lineItem.product_id || null,
+    variation_id: lineItem.variation_id || null,
+
+    error: err.message,
+    details: err.details || null,
+    hint: err.hint || null,
+    code: err.code || null,
+  });
+}
   if (orderResult.reservations_created > 0) {
     await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
   }
