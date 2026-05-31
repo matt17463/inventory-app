@@ -132,30 +132,24 @@ async function findOrCreateLogo(customerId, logoName) {
   const name = clean(logoName);
   if (!name) return null;
 
-  let query = supabase.from('logos').select('id').eq('name', name);
-
-  if (customerId) {
-    query = query.eq('customer_id', customerId);
-  }
-
-  const { data: existing, error: existingError } = await query.maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from('logos')
+    .select('id')
+    .eq('name', name)
+    .maybeSingle();
 
   if (existingError) throw existingError;
   if (existing?.id) return existing.id;
 
-  const payload = { name };
-  if (customerId) payload.customer_id = customerId;
-
   const { data, error } = await supabase
     .from('logos')
-    .insert(payload)
+    .insert({ name })
     .select('id')
     .single();
 
   if (error) throw error;
   return data.id;
 }
-
 async function findBlankProductForWooSku(wooSku) {
   const sku = normalizeSku(wooSku);
 
