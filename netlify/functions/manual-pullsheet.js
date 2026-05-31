@@ -1,0 +1,471 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+function clean(value) {
+  return String(value || '').trim();
+}
+
+function normalizeSku(value) {
+  return clean(value).toUpperCase();
+}
+
+function parseOrderSku(sku) {
+  const orderSku = normalizeSku(sku);
+  const parts = orderSku.split('-').filter(Boolean);
+
+  const sizePattern =
+    /^(XS|S|M|L|XL|XXL|XXXL|[WYM]?[0-9]*XL|WXS|WS|WM|WL|WXL|W2XL|W3XL|W4XL|A2XL|A3XL|A4XL)$/;
+
+  let sizeIndex = -1;
+
+  parts.forEach((part, index) => {
+    if (sizePattern.test(part)) sizeIndex = index;
+  });
+
+  if (sizeIndex < 0) {
+    return {
+      orderSku,
+      blankSkuBase: orderSku,
+      logoName: null,
+      placement: null,
+      decorationSize: null,
+    };
+  }
+
+  const blankStart = Math.max(0, sizeIndex - 4);
+  const blankSkuBase = parts.slice(blankStart, sizeIndex + 1).join('-');
+  const afterSize = parts.slice(sizeIndex + 1);
+
+  const logoName = afterSize[0] || null;
+  const placement = afterSize[1] || null;
+  const sizeMatch = placement ? placement.match(/([0-9]+(?:\.[0-9]+)?)/) : null;
+
+  return {
+    orderSku,
+    blankSkuBase,
+    logoName,
+    placement,
+    decorationSize: sizeMatch ? sizeMatch[1] : null,
+  };
+}
+
+function customerNameFromOrder(order) {
+  const billingName = `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim();
+  const shippingName = `${order.shipping?.first_name || ''} ${order.shipping?.last_name || ''}`.trim();
+
+  return (
+    clean(order.billing?.company) ||
+    billingName ||
+    clean(order.shipping?.company) ||
+    shippingName ||
+    'Unknown Customer'
+  );
+}
+
+async function findOrCreateCustomer(name) {
+  const cleanName = clean(name) || 'Unknown Customer';
+
+  const { data: existing, error: existingError } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('name', cleanName)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
+  const { data, error } = await supabase
+    .from('customers')
+    .insert({ name: cleanName })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function findOrCreateLogo(customerId, logoName) {
+  const name = clean(logoName);
+  if (!name) return null;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('logos')
+    .select('id')
+    .eq('customer_id', customerId)
+    .eq('name', name)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
+  const { data, error } = await supabase
+    .from('logos')
+    .insert({
+      customer_id: customerId,
+      name,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function findBlankProduct(blankSkuBase) {
+  const { data, error } = await supabase
+    .from('blank_products')
+    .select('id, sku_base, name')
+    .eq('sku_base', blankSkuBase)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+async function findOrCreateFinishedProduct({
+  blankProductId,
+  customerId,
+  logoId,
+  finishedSku,
+  name,
+  placement,
+  decorationSize,
+}) {
+  const sku = normalizeSku(finishedSku);
+
+  const { data: existing, error: existingError } = await supabase
+    .from('finished_products')
+    .select('id')
+    .eq('finished_sku', sku)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
+  const payload = {
+    blank_product_id: blankProductId,
+    customer_id: customerId,
+    logo_id: logoId,
+    finished_sku: sku,
+    name: clean(name) || sku,
+    placement: clean(placement) || null,
+    decoration_size: clean(decorationSize) || null,
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === null || payload[key] === '') delete payload[key];
+  });
+
+  const { data, error } = await supabase
+    .from('finished_products')
+    .insert(payload)
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function upsertJob(order, customerName) {
+  const orderId = Number(order.id);
+
+  const payload = {
+    woocommerce_order_id: orderId,
+    job_name: `Order #${order.number || orderId}`,
+    customer_name: customerName,
+    status: 'queued',
+    notes: clean(order.customer_note) || null,
+    due_date: new Date().toISOString().slice(0, 10),
+  };
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .upsert(payload, { onConflict: 'woocommerce_order_id' })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function existingJobItem(jobId, lineItemId, sku) {
+  let query = supabase.from('job_items').select('id').eq('job_id', jobId);
+
+  if (lineItemId) {
+    query = query.eq('woocommerce_line_item_id', Number(lineItemId));
+  } else {
+    query = query.eq('order_sku', normalizeSku(sku));
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+async function createJobItem({
+  jobId,
+  lineItem,
+  blankProductId,
+  finishedProductId,
+  logoId,
+  parsed,
+}) {
+  const lineItemId = lineItem.line_item_id || lineItem.id || null;
+  const sku = normalizeSku(lineItem.sku);
+
+  const existing = await existingJobItem(jobId, lineItemId, sku);
+
+  if (existing?.id) {
+    return {
+      id: existing.id,
+      created: false,
+    };
+  }
+
+  const payload = {
+    job_id: jobId,
+    blank_product_id: blankProductId,
+    finished_product_id: finishedProductId,
+    woocommerce_line_item_id: lineItemId ? Number(lineItemId) : null,
+    order_sku: sku,
+    quantity: Number(lineItem.quantity || 1),
+    status: 'queued',
+    logo_id: logoId || null,
+    placement: clean(parsed.placement) || null,
+    decoration_size: clean(parsed.decorationSize) || null,
+    notes: clean(lineItem.name) || null,
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === null || payload[key] === '') delete payload[key];
+  });
+
+  const { data, error } = await supabase
+    .from('job_items')
+    .insert(payload)
+    .select('id')
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    created: true,
+  };
+}
+
+async function reserveInventory({ jobId, jobItemId, blankProductId, quantity }) {
+  const { error } = await supabase.rpc('reserve_inventory', {
+    p_job_id: Number(jobId),
+    p_job_item_id: Number(jobItemId),
+    p_blank_product_id: blankProductId,
+    p_quantity: Number(quantity),
+  });
+
+  if (error) throw error;
+}
+
+async function processOrder(order) {
+  const orderId = Number(order.id);
+  const customerName = customerNameFromOrder(order);
+  const customerId = await findOrCreateCustomer(customerName);
+  const job = await upsertJob(order, customerName);
+
+  const orderResult = {
+    order_id: orderId,
+    job_id: job.id,
+    items_created: 0,
+    items_existing: 0,
+    reservations_created: 0,
+    errors: [],
+  };
+
+  for (const lineItem of order.line_items || []) {
+    try {
+      const sku = normalizeSku(lineItem.sku);
+
+      if (!sku) {
+        orderResult.errors.push({
+          line_item_id: lineItem.line_item_id || lineItem.id || null,
+          name: lineItem.name,
+          error: 'Line item has no SKU.',
+        });
+        continue;
+      }
+
+      const parsed = parseOrderSku(sku);
+      const blankProduct = await findBlankProduct(parsed.blankSkuBase);
+
+      if (!blankProduct) {
+        orderResult.errors.push({
+          sku,
+          blank_sku_base: parsed.blankSkuBase,
+          error: 'Matching blank product was not found. Create/sync the blank item first.',
+        });
+        continue;
+      }
+
+      const logoId = await findOrCreateLogo(customerId, parsed.logoName);
+
+      const finishedProductId = await findOrCreateFinishedProduct({
+        blankProductId: blankProduct.id,
+        customerId,
+        logoId,
+        finishedSku: sku,
+        name: lineItem.name,
+        placement: parsed.placement,
+        decorationSize: parsed.decorationSize,
+      });
+
+      const jobItem = await createJobItem({
+        jobId: job.id,
+        lineItem,
+        blankProductId: blankProduct.id,
+        finishedProductId,
+        logoId,
+        parsed,
+      });
+
+      if (jobItem.created) {
+        orderResult.items_created += 1;
+
+        try {
+          await reserveInventory({
+            jobId: job.id,
+            jobItemId: jobItem.id,
+            blankProductId: blankProduct.id,
+            quantity: Number(lineItem.quantity || 1),
+          });
+
+          orderResult.reservations_created += 1;
+        } catch (reservationError) {
+          orderResult.errors.push({
+            sku,
+            blank_sku_base: parsed.blankSkuBase,
+            job_item_id: jobItem.id,
+            error: `Reservation failed: ${reservationError.message}`,
+          });
+        }
+      } else {
+        orderResult.items_existing += 1;
+      }
+    } catch (err) {
+      orderResult.errors.push({
+        line_item_id: lineItem.line_item_id || lineItem.id || null,
+        sku: lineItem.sku || null,
+        error: err.message,
+      });
+    }
+  }
+
+  if (orderResult.reservations_created > 0) {
+    await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
+  }
+
+  return orderResult;
+}
+
+export const handler = async (event) => {
+  try {
+    if (event.httpMethod === 'GET') {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          message: 'manual-pullsheet function is live',
+        }),
+      };
+    }
+
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ error: 'Method not allowed' }),
+      };
+    }
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+        }),
+      };
+    }
+
+    const secret = process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || '';
+    const providedSecret =
+      event.headers['x-manual-pullsheet-secret'] ||
+      event.headers['X-Manual-Pullsheet-Secret'] ||
+      event.headers['x-webhook-secret'] ||
+      '';
+
+    if (secret && providedSecret !== secret) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Invalid manual pullsheet secret' }),
+      };
+    }
+
+    const body = JSON.parse(event.body || '{}');
+    const orders = Array.isArray(body.orders) ? body.orders : [];
+
+    if (orders.length === 0) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'No orders supplied' }),
+      };
+    }
+
+    const results = [];
+    let jobsCreated = 0;
+    let itemsCreated = 0;
+    let reservationsCreated = 0;
+    const errors = [];
+
+    for (const order of orders) {
+      const result = await processOrder(order);
+      results.push(result);
+
+      jobsCreated += 1;
+      itemsCreated += result.items_created;
+      reservationsCreated += result.reservations_created;
+
+      if (result.errors.length > 0) {
+        errors.push(
+          ...result.errors.map((error) => ({
+            order_id: result.order_id,
+            ...error,
+          }))
+        );
+      }
+    }
+
+    return {
+      statusCode: errors.length && itemsCreated === 0 ? 400 : 200,
+      body: JSON.stringify({
+        success: itemsCreated > 0 || reservationsCreated > 0,
+        jobs_created: jobsCreated,
+        items_created: itemsCreated,
+        reservations_created: reservationsCreated,
+        errors,
+        results,
+      }),
+    };
+  } catch (err) {
+    console.error('manual-pullsheet unhandled error:', err);
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Server error',
+        details: err.message,
+      }),
+    };
+  }
+};
