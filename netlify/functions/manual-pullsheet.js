@@ -375,13 +375,11 @@ async function createJobItem({
 
 const payload = {
   job_id: Number(jobId),
-
-  blank_product_id: blankProductId,
+blank_product_id: blankProductId,
   finished_product_id: finishedProductId,
-
-  woocommerce_line_item_id: lineItemId ? Number(lineItemId) : null,
-  woocommerce_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
-  woocommerce_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
+    woocommerce_line_item_id: lineItemId ? Number(lineItemId) : null,
+    woocommerce_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
+    woocommerce_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
     order_sku: sku,
     quantity: Number(lineItem.quantity || 1),
     status: 'queued',
@@ -553,7 +551,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          message: 'manual-pullsheet function ID-based lookup is live',
+          message: 'manual-pullsheet fixed product_id removed',
         }),
       };
     }
