@@ -148,19 +148,13 @@ async function findOrCreateCustomer(name) {
   if (existingError) throw existingError;
   if (existing?.id) return existing.id;
 
-const { data, error } = await supabase
-  .from('job_items')
-  .insert(payload)
-  .select('id')
-  .single();
+  const { data, error } = await supabase
+    .from('customers')
+    .insert({ name: cleanName })
+    .select('id')
+    .single();
 
-if (error) {
-  console.error('JOB ITEM INSERT ERROR');
-  console.error(JSON.stringify(error, null, 2));
-  console.error('PAYLOAD');
-  console.error(JSON.stringify(payload, null, 2));
-  throw error;
-}
+  if (error) throw error;
   return data.id;
 }
 
@@ -381,8 +375,9 @@ async function createJobItem({
 
 const payload = {
   job_id: Number(jobId),
-blank_product_id: blankProductId,
-  finished_product_id: finishedProductId,
+
+
+  blank_product_id: blankProductId,
     woocommerce_line_item_id: lineItemId ? Number(lineItemId) : null,
     woocommerce_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
     woocommerce_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
@@ -406,7 +401,13 @@ blank_product_id: blankProductId,
     .select('id')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('JOB ITEM INSERT ERROR');
+    console.error(JSON.stringify(error, null, 2));
+    console.error('JOB ITEM PAYLOAD');
+    console.error(JSON.stringify(payload, null, 2));
+    throw error;
+  }
 
   return { id: data.id, created: true };
 }
@@ -532,21 +533,17 @@ async function processOrder(order) {
       } else {
         orderResult.items_existing += 1;
       }
-catch (err) {
-  console.error('FULL ERROR', JSON.stringify(err, null, 2));
+    } catch (err) {
+      orderResult.errors.push({
+        line_item_id: lineItem.line_item_id || lineItem.id || null,
+        sku: lineItem.sku || null,
+        product_id: lineItem.product_id || null,
+        variation_id: lineItem.variation_id || null,
+        error: err.message,
+      });
+    }
+  }
 
-  orderResult.errors.push({
-    line_item_id: lineItem.line_item_id || lineItem.id || null,
-    sku: lineItem.sku || null,
-    product_id: lineItem.product_id || null,
-    variation_id: lineItem.variation_id || null,
-
-    error: err.message,
-    details: err.details || null,
-    hint: err.hint || null,
-    code: err.code || null,
-  });
-}
   if (orderResult.reservations_created > 0) {
     await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
   }
@@ -561,7 +558,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          message: 'manual-pullsheet fixed product_id removed',
+          message: 'manual-pullsheet clean syntax product_id removed',
         }),
       };
     }
