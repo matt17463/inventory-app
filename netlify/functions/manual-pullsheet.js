@@ -13,6 +13,14 @@ function normalizeSku(value) {
   return clean(value).toUpperCase();
 }
 
+function logoCodeFromName(name) {
+  return String(name || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function parseOrderSku(sku) {
   const orderSku = normalizeSku(sku);
   const parts = orderSku.split('-').filter(Boolean);
@@ -40,7 +48,6 @@ function parseOrderSku(sku) {
       if (!markerMatchesAt(marker, i)) continue;
 
       let sizeIndex = -1;
-
       for (let j = i + marker.length; j < parts.length; j += 1) {
         if (sizePattern.test(parts[j])) sizeIndex = j;
       }
@@ -63,7 +70,6 @@ function parseOrderSku(sku) {
   }
 
   let sizeIndex = -1;
-
   parts.forEach((part, index) => {
     if (sizePattern.test(part)) sizeIndex = index;
   });
@@ -127,13 +133,6 @@ async function findOrCreateCustomer(name) {
   if (error) throw error;
   return data.id;
 }
-function logoCodeFromName(name) {
-  return String(name || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 async function findOrCreateLogo(customerId, logoName) {
   const name = clean(logoName);
@@ -152,15 +151,69 @@ async function findOrCreateLogo(customerId, logoName) {
 
   const { data, error } = await supabase
     .from('logos')
-    .insert({
-      name,
-      code,
-    })
+    .insert({ name, code })
     .select('id')
     .single();
 
   if (error) throw error;
   return data.id;
+}
+
+async function findBlankProductForWooSku(wooSku) {
+  const sku = normalizeSku(wooSku);
+
+  const { data: mapping, error: mappingError } = await supabase
+    .from('product_sku_mappings')
+    .select(`
+      blank_product_id,
+      blank_products:blank_product_id (
+        id,
+        sku_base,
+        name
+      )
+    `)
+    .eq('woo_sku', sku)
+    .maybeSingle();
+
+  if (mappingError) throw mappingError;
+
+  if (mapping?.blank_products?.id) {
+    return {
+      source: 'mapping',
+      blankProduct: mapping.blank_products,
+      parsed: {
+        orderSku: sku,
+        blankSkuBase: mapping.blank_products.sku_base,
+        logoName: null,
+        placement: null,
+        decorationSize: null,
+      },
+    };
+  }
+
+  const parsed = parseOrderSku(sku);
+
+  const { data: fallbackBlank, error: fallbackError } = await supabase
+    .from('blank_products')
+    .select('id, sku_base, name')
+    .eq('sku_base', parsed.blankSkuBase)
+    .maybeSingle();
+
+  if (fallbackError) throw fallbackError;
+
+  if (fallbackBlank?.id) {
+    return {
+      source: 'fallback_parser',
+      blankProduct: fallbackBlank,
+      parsed,
+    };
+  }
+
+  return {
+    source: 'not_found',
+    blankProduct: null,
+    parsed,
+  };
 }
 
 async function findOrCreateFinishedProduct({
@@ -448,15 +501,16 @@ exports.handler = async (event) => {
       headers['x-webhook-secret'] ||
       '';
 
-if (secret && providedSecret !== secret) {
-  console.log('Manual pullsheet secret mismatch', {
-    secretLength: secret.length,
-    providedSecretLength: providedSecret.length,
-    providedHeaders: Object.keys(headers),
-    hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
-    hasWebhookHeader: Boolean(headers['x-webhook-secret']),
-  });
-}
+    // Temporarily logs mismatch but allows request through while testing.
+    if (secret && providedSecret !== secret) {
+      console.log('Manual pullsheet secret mismatch', {
+        secretLength: secret.length,
+        providedSecretLength: providedSecret.length,
+        providedHeaders: Object.keys(headers),
+        hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
+        hasWebhookHeader: Boolean(headers['x-webhook-secret']),
+      });
+    }
 
     const body = JSON.parse(event.body || '{}');
     const orders = Array.isArray(body.orders) ? body.orders : [];
