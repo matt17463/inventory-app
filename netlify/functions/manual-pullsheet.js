@@ -13,12 +13,34 @@ function normalizeSku(value) {
   return clean(value).toUpperCase();
 }
 
+function normalizeMetaKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 function logoCodeFromName(name) {
   return String(name || '')
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function getLineItemMeta(lineItem, possibleKeys) {
+  const meta = Array.isArray(lineItem.meta_data) ? lineItem.meta_data : [];
+
+  for (const wantedKey of possibleKeys) {
+    const normalizedWanted = normalizeMetaKey(wantedKey);
+
+    const found = meta.find((item) => normalizeMetaKey(item.key) === normalizedWanted);
+
+    if (found && found.value !== undefined && found.value !== null && String(found.value).trim() !== '') {
+      return String(found.value).trim();
+    }
+  }
+
+  return null;
 }
 
 function parseOrderSku(sku) {
@@ -48,6 +70,7 @@ function parseOrderSku(sku) {
       if (!markerMatchesAt(marker, i)) continue;
 
       let sizeIndex = -1;
+
       for (let j = i + marker.length; j < parts.length; j += 1) {
         if (sizePattern.test(parts[j])) sizeIndex = j;
       }
@@ -70,6 +93,7 @@ function parseOrderSku(sku) {
   }
 
   let sizeIndex = -1;
+
   parts.forEach((part, index) => {
     if (sizePattern.test(part)) sizeIndex = index;
   });
@@ -134,7 +158,7 @@ async function findOrCreateCustomer(name) {
   return data.id;
 }
 
-async function findOrCreateLogo(customerId, logoName) {
+async function findOrCreateLogo(logoName) {
   const name = clean(logoName);
   if (!name) return null;
 
@@ -159,27 +183,58 @@ async function findOrCreateLogo(customerId, logoName) {
   return data.id;
 }
 
-async function findBlankProductForWooSku(wooSku) {
-  const sku = normalizeSku(wooSku);
+/**
+ * Primary lookup:
+ * 1. WooCommerce variation_id
+ * 2. WooCommerce product_id
+ * 3. Current SKU
+ * 4. Fallback SKU parser
+ */
+async function findBlankProductForLineItem(lineItem) {
+  const sku = normalizeSku(lineItem.sku);
+  const variationId = Number(lineItem.variation_id || 0);
+  const productId = Number(lineItem.product_id || 0);
 
-  const { data: mapping, error: mappingError } = await supabase
-    .from('product_sku_mappings')
-    .select(`
-      blank_product_id,
-      blank_products:blank_product_id (
-        id,
-        sku_base,
-        name
-      )
-    `)
-    .eq('woo_sku', sku)
-    .maybeSingle();
+  async function queryMapping(column, value) {
+    const { data, error } = await supabase
+      .from('product_sku_mappings')
+      .select(`
+        blank_product_id,
+        blank_products:blank_product_id (
+          id,
+          sku_base,
+          name
+        )
+      `)
+      .eq(column, value)
+      .limit(1)
+      .maybeSingle();
 
-  if (mappingError) throw mappingError;
+    if (error) throw error;
+    return data || null;
+  }
+
+  let mapping = null;
+  let source = 'not_found';
+
+  if (variationId) {
+    mapping = await queryMapping('woo_variation_id', variationId);
+    source = 'variation_id';
+  }
+
+  if (!mapping && productId) {
+    mapping = await queryMapping('woo_product_id', productId);
+    source = 'product_id';
+  }
+
+  if (!mapping && sku) {
+    mapping = await queryMapping('woo_sku', sku);
+    source = 'sku';
+  }
 
   if (mapping?.blank_products?.id) {
     return {
-      source: 'mapping',
+      source,
       blankProduct: mapping.blank_products,
       parsed: {
         orderSku: sku,
@@ -222,6 +277,7 @@ async function findOrCreateFinishedProduct({
   logoId,
   finishedSku,
   name,
+  site,
   placement,
   decorationSize,
 }) {
@@ -304,6 +360,9 @@ async function createJobItem({
   finishedProductId,
   logoId,
   parsed,
+  site,
+  placement,
+  decorationSize,
 }) {
   const lineItemId = lineItem.line_item_id || lineItem.id || null;
   const sku = normalizeSku(lineItem.sku);
@@ -315,16 +374,19 @@ async function createJobItem({
   }
 
   const payload = {
-    job_id: jobId,
+    job_id: Number(jobId),
     blank_product_id: blankProductId,
     finished_product_id: finishedProductId,
     woocommerce_line_item_id: lineItemId ? Number(lineItemId) : null,
+    woocommerce_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
+    woocommerce_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
     order_sku: sku,
     quantity: Number(lineItem.quantity || 1),
     status: 'queued',
     logo_id: logoId || null,
-    placement: clean(parsed.placement) || null,
-    decoration_size: clean(parsed.decorationSize) || null,
+    site: clean(site) || null,
+    placement: clean(placement) || null,
+    decoration_size: clean(decorationSize) || null,
     notes: clean(lineItem.name) || null,
   };
 
@@ -384,21 +446,40 @@ async function processOrder(order) {
         continue;
       }
 
-      const lookup = await findBlankProductForWooSku(sku);
+      const lookup = await findBlankProductForLineItem(lineItem);
       const blankProduct = lookup.blankProduct;
       const parsed = lookup.parsed;
 
       if (!blankProduct) {
         orderResult.errors.push({
           sku,
+          product_id: lineItem.product_id || null,
+          variation_id: lineItem.variation_id || null,
           lookup_source: lookup.source,
           blank_sku_base: parsed.blankSkuBase,
-          error: 'Matching blank product was not found. Add product_sku_mappings row or create/sync the blank item.',
+          error: 'Matching blank product was not found. Sync products and rebuild product catalog mappings.',
         });
         continue;
       }
 
-      const logoId = await findOrCreateLogo(customerId, parsed.logoName);
+      const site =
+        getLineItemMeta(lineItem, ['site', 'school', 'location', 'store', 'department']) ||
+        parsed.logoName;
+
+      const placement =
+        getLineItemMeta(lineItem, ['logo placement', 'placement', 'print location', 'decoration location', 'location']) ||
+        parsed.placement;
+
+      const logoName =
+        getLineItemMeta(lineItem, ['logo', 'design', 'artwork', 'graphic']) ||
+        site ||
+        parsed.logoName;
+
+      const decorationSize =
+        getLineItemMeta(lineItem, ['decoration size', 'logo size', 'size']) ||
+        parsed.decorationSize;
+
+      const logoId = await findOrCreateLogo(logoName);
 
       const finishedProductId = await findOrCreateFinishedProduct({
         blankProductId: blankProduct.id,
@@ -406,8 +487,9 @@ async function processOrder(order) {
         logoId,
         finishedSku: sku,
         name: lineItem.name,
-        placement: parsed.placement,
-        decorationSize: parsed.decorationSize,
+        site,
+        placement,
+        decorationSize,
       });
 
       const jobItem = await createJobItem({
@@ -417,6 +499,9 @@ async function processOrder(order) {
         finishedProductId,
         logoId,
         parsed,
+        site,
+        placement,
+        decorationSize,
       });
 
       if (jobItem.created) {
@@ -445,6 +530,8 @@ async function processOrder(order) {
       orderResult.errors.push({
         line_item_id: lineItem.line_item_id || lineItem.id || null,
         sku: lineItem.sku || null,
+        product_id: lineItem.product_id || null,
+        variation_id: lineItem.variation_id || null,
         error: err.message,
       });
     }
@@ -464,7 +551,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          message: 'manual-pullsheet function with SKU mappings is live',
+          message: 'manual-pullsheet function ID-based lookup is live',
         }),
       };
     }
@@ -501,7 +588,8 @@ exports.handler = async (event) => {
       headers['x-webhook-secret'] ||
       '';
 
-    // Temporarily logs mismatch but allows request through while testing.
+    // During testing, this logs mismatch but allows the request.
+    // After confirmed working, change this block back to return 401.
     if (secret && providedSecret !== secret) {
       console.log('Manual pullsheet secret mismatch', {
         secretLength: secret.length,
