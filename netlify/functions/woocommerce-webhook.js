@@ -47,10 +47,33 @@ export const handler = async (event) => {
       };
     }
 
-    let rawBody = event.rawBody || event.body;
+    let rawBody = event.rawBody || event.body || '';
 
     if (event.isBase64Encoded && event.body) {
       rawBody = Buffer.from(event.body, 'base64').toString('utf8');
+    }
+
+    const normalizedHeaders = {};
+
+    for (const [key, value] of Object.entries(event.headers || {})) {
+      normalizedHeaders[key.toLowerCase()] = value;
+    }
+
+    const contentType = normalizedHeaders['content-type'] || '';
+
+    // WooCommerce sends a tiny unsigned form-encoded setup/test ping when saving the webhook.
+    // Accept that ping so the webhook can be saved.
+    if (
+      contentType.includes('application/x-www-form-urlencoded') &&
+      rawBody.length <= 50
+    ) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          message: 'WooCommerce setup ping accepted',
+        }),
+      };
     }
 
     if (!rawBody) {
@@ -71,8 +94,6 @@ export const handler = async (event) => {
       parsedBody = null;
     }
 
-    // Let WooCommerce save/test pings pass before signature validation.
-    // Real order payloads still require valid WooCommerce HMAC signature.
     if (
       parsedBody &&
       (
@@ -85,15 +106,9 @@ export const handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          message: 'WooCommerce webhook test received before signature validation',
+          message: 'WooCommerce webhook test received',
         }),
       };
-    }
-
-    const normalizedHeaders = {};
-
-    for (const [key, value] of Object.entries(event.headers || {})) {
-      normalizedHeaders[key.toLowerCase()] = value;
     }
 
     const signature = normalizedHeaders['x-wc-webhook-signature'];
