@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -370,7 +370,7 @@ async function processOrder(order) {
   return orderResult;
 }
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
       return {
