@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBlankProducts } from './lib/inventoryApi';
+import { getBlankInventory } from './lib/inventoryApi';
 
 export default function BlankInventory() {
   const [rows, setRows] = useState([]);
@@ -9,22 +9,27 @@ export default function BlankInventory() {
   async function load() {
     setMessage('');
     try {
-      setRows(await getBlankProducts(search));
+      setRows(await getBlankInventory(search));
     } catch (err) {
-      setMessage(err.message);
+      setMessage(err.message || 'Failed to load blank inventory.');
     }
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <main className="page">
       <h1>Blank Inventory</h1>
 
-      <form onSubmit={(e) => { e.preventDefault(); load(); }} className="card">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search blanks..." />
+      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="card">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search blank inventory..."
+        />
         <button type="submit">Search</button>
       </form>
 
@@ -46,10 +51,10 @@ export default function BlankInventory() {
             <tr key={row.blank_product_id}>
               <td>{row.sku_base}</td>
               <td>{row.name}</td>
-              <td>{row.brand}</td>
-              <td>{row.color}</td>
-              <td>{row.size}</td>
-              <td>{row.total_quantity}</td>
+              <td>{row.brand || ''}</td>
+              <td>{row.color || ''}</td>
+              <td>{row.size || ''}</td>
+              <td>{row.total_quantity || 0}</td>
             </tr>
           ))}
         </tbody>

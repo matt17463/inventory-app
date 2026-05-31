@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { completeJobItem, getBins, getPullSheetItems } from './lib/inventoryApi';
+import {
+  completeJobItem,
+  formatBinLabel,
+  getBins,
+  getPullSheetItems,
+} from './lib/inventoryApi';
 
 export default function PullSheetView() {
   const { jobId } = useParams();
@@ -10,16 +15,22 @@ export default function PullSheetView() {
   const [message, setMessage] = useState('');
 
   async function load() {
-    const [itemRows, binRows] = await Promise.all([
-      getPullSheetItems(jobId),
-      getBins(),
-    ]);
-    setItems(itemRows);
-    setBins(binRows);
+    setMessage('');
+    try {
+      const [itemRows, binRows] = await Promise.all([
+        getPullSheetItems(jobId),
+        getBins(),
+      ]);
+      setItems(itemRows);
+      setBins(binRows);
+    } catch (err) {
+      setMessage(err.message || 'Failed to load pull sheet.');
+    }
   }
 
   useEffect(() => {
-    load().catch((err) => setMessage(err.message));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
   async function markCompleted(item) {
@@ -39,13 +50,14 @@ export default function PullSheetView() {
       setMessage('Item completed and blank inventory deducted.');
       await load();
     } catch (err) {
-      setMessage(err.message);
+      setMessage(err.message || 'Failed to complete item.');
     }
   }
 
   return (
     <main className="page">
       <h1>Pull Sheet</h1>
+
       {message && <p className="message">{message}</p>}
 
       <table>
@@ -67,19 +79,26 @@ export default function PullSheetView() {
             <tr key={item.job_item_id}>
               <td>{item.quantity}</td>
               <td>{item.blank_sku_base}<br />{item.blank_name}</td>
-              <td>{item.color}</td>
-              <td>{item.size}</td>
-              <td>{item.logo}</td>
-              <td>{item.placement}</td>
+              <td>{item.color || ''}</td>
+              <td>{item.size || ''}</td>
+              <td>{item.logo || ''}</td>
+              <td>{item.placement || ''}</td>
               <td>{item.item_status}</td>
               <td>
                 <select
                   value={selectedBins[item.job_item_id] || item.selected_bin_id || ''}
-                  onChange={(e) => setSelectedBins((prev) => ({ ...prev, [item.job_item_id]: e.target.value }))}
+                  onChange={(event) =>
+                    setSelectedBins((prev) => ({
+                      ...prev,
+                      [item.job_item_id]: event.target.value,
+                    }))
+                  }
                 >
                   <option value="">Choose bin...</option>
                   {bins.map((bin) => (
-                    <option key={bin.id} value={bin.id}>{bin.bin_code}</option>
+                    <option key={bin.id} value={bin.id}>
+                      {formatBinLabel(bin)}
+                    </option>
                   ))}
                 </select>
               </td>

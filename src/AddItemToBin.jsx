@@ -1,19 +1,10 @@
 import { useEffect, useState } from 'react';
-import { supabase } from './supabaseClient';
-
-/**
- * Corrected Add Item To Bin component
- *
- * Purpose:
- * - Only shows blank clothing items from blank_products
- * - Does NOT show decorated WooCommerce products/finished items
- * - Adds quantity to blank_inventory using receive_blank_inventory()
- *
- * Expected Supabase objects:
- * - blank_products
- * - bins
- * - receive_blank_inventory(p_bin_id bigint, p_blank_product_id uuid, p_quantity int, p_notes text)
- */
+import {
+  formatBinLabel,
+  getBins,
+  getBlankProducts,
+  receiveBlankInventory,
+} from './lib/inventoryApi';
 
 export default function AddItemToBin() {
   const [bins, setBins] = useState([]);
@@ -26,52 +17,17 @@ export default function AddItemToBin() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function loadBins() {
-    const { data, error } = await supabase
-      .from('bins')
-      .select('id, bin_code, description')
-      .order('bin_code', { ascending: true });
-
-    if (error) throw error;
-    setBins(data || []);
-  }
-
-  async function loadBlankProducts() {
-    let query = supabase
-      .from('blank_products')
-      .select(`
-        id,
-        sku_base,
-        name,
-        brand_id,
-        color_id,
-        size_id,
-        product_type_id,
-        brands:brand_id(name),
-        colors:color_id(name),
-        sizes:size_id(name),
-        product_types:product_type_id(name)
-      `)
-      .order('name', { ascending: true });
-
-    if (search.trim()) {
-      query = query.or(
-        `sku_base.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%`
-      );
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-    setBlankProducts(data || []);
-  }
-
   async function loadPage() {
     setMessage('');
     setLoading(true);
 
     try {
-      await Promise.all([loadBins(), loadBlankProducts()]);
+      const [binRows, productRows] = await Promise.all([
+        getBins(),
+        getBlankProducts(search),
+      ]);
+      setBins(binRows);
+      setBlankProducts(productRows);
     } catch (err) {
       setMessage(err.message || 'Failed to load data.');
     } finally {
@@ -81,6 +37,7 @@ export default function AddItemToBin() {
 
   useEffect(() => {
     loadPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSearch(event) {
@@ -92,37 +49,23 @@ export default function AddItemToBin() {
     event.preventDefault();
     setMessage('');
 
-    if (!binId) {
-      setMessage('Choose a bin.');
-      return;
-    }
-
-    if (!blankProductId) {
-      setMessage('Choose a blank clothing item.');
-      return;
-    }
-
-    if (!quantity || Number(quantity) <= 0) {
-      setMessage('Quantity must be greater than zero.');
-      return;
-    }
+    if (!binId) return setMessage('Choose a bin.');
+    if (!blankProductId) return setMessage('Choose a blank clothing item.');
+    if (!quantity || Number(quantity) <= 0) return setMessage('Quantity must be greater than zero.');
 
     setLoading(true);
 
     try {
-      const { error } = await supabase.rpc('receive_blank_inventory', {
-        p_bin_id: Number(binId),
-        p_blank_product_id: blankProductId,
-        p_quantity: Number(quantity),
-        p_notes: notes || null,
+      await receiveBlankInventory({
+        binId,
+        blankProductId,
+        quantity,
+        notes,
       });
-
-      if (error) throw error;
 
       setMessage('Blank item added to bin inventory.');
       setQuantity(1);
       setNotes('');
-      await loadBlankProducts();
     } catch (err) {
       setMessage(err.message || 'Failed to add item to bin.');
     } finally {
@@ -132,18 +75,11 @@ export default function AddItemToBin() {
 
   function productLabel(product) {
     const brand = product.brands?.name || '';
+    const type = product.product_types?.name || '';
     const color = product.colors?.name || '';
     const size = product.sizes?.name || '';
-    const type = product.product_types?.name || '';
 
-    return [
-      product.sku_base,
-      product.name,
-      brand,
-      type,
-      color,
-      size,
-    ]
+    return [product.sku_base, product.name, brand, type, color, size]
       .filter(Boolean)
       .join(' - ');
   }
@@ -158,26 +94,18 @@ export default function AddItemToBin() {
           id="blank-search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by blank SKU or name"
+          placeholder="Search blank SKU or name"
         />
-        <button type="submit" disabled={loading}>
-          Search
-        </button>
+        <button type="submit" disabled={loading}>Search</button>
       </form>
 
       <form onSubmit={handleSubmit} className="card">
         <label htmlFor="bin">Bin</label>
-        <select
-          id="bin"
-          value={binId}
-          onChange={(event) => setBinId(event.target.value)}
-          required
-        >
+        <select id="bin" value={binId} onChange={(event) => setBinId(event.target.value)} required>
           <option value="">Choose bin...</option>
           {bins.map((bin) => (
             <option key={bin.id} value={bin.id}>
-              {bin.bin_code}
-              {bin.description ? ` - ${bin.description}` : ''}
+              {formatBinLabel(bin)}
             </option>
           ))}
         </select>
@@ -215,9 +143,7 @@ export default function AddItemToBin() {
           placeholder="Optional receiving notes"
         />
 
-        <button type="submit" disabled={loading}>
-          Add Item to Bin
-        </button>
+        <button type="submit" disabled={loading}>Add Item to Bin</button>
       </form>
 
       {message && <p className="message">{message}</p>}

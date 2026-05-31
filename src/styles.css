@@ -1,0 +1,97 @@
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f7f7f7;
+  color: #111;
+}
+
+a {
+  color: #4b0082;
+  text-decoration: none;
+}
+
+.app-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: white;
+  min-height: 100vh;
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ddd;
+}
+
+.top-nav nav {
+  display: flex;
+  gap: 18px;
+}
+
+.brand {
+  font-weight: 700;
+}
+
+.page {
+  padding: 32px;
+}
+
+.card {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fff;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  padding: 10px;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 8px;
+  background: #0d6efd;
+  color: white;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.message {
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+th,
+td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f1f1f1;
+}

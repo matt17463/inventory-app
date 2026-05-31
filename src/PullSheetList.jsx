@@ -9,18 +9,20 @@ export default function PullSheetList() {
   useEffect(() => {
     getPullSheets()
       .then(setJobs)
-      .catch((err) => setMessage(err.message));
+      .catch((err) => setMessage(err.message || 'Failed to load pull sheets.'));
   }, []);
 
   return (
     <main className="page">
       <h1>Pull Sheets</h1>
+
       {message && <p className="message">{message}</p>}
 
       <table>
         <thead>
           <tr>
             <th>Job</th>
+            <th>Order</th>
             <th>Customer</th>
             <th>Status</th>
             <th>Due</th>
@@ -31,9 +33,10 @@ export default function PullSheetList() {
           {jobs.map((job) => (
             <tr key={job.id}>
               <td>{job.job_name}</td>
-              <td>{job.customer_name}</td>
+              <td>{job.woocommerce_order_id || ''}</td>
+              <td>{job.customer_name || ''}</td>
               <td>{job.status}</td>
-              <td>{job.due_date}</td>
+              <td>{job.due_date || ''}</td>
               <td><Link to={`/pullsheets/${job.id}`}>Open</Link></td>
             </tr>
           ))}
