@@ -32,14 +32,18 @@ export const handler = async (event) => {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Missing Supabase environment variables' }),
+        body: JSON.stringify({
+          error: 'Missing Supabase environment variables',
+        }),
       };
     }
 
     if (!process.env.WC_WEBHOOK_SECRET) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Missing WC_WEBHOOK_SECRET' }),
+        body: JSON.stringify({
+          error: 'Missing WC_WEBHOOK_SECRET',
+        }),
       };
     }
 
@@ -59,15 +63,50 @@ export const handler = async (event) => {
       };
     }
 
-    const signature =
-      event.headers['x-wc-webhook-signature'] ||
-      event.headers['X-WC-Webhook-Signature'] ||
-      event.headers['X-Wc-Webhook-Signature'];
+    let parsedBody = null;
+
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch (e) {
+      parsedBody = null;
+    }
+
+    // Let WooCommerce save/test pings pass before signature validation.
+    // Real order payloads still require valid WooCommerce HMAC signature.
+    if (
+      parsedBody &&
+      (
+        parsedBody.webhook_id ||
+        parsedBody.ping === 'pong' ||
+        parsedBody.action === 'woocommerce_webhook_delivery'
+      )
+    ) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          message: 'WooCommerce webhook test received before signature validation',
+        }),
+      };
+    }
+
+    const normalizedHeaders = {};
+
+    for (const [key, value] of Object.entries(event.headers || {})) {
+      normalizedHeaders[key.toLowerCase()] = value;
+    }
+
+    const signature = normalizedHeaders['x-wc-webhook-signature'];
 
     if (!signature) {
+      console.log('Missing WooCommerce signature');
+      console.log('Headers:', event.headers);
+
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Missing WooCommerce signature' }),
+        body: JSON.stringify({
+          error: 'Missing WooCommerce signature',
+        }),
       };
     }
 
@@ -77,28 +116,22 @@ export const handler = async (event) => {
       .digest('base64');
 
     if (signature.trim() !== expected) {
-      console.log('Invalid signature');
+      console.log('Invalid WooCommerce signature');
       console.log('Received signature:', signature);
       console.log('Expected signature:', expected);
       console.log('Headers:', event.headers);
+      console.log('Raw body length:', rawBody.length);
+      console.log('Is base64 encoded:', event.isBase64Encoded);
 
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid WooCommerce signature' }),
-      };
-    }
-
-    const order = JSON.parse(rawBody);
-
-    if (order.ping === 'pong' || order.webhook_id) {
-      return {
-        statusCode: 200,
         body: JSON.stringify({
-          success: true,
-          message: 'WooCommerce webhook test received',
+          error: 'Invalid WooCommerce signature',
         }),
       };
     }
+
+    const order = parsedBody || JSON.parse(rawBody);
 
     const orderId = order.id;
     const customerName =
@@ -110,7 +143,9 @@ export const handler = async (event) => {
     if (!orderId || lineItems.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing order ID or line items' }),
+        body: JSON.stringify({
+          error: 'Missing order ID or line items',
+        }),
       };
     }
 
