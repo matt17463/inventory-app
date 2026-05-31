@@ -426,14 +426,19 @@ exports.handler = async (event) => {
       headers['x-webhook-secret'] ||
       '';
 
-    if (secret && providedSecret !== secret) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({
-          error: 'Invalid manual pullsheet secret',
-        }),
-      };
-    }
+if (secret && providedSecret !== secret) {
+  return {
+    statusCode: 401,
+    body: JSON.stringify({
+      error: 'Invalid manual pullsheet secret',
+      secretLength: secret.length,
+      providedSecretLength: providedSecret.length,
+      providedHeaders: Object.keys(headers),
+      hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
+      hasWebhookHeader: Boolean(headers['x-webhook-secret']),
+    }),
+  };
+}
 
     const body = JSON.parse(event.body || '{}');
     const orders = Array.isArray(body.orders) ? body.orders : [];
