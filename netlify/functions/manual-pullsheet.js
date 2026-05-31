@@ -399,11 +399,18 @@ export const handler = async (event) => {
     }
 
     const secret = process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || '';
-    const providedSecret =
-      event.headers['x-manual-pullsheet-secret'] ||
-      event.headers['X-Manual-Pullsheet-Secret'] ||
-      event.headers['x-webhook-secret'] ||
-      '';
+const headers = Object.fromEntries(
+  Object.entries(event.headers || {}).map(([key, value]) => [
+    key.toLowerCase(),
+    String(value || '').trim(),
+  ])
+);
+
+const providedSecret = headers['x-manual-pullsheet-secret'] || headers['x-webhook-secret'] || '';
+
+const secret = String(
+  process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || ''
+).trim();
 
     if (secret && providedSecret !== secret) {
       return {
