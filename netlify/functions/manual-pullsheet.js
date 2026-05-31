@@ -18,7 +18,52 @@ function parseOrderSku(sku) {
   const parts = orderSku.split('-').filter(Boolean);
 
   const sizePattern =
-    /^(XS|S|M|L|XL|XXL|XXXL|[WYM]?[0-9]*XL|WXS|WS|WM|WL|WXL|W2XL|W3XL|W4XL|A2XL|A3XL|A4XL)$/;
+    /^(XS|S|M|L|XL|XXL|XXXL|[WYM]?[0-9]*XL|WXS|WS|WM|WL|WXL|W2XL|W3XL|W4XL|A2XL|A3XL|A4XL|AS|AM|AL|AXL|A2XL|A3XL|A4XL|YL|YM|YS|YXL)$/;
+
+  const knownStyleMarkers = [
+    ['BELLA', 'CANVAS', '6405'],
+    ['BELLA', 'CANVAS', '3001'],
+    ['GILDAN', '18500'],
+    ['GILDAN', '18000'],
+    ['GILDAN', '5000'],
+    ['RICHARDSON', '112'],
+    ['JERSEY'],
+  ];
+
+  function markerMatchesAt(marker, startIndex) {
+    if (startIndex + marker.length > parts.length) return false;
+    return marker.every((token, offset) => parts[startIndex + offset] === token);
+  }
+
+  for (let i = 0; i < parts.length; i += 1) {
+    for (const marker of knownStyleMarkers) {
+      if (!markerMatchesAt(marker, i)) continue;
+
+      let sizeIndex = -1;
+
+      for (let j = i + marker.length; j < parts.length; j += 1) {
+        if (sizePattern.test(parts[j])) {
+          sizeIndex = j;
+        }
+      }
+
+      if (sizeIndex >= 0) {
+        const blankSkuBase = parts.slice(i, sizeIndex + 1).join('-');
+        const afterSize = parts.slice(sizeIndex + 1);
+        const logoName = afterSize[0] || null;
+        const placement = afterSize[1] || null;
+        const sizeMatch = placement ? placement.match(/([0-9]+(?:\.[0-9]+)?)/) : null;
+
+        return {
+          orderSku,
+          blankSkuBase,
+          logoName,
+          placement,
+          decorationSize: sizeMatch ? sizeMatch[1] : null,
+        };
+      }
+    }
+  }
 
   let sizeIndex = -1;
 
