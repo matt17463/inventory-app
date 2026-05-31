@@ -148,13 +148,19 @@ async function findOrCreateCustomer(name) {
   if (existingError) throw existingError;
   if (existing?.id) return existing.id;
 
-  const { data, error } = await supabase
-    .from('customers')
-    .insert({ name: cleanName })
-    .select('id')
-    .single();
+const { data, error } = await supabase
+  .from('job_items')
+  .insert(payload)
+  .select('id')
+  .single();
 
-  if (error) throw error;
+if (error) {
+  console.error('JOB ITEM INSERT ERROR');
+  console.error(JSON.stringify(error, null, 2));
+  console.error('PAYLOAD');
+  console.error(JSON.stringify(payload, null, 2));
+  throw error;
+}
   return data.id;
 }
 
