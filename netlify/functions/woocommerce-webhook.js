@@ -32,22 +32,22 @@ export const handler = async (event) => {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return {
         statusCode: 500,
-        body: JSON.stringify({
-          error: 'Missing Supabase environment variables',
-        }),
+        body: JSON.stringify({ error: 'Missing Supabase environment variables' }),
       };
     }
 
     if (!process.env.WC_WEBHOOK_SECRET) {
       return {
         statusCode: 500,
-        body: JSON.stringify({
-          error: 'Missing WC_WEBHOOK_SECRET',
-        }),
+        body: JSON.stringify({ error: 'Missing WC_WEBHOOK_SECRET' }),
       };
     }
 
-    const rawBody = event.rawBody || event.body;
+    let rawBody = event.rawBody || event.body;
+
+    if (event.isBase64Encoded && event.body) {
+      rawBody = Buffer.from(event.body, 'base64').toString('utf8');
+    }
 
     if (!rawBody) {
       return {
@@ -59,55 +59,46 @@ export const handler = async (event) => {
       };
     }
 
-    // Allows WooCommerce save/test pings to pass cleanly.
-    try {
-      const testPayload = JSON.parse(rawBody);
-
-      if (
-        testPayload.webhook_id ||
-        testPayload.ping === 'pong' ||
-        testPayload.action === 'woocommerce_webhook_delivery'
-      ) {
-        return {
-          statusCode: 200,
-          body: JSON.stringify({
-            success: true,
-            message: 'WooCommerce webhook test received',
-          }),
-        };
-      }
-    } catch (e) {
-      // Continue to normal signature validation.
-    }
-
     const signature =
       event.headers['x-wc-webhook-signature'] ||
+      event.headers['X-WC-Webhook-Signature'] ||
       event.headers['X-Wc-Webhook-Signature'];
 
     if (!signature) {
       return {
         statusCode: 401,
-        body: JSON.stringify({
-          error: 'Missing WooCommerce signature',
-        }),
+        body: JSON.stringify({ error: 'Missing WooCommerce signature' }),
       };
     }
 
     const expected = crypto
-      .createHmac('sha256', process.env.WC_WEBHOOK_SECRET)
+      .createHmac('sha256', process.env.WC_WEBHOOK_SECRET.trim())
       .update(rawBody, 'utf8')
       .digest('base64');
 
-    if (signature !== expected) {
+    if (signature.trim() !== expected) {
+      console.log('Invalid signature');
+      console.log('Received signature:', signature);
+      console.log('Expected signature:', expected);
+      console.log('Headers:', event.headers);
+
       return {
         statusCode: 401,
-        body: JSON.stringify({
-          error: 'Invalid WooCommerce signature',
-        }),
+        body: JSON.stringify({ error: 'Invalid WooCommerce signature' }),
       };
     }
 
     const order = JSON.parse(rawBody);
+
+    if (order.ping === 'pong' || order.webhook_id) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          message: 'WooCommerce webhook test received',
+        }),
+      };
+    }
 
     const orderId = order.id;
     const customerName =
@@ -119,9 +110,7 @@ export const handler = async (event) => {
     if (!orderId || lineItems.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({
-          error: 'Missing order ID or line items',
-        }),
+        body: JSON.stringify({ error: 'Missing order ID or line items' }),
       };
     }
 
@@ -138,6 +127,7 @@ export const handler = async (event) => {
 
     if (jobError) {
       console.error('Job insert error:', jobError);
+
       return {
         statusCode: 500,
         body: JSON.stringify({
@@ -189,6 +179,7 @@ export const handler = async (event) => {
 
     if (itemsError) {
       console.error('Job items insert error:', itemsError);
+
       return {
         statusCode: 500,
         body: JSON.stringify({
@@ -208,6 +199,7 @@ export const handler = async (event) => {
     };
   } catch (err) {
     console.error('Unhandled webhook error:', err);
+
     return {
       statusCode: 500,
       body: JSON.stringify({
