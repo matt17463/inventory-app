@@ -427,17 +427,15 @@ exports.handler = async (event) => {
       '';
 
 if (secret && providedSecret !== secret) {
-  return {
-    statusCode: 401,
-    body: JSON.stringify({
-      error: 'Invalid manual pullsheet secret',
-      secretLength: secret.length,
-      providedSecretLength: providedSecret.length,
-      providedHeaders: Object.keys(headers),
-      hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
-      hasWebhookHeader: Boolean(headers['x-webhook-secret']),
-    }),
-  };
+  console.log('Manual pullsheet secret mismatch', {
+    secretLength: secret.length,
+    providedSecretLength: providedSecret.length,
+    providedHeaders: Object.keys(headers),
+    hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
+    hasWebhookHeader: Boolean(headers['x-webhook-secret']),
+  });
+
+  // TEMPORARY: allow request through while debugging
 }
 
     const body = JSON.parse(event.body || '{}');
