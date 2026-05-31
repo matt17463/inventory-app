@@ -32,14 +32,18 @@ export const handler = async (event) => {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Missing Supabase environment variables' }),
+        body: JSON.stringify({
+          error: 'Missing Supabase environment variables',
+        }),
       };
     }
 
     if (!process.env.WC_WEBHOOK_SECRET) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Missing WC_WEBHOOK_SECRET' }),
+        body: JSON.stringify({
+          error: 'Missing WC_WEBHOOK_SECRET',
+        }),
       };
     }
 
@@ -47,14 +51,47 @@ export const handler = async (event) => {
 
     if (!rawBody) {
       return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing request body' }),
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          message: 'Webhook endpoint reached, but no body was sent.',
+        }),
       };
+    }
+
+    // Allows WooCommerce save/test pings to pass cleanly.
+    try {
+      const testPayload = JSON.parse(rawBody);
+
+      if (
+        testPayload.webhook_id ||
+        testPayload.ping === 'pong' ||
+        testPayload.action === 'woocommerce_webhook_delivery'
+      ) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            success: true,
+            message: 'WooCommerce webhook test received',
+          }),
+        };
+      }
+    } catch (e) {
+      // Continue to normal signature validation.
     }
 
     const signature =
       event.headers['x-wc-webhook-signature'] ||
       event.headers['X-Wc-Webhook-Signature'];
+
+    if (!signature) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({
+          error: 'Missing WooCommerce signature',
+        }),
+      };
+    }
 
     const expected = crypto
       .createHmac('sha256', process.env.WC_WEBHOOK_SECRET)
@@ -64,27 +101,27 @@ export const handler = async (event) => {
     if (signature !== expected) {
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid WooCommerce signature' }),
+        body: JSON.stringify({
+          error: 'Invalid WooCommerce signature',
+        }),
       };
     }
 
     const order = JSON.parse(rawBody);
 
-    if (order.ping === 'pong') {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'Ping OK' }),
-      };
-    }
-
     const orderId = order.id;
-    const customerName = `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() || 'Unknown Customer';
+    const customerName =
+      `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() ||
+      'Unknown Customer';
+
     const lineItems = order.line_items || [];
 
     if (!orderId || lineItems.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing order ID or line items' }),
+        body: JSON.stringify({
+          error: 'Missing order ID or line items',
+        }),
       };
     }
 
@@ -103,7 +140,10 @@ export const handler = async (event) => {
       console.error('Job insert error:', jobError);
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to create job', details: jobError.message }),
+        body: JSON.stringify({
+          error: 'Failed to create job',
+          details: jobError.message,
+        }),
       };
     }
 
@@ -119,7 +159,7 @@ export const handler = async (event) => {
         .from('products')
         .select('id, sku')
         .eq('sku', item.sku)
-        .single();
+        .maybeSingle();
 
       if (productError || !product) {
         console.error('Product not found for SKU:', item.sku, productError);
@@ -137,7 +177,8 @@ export const handler = async (event) => {
       return {
         statusCode: 400,
         body: JSON.stringify({
-          error: 'No valid job items created. Check that order SKUs exist in Supabase products.',
+          error:
+            'No valid job items created. Check that WooCommerce order SKUs exist in Supabase products.',
         }),
       };
     }
@@ -150,7 +191,10 @@ export const handler = async (event) => {
       console.error('Job items insert error:', itemsError);
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to create job items', details: itemsError.message }),
+        body: JSON.stringify({
+          error: 'Failed to create job items',
+          details: itemsError.message,
+        }),
       };
     }
 
