@@ -127,10 +127,19 @@ async function findOrCreateCustomer(name) {
   if (error) throw error;
   return data.id;
 }
+function logoCodeFromName(name) {
+  return String(name || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 async function findOrCreateLogo(customerId, logoName) {
   const name = clean(logoName);
   if (!name) return null;
+
+  const code = logoCodeFromName(name);
 
   const { data: existing, error: existingError } = await supabase
     .from('logos')
@@ -143,68 +152,15 @@ async function findOrCreateLogo(customerId, logoName) {
 
   const { data, error } = await supabase
     .from('logos')
-    .insert({ name })
+    .insert({
+      name,
+      code,
+    })
     .select('id')
     .single();
 
   if (error) throw error;
   return data.id;
-}
-async function findBlankProductForWooSku(wooSku) {
-  const sku = normalizeSku(wooSku);
-
-  const { data: mapping, error: mappingError } = await supabase
-    .from('product_sku_mappings')
-    .select(`
-      blank_product_id,
-      blank_products:blank_product_id (
-        id,
-        sku_base,
-        name
-      )
-    `)
-    .eq('woo_sku', sku)
-    .maybeSingle();
-
-  if (mappingError) throw mappingError;
-
-  if (mapping?.blank_products?.id) {
-    return {
-      source: 'mapping',
-      blankProduct: mapping.blank_products,
-      parsed: {
-        orderSku: sku,
-        blankSkuBase: mapping.blank_products.sku_base,
-        logoName: null,
-        placement: null,
-        decorationSize: null,
-      },
-    };
-  }
-
-  const parsed = parseOrderSku(sku);
-
-  const { data: fallbackBlank, error: fallbackError } = await supabase
-    .from('blank_products')
-    .select('id, sku_base, name')
-    .eq('sku_base', parsed.blankSkuBase)
-    .maybeSingle();
-
-  if (fallbackError) throw fallbackError;
-
-  if (fallbackBlank?.id) {
-    return {
-      source: 'fallback_parser',
-      blankProduct: fallbackBlank,
-      parsed,
-    };
-  }
-
-  return {
-    source: 'not_found',
-    blankProduct: null,
-    parsed,
-  };
 }
 
 async function findOrCreateFinishedProduct({
