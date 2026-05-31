@@ -376,8 +376,7 @@ async function createJobItem({
 const payload = {
   job_id: Number(jobId),
 
-  // Legacy required column in job_items.
-  product_id: finishedProductId,
+ 
 
   blank_product_id: blankProductId,
   finished_product_id: finishedProductId,
