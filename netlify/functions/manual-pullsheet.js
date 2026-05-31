@@ -23,7 +23,9 @@ function parseOrderSku(sku) {
   let sizeIndex = -1;
 
   parts.forEach((part, index) => {
-    if (sizePattern.test(part)) sizeIndex = index;
+    if (sizePattern.test(part)) {
+      sizeIndex = index;
+    }
   });
 
   if (sizeIndex < 0) {
@@ -92,22 +94,23 @@ async function findOrCreateLogo(customerId, logoName) {
   const name = clean(logoName);
   if (!name) return null;
 
-  const { data: existing, error: existingError } = await supabase
-    .from('logos')
-    .select('id')
-    .eq('customer_id', customerId)
-    .eq('name', name)
-    .maybeSingle();
+  let query = supabase.from('logos').select('id').eq('name', name);
+
+  if (customerId) {
+    query = query.eq('customer_id', customerId);
+  }
+
+  const { data: existing, error: existingError } = await query.maybeSingle();
 
   if (existingError) throw existingError;
   if (existing?.id) return existing.id;
 
+  const payload = { name };
+  if (customerId) payload.customer_id = customerId;
+
   const { data, error } = await supabase
     .from('logos')
-    .insert({
-      customer_id: customerId,
-      name,
-    })
+    .insert(payload)
     .select('id')
     .single();
 
@@ -148,16 +151,19 @@ async function findOrCreateFinishedProduct({
 
   const payload = {
     blank_product_id: blankProductId,
-    customer_id: customerId,
-    logo_id: logoId,
     finished_sku: sku,
     name: clean(name) || sku,
     placement: clean(placement) || null,
     decoration_size: clean(decorationSize) || null,
   };
 
+  if (customerId) payload.customer_id = customerId;
+  if (logoId) payload.logo_id = logoId;
+
   Object.keys(payload).forEach((key) => {
-    if (payload[key] === null || payload[key] === '') delete payload[key];
+    if (payload[key] === null || payload[key] === '') {
+      delete payload[key];
+    }
   });
 
   const { data, error } = await supabase
@@ -242,7 +248,9 @@ async function createJobItem({
   };
 
   Object.keys(payload).forEach((key) => {
-    if (payload[key] === null || payload[key] === '') delete payload[key];
+    if (payload[key] === null || payload[key] === '') {
+      delete payload[key];
+    }
   });
 
   const { data, error } = await supabase
@@ -285,7 +293,9 @@ async function processOrder(order) {
     errors: [],
   };
 
-  for (const lineItem of order.line_items || []) {
+  const lineItems = Array.isArray(order.line_items) ? order.line_items : [];
+
+  for (const lineItem of lineItems) {
     try {
       const sku = normalizeSku(lineItem.sku);
 
@@ -385,7 +395,9 @@ exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') {
       return {
         statusCode: 405,
-        body: JSON.stringify({ error: 'Method not allowed' }),
+        body: JSON.stringify({
+          error: 'Method not allowed',
+        }),
       };
     }
 
@@ -398,24 +410,28 @@ exports.handler = async (event) => {
       };
     }
 
-    const secret = process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || '';
-const headers = Object.fromEntries(
-  Object.entries(event.headers || {}).map(([key, value]) => [
-    key.toLowerCase(),
-    String(value || '').trim(),
-  ])
-);
+    const headers = Object.fromEntries(
+      Object.entries(event.headers || {}).map(([key, value]) => [
+        key.toLowerCase(),
+        String(value || '').trim(),
+      ])
+    );
 
-const providedSecret = headers['x-manual-pullsheet-secret'] || headers['x-webhook-secret'] || '';
+    const secret = String(
+      process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || ''
+    ).trim();
 
-const secret = String(
-  process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || ''
-).trim();
+    const providedSecret =
+      headers['x-manual-pullsheet-secret'] ||
+      headers['x-webhook-secret'] ||
+      '';
 
     if (secret && providedSecret !== secret) {
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid manual pullsheet secret' }),
+        body: JSON.stringify({
+          error: 'Invalid manual pullsheet secret',
+        }),
       };
     }
 
@@ -425,7 +441,9 @@ const secret = String(
     if (orders.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'No orders supplied' }),
+        body: JSON.stringify({
+          error: 'No orders supplied',
+        }),
       };
     }
 
