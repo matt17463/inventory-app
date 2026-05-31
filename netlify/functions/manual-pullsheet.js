@@ -373,10 +373,14 @@ async function createJobItem({
     return { id: existing.id, created: false };
   }
 
-  const payload = {
-    job_id: Number(jobId),
-    blank_product_id: blankProductId,
-    finished_product_id: finishedProductId,
+const payload = {
+  job_id: Number(jobId),
+
+  // Legacy required column in job_items.
+  product_id: finishedProductId,
+
+  blank_product_id: blankProductId,
+  finished_product_id: finishedProductId,
     woocommerce_line_item_id: lineItemId ? Number(lineItemId) : null,
     woocommerce_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
     woocommerce_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
