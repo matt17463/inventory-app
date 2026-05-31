@@ -457,7 +457,7 @@ async function processOrder(order) {
           variation_id: lineItem.variation_id || null,
           lookup_source: lookup.source,
           blank_sku_base: parsed.blankSkuBase,
-          error: 'Matching blank product was not found. Sync products and rebuild product catalog mappings.',
+          error: 'Matching blank product was not found. Run WooCommerce product sync, then select rebuild_product_catalog_from_products(); verify product_sku_mappings has the WooCommerce product/variation ID.',
         });
         continue;
       }
@@ -588,16 +588,11 @@ exports.handler = async (event) => {
       headers['x-webhook-secret'] ||
       '';
 
-    // During testing, this logs mismatch but allows the request.
-    // After confirmed working, change this block back to return 401.
     if (secret && providedSecret !== secret) {
-      console.log('Manual pullsheet secret mismatch', {
-        secretLength: secret.length,
-        providedSecretLength: providedSecret.length,
-        providedHeaders: Object.keys(headers),
-        hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
-        hasWebhookHeader: Boolean(headers['x-webhook-secret']),
-      });
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Invalid manual pullsheet secret' }),
+      };
     }
 
     const body = JSON.parse(event.body || '{}');
