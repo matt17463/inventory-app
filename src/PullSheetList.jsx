@@ -1,68 +1,44 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { supabase } from "./supabaseClient";
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getPullSheets } from './lib/inventoryApi';
 
 export default function PullSheetList() {
-    const [jobs, setJobs] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState([]);
+  const [message, setMessage] = useState('');
 
-    useEffect(() => {
-        async function loadJobs() {
-            setLoading(true);
+  useEffect(() => {
+    getPullSheets()
+      .then(setJobs)
+      .catch((err) => setMessage(err.message));
+  }, []);
 
-            const { data, error } = await supabase
-                .from("jobs")
-                .select("*")
-                .order("created_at", { ascending: false });
+  return (
+    <main className="page">
+      <h1>Pull Sheets</h1>
+      {message && <p className="message">{message}</p>}
 
-            if (error) {
-                console.error(error);
-                setLoading(false);
-                return;
-            }
-
-            setJobs(data);
-            setLoading(false);
-        }
-
-        loadJobs();
-    }, []);
-
-    if (loading) {
-        return <p style={{ padding: "20px" }}>Loading pull sheets…</p>;
-    }
-
-    return (
-        <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto" }}>
-            <h2>Pull Sheets</h2>
-
-            {jobs.length === 0 ? (
-                <p>No pull sheets created yet.</p>
-            ) : (
-                <div style={{ marginTop: "20px" }}>
-                    {jobs.map(job => (
-                        <Link
-                            key={job.id}
-                            to={`/pullsheet/${job.id}`}
-                            style={{
-                                display: "block",
-                                padding: "14px",
-                                marginBottom: "12px",
-                                border: "1px solid #ccc",
-                                borderRadius: "8px",
-                                textDecoration: "none",
-                                color: "black"
-                            }}
-                        >
-                            <strong>{job.job_name}</strong>
-                            <br />
-                            Customer: {job.customer_name}
-                            <br />
-                            Created: {new Date(job.created_at).toLocaleString()}
-                        </Link>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
+      <table>
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Customer</th>
+            <th>Status</th>
+            <th>Due</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((job) => (
+            <tr key={job.id}>
+              <td>{job.job_name}</td>
+              <td>{job.customer_name}</td>
+              <td>{job.status}</td>
+              <td>{job.due_date}</td>
+              <td><Link to={`/pullsheets/${job.id}`}>Open</Link></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </main>
+  );
 }
