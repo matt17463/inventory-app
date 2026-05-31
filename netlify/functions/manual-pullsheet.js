@@ -387,7 +387,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          message: 'manual-pullsheet function is live',
+          message: 'manual-pullsheet debug function is live',
         }),
       };
     }
