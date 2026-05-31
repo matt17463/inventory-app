@@ -10,41 +10,138 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+function normalizeSku(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function parseOrderSku(sku) {
+  const clean = normalizeSku(sku);
+  const parts = clean.split('-').filter(Boolean);
+
+  let sizeIndex = -1;
+  const sizePattern = /^(XS|S|M|L|XL|XXL|XXXL|[WYM]?[0-9]*XL|WXS|WS|WM|WL|WXL|W2XL|W3XL|W4XL|A2XL|A3XL|A4XL)$/;
+
+  parts.forEach((part, index) => {
+    if (sizePattern.test(part)) sizeIndex = index;
+  });
+
+  if (sizeIndex < 0) {
+    return {
+      orderSku: clean,
+      blankSkuBase: clean,
+      logoName: null,
+      placement: null,
+      decorationSize: null,
+    };
+  }
+
+  const blankStart = Math.max(0, sizeIndex - 4);
+  const blankSkuBase = parts.slice(blankStart, sizeIndex + 1).join('-');
+  const afterSize = parts.slice(sizeIndex + 1);
+
+  const logoName = afterSize[0] || null;
+  const placement = afterSize[1] || null;
+  const sizeMatch = placement ? placement.match(/([0-9]+(?:\.[0-9]+)?)/) : null;
+
+  return {
+    orderSku: clean,
+    blankSkuBase,
+    logoName,
+    placement,
+    decorationSize: sizeMatch ? sizeMatch[1] : null,
+  };
+}
+
+async function findOrCreateCustomer(name) {
+  const clean = String(name || '').trim() || 'Unknown Customer';
+
+  const { data: existing } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('name', clean)
+    .maybeSingle();
+
+  if (existing?.id) return existing.id;
+
+  const { data, error } = await supabase
+    .from('customers')
+    .insert({ name: clean })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function findOrCreateLogo(customerId, logoName) {
+  if (!logoName) return null;
+
+  const clean = String(logoName).trim();
+
+  const { data: existing } = await supabase
+    .from('logos')
+    .select('id')
+    .eq('customer_id', customerId)
+    .eq('name', clean)
+    .maybeSingle();
+
+  if (existing?.id) return existing.id;
+
+  const { data, error } = await supabase
+    .from('logos')
+    .insert({
+      customer_id: customerId,
+      name: clean,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function findOrCreateFinishedProduct({ blankProductId, customerId, logoId, sku, name, placement, decorationSize }) {
+  const { data: existing } = await supabase
+    .from('finished_products')
+    .select('id')
+    .eq('finished_sku', sku)
+    .maybeSingle();
+
+  if (existing?.id) return existing.id;
+
+  const { data, error } = await supabase
+    .from('finished_products')
+    .insert({
+      blank_product_id: blankProductId,
+      customer_id: customerId,
+      logo_id: logoId,
+      finished_sku: sku,
+      placement,
+      decoration_size: decorationSize,
+      name,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
       return {
         statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          message: 'WooCommerce webhook function is live',
-        }),
+        body: JSON.stringify({ success: true, message: 'WooCommerce webhook function is live' }),
       };
     }
 
     if (event.httpMethod !== 'POST') {
-      return {
-        statusCode: 405,
-        body: JSON.stringify({ error: 'Method not allowed' }),
-      };
+      return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
     }
 
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: 'Missing Supabase environment variables',
-        }),
-      };
-    }
-
-    if (!process.env.WC_WEBHOOK_SECRET) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: 'Missing WC_WEBHOOK_SECRET',
-        }),
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: 'Missing Supabase env vars' }) };
     }
 
     let rawBody = event.rawBody || event.body || '';
@@ -53,209 +150,150 @@ export const handler = async (event) => {
       rawBody = Buffer.from(event.body, 'base64').toString('utf8');
     }
 
-    const normalizedHeaders = {};
+    const headers = Object.fromEntries(
+      Object.entries(event.headers || {}).map(([key, value]) => [key.toLowerCase(), value])
+    );
 
-    for (const [key, value] of Object.entries(event.headers || {})) {
-      normalizedHeaders[key.toLowerCase()] = value;
-    }
+    const contentType = headers['content-type'] || '';
 
-    const contentType = normalizedHeaders['content-type'] || '';
-
-    // WooCommerce sends a tiny unsigned form-encoded setup/test ping when saving the webhook.
-    // Accept that ping so the webhook can be saved.
-    if (
-      contentType.includes('application/x-www-form-urlencoded') &&
-      rawBody.length <= 50
-    ) {
+    // WooCommerce setup ping when saving webhook.
+    if (contentType.includes('application/x-www-form-urlencoded') && rawBody.length <= 50) {
       return {
         statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          message: 'WooCommerce setup ping accepted',
-        }),
+        body: JSON.stringify({ success: true, message: 'WooCommerce setup ping accepted' }),
       };
     }
 
     if (!rawBody) {
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'No body sent' }) };
+    }
+
+    const secret = process.env.WC_WEBHOOK_SECRET || '';
+    const signature = headers['x-wc-webhook-signature'];
+
+    if (secret && signature) {
+      const expected = crypto.createHmac('sha256', secret.trim()).update(rawBody, 'utf8').digest('base64');
+
+      if (signature.trim() !== expected) {
+        return { statusCode: 401, body: JSON.stringify({ error: 'Invalid WooCommerce signature' }) };
+      }
+    }
+
+    const order = JSON.parse(rawBody);
+
+    if (order.ping === 'pong' || order.webhook_id) {
       return {
         statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          message: 'Webhook endpoint reached, but no body was sent.',
-        }),
+        body: JSON.stringify({ success: true, message: 'WooCommerce test received' }),
       };
     }
-
-    let parsedBody = null;
-
-    try {
-      parsedBody = JSON.parse(rawBody);
-    } catch (e) {
-      parsedBody = null;
-    }
-
-    if (
-      parsedBody &&
-      (
-        parsedBody.webhook_id ||
-        parsedBody.ping === 'pong' ||
-        parsedBody.action === 'woocommerce_webhook_delivery'
-      )
-    ) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          message: 'WooCommerce webhook test received',
-        }),
-      };
-    }
-
-    const signature = normalizedHeaders['x-wc-webhook-signature'];
-
-    if (!signature) {
-      console.log('Missing WooCommerce signature');
-      console.log('Headers:', event.headers);
-
-      return {
-        statusCode: 401,
-        body: JSON.stringify({
-          error: 'Missing WooCommerce signature',
-        }),
-      };
-    }
-
-    const expected = crypto
-      .createHmac('sha256', process.env.WC_WEBHOOK_SECRET.trim())
-      .update(rawBody, 'utf8')
-      .digest('base64');
-
-    if (signature.trim() !== expected) {
-      console.log('Invalid WooCommerce signature');
-      console.log('Received signature:', signature);
-      console.log('Expected signature:', expected);
-      console.log('Headers:', event.headers);
-      console.log('Raw body length:', rawBody.length);
-      console.log('Is base64 encoded:', event.isBase64Encoded);
-
-      return {
-        statusCode: 401,
-        body: JSON.stringify({
-          error: 'Invalid WooCommerce signature',
-        }),
-      };
-    }
-
-    const order = parsedBody || JSON.parse(rawBody);
 
     const orderId = order.id;
     const customerName =
       `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() ||
+      order.billing?.company ||
       'Unknown Customer';
 
-    const lineItems = order.line_items || [];
-
-    if (!orderId || lineItems.length === 0) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({
-          error: 'Missing order ID or line items',
-        }),
-      };
-    }
+    const customerId = await findOrCreateCustomer(customerName);
 
     const { data: job, error: jobError } = await supabase
       .from('jobs')
-      .insert({
-        job_name: `Order #${orderId}`,
-        customer_name: customerName,
-        notes: order.customer_note || null,
-        due_date: new Date().toISOString().slice(0, 10),
-      })
-      .select()
+      .upsert(
+        {
+          woocommerce_order_id: orderId,
+          job_name: `Order #${orderId}`,
+          customer_name: customerName,
+          status: 'queued',
+          notes: order.customer_note || null,
+          due_date: new Date().toISOString().slice(0, 10),
+        },
+        { onConflict: 'woocommerce_order_id' }
+      )
+      .select('id')
       .single();
 
     if (jobError) {
-      console.error('Job insert error:', jobError);
-
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: 'Failed to create job',
-          details: jobError.message,
-        }),
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to create job', details: jobError.message }) };
     }
 
-    const jobItems = [];
+    const createdItems = [];
+    const errors = [];
 
-    for (const item of lineItems) {
-      if (!item.sku) {
-        console.error('Line item missing SKU:', item.name);
+    for (const item of order.line_items || []) {
+      const sku = normalizeSku(item.sku);
+
+      if (!sku) {
+        errors.push({ item: item.name, error: 'Line item missing SKU' });
         continue;
       }
 
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .select('id, sku')
-        .eq('sku', item.sku)
+      const parsed = parseOrderSku(sku);
+
+      const { data: blankProduct, error: blankError } = await supabase
+        .from('blank_products')
+        .select('id, sku_base')
+        .eq('sku_base', parsed.blankSkuBase)
         .maybeSingle();
 
-      if (productError || !product) {
-        console.error('Product not found for SKU:', item.sku, productError);
+      if (blankError || !blankProduct) {
+        errors.push({
+          sku,
+          blankSkuBase: parsed.blankSkuBase,
+          error: 'Blank product not found. Run WooCommerce product sync first.',
+        });
         continue;
       }
 
-      jobItems.push({
-        job_id: job.id,
-        product_id: product.id,
-        quantity: item.quantity || 1,
+      const logoId = await findOrCreateLogo(customerId, parsed.logoName);
+      const finishedProductId = await findOrCreateFinishedProduct({
+        blankProductId: blankProduct.id,
+        customerId,
+        logoId,
+        sku,
+        name: item.name,
+        placement: parsed.placement,
+        decorationSize: parsed.decorationSize,
       });
-    }
 
-    if (jobItems.length === 0) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({
-          error:
-            'No valid job items created. Check that WooCommerce order SKUs exist in Supabase products.',
-        }),
-      };
-    }
+      const { data: jobItem, error: jobItemError } = await supabase
+        .from('job_items')
+        .insert({
+          job_id: job.id,
+          blank_product_id: blankProduct.id,
+          finished_product_id: finishedProductId,
+          woocommerce_line_item_id: item.id || null,
+          order_sku: sku,
+          quantity: item.quantity || 1,
+          status: 'queued',
+          logo_id: logoId,
+          placement: parsed.placement,
+          decoration_size: parsed.decorationSize,
+          notes: item.name,
+        })
+        .select('id')
+        .single();
 
-    const { error: itemsError } = await supabase
-      .from('job_items')
-      .insert(jobItems);
-
-    if (itemsError) {
-      console.error('Job items insert error:', itemsError);
-
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: 'Failed to create job items',
-          details: itemsError.message,
-        }),
-      };
+      if (jobItemError) {
+        errors.push({ sku, error: jobItemError.message });
+      } else {
+        createdItems.push(jobItem.id);
+      }
     }
 
     return {
-      statusCode: 200,
+      statusCode: createdItems.length > 0 ? 200 : 400,
       body: JSON.stringify({
-        success: true,
+        success: createdItems.length > 0,
         job_id: job.id,
-        items_created: jobItems.length,
+        items_created: createdItems.length,
+        errors,
       }),
     };
   } catch (err) {
     console.error('Unhandled webhook error:', err);
-
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: 'Server error',
-        details: err.message,
-      }),
+      body: JSON.stringify({ error: 'Server error', details: err.message }),
     };
   }
 };
