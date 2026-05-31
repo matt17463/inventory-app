@@ -18,7 +18,7 @@ function parseOrderSku(sku) {
   const parts = orderSku.split('-').filter(Boolean);
 
   const sizePattern =
-    /^(XS|S|M|L|XL|XXL|XXXL|[WYM]?[0-9]*XL|WXS|WS|WM|WL|WXL|W2XL|W3XL|W4XL|A2XL|A3XL|A4XL|AS|AM|AL|AXL|A2XL|A3XL|A4XL|YL|YM|YS|YXL)$/;
+    /^(XS|S|M|L|XL|XXL|XXXL|[WYM]?[0-9]*XL|WXS|WS|WM|WL|WXL|W2XL|W3XL|W4XL|A2XL|A3XL|A4XL|AS|AM|AL|AXL|YL|YM|YS|YXL)$/;
 
   const knownStyleMarkers = [
     ['BELLA', 'CANVAS', '6405'],
@@ -42,24 +42,21 @@ function parseOrderSku(sku) {
       let sizeIndex = -1;
 
       for (let j = i + marker.length; j < parts.length; j += 1) {
-        if (sizePattern.test(parts[j])) {
-          sizeIndex = j;
-        }
+        if (sizePattern.test(parts[j])) sizeIndex = j;
       }
 
       if (sizeIndex >= 0) {
         const blankSkuBase = parts.slice(i, sizeIndex + 1).join('-');
         const afterSize = parts.slice(sizeIndex + 1);
-        const logoName = afterSize[0] || null;
-        const placement = afterSize[1] || null;
-        const sizeMatch = placement ? placement.match(/([0-9]+(?:\.[0-9]+)?)/) : null;
 
         return {
           orderSku,
           blankSkuBase,
-          logoName,
-          placement,
-          decorationSize: sizeMatch ? sizeMatch[1] : null,
+          logoName: afterSize[0] || null,
+          placement: afterSize[1] || null,
+          decorationSize: afterSize[1]
+            ? (afterSize[1].match(/([0-9]+(?:\.[0-9]+)?)/) || [])[1] || null
+            : null,
         };
       }
     }
@@ -68,9 +65,7 @@ function parseOrderSku(sku) {
   let sizeIndex = -1;
 
   parts.forEach((part, index) => {
-    if (sizePattern.test(part)) {
-      sizeIndex = index;
-    }
+    if (sizePattern.test(part)) sizeIndex = index;
   });
 
   if (sizeIndex < 0) {
@@ -87,16 +82,14 @@ function parseOrderSku(sku) {
   const blankSkuBase = parts.slice(blankStart, sizeIndex + 1).join('-');
   const afterSize = parts.slice(sizeIndex + 1);
 
-  const logoName = afterSize[0] || null;
-  const placement = afterSize[1] || null;
-  const sizeMatch = placement ? placement.match(/([0-9]+(?:\.[0-9]+)?)/) : null;
-
   return {
     orderSku,
     blankSkuBase,
-    logoName,
-    placement,
-    decorationSize: sizeMatch ? sizeMatch[1] : null,
+    logoName: afterSize[0] || null,
+    placement: afterSize[1] || null,
+    decorationSize: afterSize[1]
+      ? (afterSize[1].match(/([0-9]+(?:\.[0-9]+)?)/) || [])[1] || null
+      : null,
   };
 }
 
@@ -163,15 +156,61 @@ async function findOrCreateLogo(customerId, logoName) {
   return data.id;
 }
 
-async function findBlankProduct(blankSkuBase) {
-  const { data, error } = await supabase
-    .from('blank_products')
-    .select('id, sku_base, name')
-    .eq('sku_base', blankSkuBase)
+async function findBlankProductForWooSku(wooSku) {
+  const sku = normalizeSku(wooSku);
+
+  const { data: mapping, error: mappingError } = await supabase
+    .from('product_sku_mappings')
+    .select(`
+      blank_product_id,
+      blank_products:blank_product_id (
+        id,
+        sku_base,
+        name
+      )
+    `)
+    .eq('woo_sku', sku)
     .maybeSingle();
 
-  if (error) throw error;
-  return data || null;
+  if (mappingError) throw mappingError;
+
+  if (mapping?.blank_products?.id) {
+    return {
+      source: 'mapping',
+      blankProduct: mapping.blank_products,
+      parsed: {
+        orderSku: sku,
+        blankSkuBase: mapping.blank_products.sku_base,
+        logoName: null,
+        placement: null,
+        decorationSize: null,
+      },
+    };
+  }
+
+  const parsed = parseOrderSku(sku);
+
+  const { data: fallbackBlank, error: fallbackError } = await supabase
+    .from('blank_products')
+    .select('id, sku_base, name')
+    .eq('sku_base', parsed.blankSkuBase)
+    .maybeSingle();
+
+  if (fallbackError) throw fallbackError;
+
+  if (fallbackBlank?.id) {
+    return {
+      source: 'fallback_parser',
+      blankProduct: fallbackBlank,
+      parsed,
+    };
+  }
+
+  return {
+    source: 'not_found',
+    blankProduct: null,
+    parsed,
+  };
 }
 
 async function findOrCreateFinishedProduct({
@@ -206,9 +245,7 @@ async function findOrCreateFinishedProduct({
   if (logoId) payload.logo_id = logoId;
 
   Object.keys(payload).forEach((key) => {
-    if (payload[key] === null || payload[key] === '') {
-      delete payload[key];
-    }
+    if (payload[key] === null || payload[key] === '') delete payload[key];
   });
 
   const { data, error } = await supabase
@@ -253,7 +290,6 @@ async function existingJobItem(jobId, lineItemId, sku) {
   }
 
   const { data, error } = await query.maybeSingle();
-
   if (error) throw error;
   return data || null;
 }
@@ -272,10 +308,7 @@ async function createJobItem({
   const existing = await existingJobItem(jobId, lineItemId, sku);
 
   if (existing?.id) {
-    return {
-      id: existing.id,
-      created: false,
-    };
+    return { id: existing.id, created: false };
   }
 
   const payload = {
@@ -293,9 +326,7 @@ async function createJobItem({
   };
 
   Object.keys(payload).forEach((key) => {
-    if (payload[key] === null || payload[key] === '') {
-      delete payload[key];
-    }
+    if (payload[key] === null || payload[key] === '') delete payload[key];
   });
 
   const { data, error } = await supabase
@@ -306,10 +337,7 @@ async function createJobItem({
 
   if (error) throw error;
 
-  return {
-    id: data.id,
-    created: true,
-  };
+  return { id: data.id, created: true };
 }
 
 async function reserveInventory({ jobId, jobItemId, blankProductId, quantity }) {
@@ -353,14 +381,16 @@ async function processOrder(order) {
         continue;
       }
 
-      const parsed = parseOrderSku(sku);
-      const blankProduct = await findBlankProduct(parsed.blankSkuBase);
+      const lookup = await findBlankProductForWooSku(sku);
+      const blankProduct = lookup.blankProduct;
+      const parsed = lookup.parsed;
 
       if (!blankProduct) {
         orderResult.errors.push({
           sku,
+          lookup_source: lookup.source,
           blank_sku_base: parsed.blankSkuBase,
-          error: 'Matching blank product was not found. Create/sync the blank item first.',
+          error: 'Matching blank product was not found. Add product_sku_mappings row or create/sync the blank item.',
         });
         continue;
       }
@@ -401,7 +431,6 @@ async function processOrder(order) {
         } catch (reservationError) {
           orderResult.errors.push({
             sku,
-            blank_sku_base: parsed.blankSkuBase,
             job_item_id: jobItem.id,
             error: `Reservation failed: ${reservationError.message}`,
           });
@@ -432,7 +461,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          message: 'manual-pullsheet debug function is live',
+          message: 'manual-pullsheet function with SKU mappings is live',
         }),
       };
     }
@@ -440,9 +469,7 @@ exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') {
       return {
         statusCode: 405,
-        body: JSON.stringify({
-          error: 'Method not allowed',
-        }),
+        body: JSON.stringify({ error: 'Method not allowed' }),
       };
     }
 
@@ -471,17 +498,12 @@ exports.handler = async (event) => {
       headers['x-webhook-secret'] ||
       '';
 
-if (secret && providedSecret !== secret) {
-  console.log('Manual pullsheet secret mismatch', {
-    secretLength: secret.length,
-    providedSecretLength: providedSecret.length,
-    providedHeaders: Object.keys(headers),
-    hasManualHeader: Boolean(headers['x-manual-pullsheet-secret']),
-    hasWebhookHeader: Boolean(headers['x-webhook-secret']),
-  });
-
-  // TEMPORARY: allow request through while debugging
-}
+    if (secret && providedSecret !== secret) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Invalid manual pullsheet secret' }),
+      };
+    }
 
     const body = JSON.parse(event.body || '{}');
     const orders = Array.isArray(body.orders) ? body.orders : [];
@@ -489,9 +511,7 @@ if (secret && providedSecret !== secret) {
     if (orders.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({
-          error: 'No orders supplied',
-        }),
+        body: JSON.stringify({ error: 'No orders supplied' }),
       };
     }
 
