@@ -349,3 +349,97 @@
 .bulk-field input {
   width: 100%;
 }
+
+
+/* Display fixes for Edit Blank Items / Bulk Edit checkboxes */
+.edit-blank-items-page input[type="checkbox"],
+.bulk-selection-toolbar input[type="checkbox"],
+.bulk-edit-form input[type="checkbox"],
+.editable-result-row input[type="checkbox"] {
+  width: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: #4b0082;
+}
+
+.edit-blank-layout {
+  gap: 18px;
+}
+
+.blank-edit-results {
+  gap: 8px;
+}
+
+.editable-result-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editable-result-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editable-result-row strong,
+.editable-result-row span,
+.editable-result-row small {
+  display: block;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.editable-result-row strong {
+  font-size: 1rem;
+  color: #171321;
+}
+
+.editable-result-row span {
+  color: #33283f;
+  font-size: 0.95rem;
+}
+
+.editable-result-row small {
+  color: #74667f;
+  font-size: 0.86rem;
+}
+
+.row-select {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+  width: 24px;
+  min-width: 24px;
+}
+
+.bulk-selection-toolbar label,
+.bulk-field > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+}
+
+.bulk-field {
+  gap: 8px;
+}
+
+.bulk-field select,
+.bulk-field input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1100px) {
+  .edit-blank-layout {
+    grid-template-columns: 1fr;
+  }
+}
