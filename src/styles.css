@@ -503,3 +503,147 @@ code {
     flex-direction: column;
   }
 }
+
+/* Operations update */
+.operations-hero {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(246, 183, 60, 0.35), transparent 22rem),
+    linear-gradient(135deg, #31005f 0%, #4b0082 46%, #1677ff 100%);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin: 24px 0;
+}
+
+.kpi-card {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border: 1px solid var(--sc-border);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--sc-ink);
+  box-shadow: 0 8px 24px rgba(43, 0, 77, 0.06);
+}
+
+.kpi-card:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: var(--sc-shadow);
+}
+
+.kpi-card span {
+  font-weight: 950;
+  font-size: clamp(1.4rem, 2.2vw, 2.2rem);
+  color: var(--sc-purple);
+  line-height: 1;
+}
+
+.kpi-card strong {
+  font-size: 1rem;
+  color: var(--sc-purple-dark);
+}
+
+.kpi-card small {
+  color: var(--sc-muted);
+}
+
+.operations-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wide-two-column {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.wide-card {
+  max-width: none;
+}
+
+.compact-row,
+.activity-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--sc-border);
+  color: var(--sc-ink);
+}
+
+.compact-row:last-child,
+.activity-row:last-child {
+  border-bottom: 0;
+}
+
+.compact-row span,
+.activity-row span,
+.activity-row small {
+  color: var(--sc-muted);
+}
+
+.activity-row strong {
+  color: var(--sc-purple-dark);
+  text-transform: capitalize;
+}
+
+.activity-row.full {
+  padding: 14px;
+  border: 1px solid var(--sc-border);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
+.transfer-card {
+  max-width: 720px;
+}
+
+.scanner-card {
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  align-items: start;
+  max-width: none;
+}
+
+.scan-video {
+  display: none;
+  width: 100%;
+  max-width: 520px;
+  margin-top: 14px;
+  border-radius: 18px;
+  border: 3px solid var(--sc-purple-soft);
+  background: #000;
+}
+
+.scan-video.active {
+  display: block;
+}
+
+.warning-text {
+  color: #b45309;
+  font-weight: 900;
+}
+
+.compact-heading {
+  margin-bottom: 0;
+}
+
+.small-select {
+  max-width: 220px;
+}
+
+.mini-kpis {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 720px;
+}
+
+@media (max-width: 1100px) {
+  .kpi-grid,
+  .operations-grid,
+  .wide-two-column,
+  .scanner-card {
+    grid-template-columns: 1fr;
+  }
+}
