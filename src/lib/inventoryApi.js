@@ -8,6 +8,33 @@ function textSearchValue(value) {
   return String(value || '').toLowerCase();
 }
 
+function searchTokens(term) {
+  return String(term || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function productMatchesAllTokens(product, term) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const parts = blankProductSearchText(product)
+    .concat([formatBlankProductLabel(product)])
+    .map((part) => ({
+      text: textSearchValue(part),
+      normalized: normalizeSearchValue(part),
+    }));
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    return parts.some((part) =>
+      part.text.includes(token) || part.normalized.includes(normalizedToken)
+    );
+  });
+}
+
 function escapeOrTerm(term) {
   return String(term || '').replace(/[%_,]/g, '\\$&');
 }
@@ -116,18 +143,7 @@ export async function getBlankProducts(search = '') {
 
   if (!term) return rows;
 
-  const lowerTerm = textSearchValue(term);
-  const normalizedTerm = normalizeSearchValue(term);
-
-  return rows.filter((product) =>
-    blankProductSearchText(product).some((part) => {
-      const value = String(part || '');
-      return (
-        textSearchValue(value).includes(lowerTerm) ||
-        normalizeSearchValue(value).includes(normalizedTerm)
-      );
-    })
-  );
+  return rows.filter((product) => productMatchesAllTokens(product, term));
 }
 
 export async function findBlankProductsByScannedValue(value) {
