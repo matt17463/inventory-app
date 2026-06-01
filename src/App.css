@@ -188,3 +188,33 @@
   color: #666;
   font-size: 0.9rem;
 }
+
+.result-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.result-row {
+  appearance: none;
+  border: 1px solid #e7dff0;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  color: #171321;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.result-row:hover,
+.result-row.selected {
+  border-color: #2478f2;
+  box-shadow: 0 0 0 3px rgba(36, 120, 242, 0.12);
+}
+
+.result-row span {
+  color: #6b6477;
+  font-size: 0.95rem;
+}

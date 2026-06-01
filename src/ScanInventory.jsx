@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  findBlankProductByScannedValue,
+  findBlankProductsByScannedValue,
   formatBinLabel,
   formatBlankProductLabel,
   getBins,
@@ -19,6 +19,7 @@ export default function ScanInventory() {
   const [bins, setBins] = useState([]);
   const [manualValue, setManualValue] = useState('');
   const [foundProduct, setFoundProduct] = useState(null);
+  const [matchingProducts, setMatchingProducts] = useState([]);
   const [binId, setBinId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [mode, setMode] = useState('receive');
@@ -41,16 +42,31 @@ export default function ScanInventory() {
     }
   }
 
+  function chooseProduct(product) {
+    setFoundProduct(product);
+    setMessage(`Selected: ${formatBlankProductLabel(product)}`);
+  }
+
   async function lookup(value) {
     setMessage('');
-    const product = await findBlankProductByScannedValue(value);
-    if (!product) {
-      setFoundProduct(null);
-      setMessage('No matching product found. Try SKU base, barcode, color, or size.');
+    setFoundProduct(null);
+    setMatchingProducts([]);
+
+    const products = await findBlankProductsByScannedValue(value);
+
+    if (!products.length) {
+      setMessage('No matching product found. Try SKU base, barcode, brand, style, color, or size.');
       return;
     }
-    setFoundProduct(product);
-    setMessage(`Found: ${formatBlankProductLabel(product)}`);
+
+    setMatchingProducts(products);
+
+    if (products.length === 1) {
+      chooseProduct(products[0]);
+      return;
+    }
+
+    setMessage(`Found ${products.length} matching blank items. Choose the exact color/size/item below.`);
   }
 
   async function startCamera() {
@@ -93,7 +109,7 @@ export default function ScanInventory() {
     setMessage('');
 
     if (!foundProduct) {
-      setMessage('Lookup a product first.');
+      setMessage('Choose a product from the search results first.');
       return;
     }
 
@@ -147,6 +163,26 @@ export default function ScanInventory() {
           </div>
         )}
       </section>
+
+      {matchingProducts.length > 1 && (
+        <section className="card">
+          <h2>Choose Matching Blank Item</h2>
+          <p className="helper-text">Your search matched multiple blank items. Select the exact item before receiving or reserving inventory.</p>
+          <div className="result-list">
+            {matchingProducts.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                className={`result-row ${foundProduct?.id === product.id ? 'selected' : ''}`}
+                onClick={() => chooseProduct(product)}
+              >
+                <strong>{formatBlankProductLabel(product)}</strong>
+                <span>{product.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <form onSubmit={handleAction} className="card">
         <h2>Inventory Action</h2>
