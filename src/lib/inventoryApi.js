@@ -243,6 +243,61 @@ export async function updateBlankProduct(blankProductId, input) {
   return data;
 }
 
+
+export async function bulkUpdateBlankProducts(blankProductIds, input) {
+  const ids = Array.from(new Set((blankProductIds || []).filter(Boolean)));
+  if (!ids.length) throw new Error('Select at least one blank item.');
+
+  const payload = {};
+
+  if (Object.prototype.hasOwnProperty.call(input, 'brand_id')) {
+    payload.brand_id = input.brand_id ? Number(input.brand_id) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'product_type_id')) {
+    payload.product_type_id = input.product_type_id ? Number(input.product_type_id) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'color_id')) {
+    payload.color_id = input.color_id ? Number(input.color_id) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'size_id')) {
+    payload.size_id = input.size_id ? Number(input.size_id) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'unit_cost')) {
+    const unitCost = input.unit_cost === '' || input.unit_cost == null ? 0 : Number(input.unit_cost);
+    if (Number.isNaN(unitCost) || unitCost < 0) throw new Error('Unit cost must be zero or greater.');
+    payload.unit_cost = unitCost;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'low_stock_threshold')) {
+    if (input.low_stock_threshold === '' || input.low_stock_threshold == null) {
+      payload.low_stock_threshold = null;
+    } else {
+      const threshold = Number(input.low_stock_threshold);
+      if (Number.isNaN(threshold) || threshold < 0) throw new Error('Low-stock threshold must be zero or greater.');
+      payload.low_stock_threshold = threshold;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'image_url')) {
+    payload.image_url = String(input.image_url || '').trim() || null;
+  }
+
+  Object.keys(payload).forEach((key) => {
+    if (Number.isNaN(payload[key])) delete payload[key];
+  });
+
+  if (!Object.keys(payload).length) {
+    throw new Error('Choose at least one bulk edit field to apply.');
+  }
+
+  const { data, error } = await supabase
+    .from('blank_products')
+    .update(payload)
+    .in('id', ids)
+    .select('id');
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getBlankProducts(search = '') {
   const { data, error } = await supabase
     .from('blank_products')
