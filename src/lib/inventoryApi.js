@@ -106,7 +106,8 @@ export async function getBlankProducts(search = '') {
       sizes:size_id(name, code),
       product_types:product_type_id(name, code)
     `)
-    .order('name', { ascending: true });
+    .order('name', { ascending: true })
+    .limit(5000);
 
   if (error) throw error;
 
@@ -129,19 +130,27 @@ export async function getBlankProducts(search = '') {
   );
 }
 
-export async function findBlankProductByScannedValue(value) {
+export async function findBlankProductsByScannedValue(value) {
   const term = String(value || '').trim();
-  if (!term) return null;
+  if (!term) return [];
 
   const products = await getBlankProducts(term);
   const normalized = normalizeSearchValue(term);
 
-  return (
-    products.find((product) => normalizeSearchValue(product.sku_base) === normalized) ||
-    products.find((product) => normalizeSearchValue(product.barcode) === normalized) ||
-    products[0] ||
-    null
-  );
+  return [...products].sort((a, b) => {
+    const aExact = normalizeSearchValue(a.sku_base) === normalized || normalizeSearchValue(a.barcode) === normalized;
+    const bExact = normalizeSearchValue(b.sku_base) === normalized || normalizeSearchValue(b.barcode) === normalized;
+
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+
+    return formatBlankProductLabel(a).localeCompare(formatBlankProductLabel(b));
+  });
+}
+
+export async function findBlankProductByScannedValue(value) {
+  const products = await findBlankProductsByScannedValue(value);
+  return products[0] || null;
 }
 
 export async function getBlankInventory(search = '') {
