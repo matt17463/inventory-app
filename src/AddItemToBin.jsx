@@ -11,6 +11,14 @@ function textSearchValue(value) {
   return String(value || '').toLowerCase();
 }
 
+function searchTokens(term) {
+  return String(term || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
 /**
  * AddItemToBin.jsx
  *
@@ -95,14 +103,16 @@ export default function AddItemToBin() {
       productLabel(product),
     ];
 
-    const lowerTerm = textSearchValue(term);
-    const normalizedTerm = normalizeSearchValue(term);
+    const tokens = searchTokens(term);
+    const parts = searchableParts.map((part) => ({
+      text: textSearchValue(part),
+      normalized: normalizeSearchValue(part),
+    }));
 
-    return searchableParts.some((part) => {
-      const value = String(part || '');
-      return (
-        textSearchValue(value).includes(lowerTerm) ||
-        normalizeSearchValue(value).includes(normalizedTerm)
+    return tokens.every((token) => {
+      const normalizedToken = normalizeSearchValue(token);
+      return parts.some((part) =>
+        part.text.includes(token) || part.normalized.includes(normalizedToken)
       );
     });
   }
