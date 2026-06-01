@@ -4,6 +4,7 @@ import AuditMode from './AuditMode';
 import BinContents from './BinContents';
 import BinsDashboard from './BinsDashboard';
 import BlankInventory from './BlankInventory';
+import EditBlankItems from './EditBlankItems';
 import Home from './Home';
 import InventoryValuation from './InventoryValuation';
 import LowStock from './LowStock';
@@ -30,6 +31,7 @@ export default function App() {
           </Link>
           <nav>
             <Link to="/inventory/blanks">Inventory</Link>
+            <Link to="/inventory/edit-blanks">Edit Blanks</Link>
             <Link to="/add-item">Add Item</Link>
             <Link to="/bins">Bins</Link>
             <Link to="/scan">Scan</Link>
@@ -44,6 +46,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
+          <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
           <Route path="/bins" element={<BinsDashboard />} />
           <Route path="/bin/:binId" element={<BinContents />} />
           <Route path="/add-item" element={<AddItemToBin />} />

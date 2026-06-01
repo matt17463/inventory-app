@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBlankInventory, money } from './lib/inventoryApi';
+import { getBlankInventory } from './lib/inventoryApi';
 
 export default function BlankInventory() {
   const [rows, setRows] = useState([]);
@@ -44,8 +44,6 @@ export default function BlankInventory() {
             <th>Color</th>
             <th>Size</th>
             <th>On Hand</th>
-            <th>Unit Cost</th>
-            <th>Value</th>
           </tr>
         </thead>
         <tbody>
@@ -57,8 +55,6 @@ export default function BlankInventory() {
               <td>{row.color || ''}</td>
               <td>{row.size || ''}</td>
               <td>{row.total_quantity || 0}</td>
-              <td>{money(row.unit_cost)}</td>
-              <td>{money(row.inventory_value)}</td>
             </tr>
           ))}
         </tbody>
