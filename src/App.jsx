@@ -30,6 +30,7 @@ export default function App() {
           </Link>
           <nav>
             <Link to="/inventory/blanks">Inventory</Link>
+            <Link to="/add-item">Add Item</Link>
             <Link to="/bins">Bins</Link>
             <Link to="/scan">Scan</Link>
             <Link to="/transfer">Transfer</Link>

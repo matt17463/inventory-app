@@ -119,6 +119,7 @@ export default function Home() {
 
       <section className="dashboard-grid operations-grid">
         <Link className="app-tile" to="/scan"><span className="tile-icon">📷</span><h2>Barcode / QR Scan</h2><p>Scan or type a SKU to receive, transfer, or reserve inventory.</p></Link>
+        <Link className="app-tile" to="/add-item"><span className="tile-icon">➕</span><h2>Add Blank Item</h2><p>Create a new blank item or receive an existing blank directly into a bin.</p></Link>
         <Link className="app-tile" to="/transfer"><span className="tile-icon">🔁</span><h2>Transfer Inventory</h2><p>Move blank inventory from one bin to another with a ledger trail.</p></Link>
         <Link className="app-tile" to="/audit"><span className="tile-icon">🧮</span><h2>Audit Mode</h2><p>Open a bin, count actual units, and adjust discrepancies.</p></Link>
         <Link className="app-tile" to="/reservations"><span className="tile-icon">📌</span><h2>Reservations</h2><p>Hold inventory for jobs without blocking online orders.</p></Link>
