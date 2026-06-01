@@ -280,3 +280,72 @@
     align-items: stretch;
   }
 }
+
+/* Bulk edit blank items */
+.edit-blank-side-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.bulk-selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #eadff2;
+  border-radius: 14px;
+  background: #fbf8fd;
+}
+
+.bulk-selection-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.bulk-selection-toolbar span {
+  color: #6b6477;
+  font-size: 0.9rem;
+}
+
+.editable-result-row {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.row-select {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 2px;
+  cursor: pointer;
+}
+
+.bulk-edit-form {
+  display: grid;
+  gap: 12px;
+}
+
+.bulk-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #efe7f5;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.bulk-field > label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 800;
+  color: #211629;
+}
+
+.bulk-field select,
+.bulk-field input {
+  width: 100%;
+}
