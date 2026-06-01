@@ -75,6 +75,22 @@ export function money(value) {
   return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 
+export async function updateBlankProductUnitCost(blankProductId, unitCost) {
+  const parsed = unitCost === '' || unitCost == null ? 0 : Number(unitCost);
+
+  if (Number.isNaN(parsed) || parsed < 0) {
+    throw new Error('Unit cost must be zero or greater.');
+  }
+
+  const { data, error } = await supabase.rpc('update_blank_product_unit_cost', {
+    p_blank_product_id: blankProductId,
+    p_unit_cost: parsed,
+  });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
 export async function getBins() {
   const { data, error } = await supabase
     .from('bins')
