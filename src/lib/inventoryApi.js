@@ -75,22 +75,6 @@ export function money(value) {
   return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 
-export async function updateBlankProductUnitCost(blankProductId, unitCost) {
-  const parsed = unitCost === '' || unitCost == null ? 0 : Number(unitCost);
-
-  if (Number.isNaN(parsed) || parsed < 0) {
-    throw new Error('Unit cost must be zero or greater.');
-  }
-
-  const { data, error } = await supabase.rpc('update_blank_product_unit_cost', {
-    p_blank_product_id: blankProductId,
-    p_unit_cost: parsed,
-  });
-
-  if (error) throw error;
-  return Array.isArray(data) ? data[0] : data;
-}
-
 export async function getBins() {
   const { data, error } = await supabase
     .from('bins')
@@ -190,6 +174,64 @@ export async function createBlankProduct(input) {
       image_url,
       unit_cost,
       low_stock_threshold,
+      brand_id,
+      color_id,
+      size_id,
+      product_type_id,
+      brands:brand_id(name, code),
+      colors:color_id(name, code),
+      sizes:size_id(name, code),
+      product_types:product_type_id(name, code)
+    `)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+
+export async function updateBlankProduct(blankProductId, input) {
+  if (!blankProductId) throw new Error('Missing blank product ID.');
+
+  const skuBase = String(input?.sku_base || '').trim().toUpperCase();
+  const name = String(input?.name || '').trim();
+
+  if (!skuBase) throw new Error('Enter a blank SKU base.');
+  if (!name) throw new Error('Enter a blank item name.');
+
+  const payload = {
+    sku_base: skuBase,
+    name,
+    barcode: String(input?.barcode || '').trim() || null,
+    brand_id: input?.brand_id ? Number(input.brand_id) : null,
+    product_type_id: input?.product_type_id ? Number(input.product_type_id) : null,
+    color_id: input?.color_id ? Number(input.color_id) : null,
+    size_id: input?.size_id ? Number(input.size_id) : null,
+    image_url: String(input?.image_url || '').trim() || null,
+    unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : 0,
+    low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (Number.isNaN(payload[key])) delete payload[key];
+  });
+
+  const { data, error } = await supabase
+    .from('blank_products')
+    .update(payload)
+    .eq('id', blankProductId)
+    .select(`
+      id,
+      sku_base,
+      barcode,
+      name,
+      image_url,
+      unit_cost,
+      low_stock_threshold,
+      brand_id,
+      color_id,
+      size_id,
+      product_type_id,
       brands:brand_id(name, code),
       colors:color_id(name, code),
       sizes:size_id(name, code),
@@ -212,6 +254,10 @@ export async function getBlankProducts(search = '') {
       image_url,
       unit_cost,
       low_stock_threshold,
+      brand_id,
+      color_id,
+      size_id,
+      product_type_id,
       brands:brand_id(name, code),
       colors:color_id(name, code),
       sizes:size_id(name, code),
