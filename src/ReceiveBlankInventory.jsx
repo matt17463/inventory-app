@@ -64,11 +64,19 @@ export default function ReceiveBlankInventory() {
         <label>Blank product</label>
         <select value={blankProductId} onChange={(e) => setBlankProductId(e.target.value)} required>
           <option value="">Choose blank product...</option>
-          {products.map((p) => (
-            <option key={p.blank_product_id} value={p.blank_product_id}>
-              {p.sku_base} — {p.brand || ''} {p.color || ''} {p.size || ''} ({p.total_quantity || 0} on hand)
-            </option>
-          ))}
+          {products.map((p) => {
+            const productId = p.blank_product_id || p.id;
+            const brand = p.brand || p.brands?.name || p.brands?.code || '';
+            const color = p.color || p.colors?.name || p.colors?.code || '';
+            const size = p.size || p.sizes?.name || p.sizes?.code || '';
+            const quantityOnHand = p.total_quantity ?? p.quantity ?? 0;
+
+            return (
+              <option key={productId} value={productId}>
+                {p.sku_base} — {brand} {color} {size} ({quantityOnHand} on hand)
+              </option>
+            );
+          })}
         </select>
 
         <label>Bin</label>

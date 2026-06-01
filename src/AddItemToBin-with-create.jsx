@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 
+function normalizeSearchValue(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function textSearchValue(value) {
+  return String(value || '').toLowerCase();
+}
+
 /**
  * AddItemToBin.jsx
  *
@@ -58,14 +68,43 @@ export default function AddItemToBin() {
   }
 
   function productLabel(product) {
-    const brand = product.brands?.name || '';
-    const type = product.product_types?.name || '';
-    const color = product.colors?.name || '';
-    const size = product.sizes?.name || '';
+    const brand = product.brands?.code || product.brands?.name || '';
+    const type = product.product_types?.code || product.product_types?.name || '';
+    const color = product.colors?.code || product.colors?.name || '';
+    const size = product.sizes?.code || product.sizes?.name || '';
 
     return [product.sku_base, product.name, brand, type, color, size]
       .filter(Boolean)
       .join(' - ');
+  }
+
+  function productMatchesSearch(product, term) {
+    if (!term) return true;
+
+    const searchableParts = [
+      product.sku_base,
+      product.name,
+      product.brands?.name,
+      product.brands?.code,
+      product.product_types?.name,
+      product.product_types?.code,
+      product.colors?.name,
+      product.colors?.code,
+      product.sizes?.name,
+      product.sizes?.code,
+      productLabel(product),
+    ];
+
+    const lowerTerm = textSearchValue(term);
+    const normalizedTerm = normalizeSearchValue(term);
+
+    return searchableParts.some((part) => {
+      const value = String(part || '');
+      return (
+        textSearchValue(value).includes(lowerTerm) ||
+        normalizeSearchValue(value).includes(normalizedTerm)
+      );
+    });
   }
 
   async function loadBins() {
@@ -105,23 +144,35 @@ export default function AddItemToBin() {
         sku_base,
         name,
         image_url,
-        brands:brand_id(name),
-        colors:color_id(name),
-        sizes:size_id(name),
-        product_types:product_type_id(name)
+        brands:brand_id(name, code),
+        colors:color_id(name, code),
+        sizes:size_id(name, code),
+        product_types:product_type_id(name, code)
       `)
       .order('name', { ascending: true });
 
     const term = search.trim();
 
-    if (term) {
-      query = query.or(`sku_base.ilike.%${term}%,name.ilike.%${term}%`);
-    }
-
     const { data, error } = await query;
 
     if (error) throw error;
-    setBlankProducts(data || []);
+
+    const rows = data || [];
+    const filteredRows = term ? rows.filter((product) => productMatchesSearch(product, term)) : rows;
+
+    setBlankProducts(filteredRows);
+
+    if (term) {
+      if (filteredRows.length === 0) {
+        setMessage(`No blank items found for "${term}".`);
+      } else {
+        setMessage(`Found ${filteredRows.length} blank item${filteredRows.length === 1 ? '' : 's'} for "${term}".`);
+
+        if (filteredRows.length === 1) {
+          setBlankProductId(filteredRows[0].id);
+        }
+      }
+    }
   }
 
   async function loadPage() {
@@ -144,7 +195,16 @@ export default function AddItemToBin() {
 
   async function handleSearch(event) {
     event.preventDefault();
-    await loadBlankProducts();
+    setMessage('');
+    setLoading(true);
+
+    try {
+      await loadBlankProducts();
+    } catch (err) {
+      setMessage(err.message || 'Search failed.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function buildSkuBase() {
@@ -438,6 +498,9 @@ export default function AddItemToBin() {
             </option>
           ))}
         </select>
+        <p className="helper-text">
+          {blankProducts.length} blank item{blankProducts.length === 1 ? '' : 's'} available from the current search.
+        </p>
 
         <label htmlFor="quantity">Quantity received</label>
         <input
