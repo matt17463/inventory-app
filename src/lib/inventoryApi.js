@@ -117,6 +117,74 @@ export async function getBin(binId) {
   return data;
 }
 
+
+export async function getBlankProductLookups() {
+  const [brandRes, colorRes, sizeRes, typeRes] = await Promise.all([
+    supabase.from('brands').select('id, name, code').order('name', { ascending: true }),
+    supabase.from('colors').select('id, name, code').order('name', { ascending: true }),
+    supabase.from('sizes').select('id, name, code').order('name', { ascending: true }),
+    supabase.from('product_types').select('id, name, code').order('name', { ascending: true }),
+  ]);
+
+  if (brandRes.error) throw brandRes.error;
+  if (colorRes.error) throw colorRes.error;
+  if (sizeRes.error) throw sizeRes.error;
+  if (typeRes.error) throw typeRes.error;
+
+  return {
+    brands: brandRes.data || [],
+    colors: colorRes.data || [],
+    sizes: sizeRes.data || [],
+    productTypes: typeRes.data || [],
+  };
+}
+
+export async function createBlankProduct(input) {
+  const skuBase = String(input?.sku_base || '').trim().toUpperCase();
+  const name = String(input?.name || '').trim();
+
+  if (!skuBase) throw new Error('Enter a blank SKU base.');
+  if (!name) throw new Error('Enter a blank item name.');
+
+  const payload = {
+    sku_base: skuBase,
+    name,
+    barcode: String(input?.barcode || '').trim() || null,
+    brand_id: input?.brand_id ? Number(input.brand_id) : null,
+    product_type_id: input?.product_type_id ? Number(input.product_type_id) : null,
+    color_id: input?.color_id ? Number(input.color_id) : null,
+    size_id: input?.size_id ? Number(input.size_id) : null,
+    image_url: String(input?.image_url || '').trim() || null,
+    unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : null,
+    low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === null || Number.isNaN(payload[key])) delete payload[key];
+  });
+
+  const { data, error } = await supabase
+    .from('blank_products')
+    .upsert(payload, { onConflict: 'sku_base' })
+    .select(`
+      id,
+      sku_base,
+      barcode,
+      name,
+      image_url,
+      unit_cost,
+      low_stock_threshold,
+      brands:brand_id(name, code),
+      colors:color_id(name, code),
+      sizes:size_id(name, code),
+      product_types:product_type_id(name, code)
+    `)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getBlankProducts(search = '') {
   const { data, error } = await supabase
     .from('blank_products')
