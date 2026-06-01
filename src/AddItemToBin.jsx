@@ -67,6 +67,7 @@ export default function AddItemToBin() {
   const [newColorId, setNewColorId] = useState('');
   const [newSizeId, setNewSizeId] = useState('');
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [newUnitCost, setNewUnitCost] = useState('');
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -154,6 +155,7 @@ export default function AddItemToBin() {
         sku_base,
         name,
         image_url,
+        unit_cost,
         brands:brand_id(name, code),
         colors:color_id(name, code),
         sizes:size_id(name, code),
@@ -278,6 +280,7 @@ export default function AddItemToBin() {
         color_id: newColorId ? Number(newColorId) : null,
         size_id: newSizeId ? Number(newSizeId) : null,
         image_url: newImageUrl.trim() || null,
+        unit_cost: newUnitCost !== '' ? Number(newUnitCost) : 0,
       };
 
       Object.keys(payload).forEach((key) => {
@@ -305,6 +308,7 @@ export default function AddItemToBin() {
       setNewColorId('');
       setNewSizeId('');
       setNewImageUrl('');
+      setNewUnitCost('');
       setShowCreate(false);
 
       await loadBlankProducts();
@@ -461,6 +465,20 @@ export default function AddItemToBin() {
             placeholder="Example: Bella Canvas 6405 Navy W3XL"
             required
           />
+
+          <label htmlFor="new-unit-cost">Unit Cost</label>
+          <input
+            id="new-unit-cost"
+            type="number"
+            min="0"
+            step="0.01"
+            value={newUnitCost}
+            onChange={(event) => setNewUnitCost(event.target.value)}
+            placeholder="Example: 8.25"
+          />
+          <p className="helper-text">
+            Enter your cost per blank item. This is used for inventory valuation.
+          </p>
 
           <label htmlFor="new-image">Image URL</label>
           <input

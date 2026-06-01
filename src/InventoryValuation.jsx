@@ -1,13 +1,44 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getInventoryValuation, money } from './lib/inventoryApi';
+import { getInventoryValuation, money, updateBlankProductUnitCost } from './lib/inventoryApi';
 
 export default function InventoryValuation() {
   const [rows, setRows] = useState([]);
   const [message, setMessage] = useState('');
+  const [costInputs, setCostInputs] = useState({});
+  const [savingCostId, setSavingCostId] = useState(null);
+
+  async function loadValuation() {
+    try {
+      const data = await getInventoryValuation();
+      setRows(data);
+      setCostInputs(
+        Object.fromEntries(
+          data.map((row) => [row.blank_product_id, Number(row.unit_cost || 0).toFixed(2)])
+        )
+      );
+    } catch (err) {
+      setMessage(err.message || 'Failed to load valuation.');
+    }
+  }
 
   useEffect(() => {
-    getInventoryValuation().then(setRows).catch((err) => setMessage(err.message || 'Failed to load valuation.'));
+    loadValuation();
   }, []);
+
+  async function saveUnitCost(blankProductId) {
+    setSavingCostId(blankProductId);
+    setMessage('');
+
+    try {
+      await updateBlankProductUnitCost(blankProductId, costInputs[blankProductId]);
+      await loadValuation();
+      setMessage('Unit cost saved and valuation refreshed.');
+    } catch (err) {
+      setMessage(err.message || 'Failed to save unit cost.');
+    } finally {
+      setSavingCostId(null);
+    }
+  }
 
   const totalValue = useMemo(() => rows.reduce((sum, row) => sum + Number(row.inventory_value || 0), 0), [rows]);
   const totalUnits = useMemo(() => rows.reduce((sum, row) => sum + Number(row.total_quantity || 0), 0), [rows]);
@@ -42,7 +73,30 @@ export default function InventoryValuation() {
                   <td>{row.color}</td>
                   <td>{row.size}</td>
                   <td>{row.total_quantity}</td>
-                  <td>{money(row.unit_cost)}</td>
+                  <td>
+                    <div className="inline-cost-editor">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={costInputs[row.blank_product_id] ?? ''}
+                        onChange={(event) =>
+                          setCostInputs((current) => ({
+                            ...current,
+                            [row.blank_product_id]: event.target.value,
+                          }))
+                        }
+                        aria-label={`Unit cost for ${row.sku_base}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveUnitCost(row.blank_product_id)}
+                        disabled={savingCostId === row.blank_product_id}
+                      >
+                        {savingCostId === row.blank_product_id ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </td>
                   <td><strong>{money(row.inventory_value)}</strong></td>
                 </tr>
               ))}

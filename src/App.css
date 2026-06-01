@@ -218,3 +218,18 @@
   color: #6b6477;
   font-size: 0.95rem;
 }
+
+
+.inline-cost-editor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-cost-editor input {
+  max-width: 100px;
+}
+
+.inline-cost-editor button {
+  white-space: nowrap;
+}
