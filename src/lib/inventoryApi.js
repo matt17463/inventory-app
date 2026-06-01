@@ -1,5 +1,28 @@
 import { supabase } from '../supabaseClient';
 
+function normalizeSearchValue(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function textSearchValue(value) {
+  return String(value || '').toLowerCase();
+}
+
+function blankProductSearchText(product) {
+  return [
+    product.sku_base,
+    product.name,
+    product.brands?.name,
+    product.brands?.code,
+    product.product_types?.name,
+    product.product_types?.code,
+    product.colors?.name,
+    product.colors?.code,
+    product.sizes?.name,
+    product.sizes?.code,
+  ];
+}
+
 export function formatBinLabel(bin) {
   return [bin.bin_code, bin.label, bin.location].filter(Boolean).join(' - ');
 }
@@ -22,22 +45,34 @@ export async function getBlankProducts(search = '') {
       sku_base,
       name,
       image_url,
-      brands:brand_id(name),
-      colors:color_id(name),
-      sizes:size_id(name),
-      product_types:product_type_id(name)
+      brands:brand_id(name, code),
+      colors:color_id(name, code),
+      sizes:size_id(name, code),
+      product_types:product_type_id(name, code)
     `)
     .order('name', { ascending: true });
 
   const term = search.trim();
 
-  if (term) {
-    query = query.or(`sku_base.ilike.%${term}%,name.ilike.%${term}%`);
-  }
-
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+
+  if (!term) return rows;
+
+  const lowerTerm = textSearchValue(term);
+  const normalizedTerm = normalizeSearchValue(term);
+
+  return rows.filter((product) =>
+    blankProductSearchText(product).some((part) => {
+      const value = String(part || '');
+      return (
+        textSearchValue(value).includes(lowerTerm) ||
+        normalizeSearchValue(value).includes(normalizedTerm)
+      );
+    })
+  );
 }
 
 export async function getBlankInventory(search = '') {
