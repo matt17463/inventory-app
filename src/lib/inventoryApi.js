@@ -550,27 +550,84 @@ export async function enqueueWooSync({ entityType, entityId, action, payload }) 
   if (error) throw error;
 }
 
+function finishedProductSearchText(product) {
+  return [
+    product?.finished_sku,
+    product?.sku,
+    product?.finished_name,
+    product?.name,
+    product?.customer,
+    product?.customer_name,
+    product?.logo,
+    product?.logo_name,
+    product?.placement,
+    product?.blank_sku_base,
+    product?.blank_name,
+    product?.brand,
+    product?.brand_code,
+    product?.product_type,
+    product?.product_type_code,
+    product?.color,
+    product?.color_code,
+    product?.size,
+    product?.size_code,
+    product?.bin_code,
+    product?.bin_label,
+    product?.bin_location,
+  ].filter(Boolean).join(' ');
+}
+
+function rowMatchesAllTokens(row, term, builder) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const text = builder(row);
+  const lower = textSearchValue(text);
+  const normalized = normalizeSearchValue(text);
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    return lower.includes(token) || normalized.includes(normalizedToken);
+  });
+}
+
+export function formatFinishedProductLabel(product) {
+  const sku = product?.finished_sku || product?.sku;
+  const name = product?.finished_name || product?.name;
+  const customer = product?.customer || product?.customer_name;
+  const logo = product?.logo || product?.logo_name;
+  const placement = product?.placement;
+  const blank = product?.blank_sku_base || product?.blank_name;
+  const qty = product?.total_quantity ?? product?.quantity_on_hand;
+
+  return [sku, name, customer, logo, placement, blank, qty != null ? `${qty} on hand` : null]
+    .filter(Boolean)
+    .join(' - ');
+}
+
 export async function getFinishedProducts(search = '') {
-  let query = supabase
+  // Query the finished inventory compatibility view and filter locally with token search.
+  // This lets searches like "Bremerton navy left chest" or "Bella Canvas customer" work
+  // across SKU, customer, logo, placement, blank, brand, color, size, and bin columns.
+  const { data, error } = await supabase
     .from('finished_inventory_by_product')
     .select('*')
-    .order('finished_sku', { ascending: true });
+    .order('finished_sku', { ascending: true })
+    .limit(1000);
 
-  const term = search.trim();
-
-  if (term) {
-    const escaped = escapeOrTerm(term);
-    query = query.or(
-      `finished_sku.ilike.%${escaped}%,name.ilike.%${escaped}%,customer.ilike.%${escaped}%,logo.ilike.%${escaped}%`
-    );
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  return rows
+    .filter((row) => rowMatchesAllTokens(row, search, finishedProductSearchText))
+    .sort((a, b) => finishedProductSearchText(a).localeCompare(finishedProductSearchText(b)));
 }
 
 export async function receiveFinishedInventory({ binId, finishedProductId, quantity, notes }) {
+  if (!finishedProductId) throw new Error('Choose a finished product.');
+  if (!binId) throw new Error('Choose a finished-products bin.');
+  if (!quantity || Number(quantity) <= 0) throw new Error('Quantity must be greater than zero.');
+
   const { error } = await supabase.rpc('receive_finished_inventory', {
     p_bin_id: Number(binId),
     p_finished_product_id: finishedProductId,
@@ -714,47 +771,54 @@ export function pullSheetStatusLabel(status) {
 
 function finishedMatchSearchText(item) {
   return [
+    item?.finished_sku,
+    item?.sku,
+    item?.finished_name,
+    item?.name,
     item?.blank_sku_base,
     item?.blank_name,
     item?.customer_name,
     item?.customer,
+    item?.logo_name,
     item?.logo,
     item?.placement,
     item?.color,
     item?.size,
+    item?.bin_code,
+    item?.bin_label,
   ].filter(Boolean).join(' ');
 }
 
 export async function getFinishedMatchesForPullSheetItem(item) {
   if (!item?.blank_product_id) return [];
 
-  let query = supabase
+  const { data, error } = await supabase
     .from('finished_inventory_by_product')
     .select('*')
     .eq('blank_product_id', item.blank_product_id)
     .gt('total_quantity', 0)
     .order('finished_sku', { ascending: true });
 
-  const { data, error } = await query;
   if (error) throw error;
 
   const rows = data || [];
-  const logo = String(item.logo || '').trim();
-  const placement = String(item.placement || '').trim();
-  const customer = String(item.customer_name || item.customer || '').trim();
+  const logo = String(item.logo || '').trim().toLowerCase();
+  const placement = String(item.placement || '').trim().toLowerCase();
+  const customer = String(item.customer_name || item.customer || '').trim().toLowerCase();
 
   return rows.filter((row) => {
-    const rowLogo = String(row.logo || '').trim().toLowerCase();
+    const rowLogo = String(row.logo || row.logo_name || '').trim().toLowerCase();
     const rowPlacement = String(row.placement || '').trim().toLowerCase();
-    const rowCustomer = String(row.customer || '').trim().toLowerCase();
+    const rowCustomer = String(row.customer || row.customer_name || '').trim().toLowerCase();
 
-    const logoOk = !logo || rowLogo === logo.toLowerCase() || rowLogo.includes(logo.toLowerCase()) || logo.toLowerCase().includes(rowLogo);
-    const placementOk = !placement || rowPlacement === placement.toLowerCase() || rowPlacement.includes(placement.toLowerCase()) || placement.toLowerCase().includes(rowPlacement);
-    const customerOk = !customer || !rowCustomer || rowCustomer === customer.toLowerCase() || rowCustomer.includes(customer.toLowerCase()) || customer.toLowerCase().includes(rowCustomer);
+    const logoOk = !logo || !rowLogo || rowLogo === logo || rowLogo.includes(logo) || logo.includes(rowLogo);
+    const placementOk = !placement || !rowPlacement || rowPlacement === placement || rowPlacement.includes(placement) || placement.includes(rowPlacement);
+    const customerOk = !customer || !rowCustomer || rowCustomer === customer || rowCustomer.includes(customer) || customer.includes(rowCustomer);
 
     return logoOk && placementOk && customerOk;
   }).sort((a, b) => finishedMatchSearchText(a).localeCompare(finishedMatchSearchText(b)));
 }
+
 
 export async function deductFinishedInventoryForJobItem({ jobItemId, finishedProductId, binId, quantity, notes }) {
   const { error } = await supabase.rpc('deduct_finished_inventory_for_job_item', {
