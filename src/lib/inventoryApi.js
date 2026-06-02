@@ -912,3 +912,71 @@ export async function getPurchasingSupplierSummary() {
   if (error) throw error;
   return data || [];
 }
+
+
+export async function importBlankInventoryRow({
+  brand,
+  style,
+  color,
+  size,
+  quantity,
+  bin,
+  sku,
+  notes,
+  createMissingBin = true,
+}) {
+  const { data, error } = await supabase.rpc('import_blank_inventory_row', {
+    p_brand: brand || null,
+    p_style: style || null,
+    p_color: color || null,
+    p_size: size || null,
+    p_quantity: Number(quantity),
+    p_bin_code: bin || null,
+    p_sku: sku || null,
+    p_notes: notes || null,
+    p_create_missing_bin: Boolean(createMissingBin),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function importFinishedInventoryRow({
+  customer,
+  logo,
+  brand,
+  style,
+  color,
+  size,
+  quantity,
+  bin,
+  finishedSku,
+  blankSku,
+  placement,
+  decorationSize,
+  notes,
+  createMissingBin = true,
+  createMissingFinishedProduct = true,
+}) {
+  const { data, error } = await supabase.rpc('import_finished_inventory_row', {
+    p_customer: customer || null,
+    p_logo: logo || null,
+    p_brand: brand || null,
+    p_style: style || null,
+    p_color: color || null,
+    p_size: size || null,
+    p_quantity: Number(quantity),
+    p_bin_code: bin || null,
+    p_finished_sku: finishedSku || null,
+    p_blank_sku: blankSku || null,
+    p_placement: placement || null,
+    p_decoration_size: decorationSize || null,
+    p_notes: notes || null,
+    p_create_missing_bin: Boolean(createMissingBin),
+    p_create_missing_finished_product: Boolean(createMissingFinishedProduct),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
