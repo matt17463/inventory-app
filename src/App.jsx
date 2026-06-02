@@ -19,6 +19,7 @@ import TransferInventory from './TransferInventory';
 import WooSync from './WooSync';
 import ActivityPage from './ActivityPage';
 import logo from './assets/logo.png';
+import './App.css';
 
 export default function App() {
   return (
