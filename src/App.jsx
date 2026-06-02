@@ -10,6 +10,7 @@ import InventoryValuation from './InventoryValuation';
 import LowStock from './LowStock';
 import NfcWriter from './NfcWriter';
 import PullSheetList from './PullSheetList';
+import Purchasing from './Purchasing';
 import PullSheetView from './PullSheetView';
 import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
@@ -42,6 +43,7 @@ export default function App() {
             <Link to="/return-finished">Finished Products</Link>
             <Link to="/reservations">Reservations</Link>
             <Link to="/low-stock">Low Stock</Link>
+            <Link to="/purchasing">Purchasing</Link>
             <Link to="/nfc-writer">NFC</Link>
           </nav>
         </header>
@@ -59,6 +61,7 @@ export default function App() {
           <Route path="/reservations" element={<Reservations />} />
           <Route path="/valuation" element={<InventoryValuation />} />
           <Route path="/low-stock" element={<LowStock />} />
+          <Route path="/purchasing" element={<Purchasing />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/nfc-writer" element={<NfcWriter />} />
