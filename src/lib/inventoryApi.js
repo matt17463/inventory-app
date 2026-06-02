@@ -873,9 +873,21 @@ export async function getPurchasingShortages(search = '') {
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
-export async function getPurchasingReorderSuggestions(search = '') {
+export async function getPurchasingLowStock(search = '') {
   const { data, error } = await supabase
-    .from('purchasing_reorder_suggestions')
+    .from('low_stock_blank_inventory')
+    .select('*')
+    .order('reorder_quantity', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = data || [];
+  return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+export async function getPurchasingRecommendedOrders(search = '') {
+  const { data, error } = await supabase
+    .from('purchasing_recommended_orders')
     .select('*')
     .order('recommended_order_quantity', { ascending: false });
 
@@ -883,6 +895,11 @@ export async function getPurchasingReorderSuggestions(search = '') {
 
   const rows = data || [];
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+// Backward compatibility for earlier Purchasing page builds.
+export async function getPurchasingReorderSuggestions(search = '') {
+  return getPurchasingRecommendedOrders(search);
 }
 
 export async function getPurchasingSupplierSummary() {
