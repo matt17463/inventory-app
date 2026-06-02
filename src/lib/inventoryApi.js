@@ -573,7 +573,7 @@ export async function getFinishedProducts(search = '') {
 export async function receiveFinishedInventory({ binId, finishedProductId, quantity, notes }) {
   const { error } = await supabase.rpc('receive_finished_inventory', {
     p_bin_id: Number(binId),
-    p_finished_product_id: Number(finishedProductId),
+    p_finished_product_id: finishedProductId,
     p_quantity: Number(quantity),
     p_notes: notes || null,
   });
@@ -759,7 +759,7 @@ export async function getFinishedMatchesForPullSheetItem(item) {
 export async function deductFinishedInventoryForJobItem({ jobItemId, finishedProductId, binId, quantity, notes }) {
   const { error } = await supabase.rpc('deduct_finished_inventory_for_job_item', {
     p_job_item_id: Number(jobItemId),
-    p_finished_product_id: Number(finishedProductId),
+    p_finished_product_id: finishedProductId,
     p_bin_id: Number(binId),
     p_quantity: Number(quantity),
     p_notes: notes || null,
