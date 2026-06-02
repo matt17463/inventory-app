@@ -842,3 +842,56 @@ export async function returnPullSheetItemToFinishedInventory({ jobItemId, binId,
 
   if (error) throw error;
 }
+
+
+function purchasingSearchText(row) {
+  return [
+    row?.sku_base,
+    row?.name,
+    row?.brand,
+    row?.brand_code,
+    row?.product_type,
+    row?.product_type_code,
+    row?.color,
+    row?.color_code,
+    row?.size,
+    row?.size_code,
+    row?.vendor,
+    row?.supplier,
+  ].filter(Boolean).join(' ');
+}
+
+export async function getPurchasingShortages(search = '') {
+  const { data, error } = await supabase
+    .from('purchasing_shortages')
+    .select('*')
+    .order('need_to_order', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = data || [];
+  return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+export async function getPurchasingReorderSuggestions(search = '') {
+  const { data, error } = await supabase
+    .from('purchasing_reorder_suggestions')
+    .select('*')
+    .order('recommended_order_quantity', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = data || [];
+  return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+export async function getPurchasingSupplierSummary() {
+  const { data, error } = await supabase
+    .from('purchasing_supplier_order_summary')
+    .select('*')
+    .order('brand', { ascending: true })
+    .order('product_type', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
