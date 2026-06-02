@@ -84,7 +84,7 @@ export default function PullSheetView() {
   const totals = useMemo(() => {
     const qty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const completed = items.filter((item) => item.item_status === 'completed').length;
-    const finishedAvailable = Object.values(finishedMatches).flat().reduce((sum, item) => sum + Number(item.total_quantity || 0), 0);
+    const finishedAvailable = Object.values(finishedMatches).flat().reduce((sum, item) => sum + Number(item.total_quantity ?? item.quantity_on_hand ?? 0), 0);
     return { qty, completed, lines: items.length, finishedAvailable };
   }, [items, finishedMatches]);
 
@@ -269,8 +269,9 @@ export default function PullSheetView() {
       </section>
 
       <section className="content-two-column">
-        <form onSubmit={handleAddItem} className="card elevated-card">
-          <h2>Add Line Item</h2>
+        <section className="card elevated-card">
+          <h2>Add Blank Needed for Job</h2>
+          <p className="muted">Search your blank inventory, choose the exact color/size, enter the job quantity, logo, and placement, then add it to this pull sheet.</p>
 
           <label>
             Search Blank Item
@@ -280,7 +281,7 @@ export default function PullSheetView() {
                 onChange={(event) => setBlankSearch(event.target.value)}
                 placeholder="Gildan 18500 Navy A2XL"
               />
-              <button type="submit">Search</button>
+              <button type="button" onClick={searchBlanks}>Search Blanks</button>
             </div>
           </label>
 
@@ -342,20 +343,20 @@ export default function PullSheetView() {
           </label>
 
           <button className="primary-action" type="button" onClick={handleAddItem} disabled={adding}>
-            {adding ? 'Adding...' : 'Add to Pull Sheet'}
+            {adding ? 'Adding...' : 'Add Selected Blank to Pull Sheet'}
           </button>
-        </form>
+        </section>
 
         <section className="card elevated-card">
           <h2>Pulling Instructions</h2>
           <p className="muted">
-            For each line, first check whether a matching finished product already exists. If not, pull blanks from blank inventory.
+            A pull sheet line is the blank garment needed for a job. For each line, you can either use a matching finished product already in stock, or pull a blank garment from blank inventory.
           </p>
           <ol className="simple-steps">
-            <li>Search and add each blank garment needed for the job.</li>
-            <li>If matching finished stock appears, choose its bin and click Use Finished.</li>
+            <li>Add one line for each blank garment/color/size needed.</li>
+            <li>If a matching decorated item is already available, choose its finished-products bin and click Use Finished.</li>
             <li>If no finished stock exists, choose the blank source bin and click Complete + Deduct Blank.</li>
-            <li>After decorating extras, choose a finished-products bin and click Return Finished to Inventory.</li>
+            <li>If you decorate extras for future orders, choose the finished-products bin and click Return Finished to Inventory.</li>
           </ol>
         </section>
       </section>
@@ -420,8 +421,8 @@ export default function PullSheetView() {
                           (finishedMatches[item.job_item_id] || []).map((match) => (
                             <div className="finished-match-card" key={`${match.finished_product_id}-${match.bin_id || 'all'}`}>
                               <span>{match.finished_sku}</span>
-                              <small>{match.customer || 'No customer'} • {match.logo || 'No logo'} • {match.placement || 'No placement'}</small>
-                              <small>{match.bin_code || 'Any bin'} {match.bin_label ? `- ${match.bin_label}` : ''} • {match.total_quantity || 0} available</small>
+                              <small>{match.customer || match.customer_name || 'No customer'} • {match.logo || match.logo_name || 'No logo'} • {match.placement || 'No placement'}</small>
+                              <small>{match.bin_code || 'Any bin'} {match.bin_label ? `- ${match.bin_label}` : ''} • {match.total_quantity ?? match.quantity_on_hand ?? 0} available</small>
                               <select
                                 value={selectedFinishedBins[item.job_item_id] || match.bin_id || ''}
                                 onChange={(event) =>

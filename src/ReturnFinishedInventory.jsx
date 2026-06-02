@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   formatBinLabel,
   getBins,
+  formatFinishedProductLabel,
   getFinishedProducts,
   receiveFinishedInventory,
 } from './lib/inventoryApi';
@@ -63,7 +64,7 @@ export default function ReturnFinishedInventory() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search finished SKU, customer, logo..."
+          placeholder="Search finished SKU, customer, logo, brand, color, size..."
         />
         <button type="submit">Search</button>
       </form>
@@ -74,7 +75,7 @@ export default function ReturnFinishedInventory() {
           <option value="">Choose finished product...</option>
           {finishedProducts.map((p) => (
             <option key={p.finished_product_id} value={p.finished_product_id}>
-              {p.finished_sku} - {p.customer || ''} {p.logo || ''} ({p.total_quantity || 0} on hand)
+              {formatFinishedProductLabel(p)}
             </option>
           ))}
         </select>
