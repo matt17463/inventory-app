@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getPurchasingReorderSuggestions,
+  getPurchasingLowStock,
+  getPurchasingRecommendedOrders,
   getPurchasingShortages,
   getPurchasingSupplierSummary,
   money,
@@ -35,11 +36,23 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
+function getOrderQuantity(row, tab) {
+  if (tab === 'shortages') return Number(row.need_to_order || 0);
+  if (tab === 'lowStock') return Number(row.reorder_quantity || 0);
+  if (tab === 'recommended') return Number(row.recommended_order_quantity || 0);
+  return 0;
+}
+
+function getEstimatedValue(row) {
+  return Number(row.estimated_order_value || 0);
+}
+
 export default function Purchasing() {
-  const [tab, setTab] = useState('shortages');
+  const [tab, setTab] = useState('recommended');
   const [search, setSearch] = useState('');
   const [shortages, setShortages] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
+  const [lowStock, setLowStock] = useState([]);
+  const [recommendedOrders, setRecommendedOrders] = useState([]);
   const [summary, setSummary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -47,17 +60,21 @@ export default function Purchasing() {
   async function loadData() {
     setLoading(true);
     setMessage('');
+
     try {
-      const [shortageRows, suggestionRows, summaryRows] = await Promise.all([
+      const [shortageRows, lowStockRows, recommendedRows, summaryRows] = await Promise.all([
         getPurchasingShortages(search),
-        getPurchasingReorderSuggestions(search),
+        getPurchasingLowStock(search),
+        getPurchasingRecommendedOrders(search),
         getPurchasingSupplierSummary(),
       ]);
+
       setShortages(shortageRows);
-      setSuggestions(suggestionRows);
+      setLowStock(lowStockRows);
+      setRecommendedOrders(recommendedRows);
       setSummary(summaryRows);
     } catch (err) {
-      setMessage(err.message || 'Failed to load purchasing report. Run the purchasing SQL migration first.');
+      setMessage(err.message || 'Failed to load purchasing reports. Run the purchasing SQL migration first.');
     } finally {
       setLoading(false);
     }
@@ -68,18 +85,28 @@ export default function Purchasing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const activeRows = tab === 'shortages' ? shortages : suggestions;
+  const activeRows = useMemo(() => {
+    if (tab === 'shortages') return shortages;
+    if (tab === 'lowStock') return lowStock;
+    if (tab === 'recommended') return recommendedOrders;
+    return [];
+  }, [tab, shortages, lowStock, recommendedOrders]);
 
   const totals = useMemo(() => {
     const rows = activeRows || [];
     return {
       lines: rows.length,
-      units: rows.reduce((sum, row) => sum + Number(row.need_to_order ?? row.recommended_order_quantity ?? 0), 0),
-      value: rows.reduce((sum, row) => sum + Number(row.estimated_order_value ?? 0), 0),
+      units: rows.reduce((sum, row) => sum + getOrderQuantity(row, tab), 0),
+      value: rows.reduce((sum, row) => sum + getEstimatedValue(row), 0),
     };
-  }, [activeRows]);
+  }, [activeRows, tab]);
 
   function exportActiveRows() {
+    if (tab === 'summary') {
+      downloadCsv('purchasing-supplier-summary.csv', summary);
+      return;
+    }
+
     const rows = activeRows.map((row) => ({
       sku_base: row.sku_base,
       name: row.name,
@@ -92,12 +119,30 @@ export default function Purchasing() {
       available_quantity: row.available_quantity,
       low_stock_threshold: row.low_stock_threshold,
       unit_cost: row.unit_cost,
-      need_to_order: row.need_to_order ?? row.recommended_order_quantity,
+      need_to_order: getOrderQuantity(row, tab),
       estimated_order_value: row.estimated_order_value,
     }));
 
-    downloadCsv(tab === 'shortages' ? 'purchasing-shortages.csv' : 'purchasing-reorder-suggestions.csv', rows);
+    const filenameMap = {
+      shortages: 'purchasing-current-shortages.csv',
+      lowStock: 'purchasing-low-stock.csv',
+      recommended: 'purchasing-recommended-orders.csv',
+    };
+
+    downloadCsv(filenameMap[tab] || 'purchasing-report.csv', rows);
   }
+
+  const headingMap = {
+    shortages: 'Current Shortages / Negative Inventory',
+    lowStock: 'Low Stock Warnings',
+    recommended: 'Recommended Orders',
+  };
+
+  const helpMap = {
+    shortages: 'Shows items where reserved inventory is greater than on-hand inventory. These are immediate production shortages.',
+    lowStock: 'Shows items where on-hand inventory is at or below your low-stock threshold.',
+    recommended: 'Uses Reserved + Threshold - On Hand. This is the best buying list because it covers current commitments plus safety stock.',
+  };
 
   return (
     <main className="page purchasing-page">
@@ -106,18 +151,20 @@ export default function Purchasing() {
           <p className="eyebrow">Purchasing</p>
           <h1>Blank Purchasing Report</h1>
           <p>
-            Use this page to find blanks that are negative or below your reorder target. Negative availability means
-            current reservations exceed on-hand quantity and those blanks should be ordered for production.
+            Use this page to decide what blanks to order. The Recommended Orders tab combines
+            current reservations with your low-stock thresholds so you can cover production needs and replenish safety stock.
           </p>
         </div>
         <div className="purchasing-actions">
-          <button type="button" onClick={exportActiveRows} disabled={!activeRows.length}>Export CSV</button>
+          <button type="button" onClick={exportActiveRows} disabled={tab !== 'summary' && !activeRows.length}>
+            Export CSV
+          </button>
           <button type="button" className="secondary-button" onClick={loadData}>Refresh</button>
         </div>
       </section>
 
       <section className="kpi-grid purchasing-kpis">
-        <div className="kpi-card"><span>{number(totals.lines)}</span><strong>Lines</strong><small>Items to review</small></div>
+        <div className="kpi-card"><span>{number(totals.lines)}</span><strong>Lines</strong><small>Items on current tab</small></div>
         <div className="kpi-card"><span>{number(totals.units)}</span><strong>Units to Order</strong><small>Based on current tab</small></div>
         <div className="kpi-card"><span>{money(totals.value)}</span><strong>Estimated Cost</strong><small>Uses unit cost</small></div>
       </section>
@@ -125,10 +172,13 @@ export default function Purchasing() {
       <section className="card elevated-card purchasing-controls">
         <div className="segmented-tabs">
           <button type="button" className={tab === 'shortages' ? 'active' : ''} onClick={() => setTab('shortages')}>
-            Shortages / Negative Inventory
+            Current Shortages
           </button>
-          <button type="button" className={tab === 'suggestions' ? 'active' : ''} onClick={() => setTab('suggestions')}>
-            Reorder Suggestions
+          <button type="button" className={tab === 'lowStock' ? 'active' : ''} onClick={() => setTab('lowStock')}>
+            Low Stock
+          </button>
+          <button type="button" className={tab === 'recommended' ? 'active' : ''} onClick={() => setTab('recommended')}>
+            Recommended Orders
           </button>
           <button type="button" className={tab === 'summary' ? 'active' : ''} onClick={() => setTab('summary')}>
             Supplier Summary
@@ -140,7 +190,7 @@ export default function Purchasing() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') loadData(); }}
-            placeholder="Search brand, style, color, size, or SKU..."
+            placeholder="Search brand, style, color, size, SKU, or product name..."
           />
           <button type="button" onClick={loadData}>Search</button>
         </div>
@@ -151,7 +201,9 @@ export default function Purchasing() {
 
       {!loading && tab !== 'summary' && (
         <section className="card elevated-card table-card">
-          <h2>{tab === 'shortages' ? 'Shortages / Negative Inventory' : 'Reorder Suggestions'}</h2>
+          <h2>{headingMap[tab]}</h2>
+          <p className="helper-text">{helpMap[tab]}</p>
+
           <div className="responsive-table">
             <table className="data-table purchasing-table">
               <thead>
@@ -172,9 +224,9 @@ export default function Purchasing() {
               </thead>
               <tbody>
                 {activeRows.length === 0 ? (
-                  <tr><td colSpan="12">No purchasing needs found.</td></tr>
+                  <tr><td colSpan="12">No purchasing needs found for this section.</td></tr>
                 ) : activeRows.map((row) => (
-                  <tr key={row.blank_product_id} className={Number(row.available_quantity) < 0 ? 'shortage-row' : ''}>
+                  <tr key={`${tab}-${row.blank_product_id}`} className={Number(row.available_quantity) < 0 ? 'shortage-row' : ''}>
                     <td><strong>{row.sku_base}</strong></td>
                     <td>{row.name}</td>
                     <td>{row.brand}</td>
@@ -185,7 +237,7 @@ export default function Purchasing() {
                     <td>{number(row.reserved_quantity)}</td>
                     <td>{number(row.available_quantity)}</td>
                     <td>{number(row.low_stock_threshold)}</td>
-                    <td><strong>{number(row.need_to_order ?? row.recommended_order_quantity)}</strong></td>
+                    <td><strong>{number(getOrderQuantity(row, tab))}</strong></td>
                     <td>{money(row.estimated_order_value)}</td>
                   </tr>
                 ))}
@@ -198,7 +250,7 @@ export default function Purchasing() {
       {!loading && tab === 'summary' && (
         <section className="card elevated-card table-card">
           <h2>Supplier / Brand Summary</h2>
-          <p className="helper-text">Use this as a quick supplier order planning summary grouped by brand and style.</p>
+          <p className="helper-text">This groups Recommended Orders by brand and style/product type for easier supplier ordering.</p>
           <div className="responsive-table">
             <table className="data-table purchasing-table">
               <thead>
@@ -229,12 +281,12 @@ export default function Purchasing() {
       )}
 
       <section className="card elevated-card guide-card">
-        <h2>How to Use This Report</h2>
+        <h2>How to Use These Sections</h2>
         <ol>
-          <li><strong>Shortages</strong> shows items where reservations exceed on-hand inventory. Order at least the “Order Qty.”</li>
-          <li><strong>Reorder Suggestions</strong> adds your low-stock threshold, so you can cover current jobs plus safety stock.</li>
-          <li><strong>Supplier Summary</strong> groups the order by brand and style for easier vendor purchasing.</li>
-          <li>Export CSV and use it as your purchasing list when ordering blanks from suppliers.</li>
+          <li><strong>Current Shortages</strong>: order immediately if production depends on these blanks.</li>
+          <li><strong>Low Stock</strong>: monitor and reorder when you want to maintain minimum shelf stock.</li>
+          <li><strong>Recommended Orders</strong>: primary buying list. Formula: Reserved + Threshold - On Hand.</li>
+          <li><strong>Supplier Summary</strong>: use this to group the recommended order by brand and style before placing vendor orders.</li>
         </ol>
       </section>
     </main>
