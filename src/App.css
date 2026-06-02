@@ -443,3 +443,251 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Pull Sheet restored workflow */
+.page-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.page-heading-row h1 {
+  margin-bottom: 4px;
+}
+
+.back-link,
+.small-link-button {
+  color: var(--brand-purple, #32006e);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.small-link-button {
+  display: inline-flex;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f1e8ff;
+}
+
+.pullsheet-page label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #2b064f;
+  font-weight: 800;
+}
+
+.pullsheet-page input,
+.pullsheet-page select,
+.pullsheet-page textarea {
+  width: 100%;
+  border: 1px solid #e4dcef;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
+}
+
+.pullsheet-page textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.inline-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.inline-action-row button,
+.pullsheet-page button {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 900;
+  cursor: pointer;
+  background: #2176ff;
+  color: white;
+}
+
+.pullsheet-page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pullsheet-status-card {
+  background: #fbf7ff;
+  border: 1px solid #e7daf7;
+  border-radius: 18px;
+  padding: 14px;
+  min-width: 240px;
+}
+
+.compact-kpis .kpi-card {
+  min-height: 120px;
+}
+
+.responsive-table {
+  overflow-x: auto;
+}
+
+.responsive-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.responsive-table th,
+.responsive-table td {
+  border-bottom: 1px solid #eee7f6;
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  background: #f1e8ff;
+  color: #32006e;
+  white-space: nowrap;
+}
+
+.status-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pulled,
+.status-in_production {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.search-result-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 10px 0 14px;
+}
+
+.result-card {
+  display: grid !important;
+  gap: 4px;
+  text-align: left;
+  background: #fff !important;
+  color: #151222 !important;
+  border: 1px solid #e4dcef !important;
+  border-radius: 14px !important;
+}
+
+.result-card.selected {
+  border-color: #2176ff !important;
+  box-shadow: 0 0 0 3px rgba(33, 118, 255, 0.14);
+}
+
+.result-card span {
+  color: #6b6178;
+  font-weight: 600;
+}
+
+.selected-item-note {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.button-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.button-stack button {
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.danger-button {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.simple-steps {
+  padding-left: 20px;
+  color: #4f465e;
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .page-heading-row,
+  .content-two-column {
+    grid-template-columns: 1fr !important;
+    display: grid;
+  }
+
+  .inline-action-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Finished inventory / pull sheet integration */
+.pullsheet-actions {
+  min-width: 280px;
+  gap: 10px;
+}
+
+.finished-match-panel,
+.finished-return-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.finished-match-panel strong,
+.finished-return-panel strong {
+  font-size: 0.82rem;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.finished-match-card {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.finished-match-card span {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.finished-match-card small,
+.finished-match-panel small {
+  color: #64748b;
+}
+
+.finished-match-card select,
+.finished-return-panel select {
+  max-width: 100%;
+}

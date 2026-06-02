@@ -38,6 +38,8 @@ export default function App() {
             <Link to="/scan">Scan</Link>
             <Link to="/transfer">Transfer</Link>
             <Link to="/audit">Audit</Link>
+            <Link to="/pullsheets">Pull Sheets</Link>
+            <Link to="/return-finished">Finished Products</Link>
             <Link to="/reservations">Reservations</Link>
             <Link to="/low-stock">Low Stock</Link>
             <Link to="/nfc-writer">NFC</Link>
