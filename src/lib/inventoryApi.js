@@ -581,14 +581,54 @@ export async function receiveFinishedInventory({ binId, finishedProductId, quant
   if (error) throw error;
 }
 
+
 export async function getPullSheets() {
   const { data, error } = await supabase
     .from('jobs')
-    .select('*')
+    .select(`
+      id,
+      job_name,
+      customer_name,
+      woocommerce_order_id,
+      status,
+      due_date,
+      notes,
+      created_at
+    `)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
   return data || [];
+}
+
+export async function createPullSheet({ jobName, customerName, orderNumber, dueDate, notes }) {
+  const name = String(jobName || '').trim();
+  if (!name) throw new Error('Enter a job name.');
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .insert({
+      job_name: name,
+      customer_name: String(customerName || '').trim() || null,
+      woocommerce_order_id: String(orderNumber || '').trim() || null,
+      due_date: dueDate || null,
+      notes: String(notes || '').trim() || null,
+      status: 'ready_to_pull',
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePullSheetStatus({ jobId, status }) {
+  const { error } = await supabase
+    .from('jobs')
+    .update({ status })
+    .eq('id', jobId);
+
+  if (error) throw error;
 }
 
 export async function getPullSheetItems(jobId) {
@@ -602,10 +642,137 @@ export async function getPullSheetItems(jobId) {
   return data || [];
 }
 
+export async function addPullSheetItem({
+  jobId,
+  blankProductId,
+  quantity,
+  logo,
+  placement,
+  notes,
+}) {
+  if (!jobId) throw new Error('Missing pull sheet ID.');
+  if (!blankProductId) throw new Error('Choose a blank item.');
+  if (!quantity || Number(quantity) <= 0) throw new Error('Quantity must be greater than zero.');
+
+  const { data, error } = await supabase
+    .from('job_items')
+    .insert({
+      job_id: jobId,
+      blank_product_id: blankProductId,
+      quantity: Number(quantity),
+      logo: String(logo || '').trim() || null,
+      placement: String(placement || '').trim() || null,
+      notes: String(notes || '').trim() || null,
+      status: 'ready_to_pull',
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePullSheetItemStatus({ jobItemId, status }) {
+  const { error } = await supabase
+    .from('job_items')
+    .update({ status })
+    .eq('id', Number(jobItemId));
+
+  if (error) throw error;
+}
+
+export async function deletePullSheetItem(jobItemId) {
+  const { error } = await supabase
+    .from('job_items')
+    .delete()
+    .eq('id', Number(jobItemId));
+
+  if (error) throw error;
+}
+
 export async function completeJobItem({ jobItemId, binId, notes }) {
   const { error } = await supabase.rpc('complete_job_item', {
     p_job_item_id: Number(jobItemId),
     p_bin_id: Number(binId),
+    p_notes: notes || null,
+  });
+
+  if (error) throw error;
+}
+
+export function pullSheetStatusLabel(status) {
+  const map = {
+    draft: 'Draft',
+    ready_to_pull: 'Ready to Pull',
+    pulled: 'Pulled',
+    in_production: 'In Production',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+  };
+  return map[status] || status || '';
+}
+
+function finishedMatchSearchText(item) {
+  return [
+    item?.blank_sku_base,
+    item?.blank_name,
+    item?.customer_name,
+    item?.customer,
+    item?.logo,
+    item?.placement,
+    item?.color,
+    item?.size,
+  ].filter(Boolean).join(' ');
+}
+
+export async function getFinishedMatchesForPullSheetItem(item) {
+  if (!item?.blank_product_id) return [];
+
+  let query = supabase
+    .from('finished_inventory_by_product')
+    .select('*')
+    .eq('blank_product_id', item.blank_product_id)
+    .gt('total_quantity', 0)
+    .order('finished_sku', { ascending: true });
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = data || [];
+  const logo = String(item.logo || '').trim();
+  const placement = String(item.placement || '').trim();
+  const customer = String(item.customer_name || item.customer || '').trim();
+
+  return rows.filter((row) => {
+    const rowLogo = String(row.logo || '').trim().toLowerCase();
+    const rowPlacement = String(row.placement || '').trim().toLowerCase();
+    const rowCustomer = String(row.customer || '').trim().toLowerCase();
+
+    const logoOk = !logo || rowLogo === logo.toLowerCase() || rowLogo.includes(logo.toLowerCase()) || logo.toLowerCase().includes(rowLogo);
+    const placementOk = !placement || rowPlacement === placement.toLowerCase() || rowPlacement.includes(placement.toLowerCase()) || placement.toLowerCase().includes(rowPlacement);
+    const customerOk = !customer || !rowCustomer || rowCustomer === customer.toLowerCase() || rowCustomer.includes(customer.toLowerCase()) || customer.toLowerCase().includes(rowCustomer);
+
+    return logoOk && placementOk && customerOk;
+  }).sort((a, b) => finishedMatchSearchText(a).localeCompare(finishedMatchSearchText(b)));
+}
+
+export async function deductFinishedInventoryForJobItem({ jobItemId, finishedProductId, binId, quantity, notes }) {
+  const { error } = await supabase.rpc('deduct_finished_inventory_for_job_item', {
+    p_job_item_id: Number(jobItemId),
+    p_finished_product_id: Number(finishedProductId),
+    p_bin_id: Number(binId),
+    p_quantity: Number(quantity),
+    p_notes: notes || null,
+  });
+
+  if (error) throw error;
+}
+
+export async function returnPullSheetItemToFinishedInventory({ jobItemId, binId, quantity, notes }) {
+  const { error } = await supabase.rpc('return_pullsheet_item_to_finished_inventory', {
+    p_job_item_id: Number(jobItemId),
+    p_bin_id: Number(binId),
+    p_quantity: Number(quantity),
     p_notes: notes || null,
   });
 
