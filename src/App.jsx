@@ -7,6 +7,7 @@ import BlankInventory from './BlankInventory';
 import EditBlankItems from './EditBlankItems';
 import Home from './Home';
 import InventoryValuation from './InventoryValuation';
+import InventoryImport from './InventoryImport';
 import LowStock from './LowStock';
 import NfcWriter from './NfcWriter';
 import PullSheetList from './PullSheetList';
@@ -34,6 +35,7 @@ export default function App() {
           <nav>
             <Link to="/inventory/blanks">Inventory</Link>
             <Link to="/inventory/edit-blanks">Edit Blanks</Link>
+            <Link to="/inventory/import">Import</Link>
             <Link to="/add-item">Add Item</Link>
             <Link to="/bins">Bins</Link>
             <Link to="/scan">Scan</Link>
@@ -52,6 +54,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
           <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
+          <Route path="/inventory/import" element={<InventoryImport />} />
           <Route path="/bins" element={<BinsDashboard />} />
           <Route path="/bin/:binId" element={<BinContents />} />
           <Route path="/add-item" element={<AddItemToBin />} />

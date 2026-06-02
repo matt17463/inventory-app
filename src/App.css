@@ -795,3 +795,59 @@
     align-items: stretch;
   }
 }
+
+
+/* Inventory Import */
+.import-page .import-header {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.import-instructions-grid {
+  align-items: stretch;
+}
+
+.import-upload-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.import-upload-card input[type="file"] {
+  margin-top: 0.4rem;
+}
+
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+
+.checkbox-line input {
+  width: auto;
+}
+
+.import-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.import-table td,
+.import-table th {
+  vertical-align: top;
+}
+
+.import-ready-row {
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.import-error-row {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.import-kpis {
+  margin-top: 1rem;
+}
