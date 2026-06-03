@@ -852,76 +852,46 @@
   margin-top: 1rem;
 }
 
-/* Bulk receive from Edit Blank Items search results */
-.bulk-receive-visible-form {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px solid #eadff2;
-  border-radius: 16px;
-  background: #fffdf6;
+
+.warning-card {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #78350f;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 16px 0;
 }
 
-.bulk-receive-visible-form h3 {
-  margin: 0;
-  color: #211629;
+.warning-card h2 {
+  margin-top: 0;
 }
 
-.bulk-receive-defaults {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.6fr);
-  gap: 10px;
-}
-
-.bulk-receive-defaults label,
-.result-receive-controls label {
-  display: grid;
-  gap: 5px;
+.danger-button {
+  border: none;
+  border-radius: 10px;
+  background: #b91c1c;
+  color: #fff;
   font-weight: 700;
-  color: #211629;
-  font-size: 0.86rem;
+  padding: 11px 16px;
+  cursor: pointer;
 }
 
-.bulk-receive-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.danger-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
-.blank-result-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.75fr);
-  gap: 12px;
-  align-items: start;
-  width: 100%;
+.danger-check {
+  color: #7f1d1d;
+  font-weight: 600;
 }
 
-.blank-result-details {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.result-receive-controls {
-  display: grid;
-  grid-template-columns: minmax(80px, 0.45fr) minmax(150px, 1fr);
-  gap: 8px;
-  align-items: end;
-}
-
-.result-receive-controls input,
-.result-receive-controls select,
-.bulk-receive-defaults input,
-.bulk-receive-defaults select {
-  width: 100%;
-  min-height: 38px;
-}
-
-@media (max-width: 1050px) {
-  .blank-result-main,
-  .bulk-receive-defaults,
-  .result-receive-controls {
-    grid-template-columns: 1fr;
-  }
+.result-json {
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
 }

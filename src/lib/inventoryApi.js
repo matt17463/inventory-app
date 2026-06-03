@@ -355,30 +355,23 @@ export async function findBlankProductByScannedValue(value) {
 }
 
 export async function getBlankInventory(search = '') {
-  const { data, error } = await supabase
+  let query = supabase
     .from('blank_inventory_by_product')
-    .select('blank_product_id, sku_base, name, brand, product_type, color, size, quantity_on_hand, reserved_quantity, available_quantity, unit_cost, inventory_value')
-    .order('name', { ascending: true })
-    .limit(5000);
+    .select('*')
+    .order('name', { ascending: true });
 
+  const term = search.trim();
+
+  if (term) {
+    const escaped = escapeOrTerm(term);
+    query = query.or(
+      `sku_base.ilike.%${escaped}%,name.ilike.%${escaped}%,brand.ilike.%${escaped}%,color.ilike.%${escaped}%,size.ilike.%${escaped}%`
+    );
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
-
-  const rows = data || [];
-  const term = String(search || '').trim();
-
-  if (!term) return rows;
-
-  return rows.filter((row) => {
-    const searchObject = {
-      ...row,
-      product_types: { name: row.product_type, code: row.product_type },
-      brands: { name: row.brand, code: row.brand },
-      colors: { name: row.color, code: row.color },
-      sizes: { name: row.size, code: row.size },
-    };
-
-    return productMatchesAllTokens(searchObject, term);
-  });
+  return data || [];
 }
 
 export async function getBinContents(binId, search = '') {
@@ -987,3 +980,37 @@ export async function importFinishedInventoryRow({
   return data;
 }
 
+
+
+export async function replaceBlankProductMaster({ rows, sourceFileName }) {
+  if (!Array.isArray(rows) || !rows.length) {
+    throw new Error('No blank product rows were provided.');
+  }
+
+  const payloadRows = rows.map((row) => ({
+    brand: row.brand || null,
+    style: row.style || null,
+    color: row.color || null,
+    size: row.size || null,
+    quantity: Number(row.quantity || 0),
+    bin: row.bin || null,
+    unit_cost: Number(row.unitCost || 0),
+    low_stock_threshold: row.lowStockThreshold === '' || row.lowStockThreshold == null ? null : Number(row.lowStockThreshold),
+    sku_base: row.skuBase || null,
+    barcode: row.barcode || null,
+    name: row.name || null,
+    image_url: row.imageUrl || null,
+    supplier: row.supplier || null,
+    supplier_sku: row.supplierSku || null,
+    notes: row.notes || null,
+    source_row_number: row.sourceRowNumber || null,
+  }));
+
+  const { data, error } = await supabase.rpc('replace_blank_product_master_from_json', {
+    p_rows: payloadRows,
+    p_source_file_name: sourceFileName || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
