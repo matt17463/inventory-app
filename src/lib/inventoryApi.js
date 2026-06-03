@@ -355,23 +355,30 @@ export async function findBlankProductByScannedValue(value) {
 }
 
 export async function getBlankInventory(search = '') {
-  let query = supabase
+  const { data, error } = await supabase
     .from('blank_inventory_by_product')
-    .select('*')
-    .order('name', { ascending: true });
+    .select('blank_product_id, sku_base, name, brand, product_type, color, size, quantity_on_hand, reserved_quantity, available_quantity, unit_cost, inventory_value')
+    .order('name', { ascending: true })
+    .limit(5000);
 
-  const term = search.trim();
-
-  if (term) {
-    const escaped = escapeOrTerm(term);
-    query = query.or(
-      `sku_base.ilike.%${escaped}%,name.ilike.%${escaped}%,brand.ilike.%${escaped}%,color.ilike.%${escaped}%,size.ilike.%${escaped}%`
-    );
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  const term = String(search || '').trim();
+
+  if (!term) return rows;
+
+  return rows.filter((row) => {
+    const searchObject = {
+      ...row,
+      product_types: { name: row.product_type, code: row.product_type },
+      brands: { name: row.brand, code: row.brand },
+      colors: { name: row.color, code: row.color },
+      sizes: { name: row.size, code: row.size },
+    };
+
+    return productMatchesAllTokens(searchObject, term);
+  });
 }
 
 export async function getBinContents(binId, search = '') {
