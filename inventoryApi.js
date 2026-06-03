@@ -354,45 +354,82 @@ export async function findBlankProductByScannedValue(value) {
   return products[0] || null;
 }
 
+function inventoryViewRowSearchText(row) {
+  return [
+    row.sku_base,
+    row.barcode,
+    row.name,
+    row.brand,
+    row.brand_code,
+    row.product_type,
+    row.product_type_code,
+    row.color,
+    row.color_code,
+    row.size,
+    row.size_code,
+    row.bin_code,
+    row.bin_label,
+    row.bin_location,
+  ];
+}
+
+function inventoryViewRowMatchesAllTokens(row, term) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const parts = inventoryViewRowSearchText(row).map((part) => ({
+    text: textSearchValue(part),
+    normalized: normalizeSearchValue(part),
+  }));
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    return parts.some((part) =>
+      part.text.includes(token) || part.normalized.includes(normalizedToken)
+    );
+  });
+}
+
 export async function getBlankInventory(search = '') {
-  let query = supabase
+  // Important: do not use Supabase .or() for the search here.
+  // A search like "Gildan 18500 YS" is multi-token and no single DB column
+  // contains that whole phrase. Bin Contents and Edit Blank Items already use
+  // token matching, so this screen should behave the same way.
+  const { data, error } = await supabase
     .from('blank_inventory_by_product')
     .select('*')
-    .order('name', { ascending: true });
+    .order('name', { ascending: true })
+    .limit(10000);
 
-  const term = search.trim();
-
-  if (term) {
-    const escaped = escapeOrTerm(term);
-    query = query.or(
-      `sku_base.ilike.%${escaped}%,name.ilike.%${escaped}%,brand.ilike.%${escaped}%,color.ilike.%${escaped}%,size.ilike.%${escaped}%`
-    );
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  const term = String(search || '').trim();
+
+  if (!term) return rows;
+
+  return rows.filter((row) => inventoryViewRowMatchesAllTokens(row, term));
 }
 
 export async function getBinContents(binId, search = '') {
-  let query = supabase
+  // Use local token matching here too so searches like "Gildan 18500 YS"
+  // match across brand + style + size instead of requiring one DB column to
+  // contain the whole phrase.
+  const { data, error } = await supabase
     .from('bin_blank_inventory_contents')
     .select('*')
     .eq('bin_id', Number(binId))
-    .order('sku_base', { ascending: true });
+    .order('sku_base', { ascending: true })
+    .limit(10000);
 
-  const term = search.trim();
-
-  if (term) {
-    const escaped = escapeOrTerm(term);
-    query = query.or(
-      `sku_base.ilike.%${escaped}%,name.ilike.%${escaped}%,brand.ilike.%${escaped}%,product_type.ilike.%${escaped}%,color.ilike.%${escaped}%,size.ilike.%${escaped}%`
-    );
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  const term = String(search || '').trim();
+
+  if (!term) return rows;
+
+  return rows.filter((row) => inventoryViewRowMatchesAllTokens(row, term));
 }
 
 export async function receiveBlankInventory({ binId, blankProductId, quantity, notes }) {
@@ -873,9 +910,21 @@ export async function getPurchasingShortages(search = '') {
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
-export async function getPurchasingReorderSuggestions(search = '') {
+export async function getPurchasingLowStock(search = '') {
   const { data, error } = await supabase
-    .from('purchasing_reorder_suggestions')
+    .from('low_stock_blank_inventory')
+    .select('*')
+    .order('reorder_quantity', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = data || [];
+  return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+export async function getPurchasingRecommendedOrders(search = '') {
+  const { data, error } = await supabase
+    .from('purchasing_recommended_orders')
     .select('*')
     .order('recommended_order_quantity', { ascending: false });
 
@@ -883,6 +932,11 @@ export async function getPurchasingReorderSuggestions(search = '') {
 
   const rows = data || [];
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+// Backward compatibility for earlier Purchasing page builds.
+export async function getPurchasingReorderSuggestions(search = '') {
+  return getPurchasingRecommendedOrders(search);
 }
 
 export async function getPurchasingSupplierSummary() {
@@ -895,3 +949,71 @@ export async function getPurchasingSupplierSummary() {
   if (error) throw error;
   return data || [];
 }
+
+
+export async function importBlankInventoryRow({
+  brand,
+  style,
+  color,
+  size,
+  quantity,
+  bin,
+  sku,
+  notes,
+  createMissingBin = true,
+}) {
+  const { data, error } = await supabase.rpc('import_blank_inventory_row', {
+    p_brand: brand || null,
+    p_style: style || null,
+    p_color: color || null,
+    p_size: size || null,
+    p_quantity: Number(quantity),
+    p_bin_code: bin || null,
+    p_sku: sku || null,
+    p_notes: notes || null,
+    p_create_missing_bin: Boolean(createMissingBin),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function importFinishedInventoryRow({
+  customer,
+  logo,
+  brand,
+  style,
+  color,
+  size,
+  quantity,
+  bin,
+  finishedSku,
+  blankSku,
+  placement,
+  decorationSize,
+  notes,
+  createMissingBin = true,
+  createMissingFinishedProduct = true,
+}) {
+  const { data, error } = await supabase.rpc('import_finished_inventory_row', {
+    p_customer: customer || null,
+    p_logo: logo || null,
+    p_brand: brand || null,
+    p_style: style || null,
+    p_color: color || null,
+    p_size: size || null,
+    p_quantity: Number(quantity),
+    p_bin_code: bin || null,
+    p_finished_sku: finishedSku || null,
+    p_blank_sku: blankSku || null,
+    p_placement: placement || null,
+    p_decoration_size: decorationSize || null,
+    p_notes: notes || null,
+    p_create_missing_bin: Boolean(createMissingBin),
+    p_create_missing_finished_product: Boolean(createMissingFinishedProduct),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
