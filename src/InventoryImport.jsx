@@ -1,405 +1,897 @@
-import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
-import { replaceBlankProductMaster } from './lib/inventoryApi';
+.counter {
+  font-size: 16px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 2px solid transparent;
+  transition: border-color 0.3s;
+  margin-bottom: 24px;
 
-const MASTER_SHEET_NAMES = [
-  'Blank Products',
-  'Blank Product Master',
-  'Blank Inventory',
-  'Inventory Master',
-  'Sheet1',
-];
-
-const MASTER_COLUMNS = [
-  'Brand',
-  'Style',
-  'Color',
-  'Size',
-  'Quantity',
-  'Bin',
-  'Unit Cost',
-  'Low Stock Threshold',
-  'SKU Base (optional)',
-  'Barcode (optional)',
-  'Product Name (optional)',
-  'Image URL (optional)',
-  'Supplier (optional)',
-  'Supplier SKU (optional)',
-  'Notes',
-];
-
-function clean(value) {
-  return String(value ?? '').trim();
+  &:hover {
+    border-color: var(--accent-border);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
-function normalize(value) {
-  return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
+.hero {
+  position: relative;
 
-function numberValue(value, fallback = 0) {
-  if (value === '' || value == null) return fallback;
-  if (typeof value === 'number') return value;
-  const parsed = Number(clean(value).replace(/[$,]/g, ''));
-  return Number.isFinite(parsed) ? parsed : NaN;
-}
-
-function integerValue(value, fallback = null) {
-  if (value === '' || value == null) return fallback;
-  const parsed = Number(clean(value).replace(/[,]/g, ''));
-  return Number.isFinite(parsed) ? Math.round(parsed) : NaN;
-}
-
-function findSheetName(workbook, names) {
-  const normalizedNames = names.map(normalize);
-  return workbook.SheetNames.find((sheetName) => normalizedNames.includes(normalize(sheetName))) || workbook.SheetNames[0];
-}
-
-function columnValue(row, possibleNames) {
-  for (const name of possibleNames) {
-    if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
-
-    const found = Object.keys(row).find((key) => normalize(key) === normalize(name));
-    if (found) return row[found];
+  .base,
+  .framework,
+  .vite {
+    inset-inline: 0;
+    margin: 0 auto;
   }
 
-  return '';
+  .base {
+    width: 170px;
+    position: relative;
+    z-index: 0;
+  }
+
+  .framework,
+  .vite {
+    position: absolute;
+  }
+
+  .framework {
+    z-index: 1;
+    top: 34px;
+    height: 28px;
+    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
+      scale(1.4);
+  }
+
+  .vite {
+    z-index: 0;
+    top: 107px;
+    height: 26px;
+    width: auto;
+    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
+      scale(0.8);
+  }
 }
 
-function buildSkuBase(row) {
-  const parts = [row.brand, row.style, row.color, row.size]
-    .map((part) => clean(part).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
-    .filter(Boolean);
+#center {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  place-content: center;
+  place-items: center;
+  flex-grow: 1;
 
-  return parts.join('-');
+  @media (max-width: 1024px) {
+    padding: 32px 20px 24px;
+    gap: 18px;
+  }
 }
 
-function parseMasterSheet(workbook, sheetName) {
-  const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+#next-steps {
+  display: flex;
+  border-top: 1px solid var(--border);
+  text-align: left;
 
-  return rows
-    .map((row, index) => {
-      const parsed = {
-        sourceRowNumber: index + 2,
-        brand: clean(columnValue(row, ['Brand'])),
-        style: clean(columnValue(row, ['Style', 'Product Style', 'Product Type'])),
-        color: clean(columnValue(row, ['Color', 'Colour'])),
-        size: clean(columnValue(row, ['Size'])),
-        quantity: integerValue(columnValue(row, ['Quantity', 'Qty', 'Count']), 0),
-        bin: clean(columnValue(row, ['Bin', 'Bin Code', 'Location'])),
-        unitCost: numberValue(columnValue(row, ['Unit Cost', 'Cost', 'Blank Cost']), 0),
-        lowStockThreshold: integerValue(columnValue(row, [
-          'Low Stock Threshold',
-          'Low Stock Threshhold',
-          'Low Stock',
-          'Threshold',
-          'Reorder Point',
-        ]), null),
-        skuBase: clean(columnValue(row, [
-          'SKU Base (optional)',
-          'SKU Base',
-          'Blank SKU',
-          'Blank SKU Base',
-          'SKU',
-        ])),
-        barcode: clean(columnValue(row, ['Barcode (optional)', 'Barcode', 'UPC'])),
-        name: clean(columnValue(row, ['Product Name (optional)', 'Product Name', 'Name', 'Description'])),
-        imageUrl: clean(columnValue(row, ['Image URL (optional)', 'Image URL', 'Image'])),
-        supplier: clean(columnValue(row, ['Supplier (optional)', 'Supplier', 'Vendor'])),
-        supplierSku: clean(columnValue(row, ['Supplier SKU (optional)', 'Supplier SKU', 'Vendor SKU'])),
-        notes: clean(columnValue(row, ['Notes', 'Note'])),
-      };
-
-      if (!parsed.skuBase) parsed.skuBase = buildSkuBase(parsed);
-      if (!parsed.name) {
-        parsed.name = [parsed.brand, parsed.style, parsed.color, parsed.size].filter(Boolean).join(' ');
-      }
-
-      return parsed;
-    })
-    .filter((row) =>
-      row.brand || row.style || row.color || row.size || row.skuBase || row.quantity || row.bin
-    );
-}
-
-function validateRows(rows) {
-  const seen = new Set();
-
-  return rows.map((row) => {
-    const errors = [];
-
-    if (!row.brand) errors.push('Brand is required.');
-    if (!row.style) errors.push('Style is required.');
-    if (!row.color) errors.push('Color is required.');
-    if (!row.size) errors.push('Size is required.');
-    if (!row.skuBase) errors.push('SKU Base could not be generated.');
-    if (!Number.isFinite(row.quantity) || row.quantity < 0) errors.push('Quantity must be zero or greater.');
-    if (row.quantity > 0 && !row.bin) errors.push('Bin is required when Quantity is greater than zero.');
-    if (!Number.isFinite(row.unitCost) || row.unitCost < 0) errors.push('Unit Cost must be zero or greater.');
-    if (row.lowStockThreshold !== null && (!Number.isFinite(row.lowStockThreshold) || row.lowStockThreshold < 0)) {
-      errors.push('Low Stock Threshold must be blank or zero or greater.');
-    }
-
-    const duplicateKey = normalize(row.skuBase);
-    if (duplicateKey && seen.has(duplicateKey)) {
-      errors.push(`Duplicate SKU Base in upload: ${row.skuBase}`);
-    }
-    if (duplicateKey) seen.add(duplicateKey);
-
-    return {
-      ...row,
-      status: errors.length ? 'error' : 'ready',
-      errors,
-    };
-  });
-}
-
-function downloadBrowserTemplate() {
-  const rows = [
-    {
-      Brand: 'Gildan',
-      Style: '18500',
-      Color: 'Navy',
-      Size: 'AXL',
-      Quantity: 24,
-      Bin: 'AXL1',
-      'Unit Cost': 8.25,
-      'Low Stock Threshold': 12,
-      'SKU Base (optional)': '',
-      'Barcode (optional)': '',
-      'Product Name (optional)': '',
-      'Image URL (optional)': '',
-      'Supplier (optional)': 'S&S Activewear',
-      'Supplier SKU (optional)': '',
-      Notes: 'Master blank product row',
-    },
-  ];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows, { header: MASTER_COLUMNS }), 'Blank Products');
-  XLSX.writeFile(wb, 'skilled-crafting-blank-product-master-template.xlsx');
-}
-
-export default function InventoryImport() {
-  const [fileName, setFileName] = useState('');
-  const [rows, setRows] = useState([]);
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState(null);
-  const [confirmReplace, setConfirmReplace] = useState(false);
-
-  const counts = useMemo(() => {
-    const readyRows = rows.filter((row) => row.status === 'ready');
-    const errorRows = rows.filter((row) => row.status !== 'ready');
-    const totalUnits = readyRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-    const withBins = readyRows.filter((row) => Number(row.quantity || 0) > 0 && row.bin).length;
-
-    return {
-      total: rows.length,
-      ready: readyRows.length,
-      errors: errorRows.length,
-      totalUnits,
-      withBins,
-    };
-  }, [rows]);
-
-  async function handleFileChange(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setLoading(true);
-    setRows([]);
-    setResult(null);
-    setConfirmReplace(false);
-    setFileName(file.name);
-    setMessage('Reading blank product master workbook...');
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = findSheetName(workbook, MASTER_SHEET_NAMES);
-
-      if (!sheetName) {
-        throw new Error('Workbook does not contain a readable sheet.');
-      }
-
-      const parsed = parseMasterSheet(workbook, sheetName);
-      if (!parsed.length) throw new Error('No blank product master rows were found.');
-
-      const validated = validateRows(parsed);
-      setRows(validated);
-      setMessage(`Loaded ${validated.length} blank product row(s) from ${file.name}. Review before replacing Supabase blank products.`);
-    } catch (err) {
-      setMessage(err.message || 'Failed to read workbook.');
-    } finally {
-      setLoading(false);
+  & > div {
+    flex: 1 1 0;
+    padding: 32px;
+    @media (max-width: 1024px) {
+      padding: 24px 20px;
     }
   }
 
-  async function handleReplaceMaster() {
-    const readyRows = rows.filter((row) => row.status === 'ready');
+  .icon {
+    margin-bottom: 16px;
+    width: 22px;
+    height: 22px;
+  }
 
-    if (!readyRows.length) {
-      setMessage('No ready rows to import.');
-      return;
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+#docs {
+  border-right: 1px solid var(--border);
+
+  @media (max-width: 1024px) {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+#next-steps ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  margin: 32px 0 0;
+
+  .logo {
+    height: 18px;
+  }
+
+  a {
+    color: var(--text-h);
+    font-size: 16px;
+    border-radius: 6px;
+    background: var(--social-bg);
+    display: flex;
+    padding: 6px 12px;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    transition: box-shadow 0.3s;
+
+    &:hover {
+      box-shadow: var(--shadow);
     }
-
-    if (!confirmReplace) {
-      setMessage('Check the confirmation box before replacing the blank product master.');
-      return;
-    }
-
-    setImporting(true);
-    setResult(null);
-    setMessage('Replacing Supabase blank product master. Do not close this page...');
-
-    try {
-      const response = await replaceBlankProductMaster({
-        rows: readyRows,
-        sourceFileName: fileName,
-      });
-
-      setResult(response);
-      setMessage(
-        `Blank product master replaced. Inserted ${response?.inserted_blank_products ?? 0} blank products and ` +
-        `${response?.inserted_inventory_movements ?? 0} initial inventory movement(s).`
-      );
-    } catch (err) {
-      setMessage(err.message || 'Blank product master import failed.');
-    } finally {
-      setImporting(false);
+    .button-icon {
+      height: 18px;
+      width: 18px;
     }
   }
 
-  return (
-    <main className="page import-page">
-      <section className="page-header import-header">
-        <div>
-          <p className="eyebrow">Blank Product Master</p>
-          <h1>Replace Supabase blank products from spreadsheet</h1>
-          <p>
-            This import replaces the Supabase <strong>blank_products</strong> catalog. After import,
-            Supabase becomes the source of truth for blank products. WooCommerce sync will only link
-            WooCommerce products/finished products to these blanks by Brand + Style + Color + Size.
-          </p>
-        </div>
-        <button type="button" className="secondary-button" onClick={downloadBrowserTemplate}>
-          Download Template
-        </button>
-      </section>
+  @media (max-width: 1024px) {
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
 
-      <section className="warning-card">
-        <h2>Important</h2>
-        <p>
-          This is a replacement import, not an incremental receiving transaction. It clears the current
-          blank product master, clears existing blank inventory movement quantities, and rebuilds the
-          master from the uploaded spreadsheet.
-        </p>
-      </section>
+    li {
+      flex: 1 1 calc(50% - 8px);
+    }
 
-      <section className="card elevated-card import-upload-card">
-        <h2>Required spreadsheet columns</h2>
-        <p className="helper-text">
-          Brand • Style • Color • Size • Quantity • Bin • Unit Cost • Low Stock Threshold
-        </p>
-        <p className="helper-text">
-          Optional: SKU Base, Barcode, Product Name, Image URL, Supplier, Supplier SKU, Notes.
-          The import also accepts the typo <strong>Low Stock Threshhold</strong>.
-        </p>
+    a {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+  }
+}
 
-        <label>
-          Upload blank product master workbook
-          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} disabled={loading || importing} />
-        </label>
+#spacer {
+  height: 88px;
+  border-top: 1px solid var(--border);
+  @media (max-width: 1024px) {
+    height: 48px;
+  }
+}
 
-        {message && <p className="message">{message}</p>}
-      </section>
+.ticks {
+  position: relative;
+  width: 100%;
 
-      {rows.length > 0 && (
-        <>
-          <section className="summary-grid">
-            <div className="metric-card"><strong>{counts.total}</strong><span>Total rows</span></div>
-            <div className="metric-card"><strong>{counts.ready}</strong><span>Ready rows</span></div>
-            <div className="metric-card"><strong>{counts.errors}</strong><span>Needs review</span></div>
-            <div className="metric-card"><strong>{counts.totalUnits}</strong><span>Initial units</span></div>
-            <div className="metric-card"><strong>{counts.withBins}</strong><span>Rows with bin quantities</span></div>
-          </section>
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: -4.5px;
+    border: 5px solid transparent;
+  }
 
-          <section className="card elevated-card">
-            <div className="import-actions">
-              <label className="checkbox-line danger-check">
-                <input
-                  type="checkbox"
-                  checked={confirmReplace}
-                  onChange={(event) => setConfirmReplace(event.target.checked)}
-                  disabled={importing}
-                />
-                I understand this will replace all Supabase blank products and reset blank inventory quantities.
-              </label>
+  &::before {
+    left: 0;
+    border-left-color: var(--border);
+  }
+  &::after {
+    right: 0;
+    border-right-color: var(--border);
+  }
+}
 
-              <button
-                type="button"
-                className="danger-button"
-                disabled={importing || loading || counts.ready === 0 || counts.errors > 0 || !confirmReplace}
-                onClick={handleReplaceMaster}
-              >
-                {importing ? 'Replacing Master...' : `Replace Blank Product Master (${counts.ready} rows)`}
-              </button>
-            </div>
-          </section>
+.helper-text {
+  margin-top: 6px;
+  color: #666;
+  font-size: 0.9rem;
+}
 
-          <section className="card elevated-card import-preview">
-            <h2>Preview</h2>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Row</th>
-                    <th>SKU Base</th>
-                    <th>Brand</th>
-                    <th>Style</th>
-                    <th>Color</th>
-                    <th>Size</th>
-                    <th>Qty</th>
-                    <th>Bin</th>
-                    <th>Unit Cost</th>
-                    <th>Low Stock</th>
-                    <th>Issues</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, 500).map((row) => (
-                    <tr key={`${row.sourceRowNumber}-${row.skuBase}`} className={row.status === 'ready' ? '' : 'error-row'}>
-                      <td>{row.status === 'ready' ? 'Ready' : 'Review'}</td>
-                      <td>{row.sourceRowNumber}</td>
-                      <td>{row.skuBase}</td>
-                      <td>{row.brand}</td>
-                      <td>{row.style}</td>
-                      <td>{row.color}</td>
-                      <td>{row.size}</td>
-                      <td>{row.quantity}</td>
-                      <td>{row.bin}</td>
-                      <td>{Number(row.unitCost || 0).toFixed(2)}</td>
-                      <td>{row.lowStockThreshold ?? ''}</td>
-                      <td>{row.errors?.join(' ')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {rows.length > 500 && <p className="helper-text">Showing first 500 rows only.</p>}
-          </section>
-        </>
-      )}
+.result-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
 
-      {result && (
-        <section className="card elevated-card">
-          <h2>Import Result</h2>
-          <pre className="result-json">{JSON.stringify(result, null, 2)}</pre>
-        </section>
-      )}
-    </main>
-  );
+.result-row {
+  appearance: none;
+  border: 1px solid #e7dff0;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  color: #171321;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.result-row:hover,
+.result-row.selected {
+  border-color: #2478f2;
+  box-shadow: 0 0 0 3px rgba(36, 120, 242, 0.12);
+}
+
+.result-row span {
+  color: #6b6477;
+  font-size: 0.95rem;
+}
+
+/* Edit Blank Items page */
+.edit-blank-layout {
+  align-items: start;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
+}
+
+.inline-search-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.inline-search-form input {
+  flex: 1;
+}
+
+.blank-edit-results {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  max-height: 620px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.blank-edit-results .result-row small {
+  color: #7b7288;
+  font-size: 0.85rem;
+}
+
+.edit-blank-form {
+  display: grid;
+  gap: 10px;
+}
+
+.edit-blank-form label {
+  font-weight: 700;
+  color: #211629;
+  margin-top: 6px;
+}
+
+.input-with-button {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-button input {
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .edit-blank-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-search-form,
+  .input-with-button {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Bulk edit blank items */
+.edit-blank-side-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.bulk-selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #eadff2;
+  border-radius: 14px;
+  background: #fbf8fd;
+}
+
+.bulk-selection-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.bulk-selection-toolbar span {
+  color: #6b6477;
+  font-size: 0.9rem;
+}
+
+.editable-result-row {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.row-select {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 2px;
+  cursor: pointer;
+}
+
+.bulk-edit-form {
+  display: grid;
+  gap: 12px;
+}
+
+.bulk-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #efe7f5;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.bulk-field > label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 800;
+  color: #211629;
+}
+
+.bulk-field select,
+.bulk-field input {
+  width: 100%;
+}
+
+
+/* Display fixes for Edit Blank Items / Bulk Edit checkboxes */
+.edit-blank-items-page input[type="checkbox"],
+.bulk-selection-toolbar input[type="checkbox"],
+.bulk-edit-form input[type="checkbox"],
+.editable-result-row input[type="checkbox"] {
+  width: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: #4b0082;
+}
+
+.edit-blank-layout {
+  gap: 18px;
+}
+
+.blank-edit-results {
+  gap: 8px;
+}
+
+.editable-result-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editable-result-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editable-result-row strong,
+.editable-result-row span,
+.editable-result-row small {
+  display: block;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.editable-result-row strong {
+  font-size: 1rem;
+  color: #171321;
+}
+
+.editable-result-row span {
+  color: #33283f;
+  font-size: 0.95rem;
+}
+
+.editable-result-row small {
+  color: #74667f;
+  font-size: 0.86rem;
+}
+
+.row-select {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+  width: 24px;
+  min-width: 24px;
+}
+
+.bulk-selection-toolbar label,
+.bulk-field > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+}
+
+.bulk-field {
+  gap: 8px;
+}
+
+.bulk-field select,
+.bulk-field input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1100px) {
+  .edit-blank-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Pull Sheet restored workflow */
+.page-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.page-heading-row h1 {
+  margin-bottom: 4px;
+}
+
+.back-link,
+.small-link-button {
+  color: var(--brand-purple, #32006e);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.small-link-button {
+  display: inline-flex;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f1e8ff;
+}
+
+.pullsheet-page label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #2b064f;
+  font-weight: 800;
+}
+
+.pullsheet-page input,
+.pullsheet-page select,
+.pullsheet-page textarea {
+  width: 100%;
+  border: 1px solid #e4dcef;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
+}
+
+.pullsheet-page textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.inline-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.inline-action-row button,
+.pullsheet-page button {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 900;
+  cursor: pointer;
+  background: #2176ff;
+  color: white;
+}
+
+.pullsheet-page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pullsheet-status-card {
+  background: #fbf7ff;
+  border: 1px solid #e7daf7;
+  border-radius: 18px;
+  padding: 14px;
+  min-width: 240px;
+}
+
+.compact-kpis .kpi-card {
+  min-height: 120px;
+}
+
+.responsive-table {
+  overflow-x: auto;
+}
+
+.responsive-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.responsive-table th,
+.responsive-table td {
+  border-bottom: 1px solid #eee7f6;
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  background: #f1e8ff;
+  color: #32006e;
+  white-space: nowrap;
+}
+
+.status-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pulled,
+.status-in_production {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.search-result-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 10px 0 14px;
+}
+
+.result-card {
+  display: grid !important;
+  gap: 4px;
+  text-align: left;
+  background: #fff !important;
+  color: #151222 !important;
+  border: 1px solid #e4dcef !important;
+  border-radius: 14px !important;
+}
+
+.result-card.selected {
+  border-color: #2176ff !important;
+  box-shadow: 0 0 0 3px rgba(33, 118, 255, 0.14);
+}
+
+.result-card span {
+  color: #6b6178;
+  font-weight: 600;
+}
+
+.selected-item-note {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.button-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.button-stack button {
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.danger-button {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.simple-steps {
+  padding-left: 20px;
+  color: #4f465e;
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .page-heading-row,
+  .content-two-column {
+    grid-template-columns: 1fr !important;
+    display: grid;
+  }
+
+  .inline-action-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Finished inventory / pull sheet integration */
+.pullsheet-actions {
+  min-width: 280px;
+  gap: 10px;
+}
+
+.finished-match-panel,
+.finished-return-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.finished-match-panel strong,
+.finished-return-panel strong {
+  font-size: 0.82rem;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.finished-match-card {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.finished-match-card span {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.finished-match-card small,
+.finished-match-panel small {
+  color: #64748b;
+}
+
+.finished-match-card select,
+.finished-return-panel select {
+  max-width: 100%;
+}
+
+
+/* Purchasing report */
+.purchasing-page .page-header,
+.purchasing-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.purchasing-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.purchasing-controls {
+  margin: 1rem 0;
+}
+
+.segmented-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.segmented-tabs button {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.segmented-tabs button.active {
+  background: #0f3d5e;
+  color: #fff;
+  border-color: #0f3d5e;
+}
+
+.search-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.search-row input {
+  flex: 1;
+  min-width: 240px;
+}
+
+.responsive-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shortage-row td {
+  background: #fff7ed;
+}
+
+.guide-card ol {
+  margin-left: 1.25rem;
+}
+
+.secondary-button {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+@media (max-width: 760px) {
+  .purchasing-page .page-header,
+  .purchasing-header,
+  .search-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+
+/* Inventory Import */
+.import-page .import-header {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.import-instructions-grid {
+  align-items: stretch;
+}
+
+.import-upload-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.import-upload-card input[type="file"] {
+  margin-top: 0.4rem;
+}
+
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+
+.checkbox-line input {
+  width: auto;
+}
+
+.import-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.import-table td,
+.import-table th {
+  vertical-align: top;
+}
+
+.import-ready-row {
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.import-error-row {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.import-kpis {
+  margin-top: 1rem;
+}
+
+
+.warning-card {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #78350f;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 16px 0;
+}
+
+.warning-card h2 {
+  margin-top: 0;
+}
+
+.danger-button {
+  border: none;
+  border-radius: 10px;
+  background: #b91c1c;
+  color: #fff;
+  font-weight: 700;
+  padding: 11px 16px;
+  cursor: pointer;
+}
+
+.danger-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.danger-check {
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+.result-json {
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
 }
