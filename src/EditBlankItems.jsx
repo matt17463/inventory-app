@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   bulkUpdateBlankProducts,
+  formatBinLabel,
   formatBlankProductLabel,
+  getBins,
   getBlankProductLookups,
   getBlankProducts,
+  receiveBlankInventory,
   updateBlankProduct,
 } from './lib/inventoryApi';
 
@@ -76,9 +79,13 @@ export default function EditBlankItems() {
   const [form, setForm] = useState(emptyForm);
   const [bulkForm, setBulkForm] = useState(emptyBulkForm);
   const [lookups, setLookups] = useState({ brands: [], colors: [], sizes: [], productTypes: [] });
+  const [bins, setBins] = useState([]);
+  const [receiveDrafts, setReceiveDrafts] = useState({});
+  const [receiveDefaults, setReceiveDefaults] = useState({ binId: '', quantity: '' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkReceiving, setBulkReceiving] = useState(false);
   const [message, setMessage] = useState('');
 
   const selectedLabel = useMemo(() => selected ? formatBlankProductLabel(selected) : '', [selected]);
@@ -88,6 +95,10 @@ export default function EditBlankItems() {
     setLookups(await getBlankProductLookups());
   }
 
+  async function loadBins() {
+    setBins(await getBins());
+  }
+
   async function loadProducts(term = search) {
     setLoading(true);
     setMessage('');
@@ -95,6 +106,13 @@ export default function EditBlankItems() {
     try {
       const products = await getBlankProducts(term);
       setRows(products);
+      setReceiveDrafts((current) => {
+        const next = {};
+        products.forEach((product) => {
+          next[product.id] = current[product.id] || { quantity: '', binId: '' };
+        });
+        return next;
+      });
       setSelectedIds((current) => current.filter((id) => products.some((product) => product.id === id)));
       if (term?.trim()) {
         setMessage(`Found ${products.length} blank item${products.length === 1 ? '' : 's'}.`);
@@ -108,6 +126,7 @@ export default function EditBlankItems() {
 
   useEffect(() => {
     loadLookups().catch((err) => setMessage(err.message || 'Failed to load lookup values.'));
+    loadBins().catch((err) => setMessage(err.message || 'Failed to load bins.'));
     loadProducts('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -135,6 +154,41 @@ export default function EditBlankItems() {
 
   function updateBulkForm(key, value) {
     setBulkForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateReceiveDraft(productId, key, value) {
+    setReceiveDrafts((current) => ({
+      ...current,
+      [productId]: {
+        ...(current[productId] || { quantity: '', binId: '' }),
+        [key]: value,
+      },
+    }));
+  }
+
+  function applyReceiveDefaultToVisible(key, value) {
+    setReceiveDefaults((current) => ({ ...current, [key]: value }));
+    setReceiveDrafts((current) => {
+      const next = { ...current };
+      rows.forEach((product) => {
+        next[product.id] = {
+          ...(next[product.id] || { quantity: '', binId: '' }),
+          [key === 'binId' ? 'binId' : 'quantity']: value,
+        };
+      });
+      return next;
+    });
+  }
+
+  function clearReceiveDraftsForVisible() {
+    setReceiveDrafts((current) => {
+      const next = { ...current };
+      rows.forEach((product) => {
+        next[product.id] = { quantity: '', binId: '' };
+      });
+      return next;
+    });
+    setReceiveDefaults({ binId: '', quantity: '' });
   }
 
   function toggleSelected(productId) {
@@ -274,11 +328,72 @@ export default function EditBlankItems() {
     }
   }
 
+  async function handleBulkReceiveVisible(event) {
+    event.preventDefault();
+    setMessage('');
+
+    const entries = rows
+      .map((product) => ({ product, draft: receiveDrafts[product.id] || {} }))
+      .filter(({ draft }) => String(draft.quantity || '').trim() !== '');
+
+    if (!entries.length) {
+      setMessage('Enter a quantity next to at least one displayed blank item.');
+      return;
+    }
+
+    const invalid = entries.find(({ draft }) => {
+      const quantity = Number(draft.quantity);
+      return !draft.binId || Number.isNaN(quantity) || quantity <= 0;
+    });
+
+    if (invalid) {
+      setMessage('Each row with a quantity must also have a bin, and quantity must be greater than zero.');
+      return;
+    }
+
+    setBulkReceiving(true);
+
+    const successes = [];
+    const failures = [];
+
+    for (const { product, draft } of entries) {
+      try {
+        await receiveBlankInventory({
+          binId: draft.binId,
+          blankProductId: product.id,
+          quantity: Number(draft.quantity),
+          notes: `Bulk added from Edit Blank Items search${search?.trim() ? `: ${search.trim()}` : ''}`,
+        });
+        successes.push(product.id);
+      } catch (err) {
+        failures.push({ product, error: err.message || 'Unknown error' });
+      }
+    }
+
+    setBulkReceiving(false);
+
+    if (failures.length) {
+      setMessage(`Added ${successes.length} item${successes.length === 1 ? '' : 's'}, but ${failures.length} failed. First error: ${failures[0].product.sku_base || failures[0].product.name}: ${failures[0].error}`);
+      return;
+    }
+
+    setReceiveDrafts((current) => {
+      const next = { ...current };
+      successes.forEach((id) => {
+        next[id] = { quantity: '', binId: '' };
+      });
+      return next;
+    });
+
+    setMessage(`Added inventory for ${successes.length} displayed blank item${successes.length === 1 ? '' : 's'}.`);
+    await loadProducts(search);
+  }
+
   return (
     <main className="page edit-blank-items-page">
       <h1>Edit Blank Items</h1>
       <p className="helper-text">
-        Search for existing blank items, edit one item at a time, or select multiple rows and apply bulk changes.
+        Search for existing blank items, edit product details, bulk edit selected rows, or add quantities for displayed search results into bins.
       </p>
 
       <section className="content-two-column edit-blank-layout">
@@ -306,6 +421,42 @@ export default function EditBlankItems() {
             <span>{selectedIds.length} selected</span>
           </div>
 
+          <form onSubmit={handleBulkReceiveVisible} className="bulk-receive-visible-form">
+            <h3>Add Displayed Items to Bins</h3>
+            <p className="helper-text">Enter quantities and choose bins beside each displayed item below. Rows with blank quantities will be skipped.</p>
+            <div className="bulk-receive-defaults">
+              <label>
+                Apply bin to visible rows
+                <select
+                  value={receiveDefaults.binId}
+                  onChange={(event) => applyReceiveDefaultToVisible('binId', event.target.value)}
+                >
+                  <option value="">Choose bin...</option>
+                  {bins.map((bin) => <option key={bin.id} value={bin.id}>{formatBinLabel(bin) || `Bin ${bin.id}`}</option>)}
+                </select>
+              </label>
+              <label>
+                Apply quantity to visible rows
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={receiveDefaults.quantity}
+                  onChange={(event) => applyReceiveDefaultToVisible('quantity', event.target.value)}
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+            <div className="bulk-receive-actions">
+              <button type="submit" disabled={!rows.length || bulkReceiving}>
+                {bulkReceiving ? 'Adding inventory...' : 'Add Entered Quantities'}
+              </button>
+              <button type="button" className="secondary-button" onClick={clearReceiveDraftsForVisible} disabled={!rows.length || bulkReceiving}>
+                Clear Qty/Bins
+              </button>
+            </div>
+          </form>
+
           <div className="blank-edit-results">
             {rows.length === 0 ? (
               <p>No blank items found.</p>
@@ -327,13 +478,38 @@ export default function EditBlankItems() {
                     onChange={() => toggleSelected(product.id)}
                   />
                 </label>
-                <div>
-                  <strong>{product.sku_base}</strong>
-                  <span>{formatBlankProductLabel(product)}</span>
-                  <small>
-                    Cost: {product.unit_cost == null ? '$0.00' : Number(product.unit_cost).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
-                    {' · '}Low stock: {product.low_stock_threshold ?? 'Not set'}
-                  </small>
+                <div className="blank-result-main">
+                  <div className="blank-result-details">
+                    <strong>{product.sku_base}</strong>
+                    <span>{formatBlankProductLabel(product)}</span>
+                    <small>
+                      Cost: {product.unit_cost == null ? '$0.00' : Number(product.unit_cost).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                      {' · '}Low stock: {product.low_stock_threshold ?? 'Not set'}
+                    </small>
+                  </div>
+                  <div className="result-receive-controls" onClick={(event) => event.stopPropagation()}>
+                    <label>
+                      Qty to add
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={receiveDrafts[product.id]?.quantity || ''}
+                        onChange={(event) => updateReceiveDraft(product.id, 'quantity', event.target.value)}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label>
+                      Bin
+                      <select
+                        value={receiveDrafts[product.id]?.binId || ''}
+                        onChange={(event) => updateReceiveDraft(product.id, 'binId', event.target.value)}
+                      >
+                        <option value="">Choose bin...</option>
+                        {bins.map((bin) => <option key={bin.id} value={bin.id}>{formatBinLabel(bin) || `Bin ${bin.id}`}</option>)}
+                      </select>
+                    </label>
+                  </div>
                 </div>
               </div>
             ))}
