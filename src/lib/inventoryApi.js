@@ -1237,42 +1237,7 @@ export async function createFinishedProductFromBlank({
 
 
 // =========================================================
-// Transfer Inventory - Bin Scoped Items
-// =========================================================
-
-export async function getBlankItemsInBin(binId, search = '') {
-  if (!binId) return [];
-
-  const { data, error } = await supabase.rpc('get_blank_items_in_bin', {
-    p_bin_id: Number(binId),
-    p_search: String(search || '').trim(),
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-// =========================================================
-// Printable Warehouse Audit Report
-// =========================================================
-
-export async function getWarehouseInventoryAuditReport() {
-  const { data, error } = await supabase
-    .from('warehouse_inventory_audit_report')
-    .select('*')
-    .order('bin_sort', { ascending: true, nullsFirst: false })
-    .order('bin_code', { ascending: true })
-    .order('brand', { ascending: true, nullsFirst: false })
-    .order('style', { ascending: true, nullsFirst: false })
-    .order('color', { ascending: true, nullsFirst: false })
-    .order('size', { ascending: true, nullsFirst: false });
-
-  if (error) throw error;
-  return data || [];
-}
-
-// =========================================================
-// Standalone Sample Products
+// Standalone Sample Products - not linked to WooCommerce or blank_products
 // =========================================================
 
 export async function createStandaloneSampleProduct({
@@ -1283,18 +1248,28 @@ export async function createStandaloneSampleProduct({
   price,
   size,
   notes,
-  quantity,
 }) {
-  const { data, error } = await supabase.rpc('create_standalone_sample_product', {
-    p_brand: String(brand || '').trim(),
-    p_style: String(style || '').trim(),
-    p_color: String(color || '').trim(),
-    p_vendor: String(vendor || '').trim() || null,
-    p_price: price === '' || price == null ? null : Number(price),
-    p_size: String(size || '').trim(),
-    p_notes: String(notes || '').trim() || null,
-    p_quantity: quantity === '' || quantity == null ? 1 : Number(quantity),
-  });
+  const payload = {
+    brand: String(brand || '').trim(),
+    style: String(style || '').trim(),
+    color: String(color || '').trim(),
+    vendor: String(vendor || '').trim() || null,
+    price: price === '' || price == null ? null : Number(price),
+    size: String(size || '').trim(),
+    notes: String(notes || '').trim() || null,
+  };
+
+  if (!payload.brand) throw new Error('Brand is required.');
+  if (!payload.style) throw new Error('Style is required.');
+  if (!payload.color) throw new Error('Color is required.');
+  if (!payload.size) throw new Error('Size is required.');
+  if (payload.price != null && Number.isNaN(payload.price)) throw new Error('Price must be a number.');
+
+  const { data, error } = await supabase
+    .from('sample_products')
+    .insert(payload)
+    .select('*')
+    .single();
 
   if (error) throw error;
   return data;
@@ -1303,17 +1278,19 @@ export async function createStandaloneSampleProduct({
 export async function getStandaloneSampleProducts(search = '') {
   const { data, error } = await supabase
     .from('sample_products')
-    .select('*')
+    .select('id, brand, style, color, vendor, price, size, notes, created_at, updated_at')
     .order('created_at', { ascending: false })
     .limit(5000);
 
   if (error) throw error;
 
   const rows = data || [];
-  const term = String(search || '').trim().toLowerCase();
-  if (!term) return rows;
+  const tokens = String(search || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean);
 
-  const tokens = term.split(/[^a-z0-9]+/i).filter(Boolean);
+  if (!tokens.length) return rows;
 
   return rows.filter((row) => {
     const text = [
@@ -1323,11 +1300,14 @@ export async function getStandaloneSampleProducts(search = '') {
       row.vendor,
       row.size,
       row.notes,
-      row.sample_sku,
     ].filter(Boolean).join(' ').toLowerCase();
 
     const normalized = text.replace(/[^a-z0-9]+/g, '');
 
-    return tokens.every((token) => text.includes(token) || normalized.includes(token.replace(/[^a-z0-9]+/g, '')));
+    return tokens.every((token) => {
+      const normalizedToken = token.replace(/[^a-z0-9]+/g, '');
+      return text.includes(token) || normalized.includes(normalizedToken);
+    });
   });
 }
+
