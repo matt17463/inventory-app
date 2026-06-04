@@ -126,6 +126,7 @@ export default function Home() {
         <Link className="app-tile" to="/reservations"><span className="tile-icon">📌</span><h2>Reservations</h2><p>Hold inventory for jobs without blocking online orders.</p></Link>
         <Link className="app-tile" to="/valuation"><span className="tile-icon">💵</span><h2>Inventory Valuation</h2><p>See value by product using unit costs and on-hand quantities.</p></Link>
         <Link className="app-tile" to="/purchasing"><span className="tile-icon">🛒</span><h2>Purchasing</h2><p>Find negative availability and export a supplier order list.</p></Link>
+        <Link className="app-tile" to="/inventory/import"><span className="tile-icon">📥</span><h2>Import Inventory</h2><p>Upload a two-tab workbook for blank and finished inventory counts.</p></Link>
         <Link className="app-tile" to="/woo-sync"><span className="tile-icon">🔄</span><h2>WooCommerce Sync</h2><p>Monitor sync queue records for your WooCommerce integration.</p></Link>
         <Link className="app-tile" to="/color-aliases"><span className="tile-icon">🎨</span><h2>Color Alias Review</h2><p>Approve or reject WooCommerce color aliases before relinking products.</p></Link>
       </section>

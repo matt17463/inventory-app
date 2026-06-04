@@ -797,61 +797,73 @@
 }
 
 
-.filter-row {
+/* Inventory Import */
+.import-page .import-header {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.import-instructions-grid {
+  align-items: stretch;
+}
+
+.import-upload-card {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-  align-items: end;
+  gap: 1rem;
 }
 
-.status-pill-list {
+.import-upload-card input[type="file"] {
+  margin-top: 0.4rem;
+}
+
+.checkbox-line {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.status-pill,
-.alias-status {
-  display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 4px 9px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  background: #eef2ff;
-  color: #312e81;
+  gap: 0.6rem;
+  font-weight: 600;
 }
 
-.alias-status-approved {
-  background: #dcfce7;
-  color: #166534;
+.checkbox-line input {
+  width: auto;
 }
 
-.alias-status-rejected {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.alias-status-pending,
-.alias-status-not_reviewed {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.button-stack {
+.import-preview-heading {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
-.success-button {
-  border: none;
-  border-radius: 10px;
-  background: #15803d;
-  color: #fff;
-  font-weight: 700;
-  padding: 9px 12px;
-  cursor: pointer;
+.import-table td,
+.import-table th {
+  vertical-align: top;
+}
+
+.import-ready-row {
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.import-error-row {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.import-kpis {
+  margin-top: 1rem;
+}
+
+
+.warning-card {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #78350f;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 16px 0;
+}
+
+.warning-card h2 {
+  margin-top: 0;
 }
 
 .danger-button {
@@ -860,22 +872,40 @@
   background: #b91c1c;
   color: #fff;
   font-weight: 700;
-  padding: 9px 12px;
+  padding: 11px 16px;
   cursor: pointer;
 }
 
-.success-button:disabled,
 .danger-button:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-.example-line {
-  font-size: 0.85rem;
-  color: #475569;
-  margin-bottom: 4px;
+.danger-check {
+  color: #7f1d1d;
+  font-weight: 600;
 }
 
-.color-alias-page textarea {
-  min-width: 220px;
+.result-json {
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
 }
+
+
+.filter-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end; }
+.status-pill-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-pill, .alias-status { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 0.85rem; font-weight: 700; background: #eef2ff; color: #312e81; }
+.alias-status-approved { background: #dcfce7; color: #166534; }
+.alias-status-rejected { background: #fee2e2; color: #991b1b; }
+.alias-status-pending, .alias-status-not_reviewed { background: #fef3c7; color: #92400e; }
+.button-stack { display: flex; gap: 8px; flex-wrap: wrap; }
+.success-button { border: none; border-radius: 10px; background: #15803d; color: #fff; font-weight: 700; padding: 9px 12px; cursor: pointer; }
+.danger-button { border: none; border-radius: 10px; background: #b91c1c; color: #fff; font-weight: 700; padding: 9px 12px; cursor: pointer; }
+.success-button:disabled, .danger-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.example-line { font-size: 0.85rem; color: #475569; margin-bottom: 4px; }
+.color-alias-page textarea { min-width: 220px; }

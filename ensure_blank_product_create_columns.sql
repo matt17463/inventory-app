@@ -1,17 +1,24 @@
--- Skilled Crafting Inventory App
--- Safe helper migration for creating blank inventory items from the app.
--- Run this only if creating blank items fails because one of these columns is missing.
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-alter table public.blank_products
-  add column if not exists barcode text,
-  add column if not exists image_url text,
-  add column if not exists unit_cost numeric(10,2) default 0,
-  add column if not exists low_stock_threshold integer default 0;
+node_modules
+dist
+dist-ssr
+*.local
 
-create unique index if not exists blank_products_sku_base_unique_idx
-  on public.blank_products(sku_base);
-
-create index if not exists blank_products_barcode_idx
-  on public.blank_products(barcode);
-
-grant select, insert, update on public.blank_products to anon, authenticated;
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

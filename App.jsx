@@ -1,76 +1,34 @@
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
-import AddItemToBin from './AddItemToBin';
-import AuditMode from './AuditMode';
-import BinContents from './BinContents';
-import BinsDashboard from './BinsDashboard';
-import BlankInventory from './BlankInventory';
-import EditBlankItems from './EditBlankItems';
-import Home from './Home';
-import InventoryValuation from './InventoryValuation';
-import LowStock from './LowStock';
-import NfcWriter from './NfcWriter';
-import PullSheetList from './PullSheetList';
-import Purchasing from './Purchasing';
-import PullSheetView from './PullSheetView';
-import Reservations from './Reservations';
-import ReturnFinishedInventory from './ReturnFinishedInventory';
-import ScanInventory from './ScanInventory';
-import TestTag from './TestTag';
-import TransferInventory from './TransferInventory';
-import WooSync from './WooSync';
-import ActivityPage from './ActivityPage';
-import logo from './assets/logo.png';
-import './App.css';
+import { useEffect, useState } from 'react';
+import { getActivityFeed } from './lib/inventoryApi';
 
-export default function App() {
+export default function ActivityPage() {
+  const [rows, setRows] = useState([]);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    getActivityFeed(100).then(setRows).catch((err) => setMessage(err.message || 'Failed to load activity feed.'));
+  }, []);
+
   return (
-    <BrowserRouter>
-      <div className="app-shell">
-        <header className="top-nav">
-          <Link to="/" className="brand">
-            <img src={logo} alt="Skilled Crafting" />
-            <span>Skilled Crafting Inventory</span>
-          </Link>
-          <nav>
-            <Link to="/inventory/blanks">Inventory</Link>
-            <Link to="/inventory/edit-blanks">Edit Blanks</Link>
-            <Link to="/add-item">Add Item</Link>
-            <Link to="/bins">Bins</Link>
-            <Link to="/scan">Scan</Link>
-            <Link to="/transfer">Transfer</Link>
-            <Link to="/audit">Audit</Link>
-            <Link to="/pullsheets">Pull Sheets</Link>
-            <Link to="/return-finished">Finished Products</Link>
-            <Link to="/reservations">Reservations</Link>
-            <Link to="/low-stock">Low Stock</Link>
-            <Link to="/purchasing">Purchasing</Link>
-            <Link to="/nfc-writer">NFC</Link>
-          </nav>
-        </header>
-
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/inventory/blanks" element={<BlankInventory />} />
-          <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
-          <Route path="/bins" element={<BinsDashboard />} />
-          <Route path="/bin/:binId" element={<BinContents />} />
-          <Route path="/add-item" element={<AddItemToBin />} />
-          <Route path="/scan" element={<ScanInventory />} />
-          <Route path="/transfer" element={<TransferInventory />} />
-          <Route path="/audit" element={<AuditMode />} />
-          <Route path="/reservations" element={<Reservations />} />
-          <Route path="/valuation" element={<InventoryValuation />} />
-          <Route path="/low-stock" element={<LowStock />} />
-          <Route path="/purchasing" element={<Purchasing />} />
-          <Route path="/activity" element={<ActivityPage />} />
-          <Route path="/woo-sync" element={<WooSync />} />
-          <Route path="/nfc-writer" element={<NfcWriter />} />
-          <Route path="/test-tag" element={<TestTag />} />
-          <Route path="/pullsheets" element={<PullSheetList />} />
-          <Route path="/pullsheets/:jobId" element={<PullSheetView />} />
-          <Route path="/return-finished" element={<ReturnFinishedInventory />} />
-        </Routes>
+    <main className="page">
+      <div className="page-heading-row">
+        <div>
+          <p className="eyebrow">Audit Trail</p>
+          <h1>Activity Feed</h1>
+          <p className="helper-text">Every receive, transfer, reservation, audit, and adjustment is logged here.</p>
+        </div>
       </div>
-    </BrowserRouter>
+      {message && <p className="message">{message}</p>}
+      <section className="card wide-card activity-list">
+        {rows.map((row) => (
+          <div key={row.id} className="activity-row full">
+            <strong>{row.activity_type}</strong>
+            <span>{row.description}</span>
+            <small>{new Date(row.created_at).toLocaleString()}</small>
+          </div>
+        ))}
+        {rows.length === 0 && <p>No activity yet.</p>}
+      </section>
+    </main>
   );
 }

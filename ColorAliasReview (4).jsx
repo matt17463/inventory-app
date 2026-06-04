@@ -873,9 +873,21 @@ export async function getPurchasingShortages(search = '') {
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
-export async function getPurchasingReorderSuggestions(search = '') {
+export async function getPurchasingLowStock(search = '') {
   const { data, error } = await supabase
-    .from('purchasing_reorder_suggestions')
+    .from('low_stock_blank_inventory')
+    .select('*')
+    .order('reorder_quantity', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = data || [];
+  return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+export async function getPurchasingRecommendedOrders(search = '') {
+  const { data, error } = await supabase
+    .from('purchasing_recommended_orders')
     .select('*')
     .order('recommended_order_quantity', { ascending: false });
 
@@ -883,6 +895,11 @@ export async function getPurchasingReorderSuggestions(search = '') {
 
   const rows = data || [];
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
+}
+
+// Backward compatibility for earlier Purchasing page builds.
+export async function getPurchasingReorderSuggestions(search = '') {
+  return getPurchasingRecommendedOrders(search);
 }
 
 export async function getPurchasingSupplierSummary() {
@@ -894,6 +911,108 @@ export async function getPurchasingSupplierSummary() {
 
   if (error) throw error;
   return data || [];
+}
+
+
+export async function importBlankInventoryRow({
+  brand,
+  style,
+  color,
+  size,
+  quantity,
+  bin,
+  sku,
+  notes,
+  createMissingBin = true,
+}) {
+  const { data, error } = await supabase.rpc('import_blank_inventory_row', {
+    p_brand: brand || null,
+    p_style: style || null,
+    p_color: color || null,
+    p_size: size || null,
+    p_quantity: Number(quantity),
+    p_bin_code: bin || null,
+    p_sku: sku || null,
+    p_notes: notes || null,
+    p_create_missing_bin: Boolean(createMissingBin),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function importFinishedInventoryRow({
+  customer,
+  logo,
+  brand,
+  style,
+  color,
+  size,
+  quantity,
+  bin,
+  finishedSku,
+  blankSku,
+  placement,
+  decorationSize,
+  notes,
+  createMissingBin = true,
+  createMissingFinishedProduct = true,
+}) {
+  const { data, error } = await supabase.rpc('import_finished_inventory_row', {
+    p_customer: customer || null,
+    p_logo: logo || null,
+    p_brand: brand || null,
+    p_style: style || null,
+    p_color: color || null,
+    p_size: size || null,
+    p_quantity: Number(quantity),
+    p_bin_code: bin || null,
+    p_finished_sku: finishedSku || null,
+    p_blank_sku: blankSku || null,
+    p_placement: placement || null,
+    p_decoration_size: decorationSize || null,
+    p_notes: notes || null,
+    p_create_missing_bin: Boolean(createMissingBin),
+    p_create_missing_finished_product: Boolean(createMissingFinishedProduct),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+
+
+export async function replaceBlankProductMaster({ rows, sourceFileName }) {
+  if (!Array.isArray(rows) || !rows.length) {
+    throw new Error('No blank product rows were provided.');
+  }
+
+  const payloadRows = rows.map((row) => ({
+    brand: row.brand || null,
+    style: row.style || null,
+    color: row.color || null,
+    size: row.size || null,
+    quantity: Number(row.quantity || 0),
+    bin: row.bin || null,
+    unit_cost: Number(row.unitCost || 0),
+    low_stock_threshold: row.lowStockThreshold === '' || row.lowStockThreshold == null ? null : Number(row.lowStockThreshold),
+    sku_base: row.skuBase || null,
+    barcode: row.barcode || null,
+    name: row.name || null,
+    image_url: row.imageUrl || null,
+    supplier: row.supplier || null,
+    supplier_sku: row.supplierSku || null,
+    notes: row.notes || null,
+    source_row_number: row.sourceRowNumber || null,
+  }));
+
+  const { data, error } = await supabase.rpc('replace_blank_product_master_from_json', {
+    p_rows: payloadRows,
+    p_source_file_name: sourceFileName || null,
+  });
+
+  if (error) throw error;
+  return data;
 }
 
 
@@ -910,7 +1029,6 @@ export async function getColorAliasCandidates() {
     .order('style', { ascending: true })
     .order('woo_color', { ascending: true })
     .order('possible_blank_color', { ascending: true });
-
   if (error) throw error;
   return data || [];
 }
@@ -921,11 +1039,7 @@ export async function getColorAliasApprovals(status = 'all') {
     .select('*')
     .order('updated_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
-
-  if (status && status !== 'all') {
-    query = query.eq('status', status);
-  }
-
+  if (status && status !== 'all') query = query.eq('status', status);
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
@@ -939,14 +1053,12 @@ export async function saveColorAliasDecision({ wooColor, blankColor, status, not
     p_notes: notes || null,
     p_reviewed_by: reviewedBy || 'Matthew',
   });
-
   if (error) throw error;
   return data;
 }
 
 export async function relinkWooProductsToBlankMaster() {
   const { data, error } = await supabase.rpc('wcsb_relink_all_woo_products_to_blank_master');
-
   if (error) throw error;
   return data;
 }
@@ -955,15 +1067,12 @@ export async function getWooBlankMatchSummary() {
   const { data, error } = await supabase
     .from('woo_blank_match_diagnostics')
     .select('match_diagnostic');
-
   if (error) throw error;
-
   const counts = {};
   (data || []).forEach((row) => {
     const key = row.match_diagnostic || 'unknown';
     counts[key] = (counts[key] || 0) + 1;
   });
-
   return Object.entries(counts)
     .map(([match_diagnostic, qty]) => ({ match_diagnostic, qty }))
     .sort((a, b) => b.qty - a.qty);
