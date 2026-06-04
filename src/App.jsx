@@ -6,6 +6,7 @@ import BinsDashboard from './BinsDashboard';
 import BlankInventory from './BlankInventory';
 import EditBlankItems from './EditBlankItems';
 import Home from './Home';
+import InventoryImport from './InventoryImport';
 import InventoryValuation from './InventoryValuation';
 import LowStock from './LowStock';
 import NfcWriter from './NfcWriter';
@@ -14,8 +15,8 @@ import Purchasing from './Purchasing';
 import PullSheetView from './PullSheetView';
 import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
-import ScanInventory from './ScanInventory';
 import SampleInventory from './SampleInventory';
+import ScanInventory from './ScanInventory';
 import TestTag from './TestTag';
 import TransferInventory from './TransferInventory';
 import WooSync from './WooSync';
@@ -36,10 +37,11 @@ export default function App() {
           <nav>
             <Link to="/inventory/blanks">Inventory</Link>
             <Link to="/inventory/edit-blanks">Edit Blanks</Link>
+            <Link to="/inventory/import">Import</Link>
+            <Link to="/inventory/samples">Samples</Link>
             <Link to="/add-item">Add Item</Link>
             <Link to="/bins">Bins</Link>
             <Link to="/scan">Scan</Link>
-            <Link to="/samples">Samples</Link>
             <Link to="/transfer">Transfer</Link>
             <Link to="/audit">Audit</Link>
             <Link to="/pullsheets">Pull Sheets</Link>
@@ -56,11 +58,12 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
           <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
+          <Route path="/inventory/import" element={<InventoryImport />} />
+          <Route path="/inventory/samples" element={<SampleInventory />} />
           <Route path="/bins" element={<BinsDashboard />} />
           <Route path="/bin/:binId" element={<BinContents />} />
           <Route path="/add-item" element={<AddItemToBin />} />
           <Route path="/scan" element={<ScanInventory />} />
-          <Route path="/samples" element={<SampleInventory />} />
           <Route path="/transfer" element={<TransferInventory />} />
           <Route path="/audit" element={<AuditMode />} />
           <Route path="/reservations" element={<Reservations />} />
