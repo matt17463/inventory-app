@@ -11,10 +11,12 @@ export default function Samples() {
   const [form, setForm] = useState({
     brand: '',
     style: '',
-    color: '',
-    vendor: '',
     price: '',
+    vendor: '',
+    color: '',
     size: '',
+    productType: '',
+    customer: '',
     notes: '',
   });
   const [message, setMessage] = useState('');
@@ -44,19 +46,21 @@ export default function Samples() {
 
     try {
       await createStandaloneSampleProduct(form);
-      setMessage('Standalone sample product saved.');
+      setMessage('Sample saved to sample_products.');
       setForm({
         brand: '',
         style: '',
-        color: '',
-        vendor: '',
         price: '',
+        vendor: '',
+        color: '',
         size: '',
+        productType: '',
+        customer: '',
         notes: '',
       });
       await load('');
     } catch (err) {
-      setMessage(err.message || 'Failed to save standalone sample product.');
+      setMessage(err.message || 'Failed to save sample.');
     } finally {
       setBusy(false);
     }
@@ -74,8 +78,8 @@ export default function Samples() {
           <p className="eyebrow">Samples</p>
           <h1>Standalone Sample Products</h1>
           <p>
-            Track sample blanks that are not tied to WooCommerce products, blank inventory,
-            pull sheets, or any existing blank product record.
+            Manually track sample blanks that are not linked to WooCommerce,
+            blank products, finished products, or inventory movement records.
           </p>
         </div>
       </section>
@@ -83,7 +87,7 @@ export default function Samples() {
       {message && <p className="message">{message}</p>}
 
       <form onSubmit={submit} className="card elevated-card">
-        <h2>Create Standalone Sample</h2>
+        <h2>Create New Sample</h2>
 
         <div className="form-grid">
           <label>
@@ -91,7 +95,7 @@ export default function Samples() {
             <input
               value={form.brand}
               onChange={(event) => updateField('brand', event.target.value)}
-              placeholder="Example: Next Level"
+              placeholder="Example: Bella Canvas"
               required
             />
           </label>
@@ -101,8 +105,29 @@ export default function Samples() {
             <input
               value={form.style}
               onChange={(event) => updateField('style', event.target.value)}
-              placeholder="Example: 6210"
+              placeholder="Example: 3001"
               required
+            />
+          </label>
+
+          <label>
+            Price
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.price}
+              onChange={(event) => updateField('price', event.target.value)}
+              placeholder="0.00"
+            />
+          </label>
+
+          <label>
+            Vendor
+            <input
+              value={form.vendor}
+              onChange={(event) => updateField('vendor', event.target.value)}
+              placeholder="Example: SanMar"
             />
           </label>
 
@@ -111,7 +136,7 @@ export default function Samples() {
             <input
               value={form.color}
               onChange={(event) => updateField('color', event.target.value)}
-              placeholder="Example: Heather Gray"
+              placeholder="Example: Black"
               required
             />
           </label>
@@ -127,23 +152,20 @@ export default function Samples() {
           </label>
 
           <label>
-            Vendor
+            Product Type
             <input
-              value={form.vendor}
-              onChange={(event) => updateField('vendor', event.target.value)}
-              placeholder="Example: SanMar"
+              value={form.productType}
+              onChange={(event) => updateField('productType', event.target.value)}
+              placeholder="Example: Tee, Hoodie, Hat"
             />
           </label>
 
           <label>
-            Price
+            Customer
             <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.price}
-              onChange={(event) => updateField('price', event.target.value)}
-              placeholder="0.00"
+              value={form.customer}
+              onChange={(event) => updateField('customer', event.target.value)}
+              placeholder="Optional customer or intended use"
             />
           </label>
         </div>
@@ -153,23 +175,23 @@ export default function Samples() {
           <textarea
             value={form.notes}
             onChange={(event) => updateField('notes', event.target.value)}
-            placeholder="Optional notes about fit, supplier, test print, customer feedback, etc."
+            placeholder="Fit notes, test print notes, supplier notes, etc."
           />
         </label>
 
         <button type="submit" disabled={busy}>
-          {busy ? 'Saving...' : 'Save Standalone Sample'}
+          {busy ? 'Saving...' : 'Save Sample'}
         </button>
       </form>
 
       <form onSubmit={runSearch} className="card">
-        <h2>Sample Product List</h2>
+        <h2>Search Sample Products</h2>
 
         <div className="inline-form-row">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search samples by brand, style, color, vendor, size, notes..."
+            placeholder="Search brand, style, color, vendor, size, product type, customer, notes..."
           />
           <button type="submit">Search</button>
         </div>
@@ -180,10 +202,12 @@ export default function Samples() {
               <tr>
                 <th>Brand</th>
                 <th>Style</th>
+                <th>Price</th>
+                <th>Vendor</th>
                 <th>Color</th>
                 <th>Size</th>
-                <th>Vendor</th>
-                <th>Price</th>
+                <th>Product Type</th>
+                <th>Customer</th>
                 <th>Notes</th>
                 <th>Created</th>
               </tr>
@@ -193,10 +217,12 @@ export default function Samples() {
                 <tr key={row.id}>
                   <td>{row.brand}</td>
                   <td>{row.style}</td>
+                  <td>{row.price != null ? money(row.price) : ''}</td>
+                  <td>{row.vendor}</td>
                   <td>{row.color}</td>
                   <td>{row.size}</td>
-                  <td>{row.vendor}</td>
-                  <td>{row.price != null ? money(row.price) : ''}</td>
+                  <td>{row.product_type}</td>
+                  <td>{row.customer}</td>
                   <td>{row.notes}</td>
                   <td>{row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</td>
                 </tr>
@@ -204,7 +230,7 @@ export default function Samples() {
 
               {!rows.length && (
                 <tr>
-                  <td colSpan="8">No standalone samples found.</td>
+                  <td colSpan="10">No sample products found.</td>
                 </tr>
               )}
             </tbody>
