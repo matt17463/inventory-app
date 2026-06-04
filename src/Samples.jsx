@@ -130,7 +130,7 @@ export default function Samples() {
         notes: '',
       });
 
-      setMessage('Sample saved.');
+      setMessage('Sample saved to sample_products.');
       await loadSamples();
     } catch (err) {
       setMessage(err.message || 'Failed to save sample.');
@@ -161,91 +161,48 @@ export default function Samples() {
           <div className="form-grid">
             <label>
               Brand
-              <input
-                value={form.brand}
-                onChange={(event) => updateField('brand', event.target.value)}
-                placeholder="Example: Bella Canvas"
-                required
-              />
+              <input value={form.brand} onChange={(event) => updateField('brand', event.target.value)} required />
             </label>
 
             <label>
               Style
-              <input
-                value={form.style}
-                onChange={(event) => updateField('style', event.target.value)}
-                placeholder="Example: 3001"
-                required
-              />
+              <input value={form.style} onChange={(event) => updateField('style', event.target.value)} required />
             </label>
 
             <label>
               Price
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.price}
-                onChange={(event) => updateField('price', event.target.value)}
-                placeholder="0.00"
-              />
+              <input type="number" step="0.01" min="0" value={form.price} onChange={(event) => updateField('price', event.target.value)} />
             </label>
 
             <label>
               Vendor
-              <input
-                value={form.vendor}
-                onChange={(event) => updateField('vendor', event.target.value)}
-                placeholder="Example: SanMar"
-              />
+              <input value={form.vendor} onChange={(event) => updateField('vendor', event.target.value)} />
             </label>
 
             <label>
               Color
-              <input
-                value={form.color}
-                onChange={(event) => updateField('color', event.target.value)}
-                placeholder="Example: Black"
-                required
-              />
+              <input value={form.color} onChange={(event) => updateField('color', event.target.value)} required />
             </label>
 
             <label>
               Size
-              <input
-                value={form.size}
-                onChange={(event) => updateField('size', event.target.value)}
-                placeholder="Example: L"
-                required
-              />
+              <input value={form.size} onChange={(event) => updateField('size', event.target.value)} required />
             </label>
 
             <label>
               Product Type
-              <input
-                value={form.productType}
-                onChange={(event) => updateField('productType', event.target.value)}
-                placeholder="Example: Tee, Hoodie, Hat"
-              />
+              <input value={form.productType} onChange={(event) => updateField('productType', event.target.value)} />
             </label>
 
             <label>
               Customer
-              <input
-                value={form.customer}
-                onChange={(event) => updateField('customer', event.target.value)}
-                placeholder="Optional customer or intended use"
-              />
+              <input value={form.customer} onChange={(event) => updateField('customer', event.target.value)} />
             </label>
           </div>
 
           <label>
             Notes
-            <textarea
-              value={form.notes}
-              onChange={(event) => updateField('notes', event.target.value)}
-              placeholder="Fit notes, supplier notes, test print notes, etc."
-            />
+            <textarea value={form.notes} onChange={(event) => updateField('notes', event.target.value)} />
           </label>
 
           <button type="submit" disabled={busy}>
