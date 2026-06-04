@@ -1141,3 +1141,65 @@ export async function getWooBlankMatchSummary() {
     .sort((a, b) => b.qty - a.qty);
 }
 
+
+
+// Create Finished Product from Blank
+export async function searchBlankProductsForFinishedCreation(search = '') {
+  const term = String(search || '').trim();
+
+  let query = supabase
+    .from('blank_products_search')
+    .select('*')
+    .order('brand', { ascending: true })
+    .order('style', { ascending: true })
+    .order('color', { ascending: true })
+    .order('size', { ascending: true })
+    .limit(250);
+
+  if (term) {
+    const escaped = term.replace(/[%_]/g, '\\$&');
+    query = query.or([
+      `sku_base.ilike.%${escaped}%`,
+      `name.ilike.%${escaped}%`,
+      `brand.ilike.%${escaped}%`,
+      `style.ilike.%${escaped}%`,
+      `color.ilike.%${escaped}%`,
+      `size.ilike.%${escaped}%`,
+    ].join(','));
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createFinishedProductFromBlank({
+  blankProductId,
+  finishedBinId,
+  quantity,
+  customerName,
+  logoName,
+  decorationType,
+  placement,
+  decorationSize,
+  notes,
+  deductBlank,
+  blankBinId,
+}) {
+  const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
+    p_blank_product_id: blankProductId,
+    p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
+    p_quantity: Number(quantity || 0),
+    p_customer_name: customerName,
+    p_logo_name: logoName,
+    p_decoration_type: decorationType || null,
+    p_placement: placement || null,
+    p_decoration_size: decorationSize || null,
+    p_notes: notes || null,
+    p_deduct_blank: Boolean(deductBlank),
+    p_blank_bin_id: blankBinId ? Number(blankBinId) : null,
+  });
+
+  if (error) throw error;
+  return data;
+}
