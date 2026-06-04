@@ -1240,76 +1240,7 @@ export async function createFinishedProductFromBlank({
 // Standalone Sample Products - not linked to WooCommerce or blank_products
 // =========================================================
 
-export async function createStandaloneSampleProduct({
-  brand,
-  style,
-  color,
-  vendor,
-  price,
-  size,
-  notes,
-}) {
-  const payload = {
-    brand: String(brand || '').trim(),
-    style: String(style || '').trim(),
-    color: String(color || '').trim(),
-    vendor: String(vendor || '').trim() || null,
-    price: price === '' || price == null ? null : Number(price),
-    size: String(size || '').trim(),
-    notes: String(notes || '').trim() || null,
-  };
 
-  if (!payload.brand) throw new Error('Brand is required.');
-  if (!payload.style) throw new Error('Style is required.');
-  if (!payload.color) throw new Error('Color is required.');
-  if (!payload.size) throw new Error('Size is required.');
-  if (payload.price != null && Number.isNaN(payload.price)) throw new Error('Price must be a number.');
-
-  const { data, error } = await supabase
-    .from('sample_products')
-    .insert(payload)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getStandaloneSampleProducts(search = '') {
-  const { data, error } = await supabase
-    .from('sample_products')
-    .select('id, brand, style, color, vendor, price, size, notes, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(5000);
-
-  if (error) throw error;
-
-  const rows = data || [];
-  const tokens = String(search || '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter(Boolean);
-
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const text = [
-      row.brand,
-      row.style,
-      row.color,
-      row.vendor,
-      row.size,
-      row.notes,
-    ].filter(Boolean).join(' ').toLowerCase();
-
-    const normalized = text.replace(/[^a-z0-9]+/g, '');
-
-    return tokens.every((token) => {
-      const normalizedToken = token.replace(/[^a-z0-9]+/g, '');
-      return text.includes(token) || normalized.includes(normalizedToken);
-    });
-  });
-}
 
 
 
@@ -1347,3 +1278,88 @@ export async function getWarehouseInventoryAuditReport() {
   if (error) throw error;
   return data || [];
 }
+
+
+// =========================================================
+// Standalone Samples - manual entry only
+// Not linked to WooCommerce, blank_products, finished_products, or inventory movements.
+// =========================================================
+
+export async function createStandaloneSampleProduct({
+  brand,
+  style,
+  price,
+  vendor,
+  color,
+  size,
+  productType,
+  customer,
+  notes,
+}) {
+  const payload = {
+    brand: String(brand || '').trim(),
+    style: String(style || '').trim(),
+    price: price === '' || price == null ? null : Number(price),
+    vendor: String(vendor || '').trim() || null,
+    color: String(color || '').trim(),
+    size: String(size || '').trim(),
+    product_type: String(productType || '').trim() || null,
+    customer: String(customer || '').trim() || null,
+    notes: String(notes || '').trim() || null,
+  };
+
+  if (!payload.brand) throw new Error('Brand is required.');
+  if (!payload.style) throw new Error('Style is required.');
+  if (!payload.color) throw new Error('Color is required.');
+  if (!payload.size) throw new Error('Size is required.');
+  if (payload.price != null && Number.isNaN(payload.price)) throw new Error('Price must be a number.');
+
+  const { data, error } = await supabase
+    .from('sample_products')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getStandaloneSampleProducts(search = '') {
+  const { data, error } = await supabase
+    .from('sample_products')
+    .select('id, brand, style, price, vendor, color, size, product_type, customer, notes, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(5000);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const tokens = String(search || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean);
+
+  if (!tokens.length) return rows;
+
+  return rows.filter((row) => {
+    const text = [
+      row.brand,
+      row.style,
+      row.price,
+      row.vendor,
+      row.color,
+      row.size,
+      row.product_type,
+      row.customer,
+      row.notes,
+    ].filter((value) => value !== null && value !== undefined).join(' ').toLowerCase();
+
+    const normalized = text.replace(/[^a-z0-9]+/g, '');
+
+    return tokens.every((token) => {
+      const normalizedToken = token.replace(/[^a-z0-9]+/g, '');
+      return text.includes(token) || normalized.includes(normalizedToken);
+    });
+  });
+}
+
