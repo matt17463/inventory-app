@@ -3,6 +3,7 @@ import {
   createFinishedProductFromBlank,
   formatBinLabel,
   getBins,
+  getFinishedProducts,
   searchBlankProductsForFinishedCreation,
 } from './lib/inventoryApi';
 
@@ -22,6 +23,9 @@ export default function CreateFinishedFromBlank() {
   const [blankProducts, setBlankProducts] = useState([]);
   const [bins, setBins] = useState([]);
   const [blankProductId, setBlankProductId] = useState('');
+  const [existingFinishedSearch, setExistingFinishedSearch] = useState('');
+  const [existingFinishedProducts, setExistingFinishedProducts] = useState([]);
+  const [existingFinishedProductId, setExistingFinishedProductId] = useState('');
   const [finishedBinId, setFinishedBinId] = useState('');
   const [blankBinId, setBlankBinId] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -40,14 +44,21 @@ export default function CreateFinishedFromBlank() {
     [blankProducts, blankProductId]
   );
 
+  const selectedExistingFinished = useMemo(
+    () => existingFinishedProducts.find((row) => String(row.finished_product_id || row.id) === String(existingFinishedProductId)),
+    [existingFinishedProducts, existingFinishedProductId]
+  );
+
   async function loadInitial() {
     try {
-      const [binRows, blankRows] = await Promise.all([
+      const [binRows, blankRows, finishedRows] = await Promise.all([
         getBins(),
         searchBlankProductsForFinishedCreation(''),
+        getFinishedProducts(''),
       ]);
       setBins(binRows);
       setBlankProducts(blankRows);
+      setExistingFinishedProducts(finishedRows);
     } catch (err) {
       setMessage(err.message || 'Failed to load page data.');
     }
@@ -67,6 +78,18 @@ export default function CreateFinishedFromBlank() {
     }
   }
 
+  async function runExistingFinishedSearch(event) {
+    event.preventDefault();
+    setMessage('');
+    try {
+      const rows = await getFinishedProducts(existingFinishedSearch);
+      setExistingFinishedProducts(rows);
+      setMessage(`Found ${rows.length} existing finished product(s).`);
+    } catch (err) {
+      setMessage(err.message || 'Existing finished product search failed.');
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
@@ -74,6 +97,7 @@ export default function CreateFinishedFromBlank() {
     try {
       const result = await createFinishedProductFromBlank({
         blankProductId,
+        existingFinishedProductId: existingFinishedProductId || null,
         finishedBinId,
         quantity: Number(quantity),
         customerName,
@@ -127,6 +151,48 @@ export default function CreateFinishedFromBlank() {
         </select>
 
         {selectedBlank && <p className="helper-text">Selected blank: <strong>{formatBlankLabel(selectedBlank)}</strong></p>}
+
+        <section className="nested-card">
+          <h3>Optional Manual Pairing</h3>
+          <p className="helper-text">
+            If this finished item already exists from WooCommerce or a previous manual entry, search and select it here.
+            When selected, the system will add inventory to that existing finished product instead of creating a new one.
+          </p>
+
+          <div className="inline-form-row">
+            <input
+              value={existingFinishedSearch}
+              onChange={(event) => setExistingFinishedSearch(event.target.value)}
+              placeholder="Search existing finished product by SKU, customer, logo, brand, color, size..."
+            />
+            <button type="button" onClick={runExistingFinishedSearch}>Search Existing Finished</button>
+          </div>
+
+          <label>Pair to existing finished product</label>
+          <select value={existingFinishedProductId} onChange={(event) => setExistingFinishedProductId(event.target.value)}>
+            <option value="">No manual pairing — auto-match or create new</option>
+            {existingFinishedProducts.map((finished) => (
+              <option key={finished.finished_product_id || finished.id} value={finished.finished_product_id || finished.id}>
+                {[
+                  finished.finished_sku || finished.sku,
+                  finished.customer_name,
+                  finished.logo_name,
+                  finished.brand,
+                  finished.style,
+                  finished.color,
+                  finished.size,
+                  finished.finished_on_hand != null ? `On hand: ${finished.finished_on_hand}` : null,
+                ].filter(Boolean).join(' / ')}
+              </option>
+            ))}
+          </select>
+
+          {selectedExistingFinished && (
+            <p className="helper-text">
+              Manual pairing selected. Inventory will be added to: <strong>{selectedExistingFinished.finished_sku || selectedExistingFinished.sku || selectedExistingFinished.name}</strong>
+            </p>
+          )}
+        </section>
 
         <div className="form-grid">
           <label>Customer<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} required /></label>
