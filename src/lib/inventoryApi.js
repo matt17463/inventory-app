@@ -628,16 +628,21 @@ export function formatFinishedProductLabel(product) {
 }
 
 export async function getFinishedProducts(search = '') {
-  const { data, error } = await supabase.rpc('search_finished_products_for_pairing', {
-    p_search: String(search || '').trim(),
-    p_limit: 5000,
-  });
+  // Query the finished inventory compatibility view and filter locally with token search.
+  // This lets searches like "Bremerton navy left chest" or "Bella Canvas customer" work
+  // across SKU, customer, logo, placement, blank, brand, color, size, and bin columns.
+  const { data, error } = await supabase
+    .from('finished_inventory_by_product')
+    .select('*')
+    .order('finished_sku', { ascending: true })
+    .limit(1000);
 
   if (error) throw error;
 
-  return (data || []).sort((a, b) =>
-    finishedProductSearchText(a).localeCompare(finishedProductSearchText(b))
-  );
+  const rows = data || [];
+  return rows
+    .filter((row) => rowMatchesAllTokens(row, search, finishedProductSearchText))
+    .sort((a, b) => finishedProductSearchText(a).localeCompare(finishedProductSearchText(b)));
 }
 
 export async function receiveFinishedInventory({ binId, finishedProductId, quantity, notes }) {
@@ -1140,11 +1145,30 @@ export async function getWooBlankMatchSummary() {
 
 // Create Finished Product from Blank
 export async function searchBlankProductsForFinishedCreation(search = '') {
-  const { data, error } = await supabase.rpc('search_blank_products_for_finished_creation', {
-    p_search: String(search || '').trim(),
-    p_limit: 5000,
-  });
+  const term = String(search || '').trim();
 
+  let query = supabase
+    .from('blank_products_search')
+    .select('*')
+    .order('brand', { ascending: true })
+    .order('style', { ascending: true })
+    .order('color', { ascending: true })
+    .order('size', { ascending: true })
+    .limit(250);
+
+  if (term) {
+    const escaped = term.replace(/[%_]/g, '\\$&');
+    query = query.or([
+      `sku_base.ilike.%${escaped}%`,
+      `name.ilike.%${escaped}%`,
+      `brand.ilike.%${escaped}%`,
+      `style.ilike.%${escaped}%`,
+      `color.ilike.%${escaped}%`,
+      `size.ilike.%${escaped}%`,
+    ].join(','));
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
@@ -1156,12 +1180,36 @@ export async function createFinishedProductFromBlank({
   quantity,
   customerName,
   logoName,
+  customerId,
+  logoId,
   decorationType,
   placement,
   decorationSize,
+  productionSource,
   notes,
   deductBlank,
   blankBinId,
+}) {
+  const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
+    p_existing_finished_product_id: existingFinishedProductId || null,
+    p_blank_product_id: blankProductId || null,
+    p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
+    p_quantity: Number(quantity || 0),
+    p_customer_name: customerName || null,
+    p_logo_name: logoName || null,
+    p_customer_id: customerId || null,
+    p_logo_id: logoId || null,
+    p_decoration_type: decorationType || null,
+    p_placement: placement || null,
+    p_decoration_size: decorationSize || null,
+    p_production_source: productionSource || null,
+    p_notes: notes || null,
+    p_deduct_blank: Boolean(deductBlank),
+    p_blank_bin_id: blankBinId ? Number(blankBinId) : null,
+  });
+
+  if (error) throw error;
+  return data;
 }) {
   const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
     p_existing_finished_product_id: existingFinishedProductId || null,
