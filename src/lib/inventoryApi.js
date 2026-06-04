@@ -1234,3 +1234,100 @@ export async function createFinishedProductFromBlank({
   if (error) throw error;
   return data;
 }
+
+
+// =========================================================
+// Transfer Inventory - Bin Scoped Items
+// =========================================================
+
+export async function getBlankItemsInBin(binId, search = '') {
+  if (!binId) return [];
+
+  const { data, error } = await supabase.rpc('get_blank_items_in_bin', {
+    p_bin_id: Number(binId),
+    p_search: String(search || '').trim(),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// =========================================================
+// Printable Warehouse Audit Report
+// =========================================================
+
+export async function getWarehouseInventoryAuditReport() {
+  const { data, error } = await supabase
+    .from('warehouse_inventory_audit_report')
+    .select('*')
+    .order('bin_sort', { ascending: true, nullsFirst: false })
+    .order('bin_code', { ascending: true })
+    .order('brand', { ascending: true, nullsFirst: false })
+    .order('style', { ascending: true, nullsFirst: false })
+    .order('color', { ascending: true, nullsFirst: false })
+    .order('size', { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// =========================================================
+// Standalone Sample Products
+// =========================================================
+
+export async function createStandaloneSampleProduct({
+  brand,
+  style,
+  color,
+  vendor,
+  price,
+  size,
+  notes,
+  quantity,
+}) {
+  const { data, error } = await supabase.rpc('create_standalone_sample_product', {
+    p_brand: String(brand || '').trim(),
+    p_style: String(style || '').trim(),
+    p_color: String(color || '').trim(),
+    p_vendor: String(vendor || '').trim() || null,
+    p_price: price === '' || price == null ? null : Number(price),
+    p_size: String(size || '').trim(),
+    p_notes: String(notes || '').trim() || null,
+    p_quantity: quantity === '' || quantity == null ? 1 : Number(quantity),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getStandaloneSampleProducts(search = '') {
+  const { data, error } = await supabase
+    .from('sample_products')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(5000);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const term = String(search || '').trim().toLowerCase();
+  if (!term) return rows;
+
+  const tokens = term.split(/[^a-z0-9]+/i).filter(Boolean);
+
+  return rows.filter((row) => {
+    const text = [
+      row.brand,
+      row.style,
+      row.color,
+      row.vendor,
+      row.size,
+      row.notes,
+      row.sample_sku,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const normalized = text.replace(/[^a-z0-9]+/g, '');
+
+    return tokens.every((token) => text.includes(token) || normalized.includes(token.replace(/[^a-z0-9]+/g, '')));
+  });
+}
