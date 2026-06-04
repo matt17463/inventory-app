@@ -7,7 +7,6 @@ import BlankInventory from './BlankInventory';
 import EditBlankItems from './EditBlankItems';
 import Home from './Home';
 import InventoryValuation from './InventoryValuation';
-import InventoryImport from './InventoryImport';
 import LowStock from './LowStock';
 import NfcWriter from './NfcWriter';
 import PullSheetList from './PullSheetList';
@@ -20,6 +19,7 @@ import TestTag from './TestTag';
 import TransferInventory from './TransferInventory';
 import WooSync from './WooSync';
 import ActivityPage from './ActivityPage';
+import ColorAliasReview from './ColorAliasReview';
 import logo from './assets/logo.png';
 import './App.css';
 
@@ -35,7 +35,6 @@ export default function App() {
           <nav>
             <Link to="/inventory/blanks">Inventory</Link>
             <Link to="/inventory/edit-blanks">Edit Blanks</Link>
-            <Link to="/inventory/import">Import</Link>
             <Link to="/add-item">Add Item</Link>
             <Link to="/bins">Bins</Link>
             <Link to="/scan">Scan</Link>
@@ -46,6 +45,7 @@ export default function App() {
             <Link to="/reservations">Reservations</Link>
             <Link to="/low-stock">Low Stock</Link>
             <Link to="/purchasing">Purchasing</Link>
+            <Link to="/color-aliases">Color Aliases</Link>
             <Link to="/nfc-writer">NFC</Link>
           </nav>
         </header>
@@ -54,7 +54,6 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
           <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
-          <Route path="/inventory/import" element={<InventoryImport />} />
           <Route path="/bins" element={<BinsDashboard />} />
           <Route path="/bin/:binId" element={<BinContents />} />
           <Route path="/add-item" element={<AddItemToBin />} />
@@ -67,6 +66,7 @@ export default function App() {
           <Route path="/purchasing" element={<Purchasing />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
+          <Route path="/color-aliases" element={<ColorAliasReview />} />
           <Route path="/nfc-writer" element={<NfcWriter />} />
           <Route path="/test-tag" element={<TestTag />} />
           <Route path="/pullsheets" element={<PullSheetList />} />
