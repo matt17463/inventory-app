@@ -24,6 +24,7 @@ import ActivityPage from './ActivityPage';
 import ColorAliasReview from './ColorAliasReview';
 import logo from './assets/logo.png';
 import './App.css';
+import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 
 export default function App() {
   return (
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/pullsheets" element={<PullSheetList />} />
           <Route path="/pullsheets/:jobId" element={<PullSheetView />} />
           <Route path="/return-finished" element={<ReturnFinishedInventory />} />
+                  <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
         </Routes>
       </div>
     </BrowserRouter>

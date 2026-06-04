@@ -186,6 +186,7 @@ export default function Home() {
       </section>
 
       {message && <p className="message">{message}</p>}
-    </main>
+            <Link className="app-tile" to="/finished/create"><span className="tile-icon">🧵</span><h2>Create Finished Product</h2><p>Decorate a blank outside of an order and receive it into finished inventory.</p></Link>
+</main>
   );
 }
