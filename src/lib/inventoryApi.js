@@ -1173,6 +1173,7 @@ export async function searchBlankProductsForFinishedCreation(search = '') {
   return data || [];
 }
 
+
 export async function createFinishedProductFromBlank({
   blankProductId,
   existingFinishedProductId,
@@ -1210,22 +1211,5 @@ export async function createFinishedProductFromBlank({
 
   if (error) throw error;
   return data;
-}) {
-  const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
-    p_existing_finished_product_id: existingFinishedProductId || null,
-    p_blank_product_id: blankProductId,
-    p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
-    p_quantity: Number(quantity || 0),
-    p_customer_name: customerName,
-    p_logo_name: logoName,
-    p_decoration_type: decorationType || null,
-    p_placement: placement || null,
-    p_decoration_size: decorationSize || null,
-    p_notes: notes || null,
-    p_deduct_blank: Boolean(deductBlank),
-    p_blank_bin_id: blankBinId ? Number(blankBinId) : null,
-  });
-
-  if (error) throw error;
-  return data;
 }
+
