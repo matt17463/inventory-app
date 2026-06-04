@@ -628,20 +628,24 @@ export function formatFinishedProductLabel(product) {
 }
 
 export async function getFinishedProducts(search = '') {
-  // Query all finished products, not only finished products with inventory on hand.
-  // This lets manual pairing searches like "black YL" or "Bella Canvas customer" work
-  // across SKU, customer, logo, placement, blank, brand, color, size, and bin columns.
+  // Search all finished product master rows, even if there is no current finished inventory on hand.
+  // Local token filtering lets searches like "black YL", "gildan black", or "sidney left chest"
+  // match across SKU, customer, logo, brand, style, color, and size.
   const { data, error } = await supabase
     .from('finished_products_search')
     .select('*')
-    .order('finished_sku', { ascending: true })
+    .order('finished_sku', { ascending: true, nullsFirst: false })
     .limit(5000);
 
   if (error) throw error;
 
   const rows = data || [];
+  const term = String(search || '').trim();
+
+  if (!term) return rows;
+
   return rows
-    .filter((row) => rowMatchesAllTokens(row, search, finishedProductSearchText))
+    .filter((row) => rowMatchesAllTokens(row, term, finishedProductSearchText))
     .sort((a, b) => finishedProductSearchText(a).localeCompare(finishedProductSearchText(b)));
 }
 
@@ -815,7 +819,7 @@ export async function getFinishedMatchesForPullSheetItem(item) {
   if (!item?.blank_product_id) return [];
 
   const { data, error } = await supabase
-    .from('finished_products_search')
+    .from('finished_inventory_by_product')
     .select('*')
     .eq('blank_product_id', item.blank_product_id)
     .gt('total_quantity', 0)
@@ -1078,7 +1082,7 @@ export async function getColorAliasCandidates() {
     .order('style', { ascending: true })
     .order('woo_color', { ascending: true })
     .order('possible_blank_color', { ascending: true })
-    .limit(5000);
+    .limit(1000);
 
   if (error) throw error;
   return data || [];
@@ -1145,32 +1149,49 @@ export async function getWooBlankMatchSummary() {
 
 // Create Finished Product from Blank
 export async function searchBlankProductsForFinishedCreation(search = '') {
-  const term = String(search || '').trim();
-
-  let query = supabase
+  // Fetch the searchable blank master view and filter locally by tokens.
+  // This avoids PostgREST single-phrase searches that fail for terms like "gildan 18500"
+  // or partial inventory terms like "black" and "yl".
+  const { data, error } = await supabase
     .from('blank_products_search')
     .select('*')
-    .order('brand', { ascending: true })
-    .order('style', { ascending: true })
-    .order('color', { ascending: true })
-    .order('size', { ascending: true })
-    .limit(250);
+    .order('brand', { ascending: true, nullsFirst: false })
+    .order('style', { ascending: true, nullsFirst: false })
+    .order('color', { ascending: true, nullsFirst: false })
+    .order('size', { ascending: true, nullsFirst: false })
+    .limit(5000);
 
-  if (term) {
-    const escaped = term.replace(/[%_]/g, '\\$&');
-    query = query.or([
-      `sku_base.ilike.%${escaped}%`,
-      `name.ilike.%${escaped}%`,
-      `brand.ilike.%${escaped}%`,
-      `style.ilike.%${escaped}%`,
-      `color.ilike.%${escaped}%`,
-      `size.ilike.%${escaped}%`,
-    ].join(','));
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  const rows = data || [];
+  const tokens = searchTokens(search);
+
+  if (!tokens.length) return rows;
+
+  return rows.filter((row) => {
+    const searchable = [
+      row.blank_product_id,
+      row.id,
+      row.sku_base,
+      row.name,
+      row.barcode,
+      row.brand,
+      row.style,
+      row.product_type,
+      row.color,
+      row.size,
+    ].filter(Boolean).map((part) => ({
+      text: textSearchValue(part),
+      normalized: normalizeSearchValue(part),
+    }));
+
+    return tokens.every((token) => {
+      const normalizedToken = normalizeSearchValue(token);
+      return searchable.some((part) =>
+        part.text.includes(token) || part.normalized.includes(normalizedToken)
+      );
+    });
+  });
 }
 
 export async function createFinishedProductFromBlank({
