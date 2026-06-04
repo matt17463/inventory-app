@@ -187,6 +187,7 @@ export default function Home() {
 
       {message && <p className="message">{message}</p>}
             <Link className="app-tile" to="/finished/create"><span className="tile-icon">🧵</span><h2>Create Finished Product</h2><p>Decorate a blank outside of an order and receive it into finished inventory.</p></Link>
+        <Link className="app-tile" to="/audit/warehouse"><span className="tile-icon">🧾</span><h2>Warehouse Audit Report</h2><p>Printable bin-by-bin inventory count sheet.</p></Link>
 </main>
   );
 }

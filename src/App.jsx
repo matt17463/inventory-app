@@ -25,6 +25,7 @@ import ColorAliasReview from './ColorAliasReview';
 import logo from './assets/logo.png';
 import './App.css';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
+import WarehouseAuditReport from './WarehouseAuditReport';
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
             <Link to="/scan">Scan</Link>
             <Link to="/transfer">Transfer</Link>
             <Link to="/audit">Audit</Link>
+            <Link to="/audit/warehouse">Warehouse Audit</Link>
             <Link to="/pullsheets">Pull Sheets</Link>
             <Link to="/return-finished">Finished Products</Link>
             <Link to="/reservations">Reservations</Link>
@@ -80,6 +82,7 @@ export default function App() {
           <Route path="/pullsheets/:jobId" element={<PullSheetView />} />
           <Route path="/return-finished" element={<ReturnFinishedInventory />} />
                   <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
+                  <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
         </Routes>
       </div>
     </BrowserRouter>

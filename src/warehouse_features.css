@@ -1,0 +1,108 @@
+
+.print-only {
+  display: none;
+}
+
+.audit-bin-section {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 24px 0;
+}
+
+.audit-bin-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  border-bottom: 2px solid #111827;
+  margin-bottom: 8px;
+}
+
+.audit-bin-heading h2 {
+  margin: 0;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.audit-table th,
+.audit-table td {
+  border: 1px solid #d1d5db;
+  padding: 6px;
+  vertical-align: middle;
+}
+
+.audit-table th {
+  background: #f3f4f6;
+  text-align: left;
+}
+
+.audit-table .numeric {
+  text-align: right;
+}
+
+.write-box {
+  display: inline-block;
+  width: 70px;
+  height: 24px;
+  border: 2px solid #111827;
+  background: white;
+}
+
+.notes-line {
+  display: inline-block;
+  width: 160px;
+  border-bottom: 1px solid #111827;
+  height: 22px;
+}
+
+.inline-form-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+@media print {
+  .no-print,
+  nav,
+  header,
+  .app-nav,
+  .sidebar {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .page {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .card,
+  .elevated-card {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .audit-bin-section {
+    page-break-inside: avoid;
+    margin-bottom: 18px;
+  }
+}
