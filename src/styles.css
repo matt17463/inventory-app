@@ -647,3 +647,163 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Improved Bins display / ordering page */
+.bins-page .page-heading-row {
+  align-items: flex-start;
+}
+
+.bins-add-card,
+.bins-toolbar,
+.bins-list-card {
+  max-width: 1120px;
+}
+
+.bins-toolbar-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.bins-toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.warning-text {
+  color: #92400e;
+  font-weight: 700;
+}
+
+.bins-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.bins-list-heading h2 {
+  margin: 0;
+}
+
+.bins-list-heading span {
+  color: var(--sc-muted, #6b7280);
+  font-weight: 800;
+}
+
+.bins-sort-list {
+  display: grid;
+  gap: 10px;
+}
+
+.bin-sort-row {
+  display: grid;
+  grid-template-columns: 28px 46px minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 6px 16px rgba(17, 24, 39, 0.04);
+}
+
+.bin-sort-row.dragging {
+  opacity: 0.55;
+  border-color: #7c3aed;
+  background: #f5f3ff;
+}
+
+.bin-drag-handle {
+  color: #7c3aed;
+  font-weight: 900;
+  cursor: grab;
+  user-select: none;
+  text-align: center;
+}
+
+.bin-order-number {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #f3e8ff;
+  color: #4c1d95;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+
+.bin-sort-main {
+  display: grid;
+  gap: 4px;
+}
+
+.bin-sort-main strong {
+  color: #2e005f;
+  font-size: 1rem;
+}
+
+.bin-sort-main span {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.bin-sort-main a {
+  color: #581c87;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.bin-sort-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.bin-sort-actions button {
+  border: 1px solid #ddd6fe;
+  border-radius: 9px;
+  background: #f5f3ff;
+  color: #4c1d95;
+  padding: 8px 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.bin-sort-actions button:hover:not(:disabled) {
+  background: #ede9fe;
+}
+
+.bin-sort-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+@media (max-width: 860px) {
+  .bins-toolbar-grid,
+  .bin-sort-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bins-toolbar-actions,
+  .bin-sort-actions {
+    justify-content: stretch;
+  }
+
+  .bins-toolbar-actions button,
+  .bin-sort-actions button {
+    flex: 1;
+  }
+
+  .bin-drag-handle,
+  .bin-order-number {
+    display: none;
+  }
+}
