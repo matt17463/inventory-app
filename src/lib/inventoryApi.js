@@ -528,13 +528,42 @@ export async function getDashboardMetrics() {
     .maybeSingle();
 
   if (error) throw error;
-  return data || {
-    total_bins: 0,
-    total_units_on_hand: 0,
-    total_reserved_units: 0,
-    total_available_units: 0,
-    total_inventory_value: 0,
-    low_stock_count: 0,
+
+  const row = data || {};
+
+  return {
+    total_bins:
+      row.total_bins ??
+      row.bin_count ??
+      0,
+
+    total_units_on_hand:
+      row.total_units_on_hand ??
+      row.on_hand_units ??
+      row.total_on_hand ??
+      0,
+
+    total_reserved_units:
+      row.total_reserved_units ??
+      row.total_units_reserved ??
+      row.reserved_units ??
+      0,
+
+    total_available_units:
+      row.total_available_units ??
+      row.total_units_available ??
+      row.available_units ??
+      0,
+
+    total_inventory_value:
+      row.total_inventory_value ??
+      row.inventory_value ??
+      0,
+
+    low_stock_count:
+      row.low_stock_count ??
+      row.low_stock_items ??
+      0,
   };
 }
 
@@ -1173,7 +1202,6 @@ export async function searchBlankProductsForFinishedCreation(search = '') {
   return data || [];
 }
 
-
 export async function createFinishedProductFromBlank({
   blankProductId,
   existingFinishedProductId,
@@ -1181,29 +1209,23 @@ export async function createFinishedProductFromBlank({
   quantity,
   customerName,
   logoName,
-  customerId,
-  logoId,
   decorationType,
   placement,
   decorationSize,
-  productionSource,
   notes,
   deductBlank,
   blankBinId,
 }) {
   const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
     p_existing_finished_product_id: existingFinishedProductId || null,
-    p_blank_product_id: blankProductId || null,
+    p_blank_product_id: blankProductId,
     p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
     p_quantity: Number(quantity || 0),
-    p_customer_name: customerName || null,
-    p_logo_name: logoName || null,
-    p_customer_id: customerId || null,
-    p_logo_id: logoId || null,
+    p_customer_name: customerName,
+    p_logo_name: logoName,
     p_decoration_type: decorationType || null,
     p_placement: placement || null,
     p_decoration_size: decorationSize || null,
-    p_production_source: productionSource || null,
     p_notes: notes || null,
     p_deduct_blank: Boolean(deductBlank),
     p_blank_bin_id: blankBinId ? Number(blankBinId) : null,
@@ -1212,4 +1234,3 @@ export async function createFinishedProductFromBlank({
   if (error) throw error;
   return data;
 }
-
