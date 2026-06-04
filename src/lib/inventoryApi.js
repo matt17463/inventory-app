@@ -1175,6 +1175,7 @@ export async function searchBlankProductsForFinishedCreation(search = '') {
 
 export async function createFinishedProductFromBlank({
   blankProductId,
+  existingFinishedProductId,
   finishedBinId,
   quantity,
   customerName,
@@ -1187,6 +1188,7 @@ export async function createFinishedProductFromBlank({
   blankBinId,
 }) {
   const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
+    p_existing_finished_product_id: existingFinishedProductId || null,
     p_blank_product_id: blankProductId,
     p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
     p_quantity: Number(quantity || 0),
