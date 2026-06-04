@@ -51,11 +51,55 @@ async function rpcSearchFinishedProducts(search) {
   return data || [];
 }
 
+async function getCustomersForDropdown() {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('id, name, code, customer_key')
+    .order('name', { ascending: true })
+    .limit(5000);
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getLogosForDropdown() {
+  const { data, error } = await supabase
+    .from('logos')
+    .select('id, name, code')
+    .order('name', { ascending: true })
+    .limit(5000);
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getBlankSourceBins(blankProductId) {
+  if (!blankProductId) return [];
+
+  const { data, error } = await supabase.rpc('get_blank_product_source_bins', {
+    p_blank_product_id: blankProductId,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+function lookupName(rows, id) {
+  const row = rows.find((item) => String(item.id) === String(id));
+  return row?.name || '';
+}
+
 export default function CreateFinishedFromBlank() {
   const [search, setSearch] = useState('');
   const [blankProducts, setBlankProducts] = useState([]);
   const [bins, setBins] = useState([]);
+  const [sourceBins, setSourceBins] = useState([]);
   const [blankProductId, setBlankProductId] = useState('');
+
+  const [customers, setCustomers] = useState([]);
+  const [logos, setLogos] = useState([]);
+  const [customerId, setCustomerId] = useState('');
+  const [logoId, setLogoId] = useState('');
 
   const [existingFinishedSearch, setExistingFinishedSearch] = useState('');
   const [existingFinishedProducts, setExistingFinishedProducts] = useState([]);
@@ -64,12 +108,11 @@ export default function CreateFinishedFromBlank() {
   const [finishedBinId, setFinishedBinId] = useState('');
   const [blankBinId, setBlankBinId] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [customerName, setCustomerName] = useState('');
-  const [logoName, setLogoName] = useState('');
   const [decorationType, setDecorationType] = useState('');
   const [placement, setPlacement] = useState('');
   const [decorationSize, setDecorationSize] = useState('');
   const [deductBlank, setDeductBlank] = useState(true);
+  const [productionSource, setProductionSource] = useState('manual_production');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -84,19 +127,46 @@ export default function CreateFinishedFromBlank() {
     [existingFinishedProducts, existingFinishedProductId]
   );
 
+  const usingExistingFinishedProduct = Boolean(existingFinishedProductId);
+
   async function loadInitial() {
     setMessage('');
     try {
-      const binRows = await getBins();
+      const [binRows, customerRows, logoRows] = await Promise.all([
+        getBins(),
+        getCustomersForDropdown(),
+        getLogosForDropdown(),
+      ]);
+
       setBins(binRows);
+      setCustomers(customerRows);
+      setLogos(logoRows);
     } catch (err) {
-      setMessage(err.message || 'Failed to load bins.');
+      setMessage(err.message || 'Failed to load page data.');
     }
   }
 
   useEffect(() => {
     loadInitial();
   }, []);
+
+  useEffect(() => {
+    async function loadSourceBins() {
+      setBlankBinId('');
+      setSourceBins([]);
+
+      if (!blankProductId) return;
+
+      try {
+        const rows = await getBlankSourceBins(blankProductId);
+        setSourceBins(rows);
+      } catch (err) {
+        setMessage(err.message || 'Failed to load source bins for selected blank.');
+      }
+    }
+
+    loadSourceBins();
+  }, [blankProductId]);
 
   async function runSearch(event) {
     event.preventDefault();
@@ -142,6 +212,21 @@ export default function CreateFinishedFromBlank() {
     setMessage('');
 
     try {
+      const customerName = lookupName(customers, customerId);
+      const logoName = lookupName(logos, logoId);
+
+      if (!usingExistingFinishedProduct && !customerName) {
+        throw new Error('Choose a customer.');
+      }
+
+      if (!usingExistingFinishedProduct && !logoName) {
+        throw new Error('Choose a logo/design.');
+      }
+
+      if (deductBlank && !blankBinId) {
+        throw new Error('Choose a source bin that contains the selected blank item.');
+      }
+
       const result = await createFinishedProductFromBlank({
         blankProductId,
         existingFinishedProductId: existingFinishedProductId || null,
@@ -149,9 +234,12 @@ export default function CreateFinishedFromBlank() {
         quantity: Number(quantity),
         customerName,
         logoName,
-        decorationType,
-        placement,
-        decorationSize,
+        customerId: customerId || null,
+        logoId: logoId || null,
+        decorationType: usingExistingFinishedProduct ? null : decorationType,
+        placement: usingExistingFinishedProduct ? null : placement,
+        decorationSize: usingExistingFinishedProduct ? null : decorationSize,
+        productionSource,
         notes,
         deductBlank,
         blankBinId: deductBlank ? blankBinId : null,
@@ -160,6 +248,7 @@ export default function CreateFinishedFromBlank() {
       setMessage(
         `Finished inventory received. Match method: ${result?.match_method || 'unknown'}`
       );
+
       setQuantity(1);
       setNotes('');
     } catch (err) {
@@ -214,7 +303,7 @@ export default function CreateFinishedFromBlank() {
           <h3>Optional Manual Pairing</h3>
           <p className="helper-text">
             If this finished item already exists from WooCommerce or a previous manual entry, search and select it here.
-            When selected, the system will add inventory to that existing finished product instead of creating a new one.
+            When selected, the system adds inventory to that existing finished product instead of creating a new one.
           </p>
 
           <div className="inline-form-row">
@@ -243,35 +332,69 @@ export default function CreateFinishedFromBlank() {
           )}
         </section>
 
+        {!usingExistingFinishedProduct && (
+          <div className="form-grid">
+            <label>
+              Customer
+              <select value={customerId} onChange={(event) => setCustomerId(event.target.value)} required>
+                <option value="">Choose customer...</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Logo / Design
+              <select value={logoId} onChange={(event) => setLogoId(event.target.value)} required>
+                <option value="">Choose logo/design...</option>
+                {logos.map((logo) => (
+                  <option key={logo.id} value={logo.id}>
+                    {logo.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Decoration Type
+              <input value={decorationType} onChange={(event) => setDecorationType(event.target.value)} placeholder="Optional: Screen Print, DTF, Embroidery" />
+            </label>
+
+            <label>
+              Placement
+              <input value={placement} onChange={(event) => setPlacement(event.target.value)} placeholder="Optional: Left Chest, Full Front" />
+            </label>
+
+            <label>
+              Decoration Size
+              <input value={decorationSize} onChange={(event) => setDecorationSize(event.target.value)} placeholder="Optional: 3.5 in, 10 in" />
+            </label>
+          </div>
+        )}
+
+        {usingExistingFinishedProduct && (
+          <p className="helper-text">
+            Customer, logo, decoration type, placement, and decoration size are taken from the selected WooCommerce finished product.
+          </p>
+        )}
+
         <div className="form-grid">
-          <label>
-            Customer
-            <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} required={!existingFinishedProductId} />
-          </label>
-
-          <label>
-            Logo / Design
-            <input value={logoName} onChange={(event) => setLogoName(event.target.value)} required={!existingFinishedProductId} />
-          </label>
-
-          <label>
-            Decoration Type
-            <input value={decorationType} onChange={(event) => setDecorationType(event.target.value)} placeholder="Screen Print, DTF, Embroidery" />
-          </label>
-
-          <label>
-            Placement
-            <input value={placement} onChange={(event) => setPlacement(event.target.value)} placeholder="Left Chest, Full Front" />
-          </label>
-
-          <label>
-            Decoration Size
-            <input value={decorationSize} onChange={(event) => setDecorationSize(event.target.value)} placeholder="3.5 in, 10 in" />
-          </label>
-
           <label>
             Quantity
             <input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
+          </label>
+
+          <label>
+            Production Source
+            <select value={productionSource} onChange={(event) => setProductionSource(event.target.value)}>
+              <option value="manual_production">Manual Production</option>
+              <option value="overstock_production">Overstock Production</option>
+              <option value="customer_order">Customer Order</option>
+              <option value="sample_inventory">Sample Inventory</option>
+            </select>
           </label>
         </div>
 
@@ -294,20 +417,23 @@ export default function CreateFinishedFromBlank() {
           <>
             <label>Blank source bin</label>
             <select value={blankBinId} onChange={(event) => setBlankBinId(event.target.value)} required={deductBlank}>
-              <option value="">Choose source blank bin...</option>
-              {bins.map((bin) => (
-                <option key={bin.id} value={bin.id}>
-                  {formatBinLabel(bin)}
+              <option value="">Choose source bin containing this blank...</option>
+              {sourceBins.map((bin) => (
+                <option key={bin.bin_id} value={bin.bin_id}>
+                  {[bin.bin_code, bin.label, bin.location, `${bin.on_hand_quantity} on hand`].filter(Boolean).join(' - ')}
                 </option>
               ))}
             </select>
+            {blankProductId && sourceBins.length === 0 && (
+              <p className="message warning">This blank item is not currently available in any bin. You cannot deduct it until it is received into inventory.</p>
+            )}
           </>
         )}
 
         <label>Notes</label>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
 
-        <button type="submit" disabled={busy}>
+        <button type="submit" disabled={busy || (deductBlank && blankProductId && sourceBins.length === 0)}>
           {busy ? 'Creating...' : 'Create Finished Product + Add Inventory'}
         </button>
       </form>
