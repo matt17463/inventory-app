@@ -1,0 +1,18 @@
+.segmented-control {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0 18px;
+}
+
+.segmented-control button {
+  background: #eef2ff;
+  color: #312e81;
+  border: 1px solid #c7d2fe;
+}
+
+.segmented-control button.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
