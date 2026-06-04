@@ -1240,7 +1240,76 @@ export async function createFinishedProductFromBlank({
 // Standalone Sample Products - not linked to WooCommerce or blank_products
 // =========================================================
 
+export async function createStandaloneSampleProduct({
+  brand,
+  style,
+  color,
+  vendor,
+  price,
+  size,
+  notes,
+}) {
+  const payload = {
+    brand: String(brand || '').trim(),
+    style: String(style || '').trim(),
+    color: String(color || '').trim(),
+    vendor: String(vendor || '').trim() || null,
+    price: price === '' || price == null ? null : Number(price),
+    size: String(size || '').trim(),
+    notes: String(notes || '').trim() || null,
+  };
 
+  if (!payload.brand) throw new Error('Brand is required.');
+  if (!payload.style) throw new Error('Style is required.');
+  if (!payload.color) throw new Error('Color is required.');
+  if (!payload.size) throw new Error('Size is required.');
+  if (payload.price != null && Number.isNaN(payload.price)) throw new Error('Price must be a number.');
+
+  const { data, error } = await supabase
+    .from('sample_products')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getStandaloneSampleProducts(search = '') {
+  const { data, error } = await supabase
+    .from('sample_products')
+    .select('id, brand, style, color, vendor, price, size, notes, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(5000);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const tokens = String(search || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean);
+
+  if (!tokens.length) return rows;
+
+  return rows.filter((row) => {
+    const text = [
+      row.brand,
+      row.style,
+      row.color,
+      row.vendor,
+      row.size,
+      row.notes,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const normalized = text.replace(/[^a-z0-9]+/g, '');
+
+    return tokens.every((token) => {
+      const normalizedToken = token.replace(/[^a-z0-9]+/g, '');
+      return text.includes(token) || normalized.includes(normalizedToken);
+    });
+  });
+}
 
 
 
@@ -1281,85 +1350,56 @@ export async function getWarehouseInventoryAuditReport() {
 
 
 // =========================================================
-// Standalone Samples - manual entry only
-// Not linked to WooCommerce, blank_products, finished_products, or inventory movements.
+// Return / Receive Finished Products
 // =========================================================
 
-export async function createStandaloneSampleProduct({
+
+// =========================================================
+// Return / Receive Finished Products
+// =========================================================
+
+export async function searchFinishedProductsForReceiving(search = '') {
+  const { data, error } = await supabase.rpc('search_finished_products_for_receiving', {
+    p_search: String(search || '').trim(),
+    p_limit: 5000,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createOrReceiveFinishedProduct({
+  existingFinishedProductId,
+  finishedSku,
+  name,
+  customer,
+  logo,
   brand,
   style,
-  price,
-  vendor,
   color,
   size,
   productType,
-  customer,
+  binId,
+  quantity,
   notes,
 }) {
-  const payload = {
-    brand: String(brand || '').trim(),
-    style: String(style || '').trim(),
-    price: price === '' || price == null ? null : Number(price),
-    vendor: String(vendor || '').trim() || null,
-    color: String(color || '').trim(),
-    size: String(size || '').trim(),
-    product_type: String(productType || '').trim() || null,
-    customer: String(customer || '').trim() || null,
-    notes: String(notes || '').trim() || null,
-  };
-
-  if (!payload.brand) throw new Error('Brand is required.');
-  if (!payload.style) throw new Error('Style is required.');
-  if (!payload.color) throw new Error('Color is required.');
-  if (!payload.size) throw new Error('Size is required.');
-  if (payload.price != null && Number.isNaN(payload.price)) throw new Error('Price must be a number.');
-
-  const { data, error } = await supabase
-    .from('sample_products')
-    .insert(payload)
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('create_or_receive_finished_product_inventory', {
+    p_existing_finished_product_id: existingFinishedProductId || null,
+    p_finished_sku: String(finishedSku || '').trim() || null,
+    p_name: String(name || '').trim() || null,
+    p_customer_name: String(customer || '').trim() || null,
+    p_logo_name: String(logo || '').trim() || null,
+    p_brand: String(brand || '').trim() || null,
+    p_style: String(style || '').trim() || null,
+    p_color: String(color || '').trim() || null,
+    p_size: String(size || '').trim() || null,
+    p_product_type: String(productType || '').trim() || null,
+    p_bin_id: binId ? Number(binId) : null,
+    p_quantity: Number(quantity || 0),
+    p_notes: String(notes || '').trim() || null,
+  });
 
   if (error) throw error;
   return data;
-}
-
-export async function getStandaloneSampleProducts(search = '') {
-  const { data, error } = await supabase
-    .from('sample_products')
-    .select('id, brand, style, price, vendor, color, size, product_type, customer, notes, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(5000);
-
-  if (error) throw error;
-
-  const rows = data || [];
-  const tokens = String(search || '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter(Boolean);
-
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const text = [
-      row.brand,
-      row.style,
-      row.price,
-      row.vendor,
-      row.color,
-      row.size,
-      row.product_type,
-      row.customer,
-      row.notes,
-    ].filter((value) => value !== null && value !== undefined).join(' ').toLowerCase();
-
-    const normalized = text.replace(/[^a-z0-9]+/g, '');
-
-    return tokens.every((token) => {
-      const normalizedToken = token.replace(/[^a-z0-9]+/g, '');
-      return text.includes(token) || normalized.includes(normalizedToken);
-    });
-  });
 }
 
