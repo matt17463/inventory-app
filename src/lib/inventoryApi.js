@@ -628,14 +628,14 @@ export function formatFinishedProductLabel(product) {
 }
 
 export async function getFinishedProducts(search = '') {
-  // Query the finished inventory compatibility view and filter locally with token search.
-  // This lets searches like "Bremerton navy left chest" or "Bella Canvas customer" work
+  // Query all finished products, not only finished products with inventory on hand.
+  // This lets manual pairing searches like "black YL" or "Bella Canvas customer" work
   // across SKU, customer, logo, placement, blank, brand, color, size, and bin columns.
   const { data, error } = await supabase
-    .from('finished_inventory_by_product')
+    .from('finished_products_search')
     .select('*')
     .order('finished_sku', { ascending: true })
-    .limit(1000);
+    .limit(5000);
 
   if (error) throw error;
 
@@ -815,7 +815,7 @@ export async function getFinishedMatchesForPullSheetItem(item) {
   if (!item?.blank_product_id) return [];
 
   const { data, error } = await supabase
-    .from('finished_inventory_by_product')
+    .from('finished_products_search')
     .select('*')
     .eq('blank_product_id', item.blank_product_id)
     .gt('total_quantity', 0)
@@ -1078,7 +1078,7 @@ export async function getColorAliasCandidates() {
     .order('style', { ascending: true })
     .order('woo_color', { ascending: true })
     .order('possible_blank_color', { ascending: true })
-    .limit(1000);
+    .limit(5000);
 
   if (error) throw error;
   return data || [];
