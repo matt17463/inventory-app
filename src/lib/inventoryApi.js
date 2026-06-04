@@ -100,7 +100,7 @@ export async function createBin({ binCode, label, location }) {
   const { data, error } = await supabase
     .from('bins')
     .insert(payload)
-    .select('id, bin_code, label, location, nfc_url')
+    .select('id, bin_code, label, location, nfc_url, display_order')
     .single();
 
   if (error) throw error;
@@ -359,17 +359,21 @@ export async function getBlankInventory(search = '') {
   const { data, error } = await supabase
     .from('blank_inventory_by_product')
     .select('*')
-    .order('name', { ascending: true });
+    .order('name', { ascending: true })
+    .limit(10000);
 
   if (error) throw error;
 
   const rows = data || [];
   const term = String(search || '').trim();
+
   if (!term) return rows;
 
   const tokens = searchTokens(term);
+  if (!tokens.length) return rows;
+
   return rows.filter((row) => {
-    const fields = [
+    const searchable = [
       row.blank_product_id,
       row.sku_base,
       row.name,
@@ -378,17 +382,16 @@ export async function getBlankInventory(search = '') {
       row.style,
       row.color,
       row.size,
-      row.barcode,
-    ];
-
-    const parts = fields.map((part) => ({
+    ].filter(Boolean).map((part) => ({
       text: textSearchValue(part),
       normalized: normalizeSearchValue(part),
     }));
 
     return tokens.every((token) => {
       const normalizedToken = normalizeSearchValue(token);
-      return parts.some((part) => part.text.includes(token) || part.normalized.includes(normalizedToken));
+      return searchable.some((part) =>
+        part.text.includes(token) || part.normalized.includes(normalizedToken)
+      );
     });
   });
 }
@@ -934,81 +937,9 @@ export async function getPurchasingSupplierSummary() {
 
 
 // =========================================================
-// Color Alias Approval Workflow
+// Append-only blank product import
 // =========================================================
 
-export async function getColorAliasCandidates() {
-  const { data, error } = await supabase
-    .from('color_alias_review_candidates')
-    .select('*')
-    .order('affected_woo_products', { ascending: false })
-    .order('brand', { ascending: true })
-    .order('style', { ascending: true })
-    .order('woo_color', { ascending: true })
-    .order('possible_blank_color', { ascending: true });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getColorAliasApprovals(status = 'all') {
-  let query = supabase
-    .from('color_alias_approvals')
-    .select('*')
-    .order('updated_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false });
-
-  if (status && status !== 'all') {
-    query = query.eq('status', status);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function saveColorAliasDecision({ wooColor, blankColor, status, notes, reviewedBy }) {
-  const { data, error } = await supabase.rpc('save_color_alias_decision', {
-    p_woo_color: wooColor,
-    p_blank_color: blankColor,
-    p_status: status,
-    p_notes: notes || null,
-    p_reviewed_by: reviewedBy || 'Matthew',
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function relinkWooProductsToBlankMaster() {
-  const { data, error } = await supabase.rpc('wcsb_relink_all_woo_products_to_blank_master');
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getWooBlankMatchSummary() {
-  const { data, error } = await supabase
-    .from('woo_blank_match_diagnostics')
-    .select('match_diagnostic');
-
-  if (error) throw error;
-
-  const counts = {};
-  (data || []).forEach((row) => {
-    const key = row.match_diagnostic || 'unknown';
-    counts[key] = (counts[key] || 0) + 1;
-  });
-
-  return Object.entries(counts)
-    .map(([match_diagnostic, qty]) => ({ match_diagnostic, qty }))
-    .sort((a, b) => b.qty - a.qty);
-}
-
-
-// =========================================================
-// Append-only Blank Product Import
-// =========================================================
 export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName }) {
   if (!Array.isArray(rows) || !rows.length) {
     throw new Error('No blank product rows were provided.');
@@ -1043,62 +974,170 @@ export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName 
 }
 
 // =========================================================
-// Sample Inventory
+// Sample inventory
 // =========================================================
+
 export async function getSampleInventory(search = '') {
   const { data, error } = await supabase
     .from('sample_inventory_view')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(5000);
 
   if (error) throw error;
-  const rows = data || [];
-  const term = String(search || '').trim();
-  if (!term) return rows;
 
-  const tokens = searchTokens(term);
+  const rows = data || [];
+  const tokens = searchTokens(search);
+  if (!tokens.length) return rows;
+
   return rows.filter((row) => {
-    const fields = [row.sku_base, row.name, row.brand, row.product_type, row.color, row.size, row.notes];
-    const parts = fields.map((part) => ({ text: textSearchValue(part), normalized: normalizeSearchValue(part) }));
+    const searchable = [row.sku_base, row.name, row.brand, row.product_type, row.color, row.size, row.notes]
+      .filter(Boolean)
+      .map((part) => ({ text: textSearchValue(part), normalized: normalizeSearchValue(part) }));
+
     return tokens.every((token) => {
       const normalizedToken = normalizeSearchValue(token);
-      return parts.some((part) => part.text.includes(token) || part.normalized.includes(normalizedToken));
+      return searchable.some((part) => part.text.includes(token) || part.normalized.includes(normalizedToken));
     });
   });
 }
 
 export async function addSampleInventory({ blankProductId, quantity, notes }) {
-  if (!blankProductId) throw new Error('Choose or create a blank product.');
+  if (!blankProductId) throw new Error('Choose a blank product.');
   const qty = Number(quantity || 0);
   if (!Number.isFinite(qty) || qty <= 0) throw new Error('Quantity must be greater than zero.');
 
+  const { data, error } = await supabase.rpc('add_sample_inventory', {
+    p_blank_product_id: blankProductId,
+    p_quantity: qty,
+    p_notes: notes || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function adjustSampleInventory({ sampleInventoryId, quantityChange, notes }) {
+  const qty = Number(quantityChange || 0);
+  if (!sampleInventoryId) throw new Error('Missing sample inventory row.');
+  if (!Number.isFinite(qty) || qty === 0) throw new Error('Quantity adjustment cannot be zero.');
+
+  const { data, error } = await supabase.rpc('adjust_sample_inventory', {
+    p_sample_inventory_id: sampleInventoryId,
+    p_quantity_change: qty,
+    p_notes: notes || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// =========================================================
+// Bin display ordering
+// =========================================================
+
+export async function updateBinDisplayOrder(binId, displayOrder) {
   const { data, error } = await supabase
-    .from('sample_inventory')
-    .insert({
-      blank_product_id: blankProductId,
-      quantity: qty,
-      notes: String(notes || '').trim() || null,
-    })
-    .select('id')
+    .from('bins')
+    .update({ display_order: Number(displayOrder || 0) })
+    .eq('id', Number(binId))
+    .select('id, bin_code, label, location, nfc_url, display_order')
     .single();
 
   if (error) throw error;
   return data;
 }
 
-// =========================================================
-// Bin Display Ordering
-// =========================================================
-export async function updateBinDisplayOrder(binOrders) {
-  const orders = (binOrders || []).map((item, index) => ({
-    bin_id: Number(item.id ?? item.bin_id),
-    display_order: Number(item.display_order ?? index + 1),
-  })).filter((item) => Number.isFinite(item.bin_id));
+export async function saveBinDisplayOrder(orderedBins) {
+  const rows = (orderedBins || []).map((bin, index) => ({
+    id: Number(bin.id),
+    display_order: index + 1,
+  }));
 
-  const { data, error } = await supabase.rpc('update_bin_display_order', {
-    p_orders: orders,
+  for (const row of rows) {
+    const { error } = await supabase
+      .from('bins')
+      .update({ display_order: row.display_order })
+      .eq('id', row.id);
+    if (error) throw error;
+  }
+
+  return true;
+}
+
+// =========================================================
+// Color Alias Approval Workflow
+// =========================================================
+
+export async function getColorAliasCandidates() {
+  const { data, error } = await supabase
+    .from('color_alias_review_candidates')
+    .select('*')
+    .order('affected_woo_products', { ascending: false })
+    .order('brand', { ascending: true })
+    .order('style', { ascending: true })
+    .order('woo_color', { ascending: true })
+    .order('possible_blank_color', { ascending: true })
+    .limit(1000);
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getColorAliasApprovals(status = 'all') {
+  let query = supabase
+    .from('color_alias_approvals')
+    .select('*')
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false });
+
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveColorAliasDecision({ wooColor, blankColor, status, notes, reviewedBy }) {
+  const { data, error } = await supabase.rpc('save_color_alias_decision', {
+    p_woo_color: wooColor,
+    p_blank_color: blankColor,
+    p_status: status,
+    p_notes: notes || null,
+    p_reviewed_by: reviewedBy || 'Matthew',
   });
 
   if (error) throw error;
   return data;
 }
+
+export async function relinkWooProductsToBlankMaster(limit = 250) {
+  const { data, error } = await supabase.rpc('wcsb_relink_woo_products_to_blank_master_batch', {
+    p_limit: Number(limit || 250),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getWooBlankMatchSummary() {
+  const { data, error } = await supabase
+    .from('woo_blank_match_diagnostics')
+    .select('match_diagnostic')
+    .limit(10000);
+
+  if (error) throw error;
+
+  const counts = {};
+  (data || []).forEach((row) => {
+    const key = row.match_diagnostic || 'unknown';
+    counts[key] = (counts[key] || 0) + 1;
+  });
+
+  return Object.entries(counts)
+    .map(([match_diagnostic, qty]) => ({ match_diagnostic, qty }))
+    .sort((a, b) => b.qty - a.qty);
+}
+
