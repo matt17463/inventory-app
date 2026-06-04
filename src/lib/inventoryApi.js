@@ -628,25 +628,16 @@ export function formatFinishedProductLabel(product) {
 }
 
 export async function getFinishedProducts(search = '') {
-  // Search all finished product master rows, even if there is no current finished inventory on hand.
-  // Local token filtering lets searches like "black YL", "gildan black", or "sidney left chest"
-  // match across SKU, customer, logo, brand, style, color, and size.
-  const { data, error } = await supabase
-    .from('finished_products_search')
-    .select('*')
-    .order('finished_sku', { ascending: true, nullsFirst: false })
-    .limit(5000);
+  const { data, error } = await supabase.rpc('search_finished_products_for_pairing', {
+    p_search: String(search || '').trim(),
+    p_limit: 5000,
+  });
 
   if (error) throw error;
 
-  const rows = data || [];
-  const term = String(search || '').trim();
-
-  if (!term) return rows;
-
-  return rows
-    .filter((row) => rowMatchesAllTokens(row, term, finishedProductSearchText))
-    .sort((a, b) => finishedProductSearchText(a).localeCompare(finishedProductSearchText(b)));
+  return (data || []).sort((a, b) =>
+    finishedProductSearchText(a).localeCompare(finishedProductSearchText(b))
+  );
 }
 
 export async function receiveFinishedInventory({ binId, finishedProductId, quantity, notes }) {
@@ -1149,49 +1140,13 @@ export async function getWooBlankMatchSummary() {
 
 // Create Finished Product from Blank
 export async function searchBlankProductsForFinishedCreation(search = '') {
-  // Fetch the searchable blank master view and filter locally by tokens.
-  // This avoids PostgREST single-phrase searches that fail for terms like "gildan 18500"
-  // or partial inventory terms like "black" and "yl".
-  const { data, error } = await supabase
-    .from('blank_products_search')
-    .select('*')
-    .order('brand', { ascending: true, nullsFirst: false })
-    .order('style', { ascending: true, nullsFirst: false })
-    .order('color', { ascending: true, nullsFirst: false })
-    .order('size', { ascending: true, nullsFirst: false })
-    .limit(5000);
+  const { data, error } = await supabase.rpc('search_blank_products_for_finished_creation', {
+    p_search: String(search || '').trim(),
+    p_limit: 5000,
+  });
 
   if (error) throw error;
-
-  const rows = data || [];
-  const tokens = searchTokens(search);
-
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const searchable = [
-      row.blank_product_id,
-      row.id,
-      row.sku_base,
-      row.name,
-      row.barcode,
-      row.brand,
-      row.style,
-      row.product_type,
-      row.color,
-      row.size,
-    ].filter(Boolean).map((part) => ({
-      text: textSearchValue(part),
-      normalized: normalizeSearchValue(part),
-    }));
-
-    return tokens.every((token) => {
-      const normalizedToken = normalizeSearchValue(token);
-      return searchable.some((part) =>
-        part.text.includes(token) || part.normalized.includes(normalizedToken)
-      );
-    });
-  });
+  return data || [];
 }
 
 export async function createFinishedProductFromBlank({
