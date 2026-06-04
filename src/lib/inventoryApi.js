@@ -1311,3 +1311,39 @@ export async function getStandaloneSampleProducts(search = '') {
   });
 }
 
+
+
+// =========================================================
+// Transfer Inventory - Bin Scoped Items
+// =========================================================
+
+export async function getBlankItemsInBin(binId, search = '') {
+  if (!binId) return [];
+
+  const { data, error } = await supabase.rpc('get_blank_items_in_bin', {
+    p_bin_id: Number(binId),
+    p_search: String(search || '').trim(),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// =========================================================
+// Printable Warehouse Audit Report
+// =========================================================
+
+export async function getWarehouseInventoryAuditReport() {
+  const { data, error } = await supabase
+    .from('warehouse_inventory_audit_report')
+    .select('*')
+    .order('bin_sort', { ascending: true, nullsFirst: false })
+    .order('bin_code', { ascending: true })
+    .order('brand', { ascending: true, nullsFirst: false })
+    .order('style', { ascending: true, nullsFirst: false })
+    .order('color', { ascending: true, nullsFirst: false })
+    .order('size', { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+  return data || [];
+}
