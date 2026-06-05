@@ -19,6 +19,25 @@ function normalizeMetaKey(value) {
     .replace(/[^a-z0-9]+/g, '');
 }
 
+function isLikelyVariableParentLineItem(lineItem) {
+  const variationId = Number(lineItem?.variation_id || 0);
+  if (variationId) return false;
+
+  const sku = normalizeSku(lineItem?.sku);
+  const name = normalizeSku(lineItem?.name);
+  const combined = `${sku} ${name}`;
+
+  // Parent/container rows often have no variation_id and contain many colors/sizes concatenated.
+  const optionSignals = [
+    'ASPHALTGREY', 'CAROLINABLUE', 'COLUMBIABLUE', 'GRAPHITEBLACK',
+    'LIGHTPINK', 'MILITARYGREEN', 'A2XL', 'A3XL', 'AXS', 'AXL'
+  ];
+
+  const signalCount = optionSignals.filter((token) => combined.includes(token)).length;
+
+  return sku.length > 150 || signalCount >= 4;
+}
+
 function logoCodeFromName(name) {
   return String(name || '')
     .trim()
@@ -195,6 +214,28 @@ async function findBlankProductForLineItem(lineItem) {
   const variationId = Number(lineItem.variation_id || 0);
   const productId = Number(lineItem.product_id || 0);
 
+  // Preferred lookup after the mapping repair: products.blank_product_id.
+  async function queryProducts(column, value) {
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        blank_product_id,
+        blank_products:blank_product_id (
+          id,
+          sku_base,
+          name
+        )
+      `)
+      .eq(column, value)
+      .not('blank_product_id', 'is', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  }
+
+  // Legacy fallback lookup.
   async function queryMapping(column, value) {
     const { data, error } = await supabase
       .from('product_sku_mappings')
@@ -218,18 +259,33 @@ async function findBlankProductForLineItem(lineItem) {
   let source = 'not_found';
 
   if (variationId) {
-    mapping = await queryMapping('woo_variation_id', variationId);
-    source = 'variation_id';
+    mapping = await queryProducts('woocommerce_variation_id', variationId);
+    source = 'products.variation_id';
   }
 
-  if (!mapping && productId) {
+  if (!mapping && productId && !isLikelyVariableParentLineItem(lineItem)) {
+    mapping = await queryProducts('woocommerce_product_id', productId);
+    source = 'products.product_id';
+  }
+
+  if (!mapping && sku) {
+    mapping = await queryProducts('sku', sku);
+    source = 'products.sku';
+  }
+
+  if (!mapping && variationId) {
+    mapping = await queryMapping('woo_variation_id', variationId);
+    source = 'product_sku_mappings.variation_id';
+  }
+
+  if (!mapping && productId && !isLikelyVariableParentLineItem(lineItem)) {
     mapping = await queryMapping('woo_product_id', productId);
-    source = 'product_id';
+    source = 'product_sku_mappings.product_id';
   }
 
   if (!mapping && sku) {
     mapping = await queryMapping('woo_sku', sku);
-    source = 'sku';
+    source = 'product_sku_mappings.sku';
   }
 
   if (mapping?.blank_products?.id) {
@@ -449,6 +505,17 @@ async function processOrder(order) {
           line_item_id: lineItem.line_item_id || lineItem.id || null,
           name: lineItem.name,
           error: 'Line item has no SKU.',
+        });
+        continue;
+      }
+
+      if (isLikelyVariableParentLineItem(lineItem)) {
+        orderResult.errors.push({
+          sku,
+          product_id: lineItem.product_id || null,
+          variation_id: lineItem.variation_id || null,
+          lookup_source: 'skipped_parent_container',
+          error: 'Skipped WooCommerce variable parent/container line item. The order line must use a concrete variation for pullsheet reservation.',
         });
         continue;
       }
