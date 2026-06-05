@@ -39,6 +39,11 @@ function escapeOrTerm(term) {
   return String(term || '').replace(/[%_,]/g, '\\$&');
 }
 
+function relationId(value) {
+  const cleaned = String(value || '').trim();
+  return cleaned || null;
+}
+
 function blankProductSearchText(product) {
   return [
     product.sku_base,
@@ -151,10 +156,10 @@ export async function createBlankProduct(input) {
     sku_base: skuBase,
     name,
     barcode: String(input?.barcode || '').trim() || null,
-    brand_id: input?.brand_id ? Number(input.brand_id) : null,
-    product_type_id: input?.product_type_id ? Number(input.product_type_id) : null,
-    color_id: input?.color_id ? Number(input.color_id) : null,
-    size_id: input?.size_id ? Number(input.size_id) : null,
+    brand_id: relationId(input?.brand_id),
+    product_type_id: relationId(input?.product_type_id),
+    color_id: relationId(input?.color_id),
+    size_id: relationId(input?.size_id),
     image_url: String(input?.image_url || '').trim() || null,
     unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : null,
     low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
@@ -204,10 +209,10 @@ export async function updateBlankProduct(blankProductId, input) {
     sku_base: skuBase,
     name,
     barcode: String(input?.barcode || '').trim() || null,
-    brand_id: input?.brand_id ? Number(input.brand_id) : null,
-    product_type_id: input?.product_type_id ? Number(input.product_type_id) : null,
-    color_id: input?.color_id ? Number(input.color_id) : null,
-    size_id: input?.size_id ? Number(input.size_id) : null,
+    brand_id: relationId(input?.brand_id),
+    product_type_id: relationId(input?.product_type_id),
+    color_id: relationId(input?.color_id),
+    size_id: relationId(input?.size_id),
     image_url: String(input?.image_url || '').trim() || null,
     unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : 0,
     low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
@@ -252,16 +257,16 @@ export async function bulkUpdateBlankProducts(blankProductIds, input) {
   const payload = {};
 
   if (Object.prototype.hasOwnProperty.call(input, 'brand_id')) {
-    payload.brand_id = input.brand_id ? Number(input.brand_id) : null;
+    payload.brand_id = relationId(input.brand_id);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'product_type_id')) {
-    payload.product_type_id = input.product_type_id ? Number(input.product_type_id) : null;
+    payload.product_type_id = relationId(input.product_type_id);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'color_id')) {
-    payload.color_id = input.color_id ? Number(input.color_id) : null;
+    payload.color_id = relationId(input.color_id);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'size_id')) {
-    payload.size_id = input.size_id ? Number(input.size_id) : null;
+    payload.size_id = relationId(input.size_id);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'unit_cost')) {
     const unitCost = input.unit_cost === '' || input.unit_cost == null ? 0 : Number(input.unit_cost);
@@ -300,36 +305,37 @@ export async function bulkUpdateBlankProducts(blankProductIds, input) {
 }
 
 export async function getBlankProducts(search = '') {
-  const { data, error } = await supabase
-    .from('blank_products')
-    .select(`
-      id,
-      sku_base,
-      barcode,
-      name,
-      image_url,
-      unit_cost,
-      low_stock_threshold,
-      brand_id,
-      color_id,
-      size_id,
-      product_type_id,
-      brands:brand_id(name, code),
-      colors:color_id(name, code),
-      sizes:size_id(name, code),
-      product_types:product_type_id(name, code)
-    `)
-    .order('name', { ascending: true })
-    .limit(5000);
+  const term = String(search || '').trim();
 
-  if (error) throw error;
+  const { data, error } = await supabase.rpc('search_blank_products_for_edit', {
+    p_search: term,
+  });
 
-  const rows = data || [];
-  const term = search.trim();
+  if (error) {
+    throw error;
+  }
 
-  if (!term) return rows;
-
-  return rows.filter((product) => productMatchesAllTokens(product, term));
+  return (data || []).map((row) => ({
+    id: row.id,
+    sku_base: row.sku_base,
+    barcode: row.barcode,
+    name: row.name,
+    image_url: row.image_url,
+    unit_cost: row.unit_cost,
+    low_stock_threshold: row.low_stock_threshold,
+    brand_id: row.brand_id || '',
+    color_id: row.color_id || '',
+    size_id: row.size_id || '',
+    product_type_id: row.product_type_id || '',
+    brand: row.brand,
+    color: row.color,
+    size: row.size,
+    product_type: row.product_type,
+    brands: row.brand || row.brand_code ? { name: row.brand, code: row.brand_code } : null,
+    colors: row.color || row.color_code ? { name: row.color, code: row.color_code } : null,
+    sizes: row.size || row.size_code ? { name: row.size, code: row.size_code } : null,
+    product_types: row.product_type || row.product_type_code ? { name: row.product_type, code: row.product_type_code } : null,
+  }));
 }
 
 export async function findBlankProductsByScannedValue(value) {
