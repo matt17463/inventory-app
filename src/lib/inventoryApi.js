@@ -531,16 +531,32 @@ export async function getDashboardMetrics() {
 
   const row = data || {};
 
+  // If the metrics view has an old/missing bins field, fetch bins directly.
+  let binsCount =
+    row.total_bins ??
+    row.bin_count ??
+    row.bins_count ??
+    row.bins ??
+    null;
+
+  if (binsCount === null || binsCount === undefined) {
+    const { count, error: binsError } = await supabase
+      .from('bins')
+      .select('id', { count: 'exact', head: true });
+
+    if (!binsError) {
+      binsCount = count || 0;
+    }
+  }
+
   return {
-    total_bins:
-      row.total_bins ??
-      row.bin_count ??
-      0,
+    total_bins: binsCount ?? 0,
 
     total_units_on_hand:
       row.total_units_on_hand ??
       row.on_hand_units ??
       row.total_on_hand ??
+      row.total_units ??
       0,
 
     total_reserved_units:
@@ -553,11 +569,14 @@ export async function getDashboardMetrics() {
       row.total_available_units ??
       row.total_units_available ??
       row.available_units ??
+      row.total_units_on_hand ??
+      row.total_on_hand ??
       0,
 
     total_inventory_value:
       row.total_inventory_value ??
       row.inventory_value ??
+      row.value ??
       0,
 
     low_stock_count:
@@ -1350,52 +1369,23 @@ export async function getWarehouseInventoryAuditReport() {
 
 
 // =========================================================
-// Return / Receive Finished Products
+// Inventory Reservations / Holds
 // =========================================================
 
-
-// =========================================================
-// Return / Receive Finished Products
-// =========================================================
-
-export async function searchFinishedProductsForReceiving(search = '') {
-  const { data, error } = await supabase.rpc('search_finished_products_for_receiving', {
-    p_search: String(search || '').trim(),
-    p_limit: 5000,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createOrReceiveFinishedProduct({
-  existingFinishedProductId,
-  finishedSku,
-  name,
-  customer,
-  logo,
-  brand,
-  style,
-  color,
-  size,
-  productType,
+export async function createInventoryReservation({
+  blankProductId,
   binId,
   quantity,
+  orderRef,
+  customer,
   notes,
 }) {
-  const { data, error } = await supabase.rpc('create_or_receive_finished_product_inventory', {
-    p_existing_finished_product_id: existingFinishedProductId || null,
-    p_finished_sku: String(finishedSku || '').trim() || null,
-    p_name: String(name || '').trim() || null,
-    p_customer_name: String(customer || '').trim() || null,
-    p_logo_name: String(logo || '').trim() || null,
-    p_brand: String(brand || '').trim() || null,
-    p_style: String(style || '').trim() || null,
-    p_color: String(color || '').trim() || null,
-    p_size: String(size || '').trim() || null,
-    p_product_type: String(productType || '').trim() || null,
+  const { data, error } = await supabase.rpc('create_inventory_reservation_safe', {
+    p_blank_product_id: blankProductId,
     p_bin_id: binId ? Number(binId) : null,
     p_quantity: Number(quantity || 0),
+    p_order_ref: String(orderRef || '').trim() || null,
+    p_customer: String(customer || '').trim() || null,
     p_notes: String(notes || '').trim() || null,
   });
 
@@ -1403,3 +1393,14 @@ export async function createOrReceiveFinishedProduct({
   return data;
 }
 
+export async function getInventoryReservations(status = 'active') {
+  const { data, error } = await supabase
+    .from('inventory_reservations_view')
+    .select('*')
+    .eq('status', status)
+    .order('created_at', { ascending: false })
+    .limit(1000);
+
+  if (error) throw error;
+  return data || [];
+}
