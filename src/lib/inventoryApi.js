@@ -1546,3 +1546,81 @@ export async function getWaitingOnItems(search = '') {
   if (error) throw error;
   return data || [];
 }
+
+
+// =========================================================
+// Phase 2 Production: Board, Finished Suggestions, Spoilage
+// =========================================================
+
+export async function getProductionBoard(search = '') {
+  const { data, error } = await supabase.rpc('phase2_get_production_board', {
+    p_search: String(search || '').trim() || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateProductionJobStatus({ jobId, status, notes }) {
+  const { data, error } = await supabase.rpc('phase2_update_job_status', {
+    p_job_id: jobId,
+    p_status: status,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getFinishedMatchSuggestions(search = '') {
+  const { data, error } = await supabase.rpc('phase2_get_finished_match_suggestions', {
+    p_search: String(search || '').trim() || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function useFinishedInventoryForJobItem({ jobItemId, finishedProductId, quantity, notes }) {
+  const { data, error } = await supabase.rpc('phase2_use_finished_inventory_for_job_item', {
+    p_job_item_id: jobItemId,
+    p_finished_product_id: finishedProductId,
+    p_quantity: Number(quantity),
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function recordBlankSpoilage({ blankProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
+  const { data, error } = await supabase.rpc('phase2_record_blank_spoilage', {
+    p_blank_product_id: blankProductId,
+    p_bin_id: Number(binId),
+    p_quantity: Number(quantity),
+    p_reason: reason || 'Other',
+    p_job_id: jobId || null,
+    p_job_item_id: jobItemId || null,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function recordFinishedSpoilage({ finishedProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
+  const { data, error } = await supabase.rpc('phase2_record_finished_spoilage', {
+    p_finished_product_id: finishedProductId,
+    p_bin_id: Number(binId),
+    p_quantity: Number(quantity),
+    p_reason: reason || 'Other',
+    p_job_id: jobId || null,
+    p_job_item_id: jobItemId || null,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getSpoilageReport(search = '') {
+  const { data, error } = await supabase.rpc('phase2_get_spoilage_report', {
+    p_search: String(search || '').trim() || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
