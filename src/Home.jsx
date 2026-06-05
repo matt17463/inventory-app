@@ -125,6 +125,9 @@ export default function Home() {
 
         <Link className="app-tile" to="/add-item"><span className="tile-icon">➕</span><h2>Add Blank Item</h2><p>Create a new blank item or receive an existing blank directly into a bin.</p></Link>
         <Link className="app-tile" to="/inventory/edit-blanks"><span className="tile-icon">✏️</span><h2>Edit Blank Items</h2><p>Update unit costs, reorder points, barcodes, images, and item details.</p></Link>
+        <Link className="app-tile priority-tile" to="/purchase-orders/new"><span className="tile-icon">🛒</span><h2>Create Purchase Order</h2><p>Turn recommended orders into vendor purchase orders.</p></Link>
+        <Link className="app-tile priority-tile" to="/purchase-orders"><span className="tile-icon">📦</span><h2>Receive Purchase Orders</h2><p>Receive supplier shipments against open purchase orders.</p></Link>
+        <Link className="app-tile priority-tile" to="/waiting-on"><span className="tile-icon">⏳</span><h2>What Am I Waiting On?</h2><p>See production shortages, open POs, ETAs, and uncovered demand.</p></Link>
         <Link className="app-tile" to="/audit"><span className="tile-icon">🧮</span><h2>Audit Mode</h2><p>Open a bin, count actual units, and adjust discrepancies.</p></Link>
         <Link className="app-tile" to="/reservations"><span className="tile-icon">📌</span><h2>Reservations</h2><p>Hold inventory for jobs without blocking online orders.</p></Link>
 

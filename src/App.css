@@ -1201,3 +1201,58 @@
   color: #7a6c8d;
   font-size: 12px;
 }
+
+/* Phase 1 Purchasing */
+.phase1-header,
+.phase1-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.phase1-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.phase1-form-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.phase1-table input,
+.phase1-table select {
+  min-width: 90px;
+  width: 100%;
+}
+
+.phase1-table td,
+.phase1-table th {
+  vertical-align: top;
+}
+
+.status-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: capitalize;
+  background: #ede9fe;
+  color: #4c1d95;
+}
+
+.status-received,
+.received-row {
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.covered-row {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}

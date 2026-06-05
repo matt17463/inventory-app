@@ -12,6 +12,10 @@ import LowStock from './LowStock';
 import NfcWriter from './NfcWriter';
 import PullSheetList from './PullSheetList';
 import Purchasing from './Purchasing';
+import PurchaseOrderGenerator from './PurchaseOrderGenerator';
+import PurchaseOrders from './PurchaseOrders';
+import ReceivePurchaseOrder from './ReceivePurchaseOrder';
+import WaitingOn from './WaitingOn';
 import PullSheetView from './PullSheetView';
 import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
@@ -54,6 +58,8 @@ export default function App() {
             <Link to="/reservations">Reservations</Link>
             <Link to="/low-stock">Low Stock</Link>
             <Link to="/purchasing">Purchasing</Link>
+            <Link to="/purchase-orders">POs</Link>
+            <Link to="/waiting-on">Waiting On</Link>
             <Link to="/color-aliases">Color Aliases</Link>
             <Link to="/nfc-writer">NFC</Link>
           </nav>
@@ -75,6 +81,10 @@ export default function App() {
           <Route path="/valuation" element={<InventoryValuation />} />
           <Route path="/low-stock" element={<LowStock />} />
           <Route path="/purchasing" element={<Purchasing />} />
+          <Route path="/purchase-orders" element={<PurchaseOrders />} />
+          <Route path="/purchase-orders/new" element={<PurchaseOrderGenerator />} />
+          <Route path="/purchase-orders/:poId/receive" element={<ReceivePurchaseOrder />} />
+          <Route path="/waiting-on" element={<WaitingOn />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />
