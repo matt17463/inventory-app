@@ -39,11 +39,6 @@ function escapeOrTerm(term) {
   return String(term || '').replace(/[%_,]/g, '\\$&');
 }
 
-function relationId(value) {
-  const cleaned = String(value || '').trim();
-  return cleaned || null;
-}
-
 function blankProductSearchText(product) {
   return [
     product.sku_base,
@@ -156,10 +151,10 @@ export async function createBlankProduct(input) {
     sku_base: skuBase,
     name,
     barcode: String(input?.barcode || '').trim() || null,
-    brand_id: relationId(input?.brand_id),
-    product_type_id: relationId(input?.product_type_id),
-    color_id: relationId(input?.color_id),
-    size_id: relationId(input?.size_id),
+    brand_id: input?.brand_id ? Number(input.brand_id) : null,
+    product_type_id: input?.product_type_id ? Number(input.product_type_id) : null,
+    color_id: input?.color_id ? Number(input.color_id) : null,
+    size_id: input?.size_id ? Number(input.size_id) : null,
     image_url: String(input?.image_url || '').trim() || null,
     unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : null,
     low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
@@ -209,10 +204,10 @@ export async function updateBlankProduct(blankProductId, input) {
     sku_base: skuBase,
     name,
     barcode: String(input?.barcode || '').trim() || null,
-    brand_id: relationId(input?.brand_id),
-    product_type_id: relationId(input?.product_type_id),
-    color_id: relationId(input?.color_id),
-    size_id: relationId(input?.size_id),
+    brand_id: input?.brand_id ? Number(input.brand_id) : null,
+    product_type_id: input?.product_type_id ? Number(input.product_type_id) : null,
+    color_id: input?.color_id ? Number(input.color_id) : null,
+    size_id: input?.size_id ? Number(input.size_id) : null,
     image_url: String(input?.image_url || '').trim() || null,
     unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : 0,
     low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
@@ -257,16 +252,16 @@ export async function bulkUpdateBlankProducts(blankProductIds, input) {
   const payload = {};
 
   if (Object.prototype.hasOwnProperty.call(input, 'brand_id')) {
-    payload.brand_id = relationId(input.brand_id);
+    payload.brand_id = input.brand_id ? Number(input.brand_id) : null;
   }
   if (Object.prototype.hasOwnProperty.call(input, 'product_type_id')) {
-    payload.product_type_id = relationId(input.product_type_id);
+    payload.product_type_id = input.product_type_id ? Number(input.product_type_id) : null;
   }
   if (Object.prototype.hasOwnProperty.call(input, 'color_id')) {
-    payload.color_id = relationId(input.color_id);
+    payload.color_id = input.color_id ? Number(input.color_id) : null;
   }
   if (Object.prototype.hasOwnProperty.call(input, 'size_id')) {
-    payload.size_id = relationId(input.size_id);
+    payload.size_id = input.size_id ? Number(input.size_id) : null;
   }
   if (Object.prototype.hasOwnProperty.call(input, 'unit_cost')) {
     const unitCost = input.unit_cost === '' || input.unit_cost == null ? 0 : Number(input.unit_cost);
@@ -305,37 +300,36 @@ export async function bulkUpdateBlankProducts(blankProductIds, input) {
 }
 
 export async function getBlankProducts(search = '') {
-  const term = String(search || '').trim();
+  const { data, error } = await supabase
+    .from('blank_products')
+    .select(`
+      id,
+      sku_base,
+      barcode,
+      name,
+      image_url,
+      unit_cost,
+      low_stock_threshold,
+      brand_id,
+      color_id,
+      size_id,
+      product_type_id,
+      brands:brand_id(name, code),
+      colors:color_id(name, code),
+      sizes:size_id(name, code),
+      product_types:product_type_id(name, code)
+    `)
+    .order('name', { ascending: true })
+    .limit(5000);
 
-  const { data, error } = await supabase.rpc('search_blank_products_for_edit', {
-    p_search: term,
-  });
+  if (error) throw error;
 
-  if (error) {
-    throw error;
-  }
+  const rows = data || [];
+  const term = search.trim();
 
-  return (data || []).map((row) => ({
-    id: row.id,
-    sku_base: row.sku_base,
-    barcode: row.barcode,
-    name: row.name,
-    image_url: row.image_url,
-    unit_cost: row.unit_cost,
-    low_stock_threshold: row.low_stock_threshold,
-    brand_id: row.brand_id || '',
-    color_id: row.color_id || '',
-    size_id: row.size_id || '',
-    product_type_id: row.product_type_id || '',
-    brand: row.brand,
-    color: row.color,
-    size: row.size,
-    product_type: row.product_type,
-    brands: row.brand || row.brand_code ? { name: row.brand, code: row.brand_code } : null,
-    colors: row.color || row.color_code ? { name: row.color, code: row.color_code } : null,
-    sizes: row.size || row.size_code ? { name: row.size, code: row.size_code } : null,
-    product_types: row.product_type || row.product_type_code ? { name: row.product_type, code: row.product_type_code } : null,
-  }));
+  if (!term) return rows;
+
+  return rows.filter((product) => productMatchesAllTokens(product, term));
 }
 
 export async function findBlankProductsByScannedValue(value) {
@@ -1463,3 +1457,92 @@ export async function createOrReceiveFinishedProduct({
   return data;
 }
 
+
+// =========================================================
+// Phase 1 Purchasing: Purchase Orders + Waiting On dashboard
+// =========================================================
+
+export async function getPurchaseOrderRecommendations(search = '') {
+  const { data, error } = await supabase.rpc('phase1_get_purchase_recommendations', {
+    p_search: String(search || '').trim() || null,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createPurchaseOrderFromItems({ supplierName, expectedAt, notes, items }) {
+  const { data, error } = await supabase.rpc('phase1_create_purchase_order_from_items', {
+    p_supplier_name: supplierName || null,
+    p_expected_at: expectedAt || null,
+    p_notes: notes || null,
+    p_items: items || [],
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPurchaseOrders(status = 'open') {
+  let query = supabase
+    .from('phase1_purchase_orders_with_totals')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (status && status !== 'all') {
+    if (status === 'open') {
+      query = query.in('status', ['draft', 'ordered', 'partial']);
+    } else if (status === 'partial') {
+      query = query.eq('status', 'partial');
+    } else {
+      query = query.eq('status', status);
+    }
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPurchaseOrderDetail(purchaseOrderId) {
+  if (!purchaseOrderId) throw new Error('Missing purchase order ID.');
+
+  const [poRes, itemsRes] = await Promise.all([
+    supabase
+      .from('phase1_purchase_orders_with_totals')
+      .select('*')
+      .eq('id', purchaseOrderId)
+      .single(),
+    supabase
+      .from('phase1_purchase_order_items_detail')
+      .select('*')
+      .eq('purchase_order_id', purchaseOrderId)
+      .order('sku_base', { ascending: true }),
+  ]);
+
+  if (poRes.error) throw poRes.error;
+  if (itemsRes.error) throw itemsRes.error;
+
+  return { po: poRes.data, items: itemsRes.data || [] };
+}
+
+export async function receivePurchaseOrderItem({ poItemId, quantity, binId, notes }) {
+  const { data, error } = await supabase.rpc('phase1_receive_purchase_order_item', {
+    p_purchase_order_item_id: poItemId,
+    p_quantity: Number(quantity),
+    p_bin_id: Number(binId),
+    p_notes: notes || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getWaitingOnItems(search = '') {
+  const { data, error } = await supabase.rpc('phase1_get_waiting_on_items', {
+    p_search: String(search || '').trim() || null,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
