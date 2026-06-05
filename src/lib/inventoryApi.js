@@ -1404,3 +1404,55 @@ export async function getInventoryReservations(status = 'active') {
   if (error) throw error;
   return data || [];
 }
+
+
+// =========================================================
+// Finished Inventory - Search, Create, and Receive
+// Required by src/ReturnFinishedInventory.jsx
+// =========================================================
+
+export async function searchFinishedProductsForReceiving(search = '') {
+  const { data, error } = await supabase.rpc('search_finished_products_for_receiving', {
+    p_search: String(search || '').trim(),
+    p_limit: 5000,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createOrReceiveFinishedProduct({
+  existingFinishedProductId,
+  finishedSku,
+  name,
+  customer,
+  logo,
+  brand,
+  style,
+  color,
+  size,
+  productType,
+  binId,
+  quantity,
+  notes,
+}) {
+  const { data, error } = await supabase.rpc('create_or_receive_finished_product_inventory', {
+    p_existing_finished_product_id: existingFinishedProductId || null,
+    p_finished_sku: String(finishedSku || '').trim() || null,
+    p_name: String(name || '').trim() || null,
+    p_customer_name: String(customer || '').trim() || null,
+    p_logo_name: String(logo || '').trim() || null,
+    p_brand: String(brand || '').trim() || null,
+    p_style: String(style || '').trim() || null,
+    p_color: String(color || '').trim() || null,
+    p_size: String(size || '').trim() || null,
+    p_product_type: String(productType || '').trim() || null,
+    p_bin_id: binId ? Number(binId) : null,
+    p_quantity: Number(quantity || 0),
+    p_notes: String(notes || '').trim() || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
