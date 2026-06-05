@@ -452,7 +452,7 @@ export async function transferBlankInventory({ fromBinId, toBinId, blankProductI
 }
 
 export async function reserveInventory({ blankProductId, binId, quantity, orderRef, customerName, notes }) {
-  const { data, error } = await supabase.rpc('reserve_blank_inventory', {
+  const { data, error } = await supabase.rpc('create_inventory_reservation_safe', {
     p_blank_product_id: blankProductId,
     p_bin_id: binId ? Number(binId) : null,
     p_quantity: Number(quantity),
@@ -466,7 +466,7 @@ export async function reserveInventory({ blankProductId, binId, quantity, orderR
 }
 
 export async function releaseReservation({ reservationId, notes }) {
-  const { error } = await supabase.rpc('release_inventory_reservation', {
+  const { error } = await supabase.rpc('release_inventory_reservation_safe', {
     p_reservation_id: reservationId,
     p_notes: notes || null,
   });
@@ -475,18 +475,19 @@ export async function releaseReservation({ reservationId, notes }) {
 }
 
 export async function getReservations(status = 'active') {
-  let query = supabase
-    .from('inventory_reservations_view')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_inventory_reservations_safe', {
+    p_status: status && status !== 'all' ? status : null,
+  });
 
-  if (status && status !== 'all') {
-    query = query.eq('status', status);
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  return (data || []).map((row) => ({
+    ...row,
+    name: row.name || row.blank_product_name || row.blank_name || '',
+    customer_name: row.customer_name || row.customer || '',
+    order_ref: row.order_ref || row.order_reference || '',
+    quantity_reserved: row.quantity_reserved ?? row.quantity ?? 0,
+  }));
 }
 
 export async function recordAuditCount({ binId, blankProductId, countedQuantity, expectedQuantity, notes }) {
