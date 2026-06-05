@@ -121,11 +121,11 @@ export default function Reservations() {
             <tbody>
               {reservations.map((row) => (
                 <tr key={row.id}>
-                  <td><strong>{row.sku_base}</strong><br />{row.name}</td>
+                  <td><strong>{row.sku_base}</strong><br />{row.name || row.blank_product_name}</td>
                   <td>{row.bin_label || row.bin_code || row.bin_id || 'Any'}</td>
                   <td>{row.quantity_reserved}</td>
                   <td>{row.order_ref || ''}</td>
-                  <td>{row.customer_name || ''}</td>
+                  <td>{row.customer_name || row.customer || ''}</td>
                   <td>{row.status}</td>
                   <td>{row.status === 'active' && <button type="button" onClick={() => release(row.id)}>Release</button>}</td>
                 </tr>
