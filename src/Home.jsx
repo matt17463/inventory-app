@@ -118,17 +118,21 @@ export default function Home() {
       </section>
 
       <section className="dashboard-grid operations-grid">
-        <Link className="app-tile" to="/scan"><span className="tile-icon">📷</span><h2>Barcode / QR Scan</h2><p>Scan or type a SKU to receive, transfer, or reserve inventory.</p></Link>
+        <Link className="app-tile priority-tile" to="/scan"><span className="tile-icon">📷</span><h2>Barcode / QR Scan</h2><p>Scan or type a SKU to receive, transfer, or reserve inventory.</p></Link>
+        <Link className="app-tile priority-tile" to="/transfer"><span className="tile-icon">🔁</span><h2>Transfer Inventory</h2><p>Move blank inventory from one bin to another with a ledger trail.</p></Link>
+        <Link className="app-tile priority-tile" to="/finished/create"><span className="tile-icon">🧵</span><h2>Create Finished Product</h2><p>Create a finished product from blank inventory and receive it into a finished bin.</p></Link>
+        <Link className="app-tile priority-tile" to="/audit/warehouse"><span className="tile-icon">🧾</span><h2>Warehouse Audit Report</h2><p>Printable bin-by-bin inventory count sheet for physical warehouse audits.</p></Link>
+
         <Link className="app-tile" to="/add-item"><span className="tile-icon">➕</span><h2>Add Blank Item</h2><p>Create a new blank item or receive an existing blank directly into a bin.</p></Link>
         <Link className="app-tile" to="/inventory/edit-blanks"><span className="tile-icon">✏️</span><h2>Edit Blank Items</h2><p>Update unit costs, reorder points, barcodes, images, and item details.</p></Link>
-        <Link className="app-tile" to="/transfer"><span className="tile-icon">🔁</span><h2>Transfer Inventory</h2><p>Move blank inventory from one bin to another with a ledger trail.</p></Link>
         <Link className="app-tile" to="/audit"><span className="tile-icon">🧮</span><h2>Audit Mode</h2><p>Open a bin, count actual units, and adjust discrepancies.</p></Link>
         <Link className="app-tile" to="/reservations"><span className="tile-icon">📌</span><h2>Reservations</h2><p>Hold inventory for jobs without blocking online orders.</p></Link>
+
         <Link className="app-tile" to="/valuation"><span className="tile-icon">💵</span><h2>Inventory Valuation</h2><p>See value by product using unit costs and on-hand quantities.</p></Link>
         <Link className="app-tile" to="/purchasing"><span className="tile-icon">🛒</span><h2>Purchasing</h2><p>Find negative availability and export a supplier order list.</p></Link>
-
         <Link className="app-tile" to="/inventory/import"><span className="tile-icon">⬆️</span><h2>Import Blank Products</h2><p>Add new blank products from spreadsheet without replacing existing inventory.</p></Link>
-        <Link className="app-tile" to="/inventory/samples"><span className="tile-icon">🧵</span><h2>Sample Inventory</h2><p>Track sample blanks separately from sellable bin inventory.</p></Link>
+        <Link className="app-tile" to="/inventory/samples"><span className="tile-icon">🧵</span><h2>Sample Inventory</h2><p>Track sample products, images, bins, and reports.</p></Link>
+
         <Link className="app-tile" to="/woo-sync"><span className="tile-icon">🔄</span><h2>WooCommerce Sync</h2><p>Monitor sync queue records for your WooCommerce integration.</p></Link>
         <Link className="app-tile" to="/color-aliases"><span className="tile-icon">🎨</span><h2>Color Alias Review</h2><p>Approve or reject WooCommerce color aliases before relinking products.</p></Link>
       </section>
@@ -186,8 +190,6 @@ export default function Home() {
       </section>
 
       {message && <p className="message">{message}</p>}
-            <Link className="app-tile" to="/finished/create"><span className="tile-icon">🧵</span><h2>Create Finished Product</h2><p>Decorate a blank outside of an order and receive it into finished inventory.</p></Link>
-        <Link className="app-tile" to="/audit/warehouse"><span className="tile-icon">🧾</span><h2>Warehouse Audit Report</h2><p>Printable bin-by-bin inventory count sheet.</p></Link>
 </main>
   );
 }

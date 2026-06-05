@@ -24,12 +24,14 @@ import ActivityPage from './ActivityPage';
 import ColorAliasReview from './ColorAliasReview';
 import logo from './assets/logo.png';
 import './App.css';
+import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <AuthGate>
       <div className="app-shell">
         <header className="top-nav">
           <Link to="/" className="brand">
@@ -85,6 +87,7 @@ export default function App() {
                   <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
         </Routes>
       </div>
+      </AuthGate>
     </BrowserRouter>
   );
 }

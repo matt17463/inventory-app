@@ -1102,3 +1102,102 @@
     display: none;
   }
 }
+
+
+/* Employee password protection */
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #f7f1ff, #eef6ff);
+}
+
+.auth-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border: 1px solid #e6ddf5;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 22px 60px rgba(44, 0, 87, 0.14);
+}
+
+.auth-card img {
+  width: 94px;
+  height: auto;
+  margin-bottom: 18px;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-card label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  color: #32005f;
+}
+
+.employee-signout {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2000;
+  width: auto;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #32005f;
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+}
+
+.priority-tile {
+  border-color: rgba(34, 118, 255, 0.32);
+  box-shadow: 0 12px 30px rgba(34, 118, 255, 0.12);
+}
+
+/* Enhanced standalone samples */
+.sample-page .form-grid {
+  align-items: start;
+}
+
+.sample-table-wrap {
+  overflow-x: auto;
+}
+
+.sample-table-wrap table {
+  min-width: 1380px;
+}
+
+.sample-table-wrap input,
+.sample-table-wrap select,
+.sample-table-wrap textarea {
+  min-width: 130px;
+  font-size: 13px;
+}
+
+.sample-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #e4d9f6;
+  background: #faf7ff;
+}
+
+.sample-action-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 92px;
+}
+
+.danger-button {
+  background: #b42318 !important;
+}
+
+.muted {
+  color: #7a6c8d;
+  font-size: 12px;
+}
