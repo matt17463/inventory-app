@@ -16,6 +16,9 @@ import PurchaseOrderGenerator from './PurchaseOrderGenerator';
 import PurchaseOrders from './PurchaseOrders';
 import ReceivePurchaseOrder from './ReceivePurchaseOrder';
 import WaitingOn from './WaitingOn';
+import ProductionBoard from './ProductionBoard';
+import FinishedMatchSuggestions from './FinishedMatchSuggestions';
+import SpoilageTracking from './SpoilageTracking';
 import PullSheetView from './PullSheetView';
 import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
@@ -60,6 +63,9 @@ export default function App() {
             <Link to="/purchasing">Purchasing</Link>
             <Link to="/purchase-orders">POs</Link>
             <Link to="/waiting-on">Waiting On</Link>
+            <Link to="/production-board">Production</Link>
+            <Link to="/finished-suggestions">Finished Matches</Link>
+            <Link to="/spoilage">Spoilage</Link>
             <Link to="/color-aliases">Color Aliases</Link>
             <Link to="/nfc-writer">NFC</Link>
           </nav>
@@ -85,6 +91,9 @@ export default function App() {
           <Route path="/purchase-orders/new" element={<PurchaseOrderGenerator />} />
           <Route path="/purchase-orders/:poId/receive" element={<ReceivePurchaseOrder />} />
           <Route path="/waiting-on" element={<WaitingOn />} />
+          <Route path="/production-board" element={<ProductionBoard />} />
+          <Route path="/finished-suggestions" element={<FinishedMatchSuggestions />} />
+          <Route path="/spoilage" element={<SpoilageTracking />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />

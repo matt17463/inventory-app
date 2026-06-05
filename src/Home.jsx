@@ -128,6 +128,9 @@ export default function Home() {
         <Link className="app-tile priority-tile" to="/purchase-orders/new"><span className="tile-icon">🛒</span><h2>Create Purchase Order</h2><p>Turn recommended orders into vendor purchase orders.</p></Link>
         <Link className="app-tile priority-tile" to="/purchase-orders"><span className="tile-icon">📦</span><h2>Receive Purchase Orders</h2><p>Receive supplier shipments against open purchase orders.</p></Link>
         <Link className="app-tile priority-tile" to="/waiting-on"><span className="tile-icon">⏳</span><h2>What Am I Waiting On?</h2><p>See production shortages, open POs, ETAs, and uncovered demand.</p></Link>
+        <Link className="app-tile priority-tile" to="/production-board"><span className="tile-icon">🏭</span><h2>Production Board</h2><p>Move jobs through waiting, production, QC, shipping, and completion.</p></Link>
+        <Link className="app-tile priority-tile" to="/finished-suggestions"><span className="tile-icon">✅</span><h2>Finished Match Suggestions</h2><p>Use finished inventory before producing more items.</p></Link>
+        <Link className="app-tile priority-tile" to="/spoilage"><span className="tile-icon">⚠️</span><h2>Spoilage / Misprints</h2><p>Track damaged blanks, misprints, test prints, and vendor defects.</p></Link>
         <Link className="app-tile" to="/audit"><span className="tile-icon">🧮</span><h2>Audit Mode</h2><p>Open a bin, count actual units, and adjust discrepancies.</p></Link>
         <Link className="app-tile" to="/reservations"><span className="tile-icon">📌</span><h2>Reservations</h2><p>Hold inventory for jobs without blocking online orders.</p></Link>
 
