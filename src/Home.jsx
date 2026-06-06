@@ -128,9 +128,6 @@ export default function Home() {
         <Link className="app-tile priority-tile" to="/purchase-orders/new"><span className="tile-icon">🛒</span><h2>Create Purchase Order</h2><p>Turn recommended orders into vendor purchase orders.</p></Link>
         <Link className="app-tile priority-tile" to="/purchase-orders"><span className="tile-icon">📦</span><h2>Receive Purchase Orders</h2><p>Receive supplier shipments against open purchase orders.</p></Link>
         <Link className="app-tile priority-tile" to="/waiting-on"><span className="tile-icon">⏳</span><h2>What Am I Waiting On?</h2><p>See production shortages, open POs, ETAs, and uncovered demand.</p></Link>
-        <Link className="app-tile priority-tile" to="/production-board"><span className="tile-icon">🏭</span><h2>Production Board</h2><p>Move jobs through waiting, production, QC, shipping, and completion.</p></Link>
-        <Link className="app-tile priority-tile" to="/finished-suggestions"><span className="tile-icon">✅</span><h2>Finished Match Suggestions</h2><p>Use finished inventory before producing more items.</p></Link>
-        <Link className="app-tile priority-tile" to="/spoilage"><span className="tile-icon">⚠️</span><h2>Spoilage / Misprints</h2><p>Track damaged blanks, misprints, test prints, and vendor defects.</p></Link>
         <Link className="app-tile" to="/audit"><span className="tile-icon">🧮</span><h2>Audit Mode</h2><p>Open a bin, count actual units, and adjust discrepancies.</p></Link>
         <Link className="app-tile" to="/reservations"><span className="tile-icon">📌</span><h2>Reservations</h2><p>Hold inventory for jobs without blocking online orders.</p></Link>
 
@@ -138,6 +135,10 @@ export default function Home() {
         <Link className="app-tile" to="/purchasing"><span className="tile-icon">🛒</span><h2>Purchasing</h2><p>Find negative availability and export a supplier order list.</p></Link>
         <Link className="app-tile" to="/inventory/import"><span className="tile-icon">⬆️</span><h2>Import Blank Products</h2><p>Add new blank products from spreadsheet without replacing existing inventory.</p></Link>
         <Link className="app-tile" to="/inventory/samples"><span className="tile-icon">🧵</span><h2>Sample Inventory</h2><p>Track sample products, images, bins, and reports.</p></Link>
+
+        <Link className="app-tile priority-tile" to="/supplier-catalog/import"><span className="tile-icon">📥</span><h2>Supplier Catalog Import</h2><p>Update UPCs, vendor SKUs, unit costs, and supplier catalog rows.</p></Link>
+        <Link className="app-tile priority-tile" to="/labels"><span className="tile-icon">🏷️</span><h2>Barcode Labels</h2><p>Print SKU labels and bin QR labels for faster scanning.</p></Link>
+        <Link className="app-tile" to="/supplier-catalog"><span className="tile-icon">📚</span><h2>Catalog Review</h2><p>Review supplier catalog matches and unmatched vendor rows.</p></Link>
 
         <Link className="app-tile" to="/woo-sync"><span className="tile-icon">🔄</span><h2>WooCommerce Sync</h2><p>Monitor sync queue records for your WooCommerce integration.</p></Link>
         <Link className="app-tile" to="/color-aliases"><span className="tile-icon">🎨</span><h2>Color Alias Review</h2><p>Approve or reject WooCommerce color aliases before relinking products.</p></Link>

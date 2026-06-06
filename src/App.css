@@ -1257,65 +1257,44 @@
   color: #991b1b;
 }
 
-
-/* Phase 2 Production Expansion */
-.phase2-header,
-.phase2-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.phase2-actions { align-items: center; flex-wrap: wrap; }
-.phase2-actions input { min-width: min(560px, 100%); flex: 1; }
-.phase2-kanban {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(220px, 1fr));
-  gap: 1rem;
-  overflow-x: auto;
-  padding-bottom: 1rem;
-}
-.phase2-column {
-  background: #faf7ff;
-  border: 1px solid #eadff7;
-  border-radius: 18px;
+/* Phase 3 supplier catalog and label tools */
+.phase3-page .code-block,
+.code-block {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 12px;
   padding: 1rem;
-  min-height: 320px;
+  overflow: auto;
+  font-size: 0.85rem;
 }
-.phase2-column h2 {
-  display: flex;
-  justify-content: space-between;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-}
-.phase2-card {
+.print-label-sheet {
   display: grid;
-  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.print-label {
+  border: 1px solid #111827;
+  border-radius: 8px;
+  padding: 0.5rem;
+  min-height: 135px;
+  display: grid;
+  gap: 0.25rem;
+  align-content: center;
   background: #fff;
-  border: 1px solid #eadff7;
-  border-radius: 16px;
-  padding: 0.85rem;
-  margin-bottom: 0.75rem;
-  box-shadow: 0 10px 24px rgba(59, 7, 100, 0.06);
+  color: #111827;
+  page-break-inside: avoid;
 }
-.phase2-card-actions {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+.print-label strong { font-size: 0.95rem; }
+.print-label span, .print-label small { font-size: 0.75rem; }
+.print-label img { max-width: 100%; height: auto; }
+.bin-print-label { text-align: center; }
+.bin-print-label img { width: 110px; margin: 0 auto; }
+@media print {
+  body { background: #fff; }
+  .no-print, .top-nav, .page-header:not(.printable-header) { display: none !important; }
+  .app-shell { padding: 0 !important; }
+  .page, .label-page { margin: 0; padding: 0; }
+  .print-label-sheet { grid-template-columns: repeat(3, 2.5in); gap: 0.12in; }
+  .print-label { width: 2.5in; min-height: 1.25in; border: 1px solid #000; border-radius: 0; }
 }
-.phase2-card-actions a,
-.phase2-card-actions button {
-  font-size: 0.78rem;
-  padding: 0.35rem 0.55rem;
-}
-.phase2-table td,
-.phase2-table th { vertical-align: top; }
-.phase2-form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-.phase2-form-grid label { display: grid; gap: 0.4rem; }
-.phase2-form-grid textarea { min-height: 90px; }
-@media (max-width: 1200px) { .phase2-kanban { grid-template-columns: repeat(3, minmax(220px, 1fr)); } }
-@media (max-width: 760px) { .phase2-kanban { grid-template-columns: 1fr; } }
