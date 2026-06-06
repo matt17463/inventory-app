@@ -1,14 +1,183 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from './supabaseClient';
 import { getPhase5ProductionTimeRules, savePhase5ProductionTimeRule } from './lib/inventoryApi';
+
+const defaultForm = {
+  ruleName: 'DTF Pressing',
+  decorationType: 'DTF',
+  setupMinutes: 20,
+  secondsPerUnit: 60,
+  qcSecondsPerUnit: 20,
+  packingSecondsPerUnit: 20,
+};
+
+function number(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function estimateHours(values) {
+  const totalMinutes =
+    number(values.setupMinutes) +
+    (number(values.quantity) * (number(values.secondsPerUnit) + number(values.qcSecondsPerUnit) + number(values.packingSecondsPerUnit))) / 60;
+  return {
+    totalMinutes,
+    totalHours: totalMinutes / 60,
+  };
+}
 
 export default function ProductionEstimator() {
   const [rules, setRules] = useState([]);
-  const [form, setForm] = useState({ ruleName:'DTF Pressing', decorationType:'DTF', setupMinutes:20, secondsPerUnit:60, qcSecondsPerUnit:20, packingSecondsPerUnit:20 });
-  const [estimate, setEstimate] = useState({ quantity:48, setupMinutes:20, secondsPerUnit:60, qcSecondsPerUnit:20, packingSecondsPerUnit:20 });
+  const [form, setForm] = useState(defaultForm);
+  const [estimate, setEstimate] = useState({
+    quantity: 48,
+    setupMinutes: 20,
+    secondsPerUnit: 60,
+    qcSecondsPerUnit: 20,
+    packingSecondsPerUnit: 20,
+  });
   const [message, setMessage] = useState('');
-  async function load(){ try{ setRules(await getPhase5ProductionTimeRules()); setMessage(''); }catch(err){ setMessage(err.message || 'Failed to load estimator.'); } }
-  useEffect(()=>{ load(); }, []);
-  async function save(e){ e.preventDefault(); try{ await savePhase5ProductionTimeRule(form); await load(); }catch(err){ setMessage(err.message || 'Failed to save rule.'); } }
-  const totalMinutes = Number(estimate.setupMinutes||0) + (Number(estimate.quantity||0) * (Number(estimate.secondsPerUnit||0)+Number(estimate.qcSecondsPerUnit||0)+Number(estimate.packingSecondsPerUnit||0)) / 60);
-  return <main className="page"><section className="page-header"><div><p className="eyebrow">Scheduling</p><h1>Production Time Estimator</h1><p>Estimate setup, pressing, QC, and packing time for scheduling and rush decisions.</p></div></section>{message&&<p className="message">{message}</p>}<section className="content-two-column wide-two-column"><section className="card elevated-card"><h2>Quick Estimate</h2><div className="form-grid"><label>Quantity<input type="number" value={estimate.quantity} onChange={e=>setEstimate({...estimate,quantity:e.target.value})}/></label><label>Setup Min<input type="number" value={estimate.setupMinutes} onChange={e=>setEstimate({...estimate,setupMinutes:e.target.value})}/></label><label>Press Sec/Unit<input type="number" value={estimate.secondsPerUnit} onChange={e=>setEstimate({...estimate,secondsPerUnit:e.target.value})}/></label><label>QC Sec/Unit<input type="number" value={estimate.qcSecondsPerUnit} onChange={e=>setEstimate({...estimate,qcSecondsPerUnit:e.target.value})}/></label><label>Pack Sec/Unit<input type="number" value={estimate.packingSecondsPerUnit} onChange={e=>setEstimate({...estimate,packingSecondsPerUnit:e.target.value})}/></label></div><div className="hero-stat-card inline-stat"><span className="stat-number">{(totalMinutes/60).toFixed(2)} hrs</span><span className="stat-label">Estimated production time</span></div></section><form className="card elevated-card" onSubmit={save}><h2>Save Time Rule</h2><label>Rule Name</label><input value={form.ruleName} onChange={e=>setForm({...form,ruleName:e.target.value})}/><label>Decoration Type</label><input value={form.decorationType} onChange={e=>setForm({...form,decorationType:e.target.value})}/><div className="form-grid"><label>Setup Min<input type="number" value={form.setupMinutes} onChange={e=>setForm({...form,setupMinutes:e.target.value})}/></label><label>Press Sec<input type="number" value={form.secondsPerUnit} onChange={e=>setForm({...form,secondsPerUnit:e.target.value})}/></label><label>QC Sec<input type="number" value={form.qcSecondsPerUnit} onChange={e=>setForm({...form,qcSecondsPerUnit:e.target.value})}/></label><label>Pack Sec<input type="number" value={form.packingSecondsPerUnit} onChange={e=>setForm({...form,packingSecondsPerUnit:e.target.value})}/></label></div><button>Save Rule</button></form></section><section className="card elevated-card table-card"><h2>Saved Time Rules</h2><div className="responsive-table"><table className="data-table"><thead><tr><th>Rule</th><th>Decoration</th><th>Setup</th><th>Production</th><th>QC</th><th>Packing</th></tr></thead><tbody>{rules.length===0?<tr><td colSpan="6">No time rules yet.</td></tr>:rules.map(rule=><tr key={rule.id}><td>{rule.rule_name}</td><td>{rule.decoration_type || 'Any'}</td><td>{rule.setup_minutes} min</td><td>{rule.seconds_per_unit}s/unit</td><td>{rule.qc_seconds_per_unit}s/unit</td><td>{rule.packing_seconds_per_unit}s/unit</td></tr>)}</tbody></table></div></section></main>;
+  const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      setRules(await getPhase5ProductionTimeRules());
+      setMessage('');
+    } catch (err) {
+      setMessage(err.message || 'Failed to load estimator.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function save(e) {
+    e.preventDefault();
+    try {
+      await savePhase5ProductionTimeRule(form);
+      setForm(defaultForm);
+      await load();
+      setMessage('Time rule saved.');
+    } catch (err) {
+      setMessage(err.message || 'Failed to save rule.');
+    }
+  }
+
+  async function deleteRule(rule) {
+    const label = rule.rule_name || 'this rule';
+    if (!window.confirm(`Delete saved time rule “${label}”? This only removes the rule; it does not delete jobs.`)) return;
+    setDeletingId(rule.id);
+    setMessage('');
+    try {
+      const { error } = await supabase.from('phase5_production_time_rules').delete().eq('id', rule.id);
+      if (error) throw error;
+      await load();
+      setMessage('Time rule deleted.');
+    } catch (err) {
+      setMessage(err.message || 'Failed to delete rule.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function useRule(rule) {
+    setEstimate({
+      ...estimate,
+      setupMinutes: rule.setup_minutes ?? 0,
+      secondsPerUnit: rule.seconds_per_unit ?? 0,
+      qcSecondsPerUnit: rule.qc_seconds_per_unit ?? 0,
+      packingSecondsPerUnit: rule.packing_seconds_per_unit ?? 0,
+    });
+    setForm({
+      ruleName: rule.rule_name || '',
+      decorationType: rule.decoration_type || '',
+      setupMinutes: rule.setup_minutes ?? 0,
+      secondsPerUnit: rule.seconds_per_unit ?? 0,
+      qcSecondsPerUnit: rule.qc_seconds_per_unit ?? 0,
+      packingSecondsPerUnit: rule.packing_seconds_per_unit ?? 0,
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  const totals = useMemo(() => estimateHours(estimate), [estimate]);
+
+  return (
+    <main className="page production-estimator-page">
+      <section className="page-header production-page-header">
+        <div>
+          <p className="eyebrow">Production</p>
+          <h1>Production Time Estimator</h1>
+          <p>Estimate setup, pressing, QC, and packing time. Save common production rules and delete outdated duplicates individually.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={load}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+      </section>
+
+      {message && <p className="message production-message">{message}</p>}
+
+      <section className="production-estimator-grid">
+        <section className="card elevated-card production-estimator-card">
+          <h2>Quick Estimate</h2>
+          <p className="helper-text">Use this before scheduling a job. Enter the quantity and expected seconds per unit.</p>
+          <div className="production-form-grid compact">
+            <label>Quantity<input type="number" min="0" value={estimate.quantity} onChange={e=>setEstimate({...estimate,quantity:e.target.value})}/></label>
+            <label>Setup Min<input type="number" min="0" value={estimate.setupMinutes} onChange={e=>setEstimate({...estimate,setupMinutes:e.target.value})}/></label>
+            <label>Press Sec/Unit<input type="number" min="0" value={estimate.secondsPerUnit} onChange={e=>setEstimate({...estimate,secondsPerUnit:e.target.value})}/></label>
+            <label>QC Sec/Unit<input type="number" min="0" value={estimate.qcSecondsPerUnit} onChange={e=>setEstimate({...estimate,qcSecondsPerUnit:e.target.value})}/></label>
+            <label>Pack Sec/Unit<input type="number" min="0" value={estimate.packingSecondsPerUnit} onChange={e=>setEstimate({...estimate,packingSecondsPerUnit:e.target.value})}/></label>
+          </div>
+          <div className="production-big-estimate">
+            <span>{totals.totalHours.toFixed(2)} hrs</span>
+            <small>{Math.round(totals.totalMinutes)} total minutes</small>
+          </div>
+        </section>
+
+        <form className="card elevated-card production-estimator-card" onSubmit={save}>
+          <h2>Save Time Rule</h2>
+          <p className="helper-text">Save reusable rules such as “Single Sided DTF,” “Full Front + Back,” or “Embroidery Estimate.”</p>
+          <label>Rule Name<input value={form.ruleName} onChange={e=>setForm({...form,ruleName:e.target.value})}/></label>
+          <label>Decoration Type<input value={form.decorationType} onChange={e=>setForm({...form,decorationType:e.target.value})}/></label>
+          <div className="production-form-grid compact">
+            <label>Setup Min<input type="number" min="0" value={form.setupMinutes} onChange={e=>setForm({...form,setupMinutes:e.target.value})}/></label>
+            <label>Press Sec<input type="number" min="0" value={form.secondsPerUnit} onChange={e=>setForm({...form,secondsPerUnit:e.target.value})}/></label>
+            <label>QC Sec<input type="number" min="0" value={form.qcSecondsPerUnit} onChange={e=>setForm({...form,qcSecondsPerUnit:e.target.value})}/></label>
+            <label>Pack Sec<input type="number" min="0" value={form.packingSecondsPerUnit} onChange={e=>setForm({...form,packingSecondsPerUnit:e.target.value})}/></label>
+          </div>
+          <button className="primary-button" type="submit">Save Rule</button>
+        </form>
+      </section>
+
+      <section className="card elevated-card production-rules-card">
+        <div className="section-title-row">
+          <div>
+            <h2>Saved Time Rules</h2>
+            <p className="helper-text">Delete duplicates or outdated rules with the Delete button on each row.</p>
+          </div>
+          <span className="count-pill">{rules.length} rules</span>
+        </div>
+        <div className="production-rule-list">
+          {rules.length === 0 ? <p className="helper-text">No time rules yet.</p> : rules.map(rule => (
+            <article className="production-rule-card" key={rule.id}>
+              <div className="production-rule-main">
+                <h3>{rule.rule_name}</h3>
+                <span className="status-chip">{rule.decoration_type || 'Any decoration'}</span>
+              </div>
+              <div className="production-rule-metrics">
+                <span><strong>{rule.setup_minutes}</strong><small>setup min</small></span>
+                <span><strong>{rule.seconds_per_unit}</strong><small>press sec/unit</small></span>
+                <span><strong>{rule.qc_seconds_per_unit}</strong><small>QC sec/unit</small></span>
+                <span><strong>{rule.packing_seconds_per_unit}</strong><small>pack sec/unit</small></span>
+              </div>
+              <div className="production-rule-actions">
+                <button className="secondary-button small-button" type="button" onClick={() => useRule(rule)}>Use Rule</button>
+                <button className="danger-button small-button" type="button" disabled={deletingId === rule.id} onClick={() => deleteRule(rule)}>{deletingId === rule.id ? 'Deleting…' : 'Delete'}</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
 }

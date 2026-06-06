@@ -11,18 +11,35 @@ const COLUMNS = [
   ['completed', 'Completed'],
 ];
 
+function formatDate(value) {
+  if (!value) return 'No due date';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
+}
+
+function normalizeStatus(status) {
+  if (!status) return 'ready_to_produce';
+  if (status === 'reserved' || status === 'new' || status === 'open') return 'ready_to_produce';
+  return COLUMNS.some(([key]) => key === status) ? status : 'ready_to_produce';
+}
+
 export default function ProductionBoard() {
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   async function load() {
+    setLoading(true);
+    setMessage('');
     try {
       const data = await getProductionBoard(search);
-      setRows(data);
+      setRows(data || []);
     } catch (err) {
       setMessage(err.message || 'Failed to load production board.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -31,17 +48,20 @@ export default function ProductionBoard() {
   const grouped = useMemo(() => {
     const map = Object.fromEntries(COLUMNS.map(([key]) => [key, []]));
     rows.forEach((row) => {
-      const key = map[row.status] ? row.status : 'ready_to_produce';
+      const key = normalizeStatus(row.status);
       map[key].push(row);
     });
     return map;
   }, [rows]);
 
+  const totalJobs = rows.length;
+
   async function move(job, status) {
+    if (!job?.job_id) return;
     setBusyId(job.job_id);
     setMessage('');
     try {
-      await updateProductionJobStatus({ jobId: job.job_id, status, notes: `Moved from ${job.status} to ${status}` });
+      await updateProductionJobStatus({ jobId: job.job_id, status, notes: `Moved from ${job.status || 'unknown'} to ${status}` });
       await load();
     } catch (err) {
       setMessage(err.message || 'Failed to update job status.');
@@ -51,43 +71,62 @@ export default function ProductionBoard() {
   }
 
   return (
-    <main className="page phase2-page">
-      <section className="page-header phase2-header">
+    <main className="page production-board-page">
+      <section className="page-header production-page-header">
         <div>
-          <p className="eyebrow">Phase 2</p>
+          <p className="eyebrow">Production</p>
           <h1>Production Status Board</h1>
-          <p>Move pull sheets through production: waiting, ready, production, QC, shipping, and completed.</p>
+          <p>Move pull sheets through each production stage. Jobs are shown as cards so the board is easier to scan.</p>
         </div>
         <Link className="secondary-button" to="/pullsheets">Open Pull Sheets</Link>
       </section>
 
-      <section className="card elevated-card phase2-actions">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job, customer, order, status..." />
-        <button type="button" onClick={load}>Search</button>
+      <section className="card elevated-card production-board-toolbar">
+        <div>
+          <label>Search Open Jobs</label>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job, customer, order, status..." onKeyDown={(e) => { if (e.key === 'Enter') load(); }} />
+        </div>
+        <button className="primary-button" type="button" onClick={load}>{loading ? 'Searching…' : 'Search'}</button>
+        <span className="count-pill">{totalJobs} jobs</span>
       </section>
 
-      {message && <p className="message">{message}</p>}
+      {message && <p className="message production-message">{message}</p>}
 
-      <section className="phase2-kanban">
+      <section className="production-kanban-grid">
         {COLUMNS.map(([status, label]) => (
-          <div className="phase2-column" key={status}>
-            <h2>{label} <span>{grouped[status]?.length || 0}</span></h2>
-            {(grouped[status] || []).map((job) => (
-              <article className="phase2-card" key={job.job_id}>
-                <strong>{job.job_name || `Job ${job.job_id}`}</strong>
-                <span>{job.customer_name || 'No customer'} {job.woocommerce_order_id ? `· Order ${job.woocommerce_order_id}` : ''}</span>
-                <small>{job.total_units || 0} units · {job.completed_units || 0} completed · {job.finished_inventory_used || 0} finished used</small>
-                {job.due_date && <small>Due {new Date(job.due_date).toLocaleDateString()}</small>}
-                <div className="phase2-card-actions">
-                  <Link to={`/pullsheets/${job.job_id}`}>Open</Link>
-                  {COLUMNS.filter(([next]) => next !== status).slice(0, 5).map(([next, nextLabel]) => (
-                    <button key={next} type="button" disabled={busyId === job.job_id} onClick={() => move(job, next)}>{nextLabel}</button>
-                  ))}
-                </div>
-              </article>
-            ))}
-            {!grouped[status]?.length && <p className="helper-text">No jobs.</p>}
-          </div>
+          <section className="production-kanban-column" key={status}>
+            <header>
+              <h2>{label}</h2>
+              <span>{grouped[status]?.length || 0}</span>
+            </header>
+            <div className="production-kanban-card-stack">
+              {(grouped[status] || []).map((job) => {
+                const currentStatus = normalizeStatus(job.status);
+                return (
+                  <article className="production-job-card" key={job.job_id}>
+                    <div className="job-card-topline">
+                      <strong>{job.job_name || `Order #${job.woocommerce_order_id || job.job_id}`}</strong>
+                      <span className="status-chip">{currentStatus.replaceAll('_', ' ')}</span>
+                    </div>
+                    <p className="job-card-customer">{job.customer_name || 'No customer listed'}</p>
+                    <div className="job-card-meta">
+                      <span>Order {job.woocommerce_order_id || job.job_id}</span>
+                      <span>{job.total_units || 0} units</span>
+                      <span>{job.completed_units || 0} completed</span>
+                      <span>Due {formatDate(job.due_date)}</span>
+                    </div>
+                    <div className="job-card-actions-row">
+                      <Link className="secondary-button small-button" to={`/pullsheets/${job.job_id}`}>Open</Link>
+                      <select value={currentStatus} disabled={busyId === job.job_id} onChange={(e) => move(job, e.target.value)}>
+                        {COLUMNS.map(([next, nextLabel]) => <option key={next} value={next}>{nextLabel}</option>)}
+                      </select>
+                    </div>
+                  </article>
+                );
+              })}
+              {!grouped[status]?.length && <p className="helper-text empty-column-note">No jobs in this stage.</p>}
+            </div>
+          </section>
         ))}
       </section>
     </main>
