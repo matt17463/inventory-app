@@ -99,6 +99,7 @@ export const navSections = [
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
       { label: 'Color Aliases', path: '/color-aliases', keywords: 'color aliases mapping woo sync' },
       { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
+      { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },

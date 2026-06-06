@@ -47,6 +47,7 @@ import QcChecklist from './QcChecklist';
 import EmployeeTasks from './EmployeeTasks';
 import OrderRiskDashboard from './OrderRiskDashboard';
 import DailyCommandCenter from './DailyCommandCenter';
+import ProductMappingRepair from './ProductMappingRepair';
 import AppShell from './components/AppShell';
 import './App.css';
 import AuthGate from './AuthGate';
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />
+          <Route path="/mapping-repair" element={<ProductMappingRepair />} />
           <Route path="/nfc-writer" element={<NfcWriter />} />
           <Route path="/test-tag" element={<TestTag />} />
           <Route path="/pullsheets" element={<PullSheetList />} />
