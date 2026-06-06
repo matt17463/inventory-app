@@ -1596,3 +1596,61 @@ export async function getSupplierCatalogReview(search = '') {
   if (error) throw error;
   return data || [];
 }
+
+// =====================================================
+// Phase 4 - Management Intelligence
+// =====================================================
+
+export async function getPhase4JobCosting(search = '') {
+  const { data, error } = await supabase.rpc('phase4_get_job_costing', {
+    p_search: String(search || '').trim() || null,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase4JobCostSettings({
+  jobId,
+  orderRevenue,
+  decorationCostPerUnit,
+  laborCostPerUnit,
+  overheadCost,
+  shippingRevenue,
+  shippingCost,
+  spoilageAllowance,
+  notes,
+}) {
+  const { data, error } = await supabase.rpc('phase4_upsert_job_cost_settings', {
+    p_job_id: Number(jobId),
+    p_order_revenue: orderRevenue === '' || orderRevenue == null ? 0 : Number(orderRevenue),
+    p_decoration_cost_per_unit: decorationCostPerUnit === '' || decorationCostPerUnit == null ? 0 : Number(decorationCostPerUnit),
+    p_labor_cost_per_unit: laborCostPerUnit === '' || laborCostPerUnit == null ? 0 : Number(laborCostPerUnit),
+    p_overhead_cost: overheadCost === '' || overheadCost == null ? 0 : Number(overheadCost),
+    p_shipping_revenue: shippingRevenue === '' || shippingRevenue == null ? 0 : Number(shippingRevenue),
+    p_shipping_cost: shippingCost === '' || shippingCost == null ? 0 : Number(shippingCost),
+    p_spoilage_allowance: spoilageAllowance === '' || spoilageAllowance == null ? 0 : Number(spoilageAllowance),
+    p_notes: notes || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase4CustomerReorders(search = '') {
+  const { data, error } = await supabase.rpc('phase4_get_customer_reorders', {
+    p_search: String(search || '').trim() || null,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPhase4CampaignForecast(search = '') {
+  const { data, error } = await supabase.rpc('phase4_get_campaign_forecast', {
+    p_search: String(search || '').trim() || null,
+  });
+
+  if (error) throw error;
+  return data || [];
+}
