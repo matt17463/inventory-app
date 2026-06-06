@@ -78,8 +78,7 @@ export function money(value) {
 export async function getBins() {
   const { data, error } = await supabase
     .from('bins')
-    .select('id, bin_code, label, location, nfc_url, display_order, created_at')
-    .order('display_order', { ascending: true, nullsFirst: false })
+    .select('id, bin_code, label, location, nfc_url, created_at')
     .order('bin_code', { ascending: true });
 
   if (error) throw error;
@@ -100,7 +99,7 @@ export async function createBin({ binCode, label, location }) {
   const { data, error } = await supabase
     .from('bins')
     .insert(payload)
-    .select('id, bin_code, label, location, nfc_url, display_order')
+    .select('id, bin_code, label, location, nfc_url')
     .single();
 
   if (error) throw error;
@@ -110,7 +109,7 @@ export async function createBin({ binCode, label, location }) {
 export async function getBin(binId) {
   const { data, error } = await supabase
     .from('bins')
-    .select('id, bin_code, label, location, nfc_url, display_order, created_at')
+    .select('id, bin_code, label, location, nfc_url, created_at')
     .eq('id', Number(binId))
     .single();
 
@@ -356,44 +355,23 @@ export async function findBlankProductByScannedValue(value) {
 }
 
 export async function getBlankInventory(search = '') {
-  const { data, error } = await supabase
+  let query = supabase
     .from('blank_inventory_by_product')
     .select('*')
-    .order('name', { ascending: true })
-    .limit(10000);
+    .order('name', { ascending: true });
 
+  const term = search.trim();
+
+  if (term) {
+    const escaped = escapeOrTerm(term);
+    query = query.or(
+      `sku_base.ilike.%${escaped}%,name.ilike.%${escaped}%,brand.ilike.%${escaped}%,color.ilike.%${escaped}%,size.ilike.%${escaped}%`
+    );
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
-
-  const rows = data || [];
-  const term = String(search || '').trim();
-
-  if (!term) return rows;
-
-  const tokens = searchTokens(term);
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const searchable = [
-      row.blank_product_id,
-      row.sku_base,
-      row.name,
-      row.brand,
-      row.product_type,
-      row.style,
-      row.color,
-      row.size,
-    ].filter(Boolean).map((part) => ({
-      text: textSearchValue(part),
-      normalized: normalizeSearchValue(part),
-    }));
-
-    return tokens.every((token) => {
-      const normalizedToken = normalizeSearchValue(token);
-      return searchable.some((part) =>
-        part.text.includes(token) || part.normalized.includes(normalizedToken)
-      );
-    });
-  });
+  return data || [];
 }
 
 export async function getBinContents(binId, search = '') {
@@ -452,7 +430,7 @@ export async function transferBlankInventory({ fromBinId, toBinId, blankProductI
 }
 
 export async function reserveInventory({ blankProductId, binId, quantity, orderRef, customerName, notes }) {
-  const { data, error } = await supabase.rpc('create_inventory_reservation_safe', {
+  const { data, error } = await supabase.rpc('reserve_blank_inventory', {
     p_blank_product_id: blankProductId,
     p_bin_id: binId ? Number(binId) : null,
     p_quantity: Number(quantity),
@@ -466,7 +444,7 @@ export async function reserveInventory({ blankProductId, binId, quantity, orderR
 }
 
 export async function releaseReservation({ reservationId, notes }) {
-  const { error } = await supabase.rpc('release_inventory_reservation_safe', {
+  const { error } = await supabase.rpc('release_inventory_reservation', {
     p_reservation_id: reservationId,
     p_notes: notes || null,
   });
@@ -475,19 +453,18 @@ export async function releaseReservation({ reservationId, notes }) {
 }
 
 export async function getReservations(status = 'active') {
-  const { data, error } = await supabase.rpc('get_inventory_reservations_safe', {
-    p_status: status && status !== 'all' ? status : null,
-  });
+  let query = supabase
+    .from('inventory_reservations_view')
+    .select('*')
+    .order('created_at', { ascending: false });
 
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
-
-  return (data || []).map((row) => ({
-    ...row,
-    name: row.name || row.blank_product_name || row.blank_name || '',
-    customer_name: row.customer_name || row.customer || '',
-    order_ref: row.order_ref || row.order_reference || '',
-    quantity_reserved: row.quantity_reserved ?? row.quantity ?? 0,
-  }));
+  return data || [];
 }
 
 export async function recordAuditCount({ binId, blankProductId, countedQuantity, expectedQuantity, notes }) {
@@ -529,61 +506,13 @@ export async function getDashboardMetrics() {
     .maybeSingle();
 
   if (error) throw error;
-
-  const row = data || {};
-
-  // If the metrics view has an old/missing bins field, fetch bins directly.
-  let binsCount =
-    row.total_bins ??
-    row.bin_count ??
-    row.bins_count ??
-    row.bins ??
-    null;
-
-  if (binsCount === null || binsCount === undefined) {
-    const { count, error: binsError } = await supabase
-      .from('bins')
-      .select('id', { count: 'exact', head: true });
-
-    if (!binsError) {
-      binsCount = count || 0;
-    }
-  }
-
-  return {
-    total_bins: binsCount ?? 0,
-
-    total_units_on_hand:
-      row.total_units_on_hand ??
-      row.on_hand_units ??
-      row.total_on_hand ??
-      row.total_units ??
-      0,
-
-    total_reserved_units:
-      row.total_reserved_units ??
-      row.total_units_reserved ??
-      row.reserved_units ??
-      0,
-
-    total_available_units:
-      row.total_available_units ??
-      row.total_units_available ??
-      row.available_units ??
-      row.total_units_on_hand ??
-      row.total_on_hand ??
-      0,
-
-    total_inventory_value:
-      row.total_inventory_value ??
-      row.inventory_value ??
-      row.value ??
-      0,
-
-    low_stock_count:
-      row.low_stock_count ??
-      row.low_stock_items ??
-      0,
+  return data || {
+    total_bins: 0,
+    total_units_on_hand: 0,
+    total_reserved_units: 0,
+    total_available_units: 0,
+    total_inventory_value: 0,
+    low_stock_count: 0,
   };
 }
 
@@ -711,19 +640,7 @@ export async function receiveFinishedInventory({ binId, finishedProductId, quant
 
 
 export async function getPullSheets() {
-  const { data, error } = await supabase
-    .from('jobs')
-    .select(`
-      id,
-      job_name,
-      customer_name,
-      woocommerce_order_id,
-      status,
-      due_date,
-      notes,
-      created_at
-    `)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('sc_existing_pull_sheets');
 
   if (error) throw error;
   return data || [];
@@ -760,14 +677,12 @@ export async function updatePullSheetStatus({ jobId, status }) {
 }
 
 export async function getPullSheetItems(jobId) {
-  const { data, error } = await supabase
-    .from('pull_sheet_view')
-    .select('*')
-    .eq('job_id', jobId)
-    .order('created_at', { ascending: true });
+  const { data, error } = await supabase.rpc('sc_pull_sheet_items', {
+    p_job_id: Number(jobId),
+  });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((row) => row.job_item_id);
 }
 
 export async function addPullSheetItem({
@@ -944,7 +859,6 @@ export async function getPurchasingShortages(search = '') {
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
-
 export async function getPurchasingLowStock(search = '') {
   const { data, error } = await supabase
     .from('low_stock_blank_inventory')
@@ -969,6 +883,7 @@ export async function getPurchasingRecommendedOrders(search = '') {
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
+// Backward compatibility for earlier Purchasing page builds.
 export async function getPurchasingReorderSuggestions(search = '') {
   return getPurchasingRecommendedOrders(search);
 }
@@ -982,896 +897,4 @@ export async function getPurchasingSupplierSummary() {
 
   if (error) throw error;
   return data || [];
-}
-
-
-// =========================================================
-// Append-only blank product import
-// =========================================================
-
-export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName }) {
-  if (!Array.isArray(rows) || !rows.length) {
-    throw new Error('No blank product rows were provided.');
-  }
-
-  const payloadRows = rows.map((row) => ({
-    brand: row.brand || null,
-    style: row.style || null,
-    color: row.color || null,
-    size: row.size || null,
-    quantity: Number(row.quantity || 0),
-    bin: row.bin || null,
-    unit_cost: Number(row.unitCost || 0),
-    low_stock_threshold: row.lowStockThreshold === '' || row.lowStockThreshold == null ? null : Number(row.lowStockThreshold),
-    sku_base: row.skuBase || null,
-    barcode: row.barcode || null,
-    name: row.name || null,
-    image_url: row.imageUrl || null,
-    supplier: row.supplier || null,
-    supplier_sku: row.supplierSku || null,
-    notes: row.notes || null,
-    source_row_number: row.sourceRowNumber || null,
-  }));
-
-  const { data, error } = await supabase.rpc('append_blank_products_from_json', {
-    p_rows: payloadRows,
-    p_source_file_name: sourceFileName || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-// =========================================================
-// Sample inventory
-// =========================================================
-
-export async function getSampleInventory(search = '') {
-  const { data, error } = await supabase
-    .from('sample_inventory_view')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(5000);
-
-  if (error) throw error;
-
-  const rows = data || [];
-  const tokens = searchTokens(search);
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const searchable = [row.sku_base, row.name, row.brand, row.product_type, row.color, row.size, row.notes]
-      .filter(Boolean)
-      .map((part) => ({ text: textSearchValue(part), normalized: normalizeSearchValue(part) }));
-
-    return tokens.every((token) => {
-      const normalizedToken = normalizeSearchValue(token);
-      return searchable.some((part) => part.text.includes(token) || part.normalized.includes(normalizedToken));
-    });
-  });
-}
-
-export async function addSampleInventory({ blankProductId, quantity, notes }) {
-  if (!blankProductId) throw new Error('Choose a blank product.');
-  const qty = Number(quantity || 0);
-  if (!Number.isFinite(qty) || qty <= 0) throw new Error('Quantity must be greater than zero.');
-
-  const { data, error } = await supabase.rpc('add_sample_inventory', {
-    p_blank_product_id: blankProductId,
-    p_quantity: qty,
-    p_notes: notes || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function adjustSampleInventory({ sampleInventoryId, quantityChange, notes }) {
-  const qty = Number(quantityChange || 0);
-  if (!sampleInventoryId) throw new Error('Missing sample inventory row.');
-  if (!Number.isFinite(qty) || qty === 0) throw new Error('Quantity adjustment cannot be zero.');
-
-  const { data, error } = await supabase.rpc('adjust_sample_inventory', {
-    p_sample_inventory_id: sampleInventoryId,
-    p_quantity_change: qty,
-    p_notes: notes || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-// =========================================================
-// Bin display ordering
-// =========================================================
-
-export async function updateBinDisplayOrder(binId, displayOrder) {
-  const { data, error } = await supabase
-    .from('bins')
-    .update({ display_order: Number(displayOrder || 0) })
-    .eq('id', Number(binId))
-    .select('id, bin_code, label, location, nfc_url, display_order')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function saveBinDisplayOrder(orderedBins) {
-  const rows = (orderedBins || []).map((bin, index) => ({
-    id: Number(bin.id),
-    display_order: index + 1,
-  }));
-
-  for (const row of rows) {
-    const { error } = await supabase
-      .from('bins')
-      .update({ display_order: row.display_order })
-      .eq('id', row.id);
-    if (error) throw error;
-  }
-
-  return true;
-}
-
-// =========================================================
-// Color Alias Approval Workflow
-// =========================================================
-
-export async function getColorAliasCandidates() {
-  const { data, error } = await supabase
-    .from('color_alias_review_candidates')
-    .select('*')
-    .order('affected_woo_products', { ascending: false })
-    .order('brand', { ascending: true })
-    .order('style', { ascending: true })
-    .order('woo_color', { ascending: true })
-    .order('possible_blank_color', { ascending: true })
-    .limit(1000);
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getColorAliasApprovals(status = 'all') {
-  let query = supabase
-    .from('color_alias_approvals')
-    .select('*')
-    .order('updated_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false });
-
-  if (status && status !== 'all') {
-    query = query.eq('status', status);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function saveColorAliasDecision({ wooColor, blankColor, status, notes, reviewedBy }) {
-  const { data, error } = await supabase.rpc('save_color_alias_decision', {
-    p_woo_color: wooColor,
-    p_blank_color: blankColor,
-    p_status: status,
-    p_notes: notes || null,
-    p_reviewed_by: reviewedBy || 'Matthew',
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function relinkWooProductsToBlankMaster(limit = 250) {
-  const { data, error } = await supabase.rpc('wcsb_relink_woo_products_to_blank_master_batch', {
-    p_limit: Number(limit || 250),
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getWooBlankMatchSummary() {
-  const { data, error } = await supabase
-    .from('woo_blank_match_diagnostics')
-    .select('match_diagnostic')
-    .limit(10000);
-
-  if (error) throw error;
-
-  const counts = {};
-  (data || []).forEach((row) => {
-    const key = row.match_diagnostic || 'unknown';
-    counts[key] = (counts[key] || 0) + 1;
-  });
-
-  return Object.entries(counts)
-    .map(([match_diagnostic, qty]) => ({ match_diagnostic, qty }))
-    .sort((a, b) => b.qty - a.qty);
-}
-
-
-
-// Create Finished Product from Blank
-export async function searchBlankProductsForFinishedCreation(search = '') {
-  const term = String(search || '').trim();
-
-  let query = supabase
-    .from('blank_products_search')
-    .select('*')
-    .order('brand', { ascending: true })
-    .order('style', { ascending: true })
-    .order('color', { ascending: true })
-    .order('size', { ascending: true })
-    .limit(250);
-
-  if (term) {
-    const escaped = term.replace(/[%_]/g, '\\$&');
-    query = query.or([
-      `sku_base.ilike.%${escaped}%`,
-      `name.ilike.%${escaped}%`,
-      `brand.ilike.%${escaped}%`,
-      `style.ilike.%${escaped}%`,
-      `color.ilike.%${escaped}%`,
-      `size.ilike.%${escaped}%`,
-    ].join(','));
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createFinishedProductFromBlank({
-  blankProductId,
-  existingFinishedProductId,
-  finishedBinId,
-  quantity,
-  customerName,
-  logoName,
-  decorationType,
-  placement,
-  decorationSize,
-  notes,
-  deductBlank,
-  blankBinId,
-}) {
-  const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
-    p_existing_finished_product_id: existingFinishedProductId || null,
-    p_blank_product_id: blankProductId,
-    p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
-    p_quantity: Number(quantity || 0),
-    p_customer_name: customerName,
-    p_logo_name: logoName,
-    p_decoration_type: decorationType || null,
-    p_placement: placement || null,
-    p_decoration_size: decorationSize || null,
-    p_notes: notes || null,
-    p_deduct_blank: Boolean(deductBlank),
-    p_blank_bin_id: blankBinId ? Number(blankBinId) : null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-
-// =========================================================
-// Standalone Sample Products - not linked to WooCommerce or blank_products
-// =========================================================
-
-export async function createStandaloneSampleProduct({
-  brand,
-  style,
-  color,
-  vendor,
-  price,
-  size,
-  notes,
-}) {
-  const payload = {
-    brand: String(brand || '').trim(),
-    style: String(style || '').trim(),
-    color: String(color || '').trim(),
-    vendor: String(vendor || '').trim() || null,
-    price: price === '' || price == null ? null : Number(price),
-    size: String(size || '').trim(),
-    notes: String(notes || '').trim() || null,
-  };
-
-  if (!payload.brand) throw new Error('Brand is required.');
-  if (!payload.style) throw new Error('Style is required.');
-  if (!payload.color) throw new Error('Color is required.');
-  if (!payload.size) throw new Error('Size is required.');
-  if (payload.price != null && Number.isNaN(payload.price)) throw new Error('Price must be a number.');
-
-  const { data, error } = await supabase
-    .from('sample_products')
-    .insert(payload)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getStandaloneSampleProducts(search = '') {
-  const { data, error } = await supabase
-    .from('sample_products')
-    .select('id, brand, style, color, vendor, price, size, notes, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(5000);
-
-  if (error) throw error;
-
-  const rows = data || [];
-  const tokens = String(search || '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter(Boolean);
-
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const text = [
-      row.brand,
-      row.style,
-      row.color,
-      row.vendor,
-      row.size,
-      row.notes,
-    ].filter(Boolean).join(' ').toLowerCase();
-
-    const normalized = text.replace(/[^a-z0-9]+/g, '');
-
-    return tokens.every((token) => {
-      const normalizedToken = token.replace(/[^a-z0-9]+/g, '');
-      return text.includes(token) || normalized.includes(normalizedToken);
-    });
-  });
-}
-
-
-
-// =========================================================
-// Transfer Inventory - Bin Scoped Items
-// =========================================================
-
-export async function getBlankItemsInBin(binId, search = '') {
-  if (!binId) return [];
-
-  const { data, error } = await supabase.rpc('get_blank_items_in_bin', {
-    p_bin_id: Number(binId),
-    p_search: String(search || '').trim(),
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-// =========================================================
-// Printable Warehouse Audit Report
-// =========================================================
-
-export async function getWarehouseInventoryAuditReport() {
-  const { data, error } = await supabase
-    .from('warehouse_inventory_audit_report')
-    .select('*')
-    .order('bin_sort', { ascending: true, nullsFirst: false })
-    .order('bin_code', { ascending: true })
-    .order('brand', { ascending: true, nullsFirst: false })
-    .order('style', { ascending: true, nullsFirst: false })
-    .order('color', { ascending: true, nullsFirst: false })
-    .order('size', { ascending: true, nullsFirst: false });
-
-  if (error) throw error;
-  return data || [];
-}
-
-
-// =========================================================
-// Inventory Reservations / Holds
-// =========================================================
-
-export async function createInventoryReservation({
-  blankProductId,
-  binId,
-  quantity,
-  orderRef,
-  customer,
-  notes,
-}) {
-  const { data, error } = await supabase.rpc('create_inventory_reservation_safe', {
-    p_blank_product_id: blankProductId,
-    p_bin_id: binId ? Number(binId) : null,
-    p_quantity: Number(quantity || 0),
-    p_order_ref: String(orderRef || '').trim() || null,
-    p_customer: String(customer || '').trim() || null,
-    p_notes: String(notes || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getInventoryReservations(status = 'active') {
-  const { data, error } = await supabase
-    .from('inventory_reservations_view')
-    .select('*')
-    .eq('status', status)
-    .order('created_at', { ascending: false })
-    .limit(1000);
-
-  if (error) throw error;
-  return data || [];
-}
-
-
-// =========================================================
-// Finished Inventory - Search, Create, and Receive
-// Required by src/ReturnFinishedInventory.jsx
-// =========================================================
-
-export async function searchFinishedProductsForReceiving(search = '') {
-  const { data, error } = await supabase.rpc('search_finished_products_for_receiving', {
-    p_search: String(search || '').trim(),
-    p_limit: 5000,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createOrReceiveFinishedProduct({
-  existingFinishedProductId,
-  finishedSku,
-  name,
-  customer,
-  logo,
-  brand,
-  style,
-  color,
-  size,
-  productType,
-  binId,
-  quantity,
-  notes,
-}) {
-  const { data, error } = await supabase.rpc('create_or_receive_finished_product_inventory', {
-    p_existing_finished_product_id: existingFinishedProductId || null,
-    p_finished_sku: String(finishedSku || '').trim() || null,
-    p_name: String(name || '').trim() || null,
-    p_customer_name: String(customer || '').trim() || null,
-    p_logo_name: String(logo || '').trim() || null,
-    p_brand: String(brand || '').trim() || null,
-    p_style: String(style || '').trim() || null,
-    p_color: String(color || '').trim() || null,
-    p_size: String(size || '').trim() || null,
-    p_product_type: String(productType || '').trim() || null,
-    p_bin_id: binId ? Number(binId) : null,
-    p_quantity: Number(quantity || 0),
-    p_notes: String(notes || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-
-// =========================================================
-// Phase 1 Purchasing: Purchase Orders + Waiting On dashboard
-// =========================================================
-
-export async function getPurchaseOrderRecommendations(search = '') {
-  const { data, error } = await supabase.rpc('phase1_get_purchase_recommendations', {
-    p_search: String(search || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createPurchaseOrderFromItems({ supplierName, expectedAt, notes, items }) {
-  const { data, error } = await supabase.rpc('phase1_create_purchase_order_from_items', {
-    p_supplier_name: supplierName || null,
-    p_expected_at: expectedAt || null,
-    p_notes: notes || null,
-    p_items: items || [],
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getPurchaseOrders(status = 'open') {
-  let query = supabase
-    .from('phase1_purchase_orders_with_totals')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (status && status !== 'all') {
-    if (status === 'open') {
-      query = query.in('status', ['draft', 'ordered', 'partial']);
-    } else if (status === 'partial') {
-      query = query.eq('status', 'partial');
-    } else {
-      query = query.eq('status', status);
-    }
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getPurchaseOrderDetail(purchaseOrderId) {
-  if (!purchaseOrderId) throw new Error('Missing purchase order ID.');
-
-  const [poRes, itemsRes] = await Promise.all([
-    supabase
-      .from('phase1_purchase_orders_with_totals')
-      .select('*')
-      .eq('id', purchaseOrderId)
-      .single(),
-    supabase
-      .from('phase1_purchase_order_items_detail')
-      .select('*')
-      .eq('purchase_order_id', purchaseOrderId)
-      .order('sku_base', { ascending: true }),
-  ]);
-
-  if (poRes.error) throw poRes.error;
-  if (itemsRes.error) throw itemsRes.error;
-
-  return { po: poRes.data, items: itemsRes.data || [] };
-}
-
-export async function receivePurchaseOrderItem({ poItemId, quantity, binId, notes }) {
-  const { data, error } = await supabase.rpc('phase1_receive_purchase_order_item', {
-    p_purchase_order_item_id: poItemId,
-    p_quantity: Number(quantity),
-    p_bin_id: Number(binId),
-    p_notes: notes || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getWaitingOnItems(search = '') {
-  const { data, error } = await supabase.rpc('phase1_get_waiting_on_items', {
-    p_search: String(search || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-// =====================================================
-// Phase 3 - Supplier Catalog + Label Tools
-// =====================================================
-
-export async function importSupplierCatalogRows({
-  supplierName,
-  sourceFileName,
-  rows,
-  updateBlankProducts = true,
-  createMissingLookups = true,
-}) {
-  const { data, error } = await supabase.rpc('import_supplier_catalog_rows', {
-    p_supplier_name: supplierName,
-    p_source_file_name: sourceFileName || null,
-    p_rows: rows || [],
-    p_update_blank_products: Boolean(updateBlankProducts),
-    p_create_missing_lookups: Boolean(createMissingLookups),
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getSupplierCatalogReview(search = '') {
-  let query = supabase
-    .from('supplier_catalog_review')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(5000);
-
-  const term = String(search || '').trim();
-  if (term) {
-    const escaped = escapeOrTerm(term);
-    query = query.or([
-      `supplier_name.ilike.%${escaped}%`,
-      `brand.ilike.%${escaped}%`,
-      `style.ilike.%${escaped}%`,
-      `color.ilike.%${escaped}%`,
-      `size.ilike.%${escaped}%`,
-      `supplier_sku.ilike.%${escaped}%`,
-      `upc.ilike.%${escaped}%`,
-      `blank_sku_base.ilike.%${escaped}%`,
-    ].join(','));
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-// Phase 2 Production: Board, Finished Suggestions, Spoilage
-// =========================================================
-
-export async function getProductionBoard(search = '') {
-  const { data, error } = await supabase.rpc('phase2_get_production_board', {
-    p_search: String(search || '').trim() || null,
-  });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function updateProductionJobStatus({ jobId, status, notes }) {
-  const { data, error } = await supabase.rpc('phase2_update_job_status', {
-    p_job_id: jobId,
-    p_status: status,
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function getFinishedMatchSuggestions(search = '') {
-  const { data, error } = await supabase.rpc('phase2_get_finished_match_suggestions', {
-    p_search: String(search || '').trim() || null,
-  });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function useFinishedInventoryForJobItem({ jobItemId, finishedProductId, quantity, notes }) {
-  const { data, error } = await supabase.rpc('phase2_use_finished_inventory_for_job_item', {
-    p_job_item_id: jobItemId,
-    p_finished_product_id: finishedProductId,
-    p_quantity: Number(quantity),
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function recordBlankSpoilage({ blankProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
-  const { data, error } = await supabase.rpc('phase2_record_blank_spoilage', {
-    p_blank_product_id: blankProductId,
-    p_bin_id: Number(binId),
-    p_quantity: Number(quantity),
-    p_reason: reason || 'Other',
-    p_job_id: jobId || null,
-    p_job_item_id: jobItemId || null,
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function recordFinishedSpoilage({ finishedProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
-  const { data, error } = await supabase.rpc('phase2_record_finished_spoilage', {
-    p_finished_product_id: finishedProductId,
-    p_bin_id: Number(binId),
-    p_quantity: Number(quantity),
-    p_reason: reason || 'Other',
-    p_job_id: jobId || null,
-    p_job_item_id: jobItemId || null,
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function getSpoilageReport(search = '') {
-  const { data, error } = await supabase.rpc('phase2_get_spoilage_report', {
-    p_search: String(search || '').trim() || null,
-  });
-  if (error) throw error;
-  return data || [];
-}
-
-// =====================================================
-// Phase 4 - Management Intelligence
-// =====================================================
-
-export async function getPhase4JobCosting(search = '') {
-  const { data, error } = await supabase.rpc('phase4_get_job_costing', {
-    p_search: String(search || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase4JobCostSettings({
-  jobId,
-  orderRevenue,
-  decorationCostPerUnit,
-  laborCostPerUnit,
-  overheadCost,
-  shippingRevenue,
-  shippingCost,
-  spoilageAllowance,
-  notes,
-}) {
-  const { data, error } = await supabase.rpc('phase4_upsert_job_cost_settings', {
-    p_job_id: Number(jobId),
-    p_order_revenue: orderRevenue === '' || orderRevenue == null ? 0 : Number(orderRevenue),
-    p_decoration_cost_per_unit: decorationCostPerUnit === '' || decorationCostPerUnit == null ? 0 : Number(decorationCostPerUnit),
-    p_labor_cost_per_unit: laborCostPerUnit === '' || laborCostPerUnit == null ? 0 : Number(laborCostPerUnit),
-    p_overhead_cost: overheadCost === '' || overheadCost == null ? 0 : Number(overheadCost),
-    p_shipping_revenue: shippingRevenue === '' || shippingRevenue == null ? 0 : Number(shippingRevenue),
-    p_shipping_cost: shippingCost === '' || shippingCost == null ? 0 : Number(shippingCost),
-    p_spoilage_allowance: spoilageAllowance === '' || spoilageAllowance == null ? 0 : Number(spoilageAllowance),
-    p_notes: notes || null,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase4CustomerReorders(search = '') {
-  const { data, error } = await supabase.rpc('phase4_get_customer_reorders', {
-    p_search: String(search || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getPhase4CampaignForecast(search = '') {
-  const { data, error } = await supabase.rpc('phase4_get_campaign_forecast', {
-    p_search: String(search || '').trim() || null,
-  });
-
-  if (error) throw error;
-  return data || [];
-}
-
-// =====================================================
-// Phase 5 - Advanced Operations, Pricing, Scheduling, Artwork
-// =====================================================
-
-export async function getPhase5CommandCenter() {
-  const { data, error } = await supabase.rpc('phase5_get_command_center');
-  if (error) throw error;
-  return data || {};
-}
-
-export async function getPhase5RiskDashboard(search = '') {
-  const { data, error } = await supabase.rpc('phase5_get_job_risk_dashboard', { p_search: String(search || '').trim() || null });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getPhase5Employees() {
-  const { data, error } = await supabase.from('phase5_employees').select('*').order('name', { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase5Employee({ id, name, role, hourlyCost, active = true }) {
-  const payload = { name: String(name || '').trim(), role: String(role || '').trim() || null, hourly_cost: hourlyCost === '' || hourlyCost == null ? 0 : Number(hourlyCost), active: Boolean(active) };
-  if (!payload.name) throw new Error('Employee name is required.');
-  const query = id ? supabase.from('phase5_employees').update(payload).eq('id', id).select('*').single() : supabase.from('phase5_employees').insert(payload).select('*').single();
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase5Tasks(filter = 'open') {
-  let query = supabase.from('phase5_tasks_detail').select('*').order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
-  if (filter === 'open') query = query.in('status', ['not_started', 'in_progress', 'blocked']);
-  if (filter === 'completed') query = query.eq('status', 'completed');
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase5Task({ id, jobId, taskType, title, assignedToEmployeeId, status, priority, dueAt, notes }) {
-  const payload = { job_id: jobId ? Number(jobId) : null, task_type: taskType || 'general', title: String(title || '').trim(), assigned_to_employee_id: assignedToEmployeeId || null, status: status || 'not_started', priority: priority === '' || priority == null ? 0 : Number(priority), due_at: dueAt || null, notes: notes || null };
-  if (!payload.title) throw new Error('Task title is required.');
-  const query = id ? supabase.from('phase5_tasks').update(payload).eq('id', id).select('*').single() : supabase.from('phase5_tasks').insert(payload).select('*').single();
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase5QcJobs(search = '') {
-  const { data, error } = await supabase.rpc('phase5_get_qc_jobs', { p_search: String(search || '').trim() || null });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase5QcChecklist({ jobId, checklist, passed, checkedBy, notes }) {
-  const { data, error } = await supabase.rpc('phase5_save_qc_checklist', { p_job_id: Number(jobId), p_checklist: checklist || {}, p_passed: Boolean(passed), p_checked_by: checkedBy || null, p_notes: notes || null });
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase5Quotes(status = 'open') {
-  let query = supabase.from('phase5_quotes_with_totals').select('*').order('created_at', { ascending: false });
-  if (status === 'open') query = query.in('status', ['draft', 'sent', 'accepted']);
-  else if (status !== 'all') query = query.eq('status', status);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createPhase5Quote({ customerName, quoteTitle, status, notes, items }) {
-  const { data, error } = await supabase.rpc('phase5_create_quote', { p_customer_name: customerName, p_quote_title: quoteTitle, p_status: status || 'draft', p_notes: notes || null, p_items: items || [] });
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase5PricingRules() {
-  const { data, error } = await supabase.from('phase5_pricing_rules').select('*').order('rule_name', { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase5PricingRule(rule) {
-  const payload = { rule_name: rule.ruleName, product_type: rule.productType || null, decoration_type: rule.decorationType || null, markup_multiplier: Number(rule.markupMultiplier || 2), decoration_cost: Number(rule.decorationCost || 0), setup_fee: Number(rule.setupFee || 0), minimum_margin_percent: Number(rule.minimumMarginPercent || 45), active: rule.active !== false };
-  const query = rule.id ? supabase.from('phase5_pricing_rules').update(payload).eq('id', rule.id).select('*').single() : supabase.from('phase5_pricing_rules').insert(payload).select('*').single();
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase5ProductionTimeRules() {
-  const { data, error } = await supabase.from('phase5_production_time_rules').select('*').order('rule_name', { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase5ProductionTimeRule(rule) {
-  const payload = { rule_name: rule.ruleName, decoration_type: rule.decorationType || null, setup_minutes: Number(rule.setupMinutes || 0), seconds_per_unit: Number(rule.secondsPerUnit || 60), qc_seconds_per_unit: Number(rule.qcSecondsPerUnit || 20), packing_seconds_per_unit: Number(rule.packingSecondsPerUnit || 20), active: rule.active !== false };
-  const query = rule.id ? supabase.from('phase5_production_time_rules').update(payload).eq('id', rule.id).select('*').single() : supabase.from('phase5_production_time_rules').insert(payload).select('*').single();
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
-}
-
-export async function getPhase5ProductionCalendar() {
-  const { data, error } = await supabase.rpc('phase5_get_production_calendar');
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getPhase5CapacityPlanning() {
-  const { data, error } = await supabase.rpc('phase5_get_capacity_planning');
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getPhase5VendorPriceComparison(search = '') {
-  const { data, error } = await supabase.rpc('phase5_get_vendor_price_comparison', { p_search: String(search || '').trim() || null });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getPhase5ShopTv() {
-  const { data, error } = await supabase.rpc('phase5_get_shop_tv');
-  if (error) throw error;
-  return data || {};
-}
-
-export async function getPhase5ArtworkRequests(status = 'open') {
-  let query = supabase.from('phase5_artwork_requests').select('*').order('created_at', { ascending: false });
-  if (status === 'open') query = query.in('status', ['new', 'prompt_ready', 'in_design', 'sent_for_approval', 'revision_requested']);
-  else if (status !== 'all') query = query.eq('status', status);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function savePhase5ArtworkRequest(request) {
-  const payload = { customer_name: request.customerName || null, job_id: request.jobId ? Number(request.jobId) : null, request_title: request.requestTitle || null, request_details: request.requestDetails || null, desired_emotion: request.desiredEmotion || null, preferred_shape: request.preferredShape || null, deadline: request.deadline || null, ai_prompt: request.aiPrompt || null, status: request.status || 'new', notes: request.notes || null };
-  const query = request.id ? supabase.from('phase5_artwork_requests').update(payload).eq('id', request.id).select('*').single() : supabase.from('phase5_artwork_requests').insert(payload).select('*').single();
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
 }
