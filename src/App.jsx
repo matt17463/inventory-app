@@ -19,6 +19,9 @@ import WaitingOn from './WaitingOn';
 import SupplierCatalogImport from './SupplierCatalogImport';
 import SupplierCatalogReview from './SupplierCatalogReview';
 import BarcodeLabelGenerator from './BarcodeLabelGenerator';
+import JobCosting from './JobCosting';
+import CustomerReorderIntelligence from './CustomerReorderIntelligence';
+import CampaignForecast from './CampaignForecast';
 import PullSheetView from './PullSheetView';
 import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
@@ -65,6 +68,9 @@ export default function App() {
             <Link to="/waiting-on">Waiting On</Link>
             <Link to="/supplier-catalog/import">Catalog Import</Link>
             <Link to="/labels">Labels</Link>
+            <Link to="/job-costing">Job Costing</Link>
+            <Link to="/customer-reorders">Reorders</Link>
+            <Link to="/campaign-forecast">Forecast</Link>
             <Link to="/color-aliases">Color Aliases</Link>
             <Link to="/nfc-writer">NFC</Link>
           </nav>
@@ -93,6 +99,9 @@ export default function App() {
           <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
           <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
           <Route path="/labels" element={<BarcodeLabelGenerator />} />
+          <Route path="/job-costing" element={<JobCosting />} />
+          <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
+          <Route path="/campaign-forecast" element={<CampaignForecast />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />

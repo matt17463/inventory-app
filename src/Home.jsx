@@ -140,6 +140,10 @@ export default function Home() {
         <Link className="app-tile priority-tile" to="/labels"><span className="tile-icon">🏷️</span><h2>Barcode Labels</h2><p>Print SKU labels and bin QR labels for faster scanning.</p></Link>
         <Link className="app-tile" to="/supplier-catalog"><span className="tile-icon">📚</span><h2>Catalog Review</h2><p>Review supplier catalog matches and unmatched vendor rows.</p></Link>
 
+        <Link className="app-tile priority-tile" to="/job-costing"><span className="tile-icon">📊</span><h2>Job Costing</h2><p>Estimate profit and margin by job using blank cost, labor, decoration, overhead, shipping, and revenue.</p></Link>
+        <Link className="app-tile priority-tile" to="/customer-reorders"><span className="tile-icon">🔁</span><h2>Customer Reorders</h2><p>Identify repeat customer/item/logo combinations and likely reorder opportunities.</p></Link>
+        <Link className="app-tile priority-tile" to="/campaign-forecast"><span className="tile-icon">📈</span><h2>Campaign Forecast</h2><p>Forecast likely campaign stock needs based on historical demand and current inventory.</p></Link>
+
         <Link className="app-tile" to="/woo-sync"><span className="tile-icon">🔄</span><h2>WooCommerce Sync</h2><p>Monitor sync queue records for your WooCommerce integration.</p></Link>
         <Link className="app-tile" to="/color-aliases"><span className="tile-icon">🎨</span><h2>Color Alias Review</h2><p>Approve or reject WooCommerce color aliases before relinking products.</p></Link>
       </section>
