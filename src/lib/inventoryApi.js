@@ -1597,6 +1597,82 @@ export async function getSupplierCatalogReview(search = '') {
   return data || [];
 }
 
+// Phase 2 Production: Board, Finished Suggestions, Spoilage
+// =========================================================
+
+export async function getProductionBoard(search = '') {
+  const { data, error } = await supabase.rpc('phase2_get_production_board', {
+    p_search: String(search || '').trim() || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateProductionJobStatus({ jobId, status, notes }) {
+  const { data, error } = await supabase.rpc('phase2_update_job_status', {
+    p_job_id: jobId,
+    p_status: status,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getFinishedMatchSuggestions(search = '') {
+  const { data, error } = await supabase.rpc('phase2_get_finished_match_suggestions', {
+    p_search: String(search || '').trim() || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function useFinishedInventoryForJobItem({ jobItemId, finishedProductId, quantity, notes }) {
+  const { data, error } = await supabase.rpc('phase2_use_finished_inventory_for_job_item', {
+    p_job_item_id: jobItemId,
+    p_finished_product_id: finishedProductId,
+    p_quantity: Number(quantity),
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function recordBlankSpoilage({ blankProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
+  const { data, error } = await supabase.rpc('phase2_record_blank_spoilage', {
+    p_blank_product_id: blankProductId,
+    p_bin_id: Number(binId),
+    p_quantity: Number(quantity),
+    p_reason: reason || 'Other',
+    p_job_id: jobId || null,
+    p_job_item_id: jobItemId || null,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function recordFinishedSpoilage({ finishedProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
+  const { data, error } = await supabase.rpc('phase2_record_finished_spoilage', {
+    p_finished_product_id: finishedProductId,
+    p_bin_id: Number(binId),
+    p_quantity: Number(quantity),
+    p_reason: reason || 'Other',
+    p_job_id: jobId || null,
+    p_job_item_id: jobItemId || null,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getSpoilageReport(search = '') {
+  const { data, error } = await supabase.rpc('phase2_get_spoilage_report', {
+    p_search: String(search || '').trim() || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
 // =====================================================
 // Phase 4 - Management Intelligence
 // =====================================================
@@ -1653,4 +1729,149 @@ export async function getPhase4CampaignForecast(search = '') {
 
   if (error) throw error;
   return data || [];
+}
+
+// =====================================================
+// Phase 5 - Advanced Operations, Pricing, Scheduling, Artwork
+// =====================================================
+
+export async function getPhase5CommandCenter() {
+  const { data, error } = await supabase.rpc('phase5_get_command_center');
+  if (error) throw error;
+  return data || {};
+}
+
+export async function getPhase5RiskDashboard(search = '') {
+  const { data, error } = await supabase.rpc('phase5_get_job_risk_dashboard', { p_search: String(search || '').trim() || null });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPhase5Employees() {
+  const { data, error } = await supabase.from('phase5_employees').select('*').order('name', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase5Employee({ id, name, role, hourlyCost, active = true }) {
+  const payload = { name: String(name || '').trim(), role: String(role || '').trim() || null, hourly_cost: hourlyCost === '' || hourlyCost == null ? 0 : Number(hourlyCost), active: Boolean(active) };
+  if (!payload.name) throw new Error('Employee name is required.');
+  const query = id ? supabase.from('phase5_employees').update(payload).eq('id', id).select('*').single() : supabase.from('phase5_employees').insert(payload).select('*').single();
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase5Tasks(filter = 'open') {
+  let query = supabase.from('phase5_tasks_detail').select('*').order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
+  if (filter === 'open') query = query.in('status', ['not_started', 'in_progress', 'blocked']);
+  if (filter === 'completed') query = query.eq('status', 'completed');
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase5Task({ id, jobId, taskType, title, assignedToEmployeeId, status, priority, dueAt, notes }) {
+  const payload = { job_id: jobId ? Number(jobId) : null, task_type: taskType || 'general', title: String(title || '').trim(), assigned_to_employee_id: assignedToEmployeeId || null, status: status || 'not_started', priority: priority === '' || priority == null ? 0 : Number(priority), due_at: dueAt || null, notes: notes || null };
+  if (!payload.title) throw new Error('Task title is required.');
+  const query = id ? supabase.from('phase5_tasks').update(payload).eq('id', id).select('*').single() : supabase.from('phase5_tasks').insert(payload).select('*').single();
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase5QcJobs(search = '') {
+  const { data, error } = await supabase.rpc('phase5_get_qc_jobs', { p_search: String(search || '').trim() || null });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase5QcChecklist({ jobId, checklist, passed, checkedBy, notes }) {
+  const { data, error } = await supabase.rpc('phase5_save_qc_checklist', { p_job_id: Number(jobId), p_checklist: checklist || {}, p_passed: Boolean(passed), p_checked_by: checkedBy || null, p_notes: notes || null });
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase5Quotes(status = 'open') {
+  let query = supabase.from('phase5_quotes_with_totals').select('*').order('created_at', { ascending: false });
+  if (status === 'open') query = query.in('status', ['draft', 'sent', 'accepted']);
+  else if (status !== 'all') query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createPhase5Quote({ customerName, quoteTitle, status, notes, items }) {
+  const { data, error } = await supabase.rpc('phase5_create_quote', { p_customer_name: customerName, p_quote_title: quoteTitle, p_status: status || 'draft', p_notes: notes || null, p_items: items || [] });
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase5PricingRules() {
+  const { data, error } = await supabase.from('phase5_pricing_rules').select('*').order('rule_name', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase5PricingRule(rule) {
+  const payload = { rule_name: rule.ruleName, product_type: rule.productType || null, decoration_type: rule.decorationType || null, markup_multiplier: Number(rule.markupMultiplier || 2), decoration_cost: Number(rule.decorationCost || 0), setup_fee: Number(rule.setupFee || 0), minimum_margin_percent: Number(rule.minimumMarginPercent || 45), active: rule.active !== false };
+  const query = rule.id ? supabase.from('phase5_pricing_rules').update(payload).eq('id', rule.id).select('*').single() : supabase.from('phase5_pricing_rules').insert(payload).select('*').single();
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase5ProductionTimeRules() {
+  const { data, error } = await supabase.from('phase5_production_time_rules').select('*').order('rule_name', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase5ProductionTimeRule(rule) {
+  const payload = { rule_name: rule.ruleName, decoration_type: rule.decorationType || null, setup_minutes: Number(rule.setupMinutes || 0), seconds_per_unit: Number(rule.secondsPerUnit || 60), qc_seconds_per_unit: Number(rule.qcSecondsPerUnit || 20), packing_seconds_per_unit: Number(rule.packingSecondsPerUnit || 20), active: rule.active !== false };
+  const query = rule.id ? supabase.from('phase5_production_time_rules').update(payload).eq('id', rule.id).select('*').single() : supabase.from('phase5_production_time_rules').insert(payload).select('*').single();
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhase5ProductionCalendar() {
+  const { data, error } = await supabase.rpc('phase5_get_production_calendar');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPhase5CapacityPlanning() {
+  const { data, error } = await supabase.rpc('phase5_get_capacity_planning');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPhase5VendorPriceComparison(search = '') {
+  const { data, error } = await supabase.rpc('phase5_get_vendor_price_comparison', { p_search: String(search || '').trim() || null });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPhase5ShopTv() {
+  const { data, error } = await supabase.rpc('phase5_get_shop_tv');
+  if (error) throw error;
+  return data || {};
+}
+
+export async function getPhase5ArtworkRequests(status = 'open') {
+  let query = supabase.from('phase5_artwork_requests').select('*').order('created_at', { ascending: false });
+  if (status === 'open') query = query.in('status', ['new', 'prompt_ready', 'in_design', 'sent_for_approval', 'revision_requested']);
+  else if (status !== 'all') query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function savePhase5ArtworkRequest(request) {
+  const payload = { customer_name: request.customerName || null, job_id: request.jobId ? Number(request.jobId) : null, request_title: request.requestTitle || null, request_details: request.requestDetails || null, desired_emotion: request.desiredEmotion || null, preferred_shape: request.preferredShape || null, deadline: request.deadline || null, ai_prompt: request.aiPrompt || null, status: request.status || 'new', notes: request.notes || null };
+  const query = request.id ? supabase.from('phase5_artwork_requests').update(payload).eq('id', request.id).select('*').single() : supabase.from('phase5_artwork_requests').insert(payload).select('*').single();
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
 }
