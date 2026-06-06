@@ -1547,80 +1547,52 @@ export async function getWaitingOnItems(search = '') {
   return data || [];
 }
 
+// =====================================================
+// Phase 3 - Supplier Catalog + Label Tools
+// =====================================================
 
-// =========================================================
-// Phase 2 Production: Board, Finished Suggestions, Spoilage
-// =========================================================
-
-export async function getProductionBoard(search = '') {
-  const { data, error } = await supabase.rpc('phase2_get_production_board', {
-    p_search: String(search || '').trim() || null,
+export async function importSupplierCatalogRows({
+  supplierName,
+  sourceFileName,
+  rows,
+  updateBlankProducts = true,
+  createMissingLookups = true,
+}) {
+  const { data, error } = await supabase.rpc('import_supplier_catalog_rows', {
+    p_supplier_name: supplierName,
+    p_source_file_name: sourceFileName || null,
+    p_rows: rows || [],
+    p_update_blank_products: Boolean(updateBlankProducts),
+    p_create_missing_lookups: Boolean(createMissingLookups),
   });
-  if (error) throw error;
-  return data || [];
-}
 
-export async function updateProductionJobStatus({ jobId, status, notes }) {
-  const { data, error } = await supabase.rpc('phase2_update_job_status', {
-    p_job_id: jobId,
-    p_status: status,
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function getFinishedMatchSuggestions(search = '') {
-  const { data, error } = await supabase.rpc('phase2_get_finished_match_suggestions', {
-    p_search: String(search || '').trim() || null,
-  });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function useFinishedInventoryForJobItem({ jobItemId, finishedProductId, quantity, notes }) {
-  const { data, error } = await supabase.rpc('phase2_use_finished_inventory_for_job_item', {
-    p_job_item_id: jobItemId,
-    p_finished_product_id: finishedProductId,
-    p_quantity: Number(quantity),
-    p_notes: notes || null,
-  });
   if (error) throw error;
   return data;
 }
 
-export async function recordBlankSpoilage({ blankProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
-  const { data, error } = await supabase.rpc('phase2_record_blank_spoilage', {
-    p_blank_product_id: blankProductId,
-    p_bin_id: Number(binId),
-    p_quantity: Number(quantity),
-    p_reason: reason || 'Other',
-    p_job_id: jobId || null,
-    p_job_item_id: jobItemId || null,
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
+export async function getSupplierCatalogReview(search = '') {
+  let query = supabase
+    .from('supplier_catalog_review')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(5000);
 
-export async function recordFinishedSpoilage({ finishedProductId, binId, quantity, reason, jobId, jobItemId, notes }) {
-  const { data, error } = await supabase.rpc('phase2_record_finished_spoilage', {
-    p_finished_product_id: finishedProductId,
-    p_bin_id: Number(binId),
-    p_quantity: Number(quantity),
-    p_reason: reason || 'Other',
-    p_job_id: jobId || null,
-    p_job_item_id: jobItemId || null,
-    p_notes: notes || null,
-  });
-  if (error) throw error;
-  return data;
-}
+  const term = String(search || '').trim();
+  if (term) {
+    const escaped = escapeOrTerm(term);
+    query = query.or([
+      `supplier_name.ilike.%${escaped}%`,
+      `brand.ilike.%${escaped}%`,
+      `style.ilike.%${escaped}%`,
+      `color.ilike.%${escaped}%`,
+      `size.ilike.%${escaped}%`,
+      `supplier_sku.ilike.%${escaped}%`,
+      `upc.ilike.%${escaped}%`,
+      `blank_sku_base.ilike.%${escaped}%`,
+    ].join(','));
+  }
 
-export async function getSpoilageReport(search = '') {
-  const { data, error } = await supabase.rpc('phase2_get_spoilage_report', {
-    p_search: String(search || '').trim() || null,
-  });
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
