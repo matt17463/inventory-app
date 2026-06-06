@@ -4,6 +4,7 @@ export const quickActions = [
   { label: 'Scan', path: '/scan', icon: '📷' },
   { label: 'Receive', path: '/add-item', icon: '📦' },
   { label: 'Pull Sheets', path: '/pullsheets', icon: '📋' },
+  { label: 'Manual', path: '/manual-orders', icon: '🧾' },
   { label: 'POs', path: '/purchase-orders', icon: '🛒' },
 ];
 
@@ -86,6 +87,7 @@ export const navSections = [
       { label: 'Quote Builder', path: '/quote-builder', keywords: 'quote estimate pricing customer quote' },
       { label: 'Pricing Rules', path: '/pricing-rules', keywords: 'markup rule margin decoration setup fees' },
       { label: 'Quote to Order', path: '/quote-to-order', keywords: 'quote convert order job approved customer' },
+      { label: 'Manual Invoiced Orders', path: '/manual-orders', keywords: 'manual invoice quickbooks external order non woocommerce create order' },
     ],
   },
 
