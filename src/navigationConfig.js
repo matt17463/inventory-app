@@ -1,5 +1,6 @@
 export const quickActions = [
   { label: 'Command', path: '/command-center', icon: '🧭' },
+  { label: 'Exceptions', path: '/exception-center', icon: '🚨' },
   { label: 'Scan', path: '/scan', icon: '📷' },
   { label: 'Receive', path: '/add-item', icon: '📦' },
   { label: 'Pull Sheets', path: '/pullsheets', icon: '📋' },
@@ -14,6 +15,7 @@ export const navSections = [
     items: [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
+      { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },
       { label: 'Shop TV Mode', path: '/shop-tv', keywords: 'production display wall tv floor' },
     ],
   },
@@ -31,6 +33,7 @@ export const navSections = [
       { label: 'Scan Inventory', path: '/scan', keywords: 'barcode scan upc sku camera' },
       { label: 'Transfer Between Bins', path: '/transfer', keywords: 'move transfer bin location' },
       { label: 'Audit Mode', path: '/audit', keywords: 'audit cycle count inventory count' },
+      { label: 'Inventory Audit / Cycle Count', path: '/inventory-audit', keywords: 'inventory audit cycle count physical count variance adjustment' },
       { label: 'Warehouse Audit', path: '/audit/warehouse', keywords: 'warehouse audit report' },
       { label: 'Low Stock', path: '/low-stock', keywords: 'low stock alerts reorder point threshold' },
       { label: 'Inventory Valuation', path: '/valuation', keywords: 'value cost valuation unit cost' },
@@ -49,6 +52,8 @@ export const navSections = [
       { label: 'Finished Match Suggestions', path: '/finished-suggestions', keywords: 'finished matches use existing finished stock' },
       { label: 'Spoilage / Misprints', path: '/spoilage', keywords: 'spoilage waste misprint damaged defect' },
       { label: 'QC Checklist', path: '/qc-checklist', keywords: 'quality control checklist inspect' },
+      { label: 'Approval Automation', path: '/approval-automation', keywords: 'artwork approved approval production automation handoff' },
+      { label: 'Production Photo Proof', path: '/production-photo-proof', keywords: 'photo proof production qc packed complete defect' },
       { label: 'Employee Tasks', path: '/employee-tasks', keywords: 'assign employees tasks work queue' },
       { label: 'Order Risk', path: '/order-risk', keywords: 'risk due date priority blocked critical' },
       { label: 'Production Time Estimator', path: '/production-estimator', keywords: 'time estimate labor press setup qc pack' },
@@ -80,6 +85,17 @@ export const navSections = [
       { label: 'Job Costing', path: '/job-costing', keywords: 'profit margin costing revenue cost' },
       { label: 'Quote Builder', path: '/quote-builder', keywords: 'quote estimate pricing customer quote' },
       { label: 'Pricing Rules', path: '/pricing-rules', keywords: 'markup rule margin decoration setup fees' },
+      { label: 'Quote to Order', path: '/quote-to-order', keywords: 'quote convert order job approved customer' },
+    ],
+  },
+
+  {
+    id: 'customer-tools',
+    label: 'Customer Tools',
+    icon: '👥',
+    items: [
+      { label: 'Customer Portal Admin', path: '/customer-portal-admin', keywords: 'customer portal token status order artwork portal links' },
+      { label: 'Customer Portal Preview', path: '/customer-portal', keywords: 'public customer portal preview token' },
     ],
   },
   {
@@ -100,6 +116,8 @@ export const navSections = [
       { label: 'Color Aliases', path: '/color-aliases', keywords: 'color aliases mapping woo sync' },
       { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
       { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },
+      { label: 'Product Data Health', path: '/product-data-health', keywords: 'product data health missing attributes cost barcode supplier reports' },
+      { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },

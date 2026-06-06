@@ -1,0 +1,15 @@
+import { useEffect, useState } from 'react';
+import { getProductionPhotos, uploadProductionPhoto } from './lib/phase6Api';
+
+const initial = { uploaded_by:'', source_type:'job', source_id:'', customer_name:'', order_id:'', job_id:'', photo_type:'completed_stack', caption:'', notes:'' };
+
+export default function ProductionPhotoProof() {
+  const [rows,setRows]=useState([]); const [form,setForm]=useState(initial); const [file,setFile]=useState(null); const [error,setError]=useState(''); const [saving,setSaving]=useState(false);
+  async function load(){ setError(''); try{ setRows(await getProductionPhotos()); }catch(e){ setError(e.message); } }
+  useEffect(()=>{load();},[]);
+  async function submit(e){ e.preventDefault(); setSaving(true); setError(''); try{ await uploadProductionPhoto(file, form); setFile(null); setForm(initial); await load(); }catch(err){ setError(err.message); }finally{ setSaving(false); } }
+  return <main className="page phase6-page"><h1>Production Photo Proof</h1><p className="muted">Attach photos for first article samples, completed stacks, packed orders, defects, pickup proof, or supplier damage.</p>{error&&<div className="error-card">{error}</div>}
+    <form className="phase6-panel phase6-grid-form" onSubmit={submit}><h2>Upload Photo</h2><input type="file" accept="image/*" onChange={e=>setFile(e.target.files?.[0]||null)} required/><input placeholder="Uploaded by" value={form.uploaded_by} onChange={e=>setForm({...form,uploaded_by:e.target.value})}/><select value={form.photo_type} onChange={e=>setForm({...form,photo_type:e.target.value})}><option value="first_article">First article sample</option><option value="completed_stack">Completed stack</option><option value="packed_order">Packed order</option><option value="defect">Defect / misprint</option><option value="pickup_proof">Customer pickup</option><option value="supplier_damage">Supplier damage</option><option value="general">General</option></select><input placeholder="Customer" value={form.customer_name} onChange={e=>setForm({...form,customer_name:e.target.value})}/><input placeholder="Order ID" value={form.order_id} onChange={e=>setForm({...form,order_id:e.target.value})}/><input placeholder="Job ID" value={form.job_id} onChange={e=>setForm({...form,job_id:e.target.value})}/><input placeholder="Caption" value={form.caption} onChange={e=>setForm({...form,caption:e.target.value})}/><textarea placeholder="Notes" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/><button className="button button-primary" disabled={saving}>{saving?'Uploading…':'Upload Proof'}</button></form>
+    <section className="phase6-photo-grid">{rows.map(p=><article className="phase6-photo-card" key={p.id}><a href={p.photo_url} target="_blank"><img src={p.photo_url} alt={p.caption||p.photo_type}/></a><h2>{p.caption||p.photo_type}</h2><p>{p.customer_name} {p.order_id?`• Order ${p.order_id}`:''} {p.job_id?`• Job ${p.job_id}`:''}</p><small>{new Date(p.created_at).toLocaleString()} — {p.uploaded_by}</small></article>)}</section>
+  </main>;
+}

@@ -48,6 +48,15 @@ import EmployeeTasks from './EmployeeTasks';
 import OrderRiskDashboard from './OrderRiskDashboard';
 import DailyCommandCenter from './DailyCommandCenter';
 import ProductMappingRepair from './ProductMappingRepair';
+import ExceptionCenter from './ExceptionCenter';
+import CustomerPortalAdmin from './CustomerPortalAdmin';
+import CustomerPortal from './CustomerPortal';
+import ApprovalAutomation from './ApprovalAutomation';
+import AuditTrail from './AuditTrail';
+import QuoteToOrder from './QuoteToOrder';
+import ProductDataHealth from './ProductDataHealth';
+import InventoryAudit from './InventoryAudit';
+import ProductionPhotoProof from './ProductionPhotoProof';
 import AppShell from './components/AppShell';
 import './App.css';
 import AuthGate from './AuthGate';
@@ -104,6 +113,15 @@ export default function App() {
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />
           <Route path="/mapping-repair" element={<ProductMappingRepair />} />
+          <Route path="/exception-center" element={<ExceptionCenter />} />
+          <Route path="/customer-portal-admin" element={<CustomerPortalAdmin />} />
+          <Route path="/customer-portal" element={<CustomerPortal />} />
+          <Route path="/approval-automation" element={<ApprovalAutomation />} />
+          <Route path="/audit-trail" element={<AuditTrail />} />
+          <Route path="/quote-to-order" element={<QuoteToOrder />} />
+          <Route path="/product-data-health" element={<ProductDataHealth />} />
+          <Route path="/inventory-audit" element={<InventoryAudit />} />
+          <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />
           <Route path="/nfc-writer" element={<NfcWriter />} />
           <Route path="/test-tag" element={<TestTag />} />
           <Route path="/pullsheets" element={<PullSheetList />} />
