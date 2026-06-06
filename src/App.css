@@ -1298,3 +1298,49 @@
   .print-label-sheet { grid-template-columns: repeat(3, 2.5in); gap: 0.12in; }
   .print-label { width: 2.5in; min-height: 1.25in; border: 1px solid #000; border-radius: 0; }
 }
+
+/* Phase 5 Advanced Operations */
+.section-heading-row,
+.button-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.8rem;
+}
+.form-grid label {
+  display: grid;
+  gap: 0.35rem;
+}
+.checkbox-line {
+  display: flex !important;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+}
+.checkbox-line input {
+  width: auto;
+}
+.inline-stat {
+  margin-top: 1rem;
+}
+.shop-tv-page .kpi-card span {
+  font-size: clamp(2rem, 5vw, 5rem);
+}
+.tv-job-card {
+  display: grid;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgba(80, 52, 130, 0.12);
+  padding: 1rem 0;
+}
+.tv-job-card strong {
+  font-size: 1.2rem;
+}
+.phase5-command-kpis .kpi-card {
+  min-height: 150px;
+}

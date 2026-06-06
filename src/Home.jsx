@@ -140,9 +140,19 @@ export default function Home() {
         <Link className="app-tile priority-tile" to="/labels"><span className="tile-icon">🏷️</span><h2>Barcode Labels</h2><p>Print SKU labels and bin QR labels for faster scanning.</p></Link>
         <Link className="app-tile" to="/supplier-catalog"><span className="tile-icon">📚</span><h2>Catalog Review</h2><p>Review supplier catalog matches and unmatched vendor rows.</p></Link>
 
-        <Link className="app-tile priority-tile" to="/job-costing"><span className="tile-icon">📊</span><h2>Job Costing</h2><p>Estimate profit and margin by job using blank cost, labor, decoration, overhead, shipping, and revenue.</p></Link>
-        <Link className="app-tile priority-tile" to="/customer-reorders"><span className="tile-icon">🔁</span><h2>Customer Reorders</h2><p>Identify repeat customer/item/logo combinations and likely reorder opportunities.</p></Link>
-        <Link className="app-tile priority-tile" to="/campaign-forecast"><span className="tile-icon">📈</span><h2>Campaign Forecast</h2><p>Forecast likely campaign stock needs based on historical demand and current inventory.</p></Link>
+
+        <Link className="app-tile priority-tile" to="/command-center"><span className="tile-icon">🧭</span><h2>Daily Command Center</h2><p>See critical jobs, waiting-on items, open tasks, QC queue, and production priorities.</p></Link>
+        <Link className="app-tile priority-tile" to="/order-risk"><span className="tile-icon">🚨</span><h2>Order Risk Score</h2><p>Prioritize jobs by due date, blocked status, open tasks, and production progress.</p></Link>
+        <Link className="app-tile priority-tile" to="/employee-tasks"><span className="tile-icon">✅</span><h2>Employee Tasks</h2><p>Assign pulling, pressing, QC, receiving, artwork, counting, and remake work.</p></Link>
+        <Link className="app-tile priority-tile" to="/qc-checklist"><span className="tile-icon">🔍</span><h2>QC Checklist</h2><p>Verify garment, color, size counts, logo, placement, print quality, and packing.</p></Link>
+        <Link className="app-tile priority-tile" to="/quote-builder"><span className="tile-icon">🧾</span><h2>Quote Builder</h2><p>Build quotes using blank cost, decoration, labor, markup, and target margin.</p></Link>
+        <Link className="app-tile" to="/pricing-rules"><span className="tile-icon">💵</span><h2>Pricing Rules</h2><p>Maintain markup, decoration cost, setup fees, and minimum margin rules.</p></Link>
+        <Link className="app-tile" to="/production-estimator"><span className="tile-icon">⏱️</span><h2>Production Time Estimator</h2><p>Estimate setup, pressing, QC, and packing time for jobs and rush work.</p></Link>
+        <Link className="app-tile" to="/production-calendar"><span className="tile-icon">🗓️</span><h2>Production Calendar</h2><p>Schedule jobs by due date, status, estimated hours, and risk.</p></Link>
+        <Link className="app-tile" to="/capacity-planning"><span className="tile-icon">📊</span><h2>Capacity Planning</h2><p>Compare scheduled production hours to available shop capacity.</p></Link>
+        <Link className="app-tile" to="/vendor-prices"><span className="tile-icon">⚖️</span><h2>Vendor Price Comparison</h2><p>Compare supplier costs, UPCs, and supplier SKUs by blank product.</p></Link>
+        <Link className="app-tile" to="/shop-tv"><span className="tile-icon">📺</span><h2>Shop TV Mode</h2><p>Display priority jobs and open tasks on a wall-mounted production screen.</p></Link>
+        <Link className="app-tile" to="/artwork-requests"><span className="tile-icon">🎨</span><h2>Artwork Requests</h2><p>Track customer artwork requests and generate AI prompt-ready design briefs.</p></Link>
 
         <Link className="app-tile" to="/woo-sync"><span className="tile-icon">🔄</span><h2>WooCommerce Sync</h2><p>Monitor sync queue records for your WooCommerce integration.</p></Link>
         <Link className="app-tile" to="/color-aliases"><span className="tile-icon">🎨</span><h2>Color Alias Review</h2><p>Approve or reject WooCommerce color aliases before relinking products.</p></Link>

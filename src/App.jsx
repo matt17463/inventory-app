@@ -19,9 +19,6 @@ import WaitingOn from './WaitingOn';
 import SupplierCatalogImport from './SupplierCatalogImport';
 import SupplierCatalogReview from './SupplierCatalogReview';
 import BarcodeLabelGenerator from './BarcodeLabelGenerator';
-import JobCosting from './JobCosting';
-import CustomerReorderIntelligence from './CustomerReorderIntelligence';
-import CampaignForecast from './CampaignForecast';
 import PullSheetView from './PullSheetView';
 import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
@@ -32,6 +29,24 @@ import TransferInventory from './TransferInventory';
 import WooSync from './WooSync';
 import ActivityPage from './ActivityPage';
 import ColorAliasReview from './ColorAliasReview';
+import CampaignForecast from './CampaignForecast';
+import CustomerReorderIntelligence from './CustomerReorderIntelligence';
+import JobCosting from './JobCosting';
+import SpoilageTracking from './SpoilageTracking';
+import FinishedMatchSuggestions from './FinishedMatchSuggestions';
+import ProductionBoard from './ProductionBoard';
+import ArtworkRequests from './ArtworkRequests';
+import ShopTvMode from './ShopTvMode';
+import VendorPriceComparison from './VendorPriceComparison';
+import CapacityPlanning from './CapacityPlanning';
+import ProductionCalendar from './ProductionCalendar';
+import ProductionEstimator from './ProductionEstimator';
+import PricingRules from './PricingRules';
+import QuoteBuilder from './QuoteBuilder';
+import QcChecklist from './QcChecklist';
+import EmployeeTasks from './EmployeeTasks';
+import OrderRiskDashboard from './OrderRiskDashboard';
+import DailyCommandCenter from './DailyCommandCenter';
 import logo from './assets/logo.png';
 import './App.css';
 import AuthGate from './AuthGate';
@@ -66,11 +81,26 @@ export default function App() {
             <Link to="/purchasing">Purchasing</Link>
             <Link to="/purchase-orders">POs</Link>
             <Link to="/waiting-on">Waiting On</Link>
+            <Link to="/campaign-forecast">Forecast</Link>
+            <Link to="/customer-reorders">Reorders</Link>
+            <Link to="/job-costing">Job Costing</Link>
+            <Link to="/artwork-requests">Artwork</Link>
+            <Link to="/shop-tv">Shop TV</Link>
+            <Link to="/vendor-prices">Vendor Prices</Link>
+            <Link to="/capacity-planning">Capacity</Link>
+            <Link to="/production-calendar">Calendar</Link>
+            <Link to="/production-estimator">Time</Link>
+            <Link to="/pricing-rules">Pricing</Link>
+            <Link to="/quote-builder">Quotes</Link>
+            <Link to="/spoilage">Spoilage</Link>
+            <Link to="/finished-suggestions">Finished Matches</Link>
+            <Link to="/production-board">Production</Link>
+            <Link to="/qc-checklist">QC</Link>
+            <Link to="/employee-tasks">Tasks</Link>
+            <Link to="/order-risk">Risk</Link>
+            <Link to="/command-center">Command</Link>
             <Link to="/supplier-catalog/import">Catalog Import</Link>
             <Link to="/labels">Labels</Link>
-            <Link to="/job-costing">Job Costing</Link>
-            <Link to="/customer-reorders">Reorders</Link>
-            <Link to="/campaign-forecast">Forecast</Link>
             <Link to="/color-aliases">Color Aliases</Link>
             <Link to="/nfc-writer">NFC</Link>
           </nav>
@@ -96,12 +126,27 @@ export default function App() {
           <Route path="/purchase-orders/new" element={<PurchaseOrderGenerator />} />
           <Route path="/purchase-orders/:poId/receive" element={<ReceivePurchaseOrder />} />
           <Route path="/waiting-on" element={<WaitingOn />} />
+          <Route path="/campaign-forecast" element={<CampaignForecast />} />
+          <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
+          <Route path="/job-costing" element={<JobCosting />} />
+          <Route path="/artwork-requests" element={<ArtworkRequests />} />
+          <Route path="/shop-tv" element={<ShopTvMode />} />
+          <Route path="/vendor-prices" element={<VendorPriceComparison />} />
+          <Route path="/capacity-planning" element={<CapacityPlanning />} />
+          <Route path="/production-calendar" element={<ProductionCalendar />} />
+          <Route path="/production-estimator" element={<ProductionEstimator />} />
+          <Route path="/pricing-rules" element={<PricingRules />} />
+          <Route path="/quote-builder" element={<QuoteBuilder />} />
+          <Route path="/spoilage" element={<SpoilageTracking />} />
+          <Route path="/finished-suggestions" element={<FinishedMatchSuggestions />} />
+          <Route path="/production-board" element={<ProductionBoard />} />
+          <Route path="/qc-checklist" element={<QcChecklist />} />
+          <Route path="/employee-tasks" element={<EmployeeTasks />} />
+          <Route path="/order-risk" element={<OrderRiskDashboard />} />
+          <Route path="/command-center" element={<DailyCommandCenter />} />
           <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
           <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
           <Route path="/labels" element={<BarcodeLabelGenerator />} />
-          <Route path="/job-costing" element={<JobCosting />} />
-          <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
-          <Route path="/campaign-forecast" element={<CampaignForecast />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />

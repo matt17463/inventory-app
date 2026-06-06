@@ -1,0 +1,9 @@
+import { useEffect, useState } from 'react';
+import { getPhase5VendorPriceComparison, money } from './lib/inventoryApi';
+
+export default function VendorPriceComparison() {
+  const [search, setSearch] = useState(''); const [rows, setRows] = useState([]); const [message, setMessage] = useState('');
+  async function load(){ try{ setRows(await getPhase5VendorPriceComparison(search)); setMessage(''); }catch(err){ setMessage(err.message || 'Failed to load vendor comparison.'); } }
+  useEffect(()=>{ load(); }, []);
+  return <main className="page"><section className="page-header"><div><p className="eyebrow">Purchasing</p><h1>Vendor Price Comparison</h1><p>Compare supplier catalog costs, UPCs, supplier SKUs, and availability by blank product.</p></div><button onClick={load}>Refresh</button></section>{message&&<p className="message">{message}</p>}<section className="card elevated-card"><div className="search-row"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search brand, style, color, size, SKU, supplier..."/><button onClick={load}>Search</button></div></section><section className="card elevated-card table-card"><div className="responsive-table"><table className="data-table"><thead><tr><th>Blank</th><th>Best Supplier</th><th>Best Cost</th><th>Supplier Options</th><th>UPC / Vendor SKU</th></tr></thead><tbody>{rows.length===0?<tr><td colSpan="5">No vendor pricing rows found. Import supplier catalog data first.</td></tr>:rows.map(row=><tr key={row.blank_product_id}><td><strong>{row.sku_base}</strong><br/>{row.brand} {row.style} {row.color} {row.size}</td><td>{row.best_supplier || '—'}</td><td>{money(row.best_unit_cost)}</td><td>{row.supplier_count} suppliers<br/><small>{row.supplier_summary}</small></td><td>{row.upc || '—'}<br/><small>{row.supplier_sku || ''}</small></td></tr>)}</tbody></table></div></section></main>;
+}

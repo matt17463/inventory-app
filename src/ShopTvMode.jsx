@@ -1,0 +1,10 @@
+import { useEffect, useState } from 'react';
+import { getPhase5ShopTv } from './lib/inventoryApi';
+
+export default function ShopTvMode() {
+  const [data, setData] = useState({}); const [message, setMessage] = useState('');
+  async function load(){ try{ setData(await getPhase5ShopTv()); setMessage(''); }catch(err){ setMessage(err.message || 'Failed to load shop TV.'); } }
+  useEffect(()=>{ load(); const id=setInterval(load, 60000); return ()=>clearInterval(id); }, []);
+  const jobs = data.jobs || []; const tasks = data.tasks || [];
+  return <main className="page shop-tv-page"><section className="page-header"><div><p className="eyebrow">Shop Floor Display</p><h1>Shop TV Mode</h1><p>Auto-refreshing display for jobs due soon, critical work, open tasks, and blocked production.</p></div><button onClick={load}>Refresh</button></section>{message&&<p className="message">{message}</p>}<section className="kpi-grid"><div className="kpi-card"><span>{data.critical_jobs ?? 0}</span><strong>Critical</strong><small>Need attention</small></div><div className="kpi-card"><span>{data.waiting_on_jobs ?? 0}</span><strong>Waiting</strong><small>Blocked</small></div><div className="kpi-card"><span>{data.in_production_jobs ?? 0}</span><strong>In Production</strong><small>Active</small></div><div className="kpi-card"><span>{data.qc_jobs ?? 0}</span><strong>QC</strong><small>Inspect</small></div></section><section className="content-two-column wide-two-column"><section className="card elevated-card"><h2>Priority Jobs</h2>{jobs.length===0?<p>No priority jobs.</p>:jobs.map(job=><div key={job.job_id} className="tv-job-card"><strong>{job.job_name}</strong><span>{job.customer_name} · {job.status}</span><small>{job.risk_level} · {job.risk_reason}</small></div>)}</section><section className="card elevated-card"><h2>Open Tasks</h2>{tasks.length===0?<p>No tasks.</p>:tasks.map(task=><div key={task.id} className="tv-job-card"><strong>{task.title}</strong><span>{task.assigned_to_name || 'Unassigned'} · {task.status}</span><small>{task.due_at ? new Date(task.due_at).toLocaleString() : 'No due time'}</small></div>)}</section></section></main>;
+}
