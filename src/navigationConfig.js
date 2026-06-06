@@ -1,0 +1,111 @@
+export const quickActions = [
+  { label: 'Command', path: '/command-center', icon: '🧭' },
+  { label: 'Scan', path: '/scan', icon: '📷' },
+  { label: 'Receive', path: '/add-item', icon: '📦' },
+  { label: 'Pull Sheets', path: '/pullsheets', icon: '📋' },
+  { label: 'POs', path: '/purchase-orders', icon: '🛒' },
+];
+
+export const navSections = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: '🏠',
+    items: [
+      { label: 'Home', path: '/', keywords: 'dashboard home overview' },
+      { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
+      { label: 'Shop TV Mode', path: '/shop-tv', keywords: 'production display wall tv floor' },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    icon: '📦',
+    items: [
+      { label: 'Inventory Overview', path: '/inventory/blanks', keywords: 'blank inventory on hand available value' },
+      { label: 'Edit Blank Items', path: '/inventory/edit-blanks', keywords: 'edit blanks products sku barcode cost threshold' },
+      { label: 'Import Inventory', path: '/inventory/import', keywords: 'excel import blank finished inventory' },
+      { label: 'Add Item to Bin', path: '/add-item', keywords: 'receive add item bin receiving' },
+      { label: 'Sample Inventory', path: '/inventory/samples', keywords: 'samples sample products showroom' },
+      { label: 'Bins', path: '/bins', keywords: 'storage bins locations order nfc' },
+      { label: 'Scan Inventory', path: '/scan', keywords: 'barcode scan upc sku camera' },
+      { label: 'Transfer Between Bins', path: '/transfer', keywords: 'move transfer bin location' },
+      { label: 'Audit Mode', path: '/audit', keywords: 'audit cycle count inventory count' },
+      { label: 'Warehouse Audit', path: '/audit/warehouse', keywords: 'warehouse audit report' },
+      { label: 'Low Stock', path: '/low-stock', keywords: 'low stock alerts reorder point threshold' },
+      { label: 'Inventory Valuation', path: '/valuation', keywords: 'value cost valuation unit cost' },
+    ],
+  },
+  {
+    id: 'production',
+    label: 'Production',
+    icon: '🏭',
+    items: [
+      { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
+      { label: 'Production Board', path: '/production-board', keywords: 'kanban status ready produce qc ship' },
+      { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
+      { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
+      { label: 'Create Finished Product', path: '/finished/create', keywords: 'make finished from blank decorated product' },
+      { label: 'Finished Match Suggestions', path: '/finished-suggestions', keywords: 'finished matches use existing finished stock' },
+      { label: 'Spoilage / Misprints', path: '/spoilage', keywords: 'spoilage waste misprint damaged defect' },
+      { label: 'QC Checklist', path: '/qc-checklist', keywords: 'quality control checklist inspect' },
+      { label: 'Employee Tasks', path: '/employee-tasks', keywords: 'assign employees tasks work queue' },
+      { label: 'Order Risk', path: '/order-risk', keywords: 'risk due date priority blocked critical' },
+      { label: 'Production Time Estimator', path: '/production-estimator', keywords: 'time estimate labor press setup qc pack' },
+      { label: 'Production Calendar', path: '/production-calendar', keywords: 'calendar schedule due date production' },
+      { label: 'Capacity Planning', path: '/capacity-planning', keywords: 'capacity hours workload schedule' },
+    ],
+  },
+  {
+    id: 'purchasing',
+    label: 'Purchasing',
+    icon: '🛒',
+    items: [
+      { label: 'Purchasing Report', path: '/purchasing', keywords: 'recommended orders purchasing shortages' },
+      { label: 'Purchase Orders', path: '/purchase-orders', keywords: 'po purchase orders list' },
+      { label: 'Create Purchase Order', path: '/purchase-orders/new', keywords: 'generate new purchase order po' },
+      { label: 'Waiting On', path: '/waiting-on', keywords: 'blocked waiting on blanks expected arrival' },
+      { label: 'Supplier Catalog Import', path: '/supplier-catalog/import', keywords: 'vendor supplier catalog csv import' },
+      { label: 'Supplier Catalog Review', path: '/supplier-catalog', keywords: 'catalog review supplier matches' },
+      { label: 'Vendor Prices', path: '/vendor-prices', keywords: 'supplier prices comparison cost vendor sku' },
+    ],
+  },
+  {
+    id: 'management',
+    label: 'Management',
+    icon: '📊',
+    items: [
+      { label: 'Campaign Forecast', path: '/campaign-forecast', keywords: 'forecast campaign stock demand' },
+      { label: 'Customer Reorders', path: '/customer-reorders', keywords: 'reorder intelligence repeat customers' },
+      { label: 'Job Costing', path: '/job-costing', keywords: 'profit margin costing revenue cost' },
+      { label: 'Quote Builder', path: '/quote-builder', keywords: 'quote estimate pricing customer quote' },
+      { label: 'Pricing Rules', path: '/pricing-rules', keywords: 'markup rule margin decoration setup fees' },
+    ],
+  },
+  {
+    id: 'artwork',
+    label: 'Artwork',
+    icon: '🎨',
+    items: [
+      { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
+      { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },
+    ],
+  },
+  {
+    id: 'tools',
+    label: 'Tools & Admin',
+    icon: '🧰',
+    items: [
+      { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
+      { label: 'Color Aliases', path: '/color-aliases', keywords: 'color aliases mapping woo sync' },
+      { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
+      { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
+      { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
+      { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },
+    ],
+  },
+];
+
+export const allNavigationItems = navSections.flatMap((section) =>
+  section.items.map((item) => ({ ...item, section: section.label, sectionIcon: section.icon }))
+);

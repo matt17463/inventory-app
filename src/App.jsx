@@ -1,4 +1,4 @@
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import AddItemToBin from './AddItemToBin';
 import AuditMode from './AuditMode';
 import BinContents from './BinContents';
@@ -47,7 +47,7 @@ import QcChecklist from './QcChecklist';
 import EmployeeTasks from './EmployeeTasks';
 import OrderRiskDashboard from './OrderRiskDashboard';
 import DailyCommandCenter from './DailyCommandCenter';
-import logo from './assets/logo.png';
+import AppShell from './components/AppShell';
 import './App.css';
 import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
@@ -57,55 +57,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthGate>
-      <div className="app-shell">
-        <header className="top-nav">
-          <Link to="/" className="brand">
-            <img src={logo} alt="Skilled Crafting" />
-            <span>Skilled Crafting Inventory</span>
-          </Link>
-          <nav>
-            <Link to="/inventory/blanks">Inventory</Link>
-            <Link to="/inventory/edit-blanks">Edit Blanks</Link>
-            <Link to="/inventory/import">Import</Link>
-            <Link to="/inventory/samples">Samples</Link>
-            <Link to="/add-item">Add Item</Link>
-            <Link to="/bins">Bins</Link>
-            <Link to="/scan">Scan</Link>
-            <Link to="/transfer">Transfer</Link>
-            <Link to="/audit">Audit</Link>
-            <Link to="/audit/warehouse">Warehouse Audit</Link>
-            <Link to="/pullsheets">Pull Sheets</Link>
-            <Link to="/return-finished">Finished Products</Link>
-            <Link to="/reservations">Reservations</Link>
-            <Link to="/low-stock">Low Stock</Link>
-            <Link to="/purchasing">Purchasing</Link>
-            <Link to="/purchase-orders">POs</Link>
-            <Link to="/waiting-on">Waiting On</Link>
-            <Link to="/campaign-forecast">Forecast</Link>
-            <Link to="/customer-reorders">Reorders</Link>
-            <Link to="/job-costing">Job Costing</Link>
-            <Link to="/artwork-requests">Artwork</Link>
-            <Link to="/shop-tv">Shop TV</Link>
-            <Link to="/vendor-prices">Vendor Prices</Link>
-            <Link to="/capacity-planning">Capacity</Link>
-            <Link to="/production-calendar">Calendar</Link>
-            <Link to="/production-estimator">Time</Link>
-            <Link to="/pricing-rules">Pricing</Link>
-            <Link to="/quote-builder">Quotes</Link>
-            <Link to="/spoilage">Spoilage</Link>
-            <Link to="/finished-suggestions">Finished Matches</Link>
-            <Link to="/production-board">Production</Link>
-            <Link to="/qc-checklist">QC</Link>
-            <Link to="/employee-tasks">Tasks</Link>
-            <Link to="/order-risk">Risk</Link>
-            <Link to="/command-center">Command</Link>
-            <Link to="/supplier-catalog/import">Catalog Import</Link>
-            <Link to="/labels">Labels</Link>
-            <Link to="/color-aliases">Color Aliases</Link>
-            <Link to="/nfc-writer">NFC</Link>
-          </nav>
-        </header>
-
+      <AppShell>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
@@ -158,7 +110,7 @@ export default function App() {
                   <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
                   <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
         </Routes>
-      </div>
+      </AppShell>
       </AuthGate>
     </BrowserRouter>
   );
