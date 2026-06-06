@@ -378,12 +378,12 @@ export default function AddItemToBin() {
   }
 
   return (
-    <main className="page bulk-receive-page">
+    <main className="page bulk-receive-page bulk-receive-layout-v2">
       <div className="page-header-row">
         <div>
           <p className="eyebrow">Warehouse Receiving</p>
           <h1>Add Blank Items to Bin</h1>
-          <p className="helper-text">Receive one item, a full size run, or a supplier order group without entering each product on a separate page.</p>
+          <p className="helper-text">Receive a single blank, a full size run, or several supplier order lines at once.</p>
         </div>
         <button type="button" onClick={loadPage} disabled={loading}>Refresh Data</button>
       </div>
@@ -391,11 +391,26 @@ export default function AddItemToBin() {
       {message && <p className="message">{message}</p>}
 
       <section className="card bulk-defaults-card">
-        <h2>Order / Group Defaults</h2>
-        <p className="helper-text">Use this section for supplier-order groups like one brand/style/color with several sizes.</p>
+        <div className="bulk-section-title-row">
+          <div>
+            <h2>Order / Group Defaults</h2>
+            <p className="helper-text">Set the common values first, then apply them to receiving lines. These are the fields required to create or match a blank product.</p>
+          </div>
+        </div>
+
+        <div className="required-fields-strip">
+          <span>Required to save: </span>
+          <strong>Bin</strong>
+          <strong>Brand</strong>
+          <strong>Style / Product Type</strong>
+          <strong>Color</strong>
+          <strong>Size</strong>
+          <strong>Quantity</strong>
+        </div>
+
         <div className="bulk-grid four">
           <label>
-            Default Bin
+            Default Bin / Storage Location
             <select value={defaultBinId} onChange={(event) => setDefaultBinId(event.target.value)}>
               <option value="">Choose bin...</option>
               {bins.map((bin) => <option key={bin.id} value={bin.id}>{binLabel(bin)}</option>)}
@@ -405,43 +420,47 @@ export default function AddItemToBin() {
             Brand
             <select value={defaultBrandId} onChange={(event) => setDefaultBrandId(event.target.value)}>
               <option value="">Choose brand...</option>
-              {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+              {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}{brand.code ? ` (${brand.code})` : ''}</option>)}
             </select>
           </label>
           <label>
             Style / Product Type
             <select value={defaultProductTypeId} onChange={(event) => setDefaultProductTypeId(event.target.value)}>
               <option value="">Choose style...</option>
-              {productTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+              {productTypes.map((type) => <option key={type.id} value={type.id}>{type.name}{type.code ? ` (${type.code})` : ''}</option>)}
             </select>
           </label>
           <label>
             Color
             <select value={defaultColorId} onChange={(event) => setDefaultColorId(event.target.value)}>
               <option value="">Choose color...</option>
-              {colors.map((color) => <option key={color.id} value={color.id}>{color.name}</option>)}
+              {colors.map((color) => <option key={color.id} value={color.id}>{color.name}{color.code ? ` (${color.code})` : ''}</option>)}
             </select>
           </label>
         </div>
         <label>
-          Default Notes
-          <textarea value={defaultNotes} onChange={(event) => setDefaultNotes(event.target.value)} placeholder="Supplier order number, receiving note, invoice reference, etc." />
+          Default Receiving Notes
+          <textarea value={defaultNotes} onChange={(event) => setDefaultNotes(event.target.value)} placeholder="Supplier order number, invoice reference, receiving note, etc." />
         </label>
         <div className="bulk-actions-row">
-          <button type="button" onClick={applyDefaultsToExistingRows}>Apply Defaults to Rows</button>
-          <button type="button" onClick={() => addRow()}>+ Add Line</button>
-          <button type="button" onClick={checkMatches}>Check Matches</button>
+          <button type="button" onClick={applyDefaultsToExistingRows}>Apply Defaults to Existing Lines</button>
+          <button type="button" onClick={() => addRow()}>+ Add Blank Line</button>
+          <button type="button" onClick={checkMatches}>Check All Matches</button>
         </div>
       </section>
 
       <section className="card quick-size-card">
         <h2>Quick Size Run</h2>
-        <p className="helper-text">Paste one size and quantity per line, then add rows. Example: <code>XL 2</code></p>
+        <p className="helper-text">For supplier orders like the screenshot, choose Brand/Style/Color above, paste sizes and quantities, then add rows.</p>
         <div className="bulk-grid two">
-          <textarea value={quickSizeText} onChange={(event) => setQuickSizeText(event.target.value)} rows={6} />
+          <label>
+            Size run
+            <textarea value={quickSizeText} onChange={(event) => setQuickSizeText(event.target.value)} rows={6} placeholder={'L 2\nM 2\nS 2\nXL 2\nXS 2'} />
+          </label>
           <div className="quick-size-help">
             <p><strong>Current group:</strong></p>
             <p>{lookupLabel(getLookup(brands, defaultBrandId)) || 'No brand'} / {lookupLabel(getLookup(productTypes, defaultProductTypeId)) || 'No style'} / {lookupLabel(getLookup(colors, defaultColorId)) || 'No color'}</p>
+            <p className="helper-text">Each line becomes a separate receiving line with its own size and quantity.</p>
             <button type="button" onClick={addQuickSizeRun}>Add Size Run Rows</button>
           </div>
         </div>
@@ -451,88 +470,141 @@ export default function AddItemToBin() {
         <div className="bulk-lines-header">
           <div>
             <h2>Receiving Lines</h2>
-            <p className="helper-text">Rows can use different bins, brands, styles, colors, sizes, quantities, and artwork/receiving notes.</p>
+            <p className="helper-text">Each card shows all categories required to create, match, and receive a blank product.</p>
           </div>
           <div className="bulk-summary-pill">
             <strong>{rows.length}</strong> rows · <strong>{totals.unitCount}</strong> units · <strong>${totals.costTotal.toFixed(2)}</strong> cost
           </div>
         </div>
 
-        <div className="bulk-options">
+        <div className="bulk-options bulk-options-v2">
           <label><input type="checkbox" checked={createMissing} onChange={(event) => setCreateMissing(event.target.checked)} /> Create missing blank products automatically</label>
           <label><input type="checkbox" checked={updateUnitCost} onChange={(event) => setUpdateUnitCost(event.target.checked)} /> Update blank product unit cost from line price</label>
         </div>
 
-        <div className="bulk-table-wrap">
-          <table className="bulk-receive-table">
-            <thead>
-              <tr>
-                <th>Bin</th>
-                <th>Brand</th>
-                <th>Style</th>
-                <th>Color</th>
-                <th>Size</th>
-                <th>Qty</th>
-                <th>Unit Cost</th>
-                <th>Artwork / Notes</th>
-                <th>Match</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={row.rowKey}>
-                  <td>
-                    <select value={row.binId} onChange={(event) => updateRow(row.rowKey, { binId: event.target.value })} required>
-                      <option value="">Bin...</option>
-                      {bins.map((bin) => <option key={bin.id} value={bin.id}>{binLabel(bin)}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={row.brandId} onChange={(event) => updateRow(row.rowKey, { brandId: event.target.value })} required>
-                      <option value="">Brand...</option>
-                      {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={row.productTypeId} onChange={(event) => updateRow(row.rowKey, { productTypeId: event.target.value })} required>
-                      <option value="">Style...</option>
-                      {productTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={row.colorId} onChange={(event) => updateRow(row.rowKey, { colorId: event.target.value })} required>
-                      <option value="">Color...</option>
-                      {colors.map((color) => <option key={color.id} value={color.id}>{color.name}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={row.sizeId} onChange={(event) => updateRow(row.rowKey, { sizeId: event.target.value })} required>
-                      <option value="">Size...</option>
-                      {sizes.map((size) => <option key={size.id} value={size.id}>{size.name}</option>)}
-                    </select>
-                  </td>
-                  <td><input type="number" min="1" value={row.quantity} onChange={(event) => updateRow(row.rowKey, { quantity: event.target.value })} required /></td>
-                  <td><input type="number" min="0" step="0.01" value={row.unitCost} onChange={(event) => updateRow(row.rowKey, { unitCost: event.target.value })} placeholder="0.00" /></td>
-                  <td>
-                    <input value={row.artworkNote} onChange={(event) => updateRow(row.rowKey, { artworkNote: event.target.value })} placeholder="Artwork note" />
-                    <input value={row.notes} onChange={(event) => updateRow(row.rowKey, { notes: event.target.value })} placeholder="Line note" />
-                  </td>
-                  <td>
+        <div className="receiving-card-list">
+          {rows.map((row, index) => {
+            const brand = getLookup(brands, row.brandId);
+            const type = getLookup(productTypes, row.productTypeId);
+            const color = getLookup(colors, row.colorId);
+            const size = getLookup(sizes, row.sizeId);
+            const bin = getLookup(bins, row.binId);
+            const skuPreview = buildSkuBase(row);
+            const missingFields = [
+              !row.binId ? 'Bin' : '',
+              !row.brandId ? 'Brand' : '',
+              !row.productTypeId ? 'Style' : '',
+              !row.colorId ? 'Color' : '',
+              !row.sizeId ? 'Size' : '',
+              !Number(row.quantity) || Number(row.quantity) <= 0 ? 'Quantity' : '',
+            ].filter(Boolean);
+
+            return (
+              <article key={row.rowKey} className={`receiving-line-card ${missingFields.length ? 'needs-attention' : ''}`}>
+                <div className="receiving-line-top">
+                  <div>
+                    <h3>Line {index + 1}</h3>
+                    <p className="line-preview-text">
+                      {[lookupLabel(brand), lookupLabel(type), lookupLabel(color), lookupLabel(size)].filter(Boolean).join(' / ') || 'Choose blank product attributes'}
+                    </p>
+                  </div>
+                  <div className="line-status-box">
                     <span className={`bulk-status ${statusClass(row.matchStatus)}`}>{row.matchStatus.replace(/_/g, ' ')}</span>
-                    {row.matchMessage && <small>{row.matchMessage}</small>}
-                    {row.matchStatus === 'not_checked' && <small>{buildSkuBase(row) || `Line ${index + 1}`}</small>}
-                  </td>
-                  <td><button type="button" className="danger-light" onClick={() => removeRow(row.rowKey)}>Remove</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    {missingFields.length > 0 && <small>Missing: {missingFields.join(', ')}</small>}
+                  </div>
+                </div>
+
+                <div className="receiving-field-grid">
+                  <label>
+                    Bin / Storage Location <span className="required-marker">required</span>
+                    <select value={row.binId} onChange={(event) => updateRow(row.rowKey, { binId: event.target.value })} required>
+                      <option value="">Choose bin...</option>
+                      {bins.map((item) => <option key={item.id} value={item.id}>{binLabel(item)}</option>)}
+                    </select>
+                    {bin && <small>{binLabel(bin)}</small>}
+                  </label>
+
+                  <label>
+                    Brand <span className="required-marker">required</span>
+                    <select value={row.brandId} onChange={(event) => updateRow(row.rowKey, { brandId: event.target.value })} required>
+                      <option value="">Choose brand...</option>
+                      {brands.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
+                    </select>
+                    {brand && <small>ID {brand.id} · {brand.name}{brand.code ? ` · ${brand.code}` : ''}</small>}
+                  </label>
+
+                  <label>
+                    Style / Product Type <span className="required-marker">required</span>
+                    <select value={row.productTypeId} onChange={(event) => updateRow(row.rowKey, { productTypeId: event.target.value })} required>
+                      <option value="">Choose style...</option>
+                      {productTypes.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
+                    </select>
+                    {type && <small>ID {type.id} · {type.name}{type.code ? ` · ${type.code}` : ''}</small>}
+                  </label>
+
+                  <label>
+                    Color <span className="required-marker">required</span>
+                    <select value={row.colorId} onChange={(event) => updateRow(row.rowKey, { colorId: event.target.value })} required>
+                      <option value="">Choose color...</option>
+                      {colors.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
+                    </select>
+                    {color && <small>ID {color.id} · {color.name}{color.code ? ` · ${color.code}` : ''}</small>}
+                  </label>
+
+                  <label>
+                    Size <span className="required-marker">required</span>
+                    <select value={row.sizeId} onChange={(event) => updateRow(row.rowKey, { sizeId: event.target.value })} required>
+                      <option value="">Choose size...</option>
+                      {sizes.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
+                    </select>
+                    {size && <small>ID {size.id} · {size.name}{size.code ? ` · ${size.code}` : ''}</small>}
+                  </label>
+
+                  <label>
+                    Quantity <span className="required-marker">required</span>
+                    <input type="number" min="1" value={row.quantity} onChange={(event) => updateRow(row.rowKey, { quantity: event.target.value })} required />
+                  </label>
+
+                  <label>
+                    Unit Cost
+                    <input type="number" min="0" step="0.01" value={row.unitCost} onChange={(event) => updateRow(row.rowKey, { unitCost: event.target.value })} placeholder="0.00" />
+                  </label>
+
+                  <label>
+                    Artwork Note
+                    <input value={row.artworkNote} onChange={(event) => updateRow(row.rowKey, { artworkNote: event.target.value })} placeholder="Optional: customer/logo/artwork note" />
+                  </label>
+
+                  <label className="wide-field">
+                    Receiving / Line Note
+                    <input value={row.notes} onChange={(event) => updateRow(row.rowKey, { notes: event.target.value })} placeholder="Optional: supplier order, condition, special note" />
+                  </label>
+
+                  <div className="wide-field sku-preview-box">
+                    <strong>SKU / Blank Product Preview</strong>
+                    <code>{skuPreview || 'Choose brand, style, color, and size to generate SKU preview.'}</code>
+                    <small>Name preview: {buildBlankName(row) || 'Choose required fields.'}</small>
+                  </div>
+
+                  <div className="wide-field match-preview-box">
+                    <strong>Match Result</strong>
+                    {row.matchMessage ? <p>{row.matchMessage}</p> : <p>Click Check Matches to verify whether this line matches an existing blank product or will create a new one.</p>}
+                    {row.blankProductId && <small>Matched blank_product_id: {row.blankProductId}</small>}
+                  </div>
+                </div>
+
+                <div className="receiving-line-actions">
+                  <button type="button" onClick={checkMatches}>Check Matches</button>
+                  <button type="button" className="danger-light" onClick={() => removeRow(row.rowKey)}>Remove Line</button>
+                </div>
+              </article>
+            );
+          })}
         </div>
 
         <div className="bulk-actions-row end">
           <button type="button" onClick={() => addRow()}>+ Add Another Line</button>
-          <button type="button" onClick={checkMatches}>Check Matches</button>
+          <button type="button" onClick={checkMatches}>Check All Matches</button>
           <button type="submit" disabled={loading}>{loading ? 'Receiving...' : 'Receive All Lines'}</button>
         </div>
       </form>
@@ -540,19 +612,21 @@ export default function AddItemToBin() {
       {results.length > 0 && (
         <section className="card">
           <h2>Batch Results</h2>
-          <table className="bulk-receive-table results-table">
-            <thead><tr><th>Row</th><th>Status</th><th>Input</th><th>Result</th></tr></thead>
-            <tbody>
-              {results.map((result) => (
-                <tr key={`${result.rowNumber}-${result.status}`}>
-                  <td>{result.rowNumber}</td>
-                  <td><span className={`bulk-status ${statusClass(result.status)}`}>{result.status}</span></td>
-                  <td>{result.input}</td>
-                  <td>{result.result}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="bulk-table-wrap">
+            <table className="bulk-receive-table results-table">
+              <thead><tr><th>Row</th><th>Status</th><th>Input</th><th>Result</th></tr></thead>
+              <tbody>
+                {results.map((result) => (
+                  <tr key={`${result.rowNumber}-${result.status}`}>
+                    <td>{result.rowNumber}</td>
+                    <td><span className={`bulk-status ${statusClass(result.status)}`}>{result.status}</span></td>
+                    <td>{result.input}</td>
+                    <td>{result.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </main>
