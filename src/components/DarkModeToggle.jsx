@@ -1,19 +1,12 @@
 import React from 'react';
 import { useTheme } from '../ui/ThemeProvider';
 
-export default function DarkModeToggle({ className = '' }) {
-  const { isDark, toggleTheme } = useTheme();
-
+export default function DarkModeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
   return (
-    <button
-      type="button"
-      className={`sc-theme-toggle ${className}`.trim()}
-      onClick={toggleTheme}
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      <span className="sc-theme-toggle__icon" aria-hidden="true">{isDark ? '☀️' : '🌙'}</span>
-      <span className="sc-theme-toggle__text">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+    <button type="button" className="sc-theme-toggle" onClick={toggleTheme} aria-label="Toggle dark mode">
+      {isDark ? '☀️ Light Mode' : '🌙 Dark Mode'}
     </button>
   );
 }
