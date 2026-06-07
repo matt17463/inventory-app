@@ -1,228 +1,283 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import * as navModule from '../navigationConfig';
+import DarkModeToggle from './DarkModeToggle';
 
-const QUICK_ACTIONS = [
-  { label: 'Scan', path: '/scan' },
-  { label: 'Receive', path: '/add-item' },
-  { label: 'Pull Sheets', path: '/pull-sheets' },
-  { label: 'Command', path: '/command-center' },
-];
+function normalizeNavigation(raw) {
+  const candidate =
+    raw?.navigationSections ||
+    raw?.NAVIGATION_SECTIONS ||
+    raw?.sections ||
+    raw?.navSections ||
+    raw?.default ||
+    raw;
 
-function firstArrayExport(mod) {
-  const candidates = [
-    mod.navigationSections,
-    mod.NAVIGATION_SECTIONS,
-    mod.navSections,
-    mod.sections,
-    mod.default,
-    mod.navigation,
-    mod.navItems,
-  ];
-  for (const c of candidates) {
-    if (Array.isArray(c)) return c;
-    if (c && Array.isArray(c.sections)) return c.sections;
-    if (c && Array.isArray(c.navigationSections)) return c.navigationSections;
-    if (c && Array.isArray(c.items)) return c.items;
-  }
-  return [];
-}
+  if (!Array.isArray(candidate)) return [];
 
-function normalizePath(item) {
-  return item?.path || item?.to || item?.href || item?.route || '#';
-}
-
-function normalizeLabel(item) {
-  return item?.label || item?.name || item?.title || item?.text || 'Untitled';
-}
-
-function normalizeIcon(item) {
-  return item?.icon || item?.emoji || '';
-}
-
-function normalizeSections(raw) {
-  if (!Array.isArray(raw)) return [];
-
-  const sections = raw.map((section, index) => {
-    if (section?.items || section?.links || section?.children || section?.pages) {
-      const items = section.items || section.links || section.children || section.pages || [];
-      return {
-        id: section.id || section.key || section.label || section.name || `section-${index}`,
-        label: section.label || section.name || section.title || `Section ${index + 1}`,
-        icon: normalizeIcon(section),
-        items: Array.isArray(items)
-          ? items.map((item, itemIndex) => ({
-              id: item.id || item.key || item.label || item.name || `${index}-${itemIndex}`,
-              label: normalizeLabel(item),
-              path: normalizePath(item),
-              icon: normalizeIcon(item),
-            }))
-          : [],
-      };
-    }
+  return candidate.map((section, index) => {
+    const title = section.title || section.label || section.name || `Section ${index + 1}`;
+    const icon = section.icon || '';
+    const items = Array.isArray(section.items)
+      ? section.items
+      : Array.isArray(section.links)
+        ? section.links
+        : Array.isArray(section.children)
+          ? section.children
+          : [];
 
     return {
-      id: section?.id || section?.key || `standalone-${index}`,
-      label: index === 0 ? 'Main' : `Section ${index + 1}`,
-      icon: '',
-      items: [
-        {
-          id: section?.id || section?.key || section?.label || `${index}`,
-          label: normalizeLabel(section),
-          path: normalizePath(section),
-          icon: normalizeIcon(section),
-        },
-      ],
+      title,
+      icon,
+      items: items
+        .map((item) => ({
+          label: item.label || item.title || item.name || item.text || 'Untitled',
+          path: item.path || item.to || item.href || '/',
+          icon: item.icon || '',
+        }))
+        .filter((item) => item.path),
     };
   });
-
-  return sections.filter((section) => section.items.length > 0);
 }
 
-function flattenSections(sections) {
-  return sections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.label })));
+const fallbackNavigation = [
+  {
+    title: 'Dashboard',
+    icon: '🏠',
+    items: [
+      { label: 'Home', path: '/' },
+      { label: 'Daily Command Center', path: '/command-center' },
+      { label: 'Exception Center', path: '/exception-center' },
+      { label: 'Shop TV Mode', path: '/shop-tv' },
+    ],
+  },
+  {
+    title: 'Inventory',
+    icon: '📦',
+    items: [
+      { label: 'Inventory Overview', path: '/inventory' },
+      { label: 'Edit Blank Items', path: '/edit-blanks' },
+      { label: 'Import Inventory', path: '/import' },
+      { label: 'Add Item to Bin', path: '/add-item' },
+      { label: 'Sample Inventory', path: '/samples' },
+      { label: 'Bins', path: '/bins' },
+      { label: 'Scan Inventory', path: '/scan' },
+      { label: 'Transfer Between Bins', path: '/transfer' },
+      { label: 'Inventory Audit', path: '/inventory-audit' },
+      { label: 'Product Data Health', path: '/product-data-health' },
+    ],
+  },
+  {
+    title: 'Production',
+    icon: '🏭',
+    items: [
+      { label: 'Pull Sheets', path: '/pull-sheets' },
+      { label: 'Production Board', path: '/production' },
+      { label: 'Reservations', path: '/reservations' },
+      { label: 'Finished Products', path: '/finished-products' },
+      { label: 'QC Checklist', path: '/qc-checklist' },
+      { label: 'Production Calendar', path: '/production-calendar' },
+      { label: 'Capacity Planning', path: '/capacity-planning' },
+      { label: 'Production Time', path: '/production-estimator' },
+    ],
+  },
+  {
+    title: 'Orders',
+    icon: '🧾',
+    items: [
+      { label: 'Manual Orders', path: '/manual-orders' },
+      { label: 'Quote to Order', path: '/quote-to-order' },
+      { label: 'Customer Portal Admin', path: '/customer-portal-admin' },
+    ],
+  },
+  {
+    title: 'Purchasing',
+    icon: '🛒',
+    items: [
+      { label: 'Purchasing Report', path: '/purchasing' },
+      { label: 'Purchase Orders', path: '/purchase-orders' },
+      { label: 'New Purchase Order', path: '/purchase-order-generator' },
+      { label: 'Waiting On', path: '/waiting-on' },
+      { label: 'Vendor Prices', path: '/vendor-prices' },
+    ],
+  },
+  {
+    title: 'Management',
+    icon: '📊',
+    items: [
+      { label: 'Campaign Forecast', path: '/campaign-forecast' },
+      { label: 'Customer Reorders', path: '/customer-reorders' },
+      { label: 'Job Costing', path: '/job-costing' },
+      { label: 'Quote Builder', path: '/quote-builder' },
+      { label: 'Pricing Rules', path: '/pricing-rules' },
+    ],
+  },
+  {
+    title: 'Artwork',
+    icon: '🎨',
+    items: [
+      { label: 'Artwork Requests', path: '/artwork-requests' },
+      { label: 'Artwork Bridge', path: '/artwork-bridge' },
+    ],
+  },
+  {
+    title: 'Tools & Admin',
+    icon: '🧰',
+    items: [
+      { label: 'Barcode Labels', path: '/labels' },
+      { label: 'Mapping Repair', path: '/mapping-repair' },
+      { label: 'Audit Trail', path: '/audit-trail' },
+      { label: 'Testing Mode', path: '/testing-mode' },
+      { label: 'Display Settings', path: '/theme-settings' },
+    ],
+  },
+];
+
+function useNavigationSections() {
+  return useMemo(() => {
+    const normalized = normalizeNavigation(navModule);
+    return normalized.length ? normalized : fallbackNavigation;
+  }, []);
 }
 
-function isActivePath(currentPath, itemPath) {
-  if (!itemPath || itemPath === '#') return false;
-  if (itemPath === '/') return currentPath === '/';
-  return currentPath === itemPath || currentPath.startsWith(`${itemPath}/`);
-}
-
-function ThemeButton() {
-  const [dark, setDark] = useState(() => {
-    try {
-      return localStorage.getItem('sc-theme-mode') === 'dark';
-    } catch {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('sc-dark', dark);
-    document.body.classList.toggle('sc-dark', dark);
-    try {
-      localStorage.setItem('sc-theme-mode', dark ? 'dark' : 'light');
-    } catch {
-      // ignore localStorage failures
-    }
-  }, [dark]);
-
-  return (
-    <button type="button" className="sc-shell-theme-button" onClick={() => setDark((v) => !v)}>
-      {dark ? '☀️ Light Mode' : '🌙 Dark Mode'}
-    </button>
-  );
+function useCurrentTitle(sections, pathname) {
+  for (const section of sections) {
+    const match = section.items.find((item) => item.path === pathname);
+    if (match) return { section: section.title, title: match.label };
+  }
+  return { section: 'Operations', title: 'Skilled Crafting Inventory' };
 }
 
 export default function AppShell({ children }) {
   const location = useLocation();
-  const sections = useMemo(() => normalizeSections(firstArrayExport(navModule)), []);
-  const allItems = useMemo(() => flattenSections(sections), [sections]);
-  const [open, setOpen] = useState(false);
+  const sections = useNavigationSections();
+  const current = useCurrentTitle(sections, location.pathname);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [expanded, setExpanded] = useState(() => {
+  const [openSections, setOpenSections] = useState(() => {
     const initial = {};
-    sections.forEach((section) => {
-      initial[section.id] = true;
-    });
+    fallbackNavigation.forEach((s) => { initial[s.title] = true; });
     return initial;
   });
 
   useEffect(() => {
-    setOpen(false);
+    setDrawerOpen(false);
   }, [location.pathname]);
 
-  const filteredItems = query.trim()
-    ? allItems.filter((item) => `${item.label} ${item.section}`.toLowerCase().includes(query.trim().toLowerCase()))
-    : [];
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        const input = document.querySelector('[data-app-search]');
+        if (input) input.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const filteredSections = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sections;
+    return sections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          `${item.label} ${section.title}`.toLowerCase().includes(q)
+        ),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [sections, query]);
+
+  const toggleSection = (title) => {
+    setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
+  };
+
+  const sidebar = (
+    <aside className="sc-sidebar" aria-label="Main navigation">
+      <div className="sc-sidebar-brand">
+        <div className="sc-brand-mark">SC</div>
+        <div>
+          <strong>Skilled Crafting</strong>
+          <span>Operations App</span>
+        </div>
+      </div>
+
+      <div className="sc-quick-actions">
+        <NavLink to="/scan">Scan</NavLink>
+        <NavLink to="/add-item">Receive</NavLink>
+        <NavLink to="/pull-sheets">Pull Sheets</NavLink>
+      </div>
+
+      <nav className="sc-nav-sections">
+        {filteredSections.map((section) => {
+          const open = openSections[section.title] !== false || query.trim();
+          return (
+            <div className="sc-nav-section" key={section.title}>
+              <button type="button" className="sc-nav-section-button" onClick={() => toggleSection(section.title)}>
+                <span>{section.icon} {section.title}</span>
+                <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+              </button>
+              {open && (
+                <div className="sc-nav-items">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={`${section.title}-${item.path}-${item.label}`}
+                      to={item.path}
+                      className={({ isActive }) => `sc-nav-link${isActive ? ' active' : ''}`}
+                    >
+                      <span>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+    </aside>
+  );
 
   return (
-    <div className="sc-shell-root">
-      {open && <button className="sc-shell-backdrop" type="button" aria-label="Close menu" onClick={() => setOpen(false)} />}
+    <div className="sc-shell">
+      <div className="sc-desktop-sidebar">{sidebar}</div>
 
-      <aside className={`sc-shell-sidebar ${open ? 'is-open' : ''}`} aria-label="Main navigation">
-        <div className="sc-shell-brand">
-          <div className="sc-shell-brand-mark">SC</div>
-          <div>
-            <div className="sc-shell-brand-title">Skilled Crafting</div>
-            <div className="sc-shell-brand-subtitle">Operations App</div>
+      {drawerOpen && (
+        <div className="sc-mobile-backdrop" onClick={() => setDrawerOpen(false)} role="presentation">
+          <div className="sc-mobile-drawer" onClick={(event) => event.stopPropagation()}>
+            {sidebar}
           </div>
         </div>
+      )}
 
-        <div className="sc-shell-quick-actions">
-          {QUICK_ACTIONS.map((action) => (
-            <Link key={action.path} to={action.path} className="sc-shell-quick-action">
-              {action.label}
-            </Link>
-          ))}
-        </div>
-
-        <nav className="sc-shell-nav">
-          {sections.map((section) => {
-            const isExpanded = expanded[section.id] !== false;
-            return (
-              <div className="sc-shell-section" key={section.id}>
-                <button
-                  type="button"
-                  className="sc-shell-section-button"
-                  onClick={() => setExpanded((state) => ({ ...state, [section.id]: !isExpanded }))}
-                >
-                  <span>{section.icon ? `${section.icon} ` : ''}{section.label}</span>
-                  <span>{isExpanded ? '▾' : '▸'}</span>
-                </button>
-
-                {isExpanded && (
-                  <div className="sc-shell-section-items">
-                    {section.items.map((item) => (
-                      <Link
-                        key={`${section.id}-${item.id}-${item.path}`}
-                        to={item.path}
-                        className={`sc-shell-nav-link ${isActivePath(location.pathname, item.path) ? 'is-active' : ''}`}
-                      >
-                        {item.icon && <span className="sc-shell-nav-icon">{item.icon}</span>}
-                        <span>{item.label}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </nav>
-      </aside>
-
-      <div className="sc-shell-main">
-        <header className="sc-shell-topbar">
-          <button type="button" className="sc-shell-menu-button" onClick={() => setOpen(true)} aria-label="Open menu">
-            ☰
-          </button>
-
-          <div className="sc-shell-search-wrap">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="sc-shell-search"
-              placeholder="Search pages or actions..."
-            />
-            <span className="sc-shell-shortcut">Ctrl K</span>
-            {filteredItems.length > 0 && (
-              <div className="sc-shell-search-results">
-                {filteredItems.slice(0, 12).map((item) => (
-                  <Link key={`${item.section}-${item.path}-${item.label}`} to={item.path} className="sc-shell-search-result" onClick={() => setQuery('')}>
-                    <span>{item.label}</span>
-                    <small>{item.section}</small>
-                  </Link>
-                ))}
-              </div>
-            )}
+      <main className="sc-main">
+        <header className="sc-topbar">
+          <div className="sc-page-title-wrap">
+            <button type="button" className="sc-menu-button" onClick={() => setDrawerOpen(true)} aria-label="Open navigation">
+              ☰
+            </button>
+            <div>
+              <div className="sc-page-kicker">{current.section}</div>
+              <h1 className="sc-page-title">{current.title}</h1>
+            </div>
           </div>
-
-          <ThemeButton />
+          <div className="sc-topbar-actions">
+            <div className="sc-search-box">
+              <input
+                data-app-search
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search pages or actions..."
+                aria-label="Search pages or actions"
+              />
+              <span>Ctrl K</span>
+            </div>
+            <DarkModeToggle />
+          </div>
         </header>
-
-        <main className="sc-shell-content">{children}</main>
-      </div>
+        <section className="sc-content">{children}</section>
+      </main>
     </div>
   );
 }
