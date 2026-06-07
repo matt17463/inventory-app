@@ -1,67 +1,120 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { navigationSections } from '../navigationConfig';
 import DarkModeToggle from './DarkModeToggle';
 
-const DEFAULT_GROUPS = [
-  { label: 'Dashboard', items: [{ label: 'Home', path: '/' }, { label: 'Command Center', path: '/command-center' }, { label: 'Shop TV', path: '/shop-tv' }] },
-  { label: 'Inventory', items: [{ label: 'Blank Inventory', path: '/blank-inventory' }, { label: 'Add Items to Bin', path: '/add-item' }, { label: 'Edit Blanks', path: '/edit-blank-items' }, { label: 'Bins', path: '/bins' }, { label: 'Scan', path: '/scan' }, { label: 'Inventory Audit', path: '/inventory-audit' }, { label: 'Product Data Health', path: '/product-data-health' }] },
-  { label: 'Production', items: [{ label: 'Pull Sheets', path: '/pull-sheets' }, { label: 'Production Board', path: '/production-board' }, { label: 'QC Checklist', path: '/qc-checklist' }, { label: 'Production Calendar', path: '/production-calendar' }, { label: 'Capacity Planning', path: '/capacity-planning' }, { label: 'Production Time', path: '/production-estimator' }] },
-  { label: 'Orders', items: [{ label: 'Manual Orders', path: '/manual-orders' }, { label: 'Quote to Order', path: '/quote-to-order' }, { label: 'Customer Portal Admin', path: '/customer-portal-admin' }] },
-  { label: 'Purchasing', items: [{ label: 'Purchase Orders', path: '/purchase-orders' }, { label: 'New Purchase Order', path: '/purchase-orders/new' }, { label: 'Waiting On', path: '/waiting-on' }, { label: 'Vendor Prices', path: '/vendor-prices' }] },
-  { label: 'Artwork', items: [{ label: 'Artwork Requests', path: '/artwork-requests' }, { label: 'Artwork Bridge', path: '/artwork-bridge' }] },
-  { label: 'Tools & Admin', items: [{ label: 'Exception Center', path: '/exception-center' }, { label: 'Mapping Repair', path: '/mapping-repair' }, { label: 'Audit Trail', path: '/audit-trail' }, { label: 'Testing Mode', path: '/testing-mode' }, { label: 'Display Settings', path: '/theme-settings' }] },
-];
+function flattenNav(sections) {
+  return sections.flatMap((section) => (section.items || []).map((item) => ({ ...item, section: section.label })));
+}
 
-function flatten(groups) { return groups.flatMap((g) => g.items.map((item) => ({ ...item, group: g.label }))); }
-
-export default function AppShell({ children, navigationGroups = DEFAULT_GROUPS }) {
+export default function AppShell({ children }) {
   const location = useLocation();
-  const [open, setOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [commandOpen, setCommandOpen] = useState(false);
-  const pages = useMemo(() => flatten(navigationGroups), [navigationGroups]);
-  const filtered = pages.filter((p) => `${p.label} ${p.group}`.toLowerCase().includes(query.toLowerCase())).slice(0, 12);
+
+  const allItems = useMemo(() => flattenNav(navigationSections), []);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allItems.slice(0, 12);
+    return allItems.filter((item) => `${item.label} ${item.section} ${item.path}`.toLowerCase().includes(q)).slice(0, 20);
+  }, [allItems, query]);
 
   useEffect(() => {
-    const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCommandOpen(true);
+    setDrawerOpen(false);
+    setSearchOpen(false);
+    setQuery('');
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      if ((isMac ? event.metaKey : event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+      if (event.key === 'Escape') {
+        setSearchOpen(false);
+        setDrawerOpen(false);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   return (
     <div className="sc-app-shell">
-      <aside className={`sc-sidebar ${open ? 'open' : ''}`}>
-        <div className="sc-sidebar__brand"><strong>Skilled Crafting</strong><span>Operations App</span></div>
-        <nav className="sc-sidebar__nav">
-          {navigationGroups.map((group) => (
-            <details key={group.label} open>
-              <summary>{group.label}</summary>
-              {group.items.map((item) => (
-                <Link key={item.path} to={item.path} onClick={() => setOpen(false)} className={location.pathname === item.path ? 'active' : ''}>{item.label}</Link>
-              ))}
+      <aside className={`sc-sidebar ${drawerOpen ? 'is-open' : ''}`} aria-label="Main navigation">
+        <div className="sc-sidebar-brand">
+          <Link to="/" className="sc-brand-link">
+            <span className="sc-brand-mark">SC</span>
+            <span>
+              <strong>Skilled Crafting</strong>
+              <small>Operations App</small>
+            </span>
+          </Link>
+        </div>
+
+        <nav className="sc-nav-list">
+          {navigationSections.map((section) => (
+            <details className="sc-nav-section" key={section.label} open>
+              <summary>{section.icon ? <span>{section.icon}</span> : null}<span>{section.label}</span></summary>
+              <div className="sc-nav-items">
+                {(section.items || []).map((item) => (
+                  <NavLink
+                    key={`${section.label}-${item.path}`}
+                    to={item.path}
+                    className={({ isActive }) => `sc-nav-link ${isActive ? 'active' : ''}`}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
             </details>
           ))}
         </nav>
       </aside>
+
+      {drawerOpen && <button className="sc-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-label="Close navigation" />}
+
       <div className="sc-shell-main">
         <header className="sc-topbar">
-          <button className="sc-icon-button" onClick={() => setOpen((v) => !v)}>☰</button>
-          <button className="sc-command-button" onClick={() => setCommandOpen(true)}>Search pages or actions… <kbd>⌘K</kbd></button>
+          <button className="sc-icon-button" type="button" onClick={() => setDrawerOpen(true)} aria-label="Open navigation">
+            ☰
+          </button>
+          <button className="sc-command-button" type="button" onClick={() => setSearchOpen(true)}>
+            <span>Search pages/actions...</span>
+            <kbd>Ctrl K</kbd>
+          </button>
           <DarkModeToggle />
         </header>
-        <div className="sc-shell-content">{children}</div>
+
+        <main className="sc-page-content">{children}</main>
       </div>
-      {commandOpen && (
-        <div className="sc-modal-backdrop" onClick={() => setCommandOpen(false)}>
-          <div className="sc-command-palette" onClick={(e) => e.stopPropagation()}>
-            <input autoFocus placeholder="Search pages…" value={query} onChange={(e) => setQuery(e.target.value)} />
-            <div>{filtered.map((p) => <Link key={p.path} to={p.path} onClick={() => setCommandOpen(false)}><span>{p.label}</span><small>{p.group}</small></Link>)}</div>
-          </div>
+
+      {searchOpen && (
+        <div className="sc-command-overlay" role="dialog" aria-modal="true" aria-label="Search pages and actions">
+          <button className="sc-command-backdrop" type="button" onClick={() => setSearchOpen(false)} aria-label="Close search" />
+          <section className="sc-command-palette">
+            <div className="sc-command-header">
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search pages or actions..."
+              />
+              <button type="button" onClick={() => setSearchOpen(false)}>Close</button>
+            </div>
+            <div className="sc-command-results">
+              {results.map((item) => (
+                <Link className="sc-command-result" to={item.path} key={`${item.section}-${item.path}`}>
+                  <span>{item.label}</span>
+                  <small>{item.section}</small>
+                </Link>
+              ))}
+              {!results.length && <p className="sc-empty-state">No matching pages found.</p>}
+            </div>
+          </section>
         </div>
       )}
     </div>
