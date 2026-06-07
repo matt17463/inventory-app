@@ -1,68 +1,69 @@
 import { supabase } from '../supabaseClient';
 
-function normalizeRows(data) {
-  return Array.isArray(data) ? data : [];
+function normalizeError(error, fallback = 'Artwork bridge request failed') {
+  if (!error) return new Error(fallback);
+  if (error instanceof Error) return error;
+  return new Error(error.message || fallback);
 }
 
 export async function getArtworkBridgeSummary() {
   const { data, error } = await supabase.rpc('sc_artwork_bridge_summary');
-  if (error) throw error;
-  return normalizeRows(data)[0] || {
-    artwork_requests: 0,
-    reorder_requests: 0,
-    due_soon_or_overdue: 0,
-    recent_handoffs: 0,
-    open_requests: 0,
-    approved_requests: 0,
-    completed_requests: 0,
-  };
+  if (error) throw normalizeError(error, 'Could not load artwork bridge summary');
+  return Array.isArray(data) ? data[0] || {} : data || {};
 }
 
-export async function getArtworkRequests() {
-  const { data, error } = await supabase.rpc('sc_artwork_requests_app');
-  if (error) throw error;
-  return normalizeRows(data);
+export async function getArtworkBridgeStatus() {
+  const { data, error } = await supabase.rpc('sc_artwork_bridge_status');
+  if (error) throw normalizeError(error, 'Could not load artwork bridge status');
+  return Array.isArray(data) ? data : [];
 }
 
-export async function updateArtworkStatus(requestId, status, note = '') {
-  const { data, error } = await supabase.rpc('sc_artwork_update_status', {
-    p_request_id: String(requestId),
-    p_status: status,
-    p_note: note || null,
-  });
-  if (error) throw error;
-  return data;
+export async function getArtworkRequests(filter = 'all') {
+  const { data, error } = await supabase.rpc('sc_artwork_requests_app', { p_filter: filter });
+  if (error) throw normalizeError(error, 'Could not load artwork requests');
+  return Array.isArray(data) ? data : [];
 }
 
-export async function sendArtworkToProduction(requestId, note = '') {
-  const { data, error } = await supabase.rpc('sc_artwork_handoff_to_production', {
-    p_request_id: String(requestId),
-    p_note: note || null,
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function getArtworkHandoffLog() {
+export async function getArtworkHandoffLog(limit = 50) {
   const { data, error } = await supabase
     .from('sc_artwork_handoff_log_app')
     .select('*')
-    .limit(100);
-  if (error) throw error;
-  return normalizeRows(data);
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw normalizeError(error, 'Could not load artwork handoff log');
+  return Array.isArray(data) ? data : [];
 }
 
-export function buildArtworkPrompt(request) {
-  const parts = [];
-  parts.push(`Create a professional custom apparel artwork concept for ${request.organization || request.project_name || 'this customer'}.`);
-  if (request.project_type) parts.push(`Project type: ${request.project_type}.`);
-  if (request.main_subject) parts.push(`Main subject: ${request.main_subject}.`);
-  if (request.graphic_elements) parts.push(`Include these graphic elements: ${request.graphic_elements}.`);
-  if (request.exact_text) parts.push(`Exact text to include: ${request.exact_text}.`);
-  if (request.preferred_shape) parts.push(`Preferred design shape: ${request.preferred_shape}.`);
-  if (request.emotion) parts.push(`The design should feel: ${request.emotion}.`);
-  if (request.garment_color) parts.push(`Design for garment color: ${request.garment_color}.`);
-  if (request.notes) parts.push(`Additional notes: ${request.notes}.`);
-  parts.push('Use clean vector-style composition suitable for DTF or apparel decoration. Avoid mockup background.');
-  return request.prompt || parts.join('\n');
+export async function updateArtworkStatus(sourceType, sourceId, status, notes = '') {
+  const { data, error } = await supabase.rpc('sc_artwork_update_status', {
+    p_source_type: sourceType,
+    p_source_id: Number(sourceId),
+    p_status: status,
+    p_notes: notes || null,
+  });
+  if (error) throw normalizeError(error, 'Could not update artwork status');
+  return data;
+}
+
+export async function sendArtworkToProduction(sourceType, sourceId, notes = '') {
+  const { data, error } = await supabase.rpc('sc_artwork_handoff_to_production', {
+    p_source_type: sourceType,
+    p_source_id: Number(sourceId),
+    p_notes: notes || null,
+  });
+  if (error) throw normalizeError(error, 'Could not create production handoff');
+  return data;
+}
+
+export function buildPrompt(record) {
+  return record?.chatgpt_prompt || record?.generated_prompt || record?.raw_payload?.artwork_request?.chatgpt_prompt || record?.raw_payload?.artwork_request?.generated_prompt || '';
+}
+
+export function recordTitle(record) {
+  return record?.organization || record?.project_name || record?.customer_name || `${record?.source_type || 'Artwork'} #${record?.source_id || record?.app_row_id || ''}`;
+}
+
+export function recordSubtitle(record) {
+  const parts = [record?.customer_name, record?.email, record?.deadline ? `Due: ${record.deadline}` : null].filter(Boolean);
+  return parts.join(' • ');
 }
