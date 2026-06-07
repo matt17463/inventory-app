@@ -7,7 +7,7 @@ function firstValue(...values) {
   return null;
 }
 
-function normalizePairingRow(row) {
+function normalizePairingRow(row = {}) {
   const orderedName = firstValue(
     row.ordered_name,
     row.ordered_product_name,
@@ -19,7 +19,8 @@ function normalizePairingRow(row) {
   const orderedSku = firstValue(
     row.ordered_sku,
     row.order_sku,
-    row.ordered_product_sku
+    row.ordered_product_sku,
+    row.variation_sku
   );
 
   const pairedBlankId = firstValue(
@@ -46,11 +47,9 @@ function normalizePairingRow(row) {
   return {
     ...row,
 
-    // Job/item aliases expected by PullSheetView.jsx
     item_status: firstValue(row.item_status, row.status, 'open'),
     quantity: Number(row.quantity || 0),
 
-    // Ordered product aliases expected by PullSheetView.jsx
     ordered_sku: orderedSku,
     ordered_name: orderedName,
     ordered_brand: firstValue(row.ordered_brand, row.selected_brand),
@@ -58,7 +57,6 @@ function normalizePairingRow(row) {
     ordered_color: firstValue(row.ordered_color, row.selected_color),
     ordered_size: firstValue(row.ordered_size, row.selected_size),
 
-    // Paired blank aliases expected by PullSheetView.jsx
     paired_blank_product_id: pairedBlankId,
     paired_blank_sku_base: pairedBlankSku,
     paired_blank_name: pairedBlankName,
@@ -73,20 +71,36 @@ function normalizePairingRow(row) {
 }
 
 export async function getPullSheetItemsWithPairings(jobId) {
+  const numericJobId = Number(jobId);
+  if (!Number.isFinite(numericJobId)) {
+    throw new Error('A valid job ID is required to load pull sheet pairings.');
+  }
+
   const { data, error } = await supabase.rpc('sc_pull_sheet_ordered_blank_pairings', {
-    p_job_id: Number(jobId),
+    p_job_id: numericJobId,
   });
+
   if (error) throw error;
   return (data || []).map(normalizePairingRow);
 }
 
 export async function overrideJobItemBlankPairing({ jobItemId, blankProductId, reason }) {
+  const numericJobItemId = Number(jobItemId);
+  if (!Number.isFinite(numericJobItemId)) {
+    throw new Error('A valid job item ID is required to override a blank pairing.');
+  }
+
+  if (!blankProductId) {
+    throw new Error('Choose a blank product before saving the override.');
+  }
+
   const { data, error } = await supabase.rpc('sc_override_job_item_blank_pairing', {
-    p_job_item_id: Number(jobItemId),
+    p_job_item_id: numericJobItemId,
     p_new_blank_product_id: blankProductId,
     p_reason: reason || null,
     p_changed_by: 'inventory_app',
   });
+
   if (error) throw error;
-  return data?.[0] || null;
+  return Array.isArray(data) ? data[0] : data;
 }
