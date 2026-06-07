@@ -1,106 +1,83 @@
 import { supabase } from '../supabaseClient';
 
-function firstValue(...values) {
-  for (const value of values) {
-    if (value !== null && value !== undefined && value !== '') return value;
-  }
-  return null;
-}
+function normalizePairing(row = {}) {
+  const orderedSku = row.ordered_sku || row.order_sku || row.sku || '';
+  const orderedName = row.ordered_name || row.ordered_product_name || row.item_name || row.product_name || orderedSku || '';
 
-function normalizePairingRow(row = {}) {
-  const orderedName = firstValue(
-    row.ordered_name,
-    row.ordered_product_name,
-    row.ordered_product_name_from_sync,
-    row.item_name,
-    row.name
-  );
-
-  const orderedSku = firstValue(
-    row.ordered_sku,
-    row.order_sku,
-    row.ordered_product_sku,
-    row.variation_sku
-  );
-
-  const pairedBlankId = firstValue(
-    row.paired_blank_product_id,
-    row.blank_product_id
-  );
-
-  const pairedBlankSku = firstValue(
-    row.paired_blank_sku_base,
-    row.blank_sku,
-    row.blank_sku_base,
-    row.paired_blank_sku
-  );
-
-  const pairedBlankName = firstValue(
-    row.paired_blank_name,
-    row.blank_name
-  );
-
-  let normalizedStatus = firstValue(row.pairing_status, 'review');
-  if (normalizedStatus === 'exact_variation_pairing') normalizedStatus = 'paired';
-  if (normalizedStatus === 'manual_override') normalizedStatus = 'paired';
+  const blankSku = row.paired_blank_sku_base || row.blank_sku || row.blank_sku_base || '';
+  const blankName = row.paired_blank_name || row.blank_name || blankSku || '';
 
   return {
     ...row,
-
-    item_status: firstValue(row.item_status, row.status, 'open'),
-    quantity: Number(row.quantity || 0),
+    job_item_id: row.job_item_id || row.id,
+    line_number: row.line_number,
+    quantity: Number(row.quantity || row.qty || 0),
 
     ordered_sku: orderedSku,
+    order_sku: orderedSku,
     ordered_name: orderedName,
-    ordered_brand: firstValue(row.ordered_brand, row.selected_brand),
-    ordered_style: firstValue(row.ordered_style, row.selected_style),
-    ordered_color: firstValue(row.ordered_color, row.selected_color),
-    ordered_size: firstValue(row.ordered_size, row.selected_size),
+    ordered_product_name: orderedName,
+    ordered_brand: row.ordered_brand || row.source_brand || '',
+    ordered_style: row.ordered_style || row.source_style || row.ordered_product_type || '',
+    ordered_color: row.ordered_color || row.source_color || '',
+    ordered_size: row.ordered_size || row.source_size || '',
+    ordered_fields_source: row.ordered_fields_source || '',
+    ordered_fields_warning: row.ordered_fields_warning || row.pairing_warning || '',
 
-    paired_blank_product_id: pairedBlankId,
-    paired_blank_sku_base: pairedBlankSku,
-    paired_blank_name: pairedBlankName,
-    paired_blank_brand: firstValue(row.paired_blank_brand, row.blank_brand),
-    paired_blank_style: firstValue(row.paired_blank_style, row.blank_style),
-    paired_blank_color: firstValue(row.paired_blank_color, row.blank_color),
-    paired_blank_size: firstValue(row.paired_blank_size, row.blank_size),
+    paired_blank_id: row.paired_blank_id || row.blank_product_id || '',
+    blank_product_id: row.blank_product_id || row.paired_blank_id || '',
+    paired_blank_sku_base: blankSku,
+    blank_sku: blankSku,
+    paired_blank_name: blankName,
+    blank_name: blankName,
+    paired_blank_brand: row.paired_blank_brand || row.blank_brand || '',
+    paired_blank_style: row.paired_blank_style || row.blank_style || '',
+    paired_blank_color: row.paired_blank_color || row.blank_color || '',
+    paired_blank_size: row.paired_blank_size || row.blank_size || '',
 
-    pairing_status: normalizedStatus,
-    pairing_message: firstValue(row.pairing_message, row.pairing_warning),
+    pairing_status: row.pairing_status || 'review',
+    pairing_warning: row.pairing_warning || row.ordered_fields_warning || '',
+    selected_attributes: row.selected_attributes || {},
   };
 }
 
-export async function getPullSheetItemsWithPairings(jobId) {
-  const numericJobId = Number(jobId);
-  if (!Number.isFinite(numericJobId)) {
-    throw new Error('A valid job ID is required to load pull sheet pairings.');
-  }
-
+export async function getPullSheetOrderedBlankPairings(jobId) {
   const { data, error } = await supabase.rpc('sc_pull_sheet_ordered_blank_pairings', {
-    p_job_id: numericJobId,
+    p_job_id: Number(jobId),
   });
 
   if (error) throw error;
-  return (data || []).map(normalizePairingRow);
+  return (data || []).map(normalizePairing);
 }
 
-export async function overrideJobItemBlankPairing({ jobItemId, blankProductId, reason }) {
-  const numericJobItemId = Number(jobItemId);
-  if (!Number.isFinite(numericJobItemId)) {
-    throw new Error('A valid job item ID is required to override a blank pairing.');
-  }
+export async function searchBlankProductsForOverride(search = '') {
+  const term = String(search || '').trim();
 
-  if (!blankProductId) {
-    throw new Error('Choose a blank product before saving the override.');
-  }
-
-  const { data, error } = await supabase.rpc('sc_override_job_item_blank_pairing', {
-    p_job_item_id: numericJobItemId,
-    p_new_blank_product_id: blankProductId,
-    p_reason: reason || null,
-    p_changed_by: 'inventory_app',
+  const { data, error } = await supabase.rpc('search_blank_products_for_edit', {
+    p_search: term,
   });
 
   if (error) throw error;
-  return Array.isArray(data) ? data[0] : data;
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    sku_base: row.sku_base,
+    name: row.name,
+    brand: row.brand || row.brand_name || '',
+    style: row.product_type || row.style || row.product_type_name || '',
+    color: row.color || row.color_name || '',
+    size: row.size || row.size_name || '',
+    label: [row.sku_base, row.brand, row.product_type, row.color, row.size].filter(Boolean).join(' / '),
+  }));
+}
+
+export async function overridePullSheetBlankPairing(jobItemId, newBlankProductId, reason = '') {
+  const { data, error } = await supabase.rpc('override_job_item_blank_pairing', {
+    p_job_item_id: Number(jobItemId),
+    p_new_blank_product_id: newBlankProductId,
+    p_reason: reason || 'Manual pull sheet blank override',
+  });
+
+  if (error) throw error;
+  return data;
 }
