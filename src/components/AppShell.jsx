@@ -106,21 +106,23 @@ export default function AppShell({ children }) {
       <div className={`sc-mobile-drawer ${drawerOpen ? 'open' : ''}`}>{sidebar}</div>
 
       <div className="sc-main-shell">
-        <header className="sc-topbar">
+        <header className="sc-topbar sc-topbar-polished">
           <div className="sc-topbar-left">
             <button className="sc-icon-button sc-mobile-menu" onClick={() => setDrawerOpen(true)} aria-label="Open menu">☰</button>
-            <div>
-              <div className="sc-kicker">Operations Dashboard</div>
-              <h1>{location.pathname === '/' ? 'Home' : allItems.find((i) => i.path === location.pathname)?.label || 'Skilled Crafting'}</h1>
+            <div className="sc-topbar-title-block">
+              <div className="sc-kicker">Skilled Crafting</div>
+              <h1>{location.pathname === '/' ? 'Operations Home' : allItems.find((i) => i.path === location.pathname)?.label || 'Operations'}</h1>
+              <p>Inventory • Artwork • Production • Purchasing</p>
             </div>
           </div>
           <div className="sc-topbar-actions">
-            <div className="sc-command-search">
+            <div className="sc-command-search sc-command-search-polished">
+              <span aria-hidden="true" className="sc-search-icon">⌕</span>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search pages..."
-                aria-label="Search pages"
+                placeholder="Search tools and pages..."
+                aria-label="Search tools and pages"
               />
               {filtered.length > 0 && (
                 <div className="sc-command-results">
