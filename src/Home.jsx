@@ -6,27 +6,17 @@ const money = (value) => new Intl.NumberFormat('en-US', { style: 'currency', cur
 const number = (value) => new Intl.NumberFormat('en-US').format(Number(value || 0));
 
 function HomeLogo() {
-  const [srcIndex, setSrcIndex] = useState(0);
-  const sources = [
-    '/skilled-crafting-logo.png',
-    '/skilled-crafting-logo.PNG',
-    '/logo.png',
-    '/skilled-crafting-logo.svg',
-  ];
-
-  if (srcIndex >= sources.length) {
-    return <div className="sc-home-logo-fallback">SC</div>;
-  }
-
   return (
-    <img
-      className="sc-home-logo-img"
-      src={sources[srcIndex]}
-      alt="Skilled Crafting"
-      onError={() => setSrcIndex((idx) => idx + 1)}
-    />
+    <div className="sc-home-logo-wrap" aria-label="Skilled Crafting logo">
+      <img
+        className="sc-home-logo-img"
+        src="/skilled-crafting-logo.png"
+        alt="Skilled Crafting"
+      />
+    </div>
   );
 }
+
 
 export default function Home() {
   const [stats, setStats] = useState({});

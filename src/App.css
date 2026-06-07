@@ -344,3 +344,35 @@ body[data-theme='dark'] .sc-quick-grid-colored a:hover { background: #172554; }
   .sc-home-logo-img { max-width: 104px; max-height: 104px; }
   .sc-stat-grid-home { grid-template-columns: 1fr; }
 }
+
+
+/* =========================================================
+   Skilled Crafting Logo Force PNG Fix
+   Uses /skilled-crafting-logo.png from the public directory.
+   Removes the blue/white SC fallback mark from the Home page.
+   ========================================================= */
+.sc-home-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(360px, 100%);
+  min-height: 120px;
+  margin: 0 auto;
+}
+.sc-home-logo-img {
+  display: block;
+  max-width: 340px;
+  width: 100%;
+  max-height: 150px;
+  height: auto;
+  object-fit: contain;
+  background: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.sc-home-logo-fallback { display: none !important; }
+.sc-sidebar-brand img {
+  object-fit: contain;
+  background: #ffffff;
+}
