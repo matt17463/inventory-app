@@ -1,35 +1,98 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { navigationSections } from '../navigationConfig';
+import React, { useMemo, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import * as navigationConfig from '../navigationConfig';
 import DarkModeToggle from './DarkModeToggle';
 
-function flattenNav(sections) {
-  return sections.flatMap((section) => (section.items || []).map((item) => ({ ...item, section: section.label })));
+function normalizeNavigation(rawConfig) {
+  const candidate =
+    rawConfig.navigationSections ||
+    rawConfig.NAVIGATION_SECTIONS ||
+    rawConfig.sections ||
+    rawConfig.navSections ||
+    rawConfig.default ||
+    [];
+
+  if (Array.isArray(candidate)) return candidate;
+
+  if (candidate && typeof candidate === 'object') {
+    return Object.entries(candidate).map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return {
+          id: key,
+          label: key,
+          items: value,
+        };
+      }
+      return {
+        id: key,
+        label: value.label || value.title || key,
+        icon: value.icon || '',
+        items: value.items || value.links || [],
+      };
+    });
+  }
+
+  return [];
+}
+
+function normalizeItem(item) {
+  if (!item) return null;
+  if (typeof item === 'string') return { label: item, path: '/' };
+  return {
+    label: item.label || item.title || item.name || item.text || 'Untitled',
+    path: item.path || item.to || item.href || item.route || '/',
+    icon: item.icon || '',
+    keywords: item.keywords || [],
+  };
+}
+
+function getSectionId(section, index) {
+  return section.id || section.key || section.label || section.title || `section-${index}`;
+}
+
+function getSectionLabel(section, index) {
+  return section.label || section.title || section.name || `Section ${index + 1}`;
+}
+
+function getSectionItems(section) {
+  return (section.items || section.links || section.children || []).map(normalizeItem).filter(Boolean);
 }
 
 export default function AppShell({ children }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const allItems = useMemo(() => flattenNav(navigationSections), []);
-  const results = useMemo(() => {
+  const sections = useMemo(() => normalizeNavigation(navigationConfig), []);
+
+  const allItems = useMemo(() => {
+    return sections.flatMap((section, sectionIndex) =>
+      getSectionItems(section).map((item) => ({
+        ...item,
+        section: getSectionLabel(section, sectionIndex),
+      }))
+    );
+  }, [sections]);
+
+  const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return allItems.slice(0, 12);
-    return allItems.filter((item) => `${item.label} ${item.section} ${item.path}`.toLowerCase().includes(q)).slice(0, 20);
+    if (!q) return allItems.slice(0, 20);
+    return allItems
+      .filter((item) => {
+        const haystack = [item.label, item.path, item.section, ...(item.keywords || [])]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 30);
   }, [allItems, query]);
 
-  useEffect(() => {
-    setDrawerOpen(false);
-    setSearchOpen(false);
-    setQuery('');
-  }, [location.pathname]);
-
-  useEffect(() => {
+  React.useEffect(() => {
     const onKeyDown = (event) => {
-      const isMac = navigator.platform.toUpperCase().includes('MAC');
-      if ((isMac ? event.metaKey : event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      const isCommandSearch = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+      if (isCommandSearch) {
         event.preventDefault();
         setSearchOpen(true);
       }
@@ -42,81 +105,106 @@ export default function AppShell({ children }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  return (
-    <div className="sc-app-shell">
-      <aside className={`sc-sidebar ${drawerOpen ? 'is-open' : ''}`} aria-label="Main navigation">
-        <div className="sc-sidebar-brand">
-          <Link to="/" className="sc-brand-link">
-            <span className="sc-brand-mark">SC</span>
-            <span>
-              <strong>Skilled Crafting</strong>
-              <small>Operations App</small>
-            </span>
-          </Link>
+  const sidebar = (
+    <aside className="sc-shell-sidebar" aria-label="Main navigation">
+      <div className="sc-shell-brand" onClick={() => navigate('/')} role="button" tabIndex={0}>
+        <div className="sc-shell-brand-mark">SC</div>
+        <div>
+          <strong>Skilled Crafting</strong>
+          <span>Operations App</span>
         </div>
+      </div>
 
-        <nav className="sc-nav-list">
-          {navigationSections.map((section) => (
-            <details className="sc-nav-section" key={section.label} open>
-              <summary>{section.icon ? <span>{section.icon}</span> : null}<span>{section.label}</span></summary>
-              <div className="sc-nav-items">
-                {(section.items || []).map((item) => (
+      <nav className="sc-shell-nav">
+        {sections.map((section, index) => {
+          const items = getSectionItems(section);
+          if (!items.length) return null;
+          const sectionId = getSectionId(section, index);
+          const sectionLabel = getSectionLabel(section, index);
+          const sectionIcon = section.icon || section.emoji || '';
+          const isActiveSection = items.some((item) => item.path === location.pathname);
+
+          return (
+            <details key={sectionId} className="sc-shell-section" open={isActiveSection || index < 3}>
+              <summary>
+                <span>{sectionIcon}</span>
+                <span>{sectionLabel}</span>
+              </summary>
+              <div className="sc-shell-section-links">
+                {items.map((item) => (
                   <NavLink
-                    key={`${section.label}-${item.path}`}
+                    key={`${sectionId}-${item.path}-${item.label}`}
                     to={item.path}
-                    className={({ isActive }) => `sc-nav-link ${isActive ? 'active' : ''}`}
+                    className={({ isActive }) => `sc-shell-link ${isActive ? 'active' : ''}`}
+                    onClick={() => setDrawerOpen(false)}
                   >
-                    {item.label}
+                    {item.icon ? <span>{item.icon}</span> : null}
+                    <span>{item.label}</span>
                   </NavLink>
                 ))}
               </div>
             </details>
-          ))}
-        </nav>
-      </aside>
+          );
+        })}
+      </nav>
+    </aside>
+  );
 
-      {drawerOpen && <button className="sc-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-label="Close navigation" />}
+  return (
+    <div className="sc-shell">
+      <div className="sc-shell-desktop-sidebar">{sidebar}</div>
 
-      <div className="sc-shell-main">
-        <header className="sc-topbar">
-          <button className="sc-icon-button" type="button" onClick={() => setDrawerOpen(true)} aria-label="Open navigation">
+      {drawerOpen ? (
+        <div className="sc-shell-mobile-overlay" onClick={() => setDrawerOpen(false)}>
+          <div onClick={(event) => event.stopPropagation()}>{sidebar}</div>
+        </div>
+      ) : null}
+
+      <main className="sc-shell-main">
+        <header className="sc-shell-topbar">
+          <button className="sc-shell-icon-button" type="button" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
             ☰
           </button>
-          <button className="sc-command-button" type="button" onClick={() => setSearchOpen(true)}>
-            <span>Search pages/actions...</span>
-            <kbd>Ctrl K</kbd>
+          <button className="sc-shell-search" type="button" onClick={() => setSearchOpen(true)}>
+            Search pages or actions... <kbd>Ctrl K</kbd>
           </button>
           <DarkModeToggle />
         </header>
+        <div className="sc-shell-content">{children}</div>
+      </main>
 
-        <main className="sc-page-content">{children}</main>
-      </div>
-
-      {searchOpen && (
-        <div className="sc-command-overlay" role="dialog" aria-modal="true" aria-label="Search pages and actions">
-          <button className="sc-command-backdrop" type="button" onClick={() => setSearchOpen(false)} aria-label="Close search" />
-          <section className="sc-command-palette">
-            <div className="sc-command-header">
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search pages or actions..."
-              />
-              <button type="button" onClick={() => setSearchOpen(false)}>Close</button>
-            </div>
+      {searchOpen ? (
+        <div className="sc-command-overlay" onClick={() => setSearchOpen(false)}>
+          <div className="sc-command-panel" onClick={(event) => event.stopPropagation()}>
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search pages or actions..."
+            />
             <div className="sc-command-results">
-              {results.map((item) => (
-                <Link className="sc-command-result" to={item.path} key={`${item.section}-${item.path}`}>
-                  <span>{item.label}</span>
-                  <small>{item.section}</small>
-                </Link>
-              ))}
-              {!results.length && <p className="sc-empty-state">No matching pages found.</p>}
+              {filteredItems.length ? (
+                filteredItems.map((item) => (
+                  <button
+                    key={`${item.section}-${item.path}-${item.label}`}
+                    type="button"
+                    onClick={() => {
+                      navigate(item.path);
+                      setSearchOpen(false);
+                      setQuery('');
+                    }}
+                  >
+                    <span>{item.label}</span>
+                    <small>{item.section}</small>
+                  </button>
+                ))
+              ) : (
+                <p>No matching pages found.</p>
+              )}
             </div>
-          </section>
+          </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
