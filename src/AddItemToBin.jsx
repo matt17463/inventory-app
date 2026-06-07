@@ -159,27 +159,21 @@ export default function AddItemToBin() {
           line.notes,
         ].filter(Boolean).join(' | ');
 
-        const rpc = await supabase.rpc('receive_blank_inventory', {
-          p_blank_product_id: blank.id,
-          p_bin_id: line.bin_id,
+        const rpcPayload = {
+          p_blank_product_id: String(blank.id),
+          p_bin_id: String(line.bin_id),
           p_quantity: Number(line.quantity),
           p_notes: note || null,
           p_unit_cost: line.unit_cost === '' ? null : Number(line.unit_cost),
-        });
+        };
+
+        const rpc = await supabase.rpc('sc_receive_blank_inventory', rpcPayload);
 
         if (rpc.error) {
-          const fallback = await supabase.from('blank_inventory_movements').insert({
-            blank_product_id: blank.id,
-            bin_id: line.bin_id,
-            quantity: Number(line.quantity),
-            movement_type: 'receive',
-            notes: note || null,
-          });
-          if (fallback.error) errors.push(fallback.error.message);
-          else saved += 1;
-        } else {
-          saved += 1;
+          throw new Error(rpc.error.message || 'Receiving RPC failed.');
         }
+
+        saved += 1;
       } catch (err) {
         errors.push(err.message || String(err));
       }
