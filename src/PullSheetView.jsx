@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import PullSheetCancellationPanel from './PullSheetCancellationPanel';
 import {
   addPullSheetItem,
   completeJobItem,
@@ -279,6 +280,14 @@ export default function PullSheetView() {
               {JOB_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
+          <PullSheetCancellationPanel
+            jobId={jobId}
+            currentStatus={status}
+            onCancelled={async () => {
+              setMessage('Pull sheet cancelled. Open reservations were released if selected.');
+              await load();
+            }}
+          />
         </div>
       </div>
 
