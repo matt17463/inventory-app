@@ -859,3 +859,70 @@ body.dark .sc-action-icon { background: #23293a; }
   .sc-home-actions { flex-direction: column; }
   .sc-stat-grid, .sc-action-grid { grid-template-columns: 1fr; }
 }
+
+
+/* Home logo restore patch */
+.sc-home-logo-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(360px, 100%);
+  min-height: 96px;
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #e5e7eb);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.sc-home-company-logo {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  max-height: 92px;
+  object-fit: contain;
+}
+
+.sc-home-logo-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.sc-home-logo-mark {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #2563eb, #0f172a);
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.sc-home-logo-wordmark strong {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--text, #0f172a);
+}
+
+.sc-home-logo-wordmark span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted, #64748b);
+  font-size: .88rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+[data-theme="dark"] .sc-home-logo-card,
+.theme-dark .sc-home-logo-card,
+body.theme-dark .sc-home-logo-card {
+  background: #111827;
+  border-color: #334155;
+}
