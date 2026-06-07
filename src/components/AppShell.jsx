@@ -1,140 +1,142 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import * as navConfig from '../navigationConfig';
 import DarkModeToggle from './DarkModeToggle';
 
-function getLabel(item) {
-  return item?.label || item?.name || item?.title || item?.text || 'Untitled';
+function normalizeNavigation(raw) {
+  const candidate = raw?.navigationSections || raw?.NAVIGATION_SECTIONS || raw?.sections || raw?.navSections || raw?.default || raw;
+  const arr = Array.isArray(candidate) ? candidate : [];
+  return arr.map((section) => ({
+    title: section.title || section.label || section.name || 'Section',
+    icon: section.icon || '',
+    items: Array.isArray(section.items) ? section.items.map((item) => ({
+      label: item.label || item.title || item.name || item.path || 'Page',
+      path: item.path || item.href || item.to || '/',
+      icon: item.icon || '',
+    })) : [],
+  })).filter((section) => section.items.length);
 }
 
-function getPath(item) {
-  return item?.path || item?.to || item?.href || '/';
-}
-
-function normalizeNavigation() {
-  const raw =
-    navConfig.navigationSections ||
-    navConfig.NAVIGATION_SECTIONS ||
-    navConfig.sections ||
-    navConfig.navSections ||
-    navConfig.navigation ||
-    navConfig.default ||
-    [];
-
-  const candidate = Array.isArray(raw)
-    ? raw
-    : Array.isArray(raw.sections)
-      ? raw.sections
-      : Array.isArray(raw.items)
-        ? raw.items
-        : [];
-
-  if (!candidate.length) {
-    return [
-      { label: 'Dashboard', icon: '🏠', items: [{ label: 'Home', path: '/' }] },
-      { label: 'Inventory', icon: '📦', items: [{ label: 'Inventory Overview', path: '/' }, { label: 'Add Item to Bin', path: '/add-item' }] },
-      { label: 'Production', icon: '🏭', items: [{ label: 'Pull Sheets', path: '/pull-sheets' }, { label: 'Production Board', path: '/production' }] },
-    ];
-  }
-
-  return candidate.map((section) => {
-    const items = section.items || section.children || section.links || [];
-    if (Array.isArray(items) && items.length) {
-      return {
-        label: getLabel(section),
-        icon: section.icon || '',
-        items: items.map((item) => ({ label: getLabel(item), path: getPath(item), icon: item.icon || '' })),
-      };
-    }
-    return {
-      label: getLabel(section),
-      icon: section.icon || '',
-      items: [{ label: getLabel(section), path: getPath(section), icon: section.icon || '' }],
-    };
-  });
-}
-
-function Section({ section, onNavigate }) {
-  const [open, setOpen] = useState(true);
-  const label = getLabel(section);
-  return (
-    <div className="sc-nav-section">
-      <button type="button" className="sc-nav-section-button" onClick={() => setOpen((v) => !v)}>
-        <span>{section.icon ? `${section.icon} ` : ''}{label}</span>
-        <span>{open ? '▾' : '▸'}</span>
-      </button>
-      {open && (
-        <div className="sc-nav-items">
-          {(section.items || []).map((item) => (
-            <NavLink
-              key={`${item.path}-${item.label}`}
-              to={item.path || '/'}
-              onClick={onNavigate}
-              className={({ isActive }) => `sc-nav-link${isActive ? ' active' : ''}`}
-            >
-              {item.icon ? <span>{item.icon}</span> : null}
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+const fallbackNav = [
+  { title: 'Dashboard', items: [{ label: 'Home', path: '/' }, { label: 'Command Center', path: '/command-center' }] },
+  { title: 'Inventory', items: [
+    { label: 'Inventory Overview', path: '/inventory' },
+    { label: 'Add Item to Bin', path: '/add-item' },
+    { label: 'Edit Blank Items', path: '/edit-blank-items' },
+    { label: 'Bins', path: '/bins' },
+    { label: 'Bin Contents', path: '/bin-contents' },
+    { label: 'Inventory Audit', path: '/inventory-audit' },
+    { label: 'Product Data Health', path: '/product-data-health' },
+  ]},
+  { title: 'Production', items: [
+    { label: 'Pull Sheets', path: '/pull-sheets' },
+    { label: 'Production Board', path: '/production-board' },
+    { label: 'QC Checklist', path: '/qc-checklist' },
+    { label: 'Production Calendar', path: '/production-calendar' },
+    { label: 'Capacity Planning', path: '/capacity-planning' },
+  ]},
+  { title: 'Purchasing', items: [
+    { label: 'Purchase Orders', path: '/purchase-orders' },
+    { label: 'Recommended Orders', path: '/purchase-orders/new' },
+    { label: 'Waiting On', path: '/waiting-on' },
+  ]},
+  { title: 'Sales & Customers', items: [
+    { label: 'Manual Orders', path: '/manual-orders' },
+    { label: 'Pricing Rules', path: '/pricing-rules' },
+    { label: 'Customer Portal Preview', path: '/customer-portal-preview' },
+    { label: 'Artwork Bridge', path: '/artwork-bridge' },
+  ]},
+  { title: 'Tools', items: [
+    { label: 'Labels', path: '/labels' },
+    { label: 'Mapping Repair', path: '/mapping-repair' },
+    { label: 'Testing Mode', path: '/testing-mode' },
+    { label: 'Theme Settings', path: '/theme-settings' },
+  ]},
+];
 
 export default function AppShell({ children }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const location = useLocation();
-  const sections = useMemo(() => normalizeNavigation(), []);
-  const flatItems = useMemo(() => sections.flatMap((s) => s.items || []), [sections]);
-  const matches = query.trim()
-    ? flatItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const nav = useMemo(() => {
+    const configured = normalizeNavigation(navConfig);
+    return configured.length ? configured : fallbackNav;
+  }, []);
+
+  const allItems = nav.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
+  const filtered = search.trim()
+    ? allItems.filter((item) => `${item.label} ${item.section}`.toLowerCase().includes(search.toLowerCase())).slice(0, 10)
     : [];
+
+  useEffect(() => {
+    setDrawerOpen(false);
+    setSearch('');
+  }, [location.pathname]);
+
+  const sidebar = (
+    <aside className="sc-sidebar" aria-label="Main navigation">
+      <Link to="/" className="sc-sidebar-brand">
+        <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        <span>Skilled Crafting</span>
+      </Link>
+      <nav className="sc-sidebar-nav">
+        {nav.map((section) => (
+          <div className="sc-nav-section" key={section.title}>
+            <div className="sc-nav-section-title">{section.icon ? `${section.icon} ` : ''}{section.title}</div>
+            {section.items.map((item) => (
+              <NavLink
+                key={`${section.title}-${item.path}-${item.label}`}
+                to={item.path}
+                className={({ isActive }) => `sc-nav-link ${isActive ? 'active' : ''}`}
+              >
+                <span>{item.icon || '•'}</span>
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        ))}
+      </nav>
+    </aside>
+  );
 
   return (
     <div className="sc-app-shell">
-      <aside className={`sc-sidebar ${mobileOpen ? 'open' : ''}`}>
-        <div className="sc-sidebar-brand">
-          <Link to="/" onClick={() => setMobileOpen(false)}>
-            <strong>Skilled Crafting</strong>
-            <span>Operations App</span>
-          </Link>
-        </div>
-        <nav className="sc-sidebar-nav" aria-label="Main navigation">
-          {sections.map((section) => (
-            <Section key={section.label} section={section} onNavigate={() => setMobileOpen(false)} />
-          ))}
-        </nav>
-      </aside>
+      <div className="sc-desktop-sidebar">{sidebar}</div>
+      {drawerOpen && <div className="sc-drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
+      <div className={`sc-mobile-drawer ${drawerOpen ? 'open' : ''}`}>{sidebar}</div>
 
-      {mobileOpen && <button type="button" className="sc-mobile-backdrop" onClick={() => setMobileOpen(false)} aria-label="Close menu" />}
-
-      <div className="sc-main-area">
+      <div className="sc-main-shell">
         <header className="sc-topbar">
-          <button type="button" className="sc-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open menu">☰</button>
-          <div className="sc-current-page">{flatItems.find((item) => item.path === location.pathname)?.label || 'Dashboard'}</div>
-          <div className="sc-search-wrap">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search pages or actions..."
-              className="sc-search-input"
-            />
-            <span className="sc-search-shortcut">Ctrl K</span>
-            {matches.length > 0 && (
-              <div className="sc-search-results">
-                {matches.map((item) => (
-                  <Link key={`${item.path}-${item.label}`} to={item.path} onClick={() => setQuery('')}>
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            )}
+          <div className="sc-topbar-left">
+            <button className="sc-icon-button sc-mobile-menu" onClick={() => setDrawerOpen(true)} aria-label="Open menu">☰</button>
+            <div>
+              <div className="sc-kicker">Operations Dashboard</div>
+              <h1>{location.pathname === '/' ? 'Home' : allItems.find((i) => i.path === location.pathname)?.label || 'Skilled Crafting'}</h1>
+            </div>
           </div>
-          <DarkModeToggle />
+          <div className="sc-topbar-actions">
+            <div className="sc-command-search">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search pages..."
+                aria-label="Search pages"
+              />
+              {filtered.length > 0 && (
+                <div className="sc-command-results">
+                  {filtered.map((item) => (
+                    <Link key={`${item.section}-${item.path}`} to={item.path}>
+                      <strong>{item.label}</strong>
+                      <small>{item.section}</small>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DarkModeToggle />
+          </div>
         </header>
-        <main className="sc-content">{children}</main>
+        <main className="sc-page-shell">{children}</main>
       </div>
     </div>
   );
