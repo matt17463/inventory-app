@@ -4,12 +4,66 @@ function clean(value) {
   return String(value ?? '').trim();
 }
 
-export async function searchBlanksForManualInvoice(search = '') {
-  const { data, error } = await supabase.rpc('sc_search_blanks_for_manual_invoice', {
-    p_search: search || '',
+function normalizeSearchArgs(input = '') {
+  if (typeof input === 'string') {
+    return { productSource: 'blank', search: input, brand: '', style: '', color: '', size: '', limit: 150 };
+  }
+  return {
+    productSource: clean(input.productSource || input.product_source || 'blank').toLowerCase() === 'finished' ? 'finished' : 'blank',
+    search: clean(input.search),
+    brand: clean(input.brand),
+    style: clean(input.style),
+    color: clean(input.color),
+    size: clean(input.size),
+    limit: Number(input.limit || 150),
+  };
+}
+
+export async function searchManualInvoiceProducts(input = {}) {
+  const args = normalizeSearchArgs(input);
+
+  const { data, error } = await supabase.rpc('sc_search_manual_invoice_products_v1', {
+    p_product_source: args.productSource,
+    p_search: args.search,
+    p_brand: args.brand,
+    p_style: args.style,
+    p_color: args.color,
+    p_size: args.size,
+    p_limit: args.limit,
   });
+
   if (error) throw error;
   return data || [];
+}
+
+export async function searchBlanksForManualInvoice(input = '') {
+  const args = normalizeSearchArgs(input);
+
+  try {
+    return await searchManualInvoiceProducts({ ...args, productSource: 'blank' });
+  } catch (primaryError) {
+    const { data, error } = await supabase.rpc('sc_search_blanks_for_manual_invoice_v3', {
+      p_search: args.search,
+      p_brand: args.brand,
+      p_style: args.style,
+      p_color: args.color,
+      p_size: args.size,
+      p_limit: args.limit,
+    });
+    if (!error) return data || [];
+
+    const fallbackTerm = [args.search, args.brand, args.style, args.color, args.size].filter(Boolean).join(' ');
+    const fallback = await supabase.rpc('sc_search_blanks_for_manual_invoice', {
+      p_search: fallbackTerm,
+    });
+    if (fallback.error) throw primaryError;
+    return fallback.data || [];
+  }
+}
+
+export async function searchFinishedForManualInvoice(input = '') {
+  const args = normalizeSearchArgs(input);
+  return searchManualInvoiceProducts({ ...args, productSource: 'finished' });
 }
 
 export async function createManualInvoiceOrder(order, items, generateJob = true) {
@@ -31,22 +85,28 @@ export async function createManualInvoiceOrder(order, items, generateJob = true)
     notes: clean(order.notes),
   };
 
-  const safeItems = (items || []).map((item, index) => ({
-    line_number: index + 1,
-    blank_product_id: clean(item.blank_product_id),
-    sku_base: clean(item.sku_base),
-    item_name: clean(item.item_name),
-    brand: clean(item.brand),
-    style: clean(item.style),
-    color: clean(item.color),
-    size: clean(item.size),
-    quantity: Number(item.quantity || 0),
-    price_per_item: Number(item.price_per_item || 0),
-    artwork_note: clean(item.artwork_note),
-    placement: clean(item.placement),
-    decoration_size: clean(item.decoration_size),
-    notes: clean(item.notes),
-  }));
+  const safeItems = (items || []).map((item, index) => {
+    const itemType = clean(item.item_type || item.product_source || 'blank').toLowerCase() === 'finished' ? 'finished' : 'blank';
+    return {
+      line_number: index + 1,
+      item_type: itemType,
+      product_source: itemType,
+      blank_product_id: itemType === 'blank' ? clean(item.blank_product_id) : '',
+      finished_product_id: itemType === 'finished' ? clean(item.finished_product_id) : '',
+      sku_base: clean(item.sku_base),
+      item_name: clean(item.item_name),
+      brand: clean(item.brand),
+      style: clean(item.style),
+      color: clean(item.color),
+      size: clean(item.size),
+      quantity: Number(item.quantity || 0),
+      price_per_item: Number(item.price_per_item || 0),
+      artwork_note: clean(item.artwork_note),
+      placement: clean(item.placement),
+      decoration_size: clean(item.decoration_size),
+      notes: clean(item.notes),
+    };
+  });
 
   const { data, error } = await supabase.rpc('sc_create_manual_invoice_order', {
     p_order: header,
