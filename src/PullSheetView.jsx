@@ -7,6 +7,49 @@ function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
 }
 
+function rowKey(row, idx = 0) {
+  return String(row.job_item_id || row.id || idx);
+}
+
+function pickBlankProductId(row) {
+  return value(
+    row.blank_product_id,
+    row.paired_blank_id,
+    row.app_paired_blank_product_id,
+    row.paired_blank_product_id,
+    row.matched_blank_product_id,
+    ''
+  ) === '—'
+    ? ''
+    : value(
+        row.blank_product_id,
+        row.paired_blank_id,
+        row.app_paired_blank_product_id,
+        row.paired_blank_product_id,
+        row.matched_blank_product_id,
+        ''
+      );
+}
+
+function pickJobItemId(row) {
+  return value(row.job_item_id, row.id, '') === '—' ? '' : value(row.job_item_id, row.id, '');
+}
+
+function binDisplayName(bin) {
+  const qty = value(bin.quantity_on_hand, bin.on_hand_quantity, bin.total_quantity, bin.quantity, bin.available_quantity, 0);
+  return [
+    value(bin.bin_code, bin.code, bin.bin_label, bin.label, bin.name, bin.bin_id),
+    value(bin.location, '') === '—' ? '' : value(bin.location, ''),
+    `Qty ${qty}`,
+  ].filter(Boolean).join(' · ');
+}
+
+function toRpcBinId(binId) {
+  const text = String(binId || '').trim();
+  if (/^\d+$/.test(text)) return Number(text);
+  return text;
+}
+
 export default function PullSheetView() {
   const { jobId, id } = useParams();
   const resolvedJobId = jobId || id;
@@ -17,10 +60,15 @@ export default function PullSheetView() {
   const [overrideRow, setOverrideRow] = useState(null);
   const [blankSearch, setBlankSearch] = useState('');
   const [blankResults, setBlankResults] = useState([]);
+  const [sourceBinsByLine, setSourceBinsByLine] = useState({});
+  const [selectedBinByLine, setSelectedBinByLine] = useState({});
+  const [lineMessages, setLineMessages] = useState({});
+  const [completingLine, setCompletingLine] = useState('');
 
   async function load() {
     setLoading(true);
     setError('');
+    setLineMessages({});
     const { data: jobData } = await supabase.from('jobs').select('*').eq('id', resolvedJobId).maybeSingle();
     setJob(jobData || null);
 
@@ -36,6 +84,59 @@ export default function PullSheetView() {
   }
 
   useEffect(() => { if (resolvedJobId) load(); }, [resolvedJobId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSourceBins() {
+      const nextBins = {};
+      const nextSelected = {};
+
+      for (let idx = 0; idx < items.length; idx += 1) {
+        const row = items[idx];
+        const key = rowKey(row, idx);
+        const blankProductId = pickBlankProductId(row);
+
+        if (!blankProductId) {
+          nextBins[key] = [];
+          continue;
+        }
+
+        const { data, error } = await supabase
+          .from('bin_blank_inventory_contents')
+          .select('*')
+          .eq('blank_product_id', blankProductId)
+          .gt('quantity_on_hand', 0)
+          .order('bin_code', { ascending: true });
+
+        if (!active) return;
+
+        if (error) {
+          nextBins[key] = [];
+          setLineMessages((messages) => ({
+            ...messages,
+            [key]: `Could not load source bins: ${error.message}`,
+          }));
+        } else {
+          const bins = data || [];
+          nextBins[key] = bins;
+          if (bins.length === 1) nextSelected[key] = String(bins[0].bin_id);
+        }
+      }
+
+      if (!active) return;
+      setSourceBinsByLine(nextBins);
+      setSelectedBinByLine((current) => ({ ...nextSelected, ...current }));
+    }
+
+    if (items.length) loadSourceBins();
+    else {
+      setSourceBinsByLine({});
+      setSelectedBinByLine({});
+    }
+
+    return () => { active = false; };
+  }, [items]);
 
   async function searchBlanks() {
     const term = String(blankSearch || '').trim();
@@ -62,6 +163,41 @@ export default function PullSheetView() {
     setOverrideRow(null);
     setBlankSearch('');
     setBlankResults([]);
+    await load();
+  }
+
+  async function completeAndDeduct(row, idx) {
+    const key = rowKey(row, idx);
+    const jobItemId = pickJobItemId(row);
+    const selectedBinId = selectedBinByLine[key];
+
+    if (!jobItemId) {
+      setLineMessages((messages) => ({ ...messages, [key]: 'This line is missing a job item ID.' }));
+      return;
+    }
+
+    if (!selectedBinId) {
+      setLineMessages((messages) => ({ ...messages, [key]: 'Choose the blank source bin before completing this line.' }));
+      return;
+    }
+
+    setCompletingLine(key);
+    setLineMessages((messages) => ({ ...messages, [key]: '' }));
+
+    const { error } = await supabase.rpc('complete_job_item', {
+      p_job_item_id: Number(jobItemId),
+      p_bin_id: toRpcBinId(selectedBinId),
+      p_notes: 'Completed and deducted blank from pull sheet screen.',
+    });
+
+    if (error) {
+      setLineMessages((messages) => ({ ...messages, [key]: error.message || 'Could not complete and deduct blank.' }));
+      setCompletingLine('');
+      return;
+    }
+
+    setLineMessages((messages) => ({ ...messages, [key]: 'Completed and blank inventory deducted.' }));
+    setCompletingLine('');
     await load();
   }
 
@@ -102,9 +238,16 @@ export default function PullSheetView() {
 
       <div className="sc-pullsheet-line-stack">
         {items.map((row, idx) => {
+          const key = rowKey(row, idx);
           const warning = row.pairing_warning || row.warning || (!row.woocommerce_variation_id ? 'Variation not captured. Verify paired blank.' : '');
+          const blankProductId = pickBlankProductId(row);
+          const sourceBins = sourceBinsByLine[key] || [];
+          const selectedBinId = selectedBinByLine[key] || '';
+          const lineMessage = lineMessages[key] || '';
+          const isCompleting = completingLine === key;
+
           return (
-            <article className="sc-pullsheet-line-card" key={row.job_item_id || row.id || idx}>
+            <article className="sc-pullsheet-line-card" key={key}>
               <header className="sc-pullsheet-line-card__header">
                 <div>
                   <h2>Line {idx + 1}</h2>
@@ -137,11 +280,36 @@ export default function PullSheetView() {
                 </section>
               </div>
               {warning ? <div className="sc-warning-callout">{warning}</div> : null}
-              <div className="sc-button-row">
-                <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
-                <ActionButton tone="secondary">Mark Pulled Only</ActionButton>
-                <ActionButton tone="primary">Complete + Deduct Blank</ActionButton>
-              </div>
+
+              {blankProductId ? (
+                <div className="sc-button-row" style={{ alignItems: 'center' }}>
+                  <label style={{ display: 'grid', gap: 4, minWidth: 260 }}>
+                    <span style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>Blank Source Bin</span>
+                    <select
+                      value={selectedBinId}
+                      onChange={(event) => setSelectedBinByLine((current) => ({ ...current, [key]: event.target.value }))}
+                    >
+                      <option value="">Choose bin…</option>
+                      {sourceBins.map((bin) => (
+                        <option key={bin.bin_id} value={bin.bin_id}>{binDisplayName(bin)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="secondary">Mark Pulled Only</ActionButton>
+                  <ActionButton tone="primary" disabled={isCompleting} onClick={() => completeAndDeduct(row, idx)}>
+                    {isCompleting ? 'Completing…' : 'Complete + Deduct Blank'}
+                  </ActionButton>
+                </div>
+              ) : (
+                <div className="sc-button-row">
+                  <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="secondary">Mark Pulled Only</ActionButton>
+                  <ActionButton tone="primary" disabled>Complete + Deduct Blank</ActionButton>
+                </div>
+              )}
+
+              {lineMessage ? <div className="sc-warning-callout">{lineMessage}</div> : null}
             </article>
           );
         })}
