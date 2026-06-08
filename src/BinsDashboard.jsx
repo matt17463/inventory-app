@@ -4,7 +4,6 @@ import {
   createBin,
   getBins,
   getBinContents,
-  getBinsDashboardCards,
   saveBinDisplayOrder,
 } from "./lib/inventoryApi";
 
@@ -12,10 +11,19 @@ import {
  * BinsDashboard.jsx
  *
  * Bins page only.
- * Complete file.
- * Uses existing inventoryApi.js exports.
- * Does not import supabaseClient directly.
- * Does not require App.css or AppShell.jsx changes.
+ *
+ * This version intentionally DOES NOT use a new Supabase RPC for counts.
+ * It uses your existing getBinContents(binId) function because that is already
+ * wired to your existing bin contents view:
+ *
+ *   bin_blank_inventory_contents
+ *
+ * That keeps the counts aligned with the same data source that the bin contents
+ * page already uses.
+ *
+ * No App.css changes.
+ * No AppShell.jsx changes.
+ * No other page changes.
  */
 
 function safeText(value, fallback = "—") {
@@ -28,10 +36,12 @@ function getAccent(index) {
 }
 
 function normalizeBin(row, fallback = {}) {
+  const id = row?.id ?? fallback?.id ?? "";
   return {
     ...fallback,
     ...row,
-    id: String(row?.id ?? fallback?.id ?? ""),
+    id: String(id),
+    raw_id: id,
     bin_code:
       row?.bin_code ??
       row?.code ??
@@ -42,71 +52,59 @@ function normalizeBin(row, fallback = {}) {
       fallback?.name ??
       fallback?.label ??
       "",
-    label: row?.label ?? row?.name ?? row?.description ?? fallback?.label ?? fallback?.name ?? "",
+    label:
+      row?.label ??
+      row?.name ??
+      row?.description ??
+      fallback?.label ??
+      fallback?.name ??
+      "",
     location: row?.location ?? fallback?.location ?? "",
     display_name: row?.display_name ?? fallback?.display_name ?? "",
     display_order: Number(row?.display_order ?? fallback?.display_order ?? 999999),
-    item_count: Number(
-      row?.item_count ??
-        row?.distinct_items ??
-        row?.product_count ??
-        fallback?.item_count ??
-        fallback?.distinct_items ??
-        fallback?.product_count ??
-        0
-    ),
-    total_units: Number(
-      row?.total_units ??
-        row?.units ??
-        row?.quantity ??
-        row?.quantity_on_hand ??
-        fallback?.total_units ??
-        fallback?.units ??
-        fallback?.quantity ??
-        0
-    ),
+    item_count: Number(row?.item_count ?? row?.distinct_items ?? row?.product_count ?? fallback?.item_count ?? 0),
+    total_units: Number(row?.total_units ?? row?.units ?? row?.quantity ?? row?.quantity_on_hand ?? fallback?.total_units ?? 0),
   };
 }
 
-function normalizeContents(rows) {
-  if (!Array.isArray(rows)) return [];
-
-  return rows.map((row) => ({
+function normalizeContentRow(row) {
+  return {
     ...row,
-    sku: row?.sku ?? row?.blank_sku ?? "",
+    blank_product_id: row?.blank_product_id ?? row?.product_id ?? row?.id ?? "",
+    sku: row?.sku ?? row?.sku_base ?? row?.blank_sku ?? "",
     product_name:
       row?.product_name ??
       row?.name ??
       row?.title ??
       row?.display_name ??
       row?.sku ??
+      row?.sku_base ??
       "Blank product",
     brand: row?.brand ?? row?.brand_name ?? "",
     style: row?.style ?? row?.style_name ?? row?.product_type ?? "",
     color: row?.color ?? row?.color_name ?? "",
     size: row?.size ?? row?.size_name ?? "",
-    quantity: Number(row?.quantity ?? row?.quantity_on_hand ?? row?.on_hand ?? 0),
-  }));
+    quantity: Number(
+      row?.quantity ??
+        row?.quantity_on_hand ??
+        row?.on_hand ??
+        row?.available_quantity ??
+        row?.qty ??
+        0
+    ),
+  };
 }
 
-async function loadBinsForDashboard() {
-  if (typeof getBinsDashboardCards === "function") {
-    try {
-      const rows = await getBinsDashboardCards();
-      if (Array.isArray(rows)) return rows.map((row) => normalizeBin(row));
-    } catch (error) {
-      console.warn("sc_bins_dashboard_cards_v1 failed; falling back to getBins()", error);
-    }
-  }
+function summarizeContents(rows) {
+  const normalized = Array.isArray(rows) ? rows.map(normalizeContentRow) : [];
+  const totalUnits = normalized.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const positiveItems = normalized.filter((row) => Number(row.quantity || 0) !== 0).length;
 
-  const fallbackRows = await getBins();
-  return Array.isArray(fallbackRows) ? fallbackRows.map((row) => normalizeBin(row)) : [];
-}
-
-async function loadBinContentsForDashboard(binId) {
-  if (typeof getBinContents !== "function") return [];
-  const rows = await getBinContents(binId, "");
-  return normalizeContents(rows);
+  return {
+    contents: normalized,
+    item_count: positiveItems,
+    total_units: totalUnits,
+  };
 }
 
 export default function BinsDashboard() {
@@ -124,9 +122,29 @@ export default function BinsDashboard() {
   async function loadBins() {
     setLoading(true);
     setMessage("");
+
     try {
-      const rows = await loadBinsForDashboard();
-      setBins(rows);
+      const rows = await getBins();
+      const normalizedBins = Array.isArray(rows) ? rows.map((row) => normalizeBin(row)) : [];
+
+      const withCounts = await Promise.all(
+        normalizedBins.map(async (bin) => {
+          try {
+            const contentRows = await getBinContents(bin.raw_id || bin.id, "");
+            const summary = summarizeContents(contentRows);
+            return {
+              ...bin,
+              item_count: summary.item_count,
+              total_units: summary.total_units,
+            };
+          } catch (error) {
+            console.warn(`Could not load counts for bin ${bin.id}`, error);
+            return bin;
+          }
+        })
+      );
+
+      setBins(withCounts);
     } catch (error) {
       setMessage(error?.message || "Could not load bins.");
       setBins([]);
@@ -194,7 +212,7 @@ export default function BinsDashboard() {
 
     try {
       if (typeof saveBinDisplayOrder === "function") {
-        await saveBinDisplayOrder(next.map((bin, i) => ({ id: bin.id, display_order: i + 1 })));
+        await saveBinDisplayOrder(next.map((bin, i) => ({ id: bin.raw_id || bin.id, display_order: i + 1 })));
       }
     } catch (error) {
       setMessage(error?.message || "Display order could not be saved.");
@@ -208,8 +226,21 @@ export default function BinsDashboard() {
     setMessage("");
 
     try {
-      const rows = await loadBinContentsForDashboard(bin.id);
-      setContents(rows);
+      const rows = await getBinContents(bin.raw_id || bin.id, "");
+      const summary = summarizeContents(rows);
+      setContents(summary.contents);
+
+      setBins((currentBins) =>
+        currentBins.map((currentBin) =>
+          currentBin.id === bin.id
+            ? {
+                ...currentBin,
+                item_count: summary.item_count,
+                total_units: summary.total_units,
+              }
+            : currentBin
+        )
+      );
     } catch (error) {
       setMessage(error?.message || "Could not load bin contents.");
       setContents([]);
@@ -235,6 +266,7 @@ export default function BinsDashboard() {
                 {safeText(activeBin.location || activeBin.label || activeBin.display_name, "No location set")}
               </p>
             </div>
+
             <div className="bins-actions">
               <button className="bins-button bins-button-secondary" type="button" onClick={() => setActiveBin(null)}>
                 ← Back to Bins
@@ -353,7 +385,7 @@ export default function BinsDashboard() {
       </section>
 
       {loading ? (
-        <div className="bins-empty">Loading bins...</div>
+        <div className="bins-empty">Loading bins and counts...</div>
       ) : filteredBins.length === 0 ? (
         <div className="bins-empty">No bins found. Try a different search or create a new bin.</div>
       ) : (
@@ -387,8 +419,8 @@ export default function BinsDashboard() {
                 </div>
 
                 <div className="bin-card-actions">
-                  <button type="button" className="bin-view-button" onClick={() => openBin(bin)}>
-                    View Contents →
+                  <button type="button" className={`bin-view-button bin-view-${accent}`} onClick={() => openBin(bin)}>
+                    View Contents
                   </button>
                   <button type="button" className="bin-mini-button" onClick={() => moveBin(realIndex, -1)} disabled={realIndex <= 0} title="Move up">
                     ↑
@@ -476,31 +508,33 @@ function BinsScopedStyles() {
       }
       .bins-button,
       .bin-view-button {
-        border: 0;
-        border-radius: 15px;
+        border: 0 !important;
+        border-radius: 15px !important;
         min-height: 44px;
-        padding: 11px 16px;
-        font-weight: 900;
+        padding: 11px 16px !important;
+        font-weight: 900 !important;
         cursor: pointer;
-        text-decoration: none;
-        display: inline-flex;
+        text-decoration: none !important;
+        display: inline-flex !important;
         align-items: center;
         justify-content: center;
         gap: 8px;
         transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
         white-space: nowrap;
+        appearance: none;
+        -webkit-appearance: none;
       }
       .bins-button:hover,
       .bin-view-button:hover { transform: translateY(-1px); }
       .bins-button-primary {
-        color: #fff;
-        background: linear-gradient(135deg, var(--bin-blue), var(--bin-purple));
+        color: #fff !important;
+        background: linear-gradient(135deg, var(--bin-blue), var(--bin-purple)) !important;
         box-shadow: 0 14px 28px rgba(37, 99, 235, .25);
       }
       .bins-button-secondary {
-        color: var(--bin-text);
-        background: rgba(255,255,255,.86);
-        border: 1px solid rgba(37, 99, 235, .14);
+        color: var(--bin-text) !important;
+        background: rgba(255,255,255,.86) !important;
+        border: 1px solid rgba(37, 99, 235, .14) !important;
       }
       .bins-toolbar {
         display: flex;
@@ -631,10 +665,10 @@ function BinsScopedStyles() {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: color-mix(in srgb, var(--accent) 12%, white);
+        background: rgba(37, 99, 235, .10);
         color: var(--accent);
         font-weight: 950;
-        border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+        border: 1px solid rgba(37, 99, 235, .14);
       }
       .bin-location {
         margin: 0;
@@ -651,8 +685,8 @@ function BinsScopedStyles() {
       .bin-metric {
         border-radius: 16px;
         padding: 12px;
-        background: color-mix(in srgb, var(--accent) 8%, white);
-        border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+        background: rgba(37, 99, 235, .08);
+        border: 1px solid rgba(37, 99, 235, .12);
       }
       .bin-metric-value {
         display: block;
@@ -672,17 +706,23 @@ function BinsScopedStyles() {
       }
       .bin-card-actions {
         display: grid;
-        grid-template-columns: 1fr auto auto;
+        grid-template-columns: minmax(128px, 1fr) auto auto;
         gap: 9px;
         align-items: center;
         margin-top: auto;
       }
       .bin-view-button {
-        color: #fff !important;
-        background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #111827));
+        color: #ffffff !important;
+        background: #2563eb !important;
         min-height: 46px;
-        box-shadow: 0 12px 26px color-mix(in srgb, var(--accent) 28%, transparent);
+        box-shadow: 0 12px 26px rgba(37, 99, 235, .26);
+        font-size: .92rem;
       }
+      .bin-view-purple { background: #7c3aed !important; box-shadow: 0 12px 26px rgba(124, 58, 237, .24); }
+      .bin-view-teal { background: #0f9f9a !important; box-shadow: 0 12px 26px rgba(15, 159, 154, .22); }
+      .bin-view-orange { background: #f97316 !important; box-shadow: 0 12px 26px rgba(249, 115, 22, .22); }
+      .bin-view-pink { background: #db2777 !important; box-shadow: 0 12px 26px rgba(219, 39, 119, .22); }
+      .bin-view-green { background: #059669 !important; box-shadow: 0 12px 26px rgba(5, 150, 105, .22); }
       .bin-mini-button {
         border: 1px solid var(--bin-border);
         background: #fff;
