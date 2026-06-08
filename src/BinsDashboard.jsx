@@ -237,7 +237,7 @@ export default function BinsDashboard() {
                     <div className="bin-sort-main">
                       <strong>{binTitle(bin)}</strong>
                       <span>ID {bin.id}{bin.location ? ` • ${bin.location}` : ''}</span>
-                      <Link to={`/bin/${bin.id}`}>View contents →</Link>
+                      <Link className="bin-view-contents-btn" to={`/bin/${bin.id}`}>View Contents →</Link>
                     </div>
                     <div className="bin-sort-actions">
                       <button type="button" onClick={() => reorderById(bin.id, 'top')} disabled={disabled || first}>Top</button>

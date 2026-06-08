@@ -134,6 +134,7 @@ export default function SampleInventory() {
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const filteredRows = useMemo(() => {
     return rows.filter((row) => tokensMatch(row, search) && filtersMatch(row, filters));
@@ -637,7 +638,16 @@ export default function SampleInventory() {
                 return (
                   <tr key={row.id}>
                     <td>
-                      {row.image_url ? <img src={row.image_url} alt="" className="sample-thumb" /> : <span className="muted">No image</span>}
+                      {row.image_url ? (
+                        <button
+                          type="button"
+                          className="sample-thumb-button"
+                          onClick={() => setImagePreview({ url: row.image_url, title: [row.brand, row.style, row.color, row.size].filter(Boolean).join(' ') })}
+                          title="Click to view full size"
+                        >
+                          <img src={row.image_url} alt={[row.brand, row.style, row.color, row.size].filter(Boolean).join(' ')} className="sample-thumb" />
+                        </button>
+                      ) : <span className="muted">No image</span>}
                       {editing && <input type="file" accept="image/*" onChange={(event) => updateEditField('imageFile', event.target.files?.[0] || null)} />}
                     </td>
                     <td>{editing ? <input value={editForm.brand} onChange={(event) => updateEditField('brand', event.target.value)} /> : row.brand}</td>
@@ -693,6 +703,18 @@ export default function SampleInventory() {
           </table>
         </div>
       </section>
+
+      {imagePreview && (
+        <div className="sample-image-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setImagePreview(null)}>
+          <div className="sample-image-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="sample-image-modal-header">
+              <strong>{imagePreview.title || 'Sample Image'}</strong>
+              <button type="button" className="button" onClick={() => setImagePreview(null)}>Close</button>
+            </div>
+            <img src={imagePreview.url} alt={imagePreview.title || 'Sample product'} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
