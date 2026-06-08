@@ -1866,19 +1866,13 @@ export async function savePhase5ArtworkRequest(request) {
 }
 
 // ---------------------------------------------------------
-// Bins Dashboard counts + contents helpers
-// Added for BinsDashboard.jsx card counts and in-page View Contents.
+// Bins Dashboard card-count helper.
+// Added for the card-style BinsDashboard page.
+// NOTE: getBinContents already exists in this file, so do not add
+// another getBinContents export.
 // ---------------------------------------------------------
 export async function getBinsDashboardCards() {
   const { data, error } = await supabase.rpc('sc_bins_dashboard_cards_v1');
-  if (error) throw error;
-  return data || [];
-}
-
-export async function getBinContents(binId) {
-  const { data, error } = await supabase.rpc('sc_bin_contents_v1', {
-    p_bin_id_text: String(binId || ''),
-  });
   if (error) throw error;
   return data || [];
 }
