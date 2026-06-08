@@ -33,7 +33,7 @@ function normalizeLookup(row) {
 }
 
 async function loadBins() {
-  const rpc = await supabase.rpc('sc_receiving_bins');
+  const rpc = await supabase.rpc('sc_receiving_bins_v2');
   if (!rpc.error && Array.isArray(rpc.data)) {
     return rpc.data.map(normalizeBin).filter((b) => b?.id);
   }
@@ -160,14 +160,14 @@ export default function AddItemToBin() {
         ].filter(Boolean).join(' | ');
 
         const rpcPayload = {
-          p_blank_product_id: String(blank.id),
-          p_bin_id: String(line.bin_id),
+          p_blank_product_id_text: String(blank.id),
+          p_bin_id_text: String(line.bin_id),
           p_quantity: Number(line.quantity),
-          p_notes: note || null,
           p_unit_cost: line.unit_cost === '' ? null : Number(line.unit_cost),
+          p_notes: note || null,
         };
 
-        const rpc = await supabase.rpc('sc_receive_blank_inventory', rpcPayload);
+        const rpc = await supabase.rpc('sc_receive_blank_inventory_v3', rpcPayload);
 
         if (rpc.error) {
           throw new Error(rpc.error.message || 'Receiving RPC failed.');
