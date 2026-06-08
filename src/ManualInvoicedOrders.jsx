@@ -46,33 +46,40 @@ function productLabel(row) {
 
 function ProductSourceToggle({ value, onChange }) {
   return (
-    <div className="manual-product-toggle" role="group" aria-label="Product source">
+    <div className="manual-product-toggle manual-product-toggle-compact" role="group" aria-label="Product source">
       <button
         type="button"
         className={value === 'blank' ? 'active' : ''}
         onClick={() => onChange('blank')}
       >
-        Blank Inventory
+        Blank
       </button>
       <button
         type="button"
         className={value === 'finished' ? 'active' : ''}
         onClick={() => onChange('finished')}
       >
-        Finished Inventory
+        Finished
       </button>
     </div>
   );
 }
 
-function ManualLine({ line, index, onChange, onRemove, canRemove }) {
+function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
   const [lookup, setLookup] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
 
   const source = line.item_type === 'finished' ? 'finished' : 'blank';
+  const hasSelectedProduct = source === 'finished' ? Boolean(line.finished_product_id) : Boolean(line.blank_product_id);
+  const lineTotal = Number(line.quantity || 0) * Number(line.price_per_item || 0);
+
+  function patch(patchValues) {
+    onChange(index, { ...line, ...patchValues });
+  }
 
   function updateSource(nextSource) {
     onChange(index, {
@@ -110,9 +117,9 @@ function ManualLine({ line, index, onChange, onRemove, canRemove }) {
         size: line.size,
         limit: 200,
       });
-      setResults(rows);
+      setResults(rows || []);
       setOpen(true);
-      if (!rows.length) {
+      if (!rows?.length) {
         setSearchMessage(
           source === 'finished'
             ? 'No finished products matched these search terms. Try customer, logo, SKU, brand, color, or size.'
@@ -136,8 +143,8 @@ function ManualLine({ line, index, onChange, onRemove, canRemove }) {
       product_source: selectedSource,
       blank_product_id: selectedSource === 'blank' ? (row.blank_product_id || row.product_id || row.id || '') : '',
       finished_product_id: selectedSource === 'finished' ? (row.finished_product_id || row.product_id || row.id || '') : '',
-      sku_base: row.sku_base || '',
-      item_name: row.name || row.sku_base || '',
+      sku_base: row.sku_base || row.finished_sku || row.sku || '',
+      item_name: row.name || row.item_name || row.sku_base || '',
       brand: row.brand || '',
       style: row.style || '',
       color: row.color || '',
@@ -145,67 +152,71 @@ function ManualLine({ line, index, onChange, onRemove, canRemove }) {
       customer_name: row.customer_name || '',
       logo_name: row.logo_name || '',
       placement: row.placement || line.placement || '',
-      price_per_item: Number(line.price_per_item || 0) || Number(row.unit_cost || 0),
+      price_per_item: Number(line.price_per_item || 0) || Number(row.unit_cost || row.price_per_item || 0),
     });
-    setLookup(row.sku_base || row.name || '');
+    setLookup(row.sku_base || row.finished_sku || row.sku || row.name || '');
     setOpen(false);
+    setDetailsOpen(true);
   }
 
-  const lineTotal = Number(line.quantity || 0) * Number(line.price_per_item || 0);
-  const hasSelectedProduct = source === 'finished' ? Boolean(line.finished_product_id) : Boolean(line.blank_product_id);
-
   return (
-    <div className="manual-order-line-card sc-panel-soft">
-      <div className="manual-order-line-header">
+    <div className="manual-line-table-row sc-panel-soft">
+      <div className="manual-line-row-title">
         <div>
-          <h3>Line {index + 1}</h3>
-          <p>
-            {hasSelectedProduct
-              ? `Selected ${source}: ${line.sku_base || line.item_name}`
-              : `Search and select the ${source === 'finished' ? 'finished product' : 'blank product'} for this line.`}
-          </p>
+          <strong>Line {index + 1}</strong>
+          {hasSelectedProduct ? (
+            <span className="manual-line-selected-label">Selected: {line.sku_base || line.item_name}</span>
+          ) : (
+            <span className="manual-line-missing-label">Choose {source === 'finished' ? 'finished product' : 'blank product'}</span>
+          )}
         </div>
-        {canRemove && <button type="button" className="sc-btn sc-btn-danger" onClick={() => onRemove(index)}>Remove Line</button>}
+        <div className="manual-line-row-actions">
+          <button type="button" className="sc-btn sc-btn-muted" onClick={() => setDetailsOpen((v) => !v)}>
+            {detailsOpen ? 'Hide Details' : 'Line Details'}
+          </button>
+          {canRemove && <button type="button" className="sc-btn sc-btn-danger" onClick={() => onRemove(index)}>Remove Line</button>}
+        </div>
       </div>
 
-      <div className="manual-search-panel">
-        <div className="manual-search-title-row">
-          <div>
-            <div className="manual-search-title">Find Product</div>
-            <small>{source === 'finished' ? 'Search decorated/finished inventory.' : 'Search blank inventory.'}</small>
-          </div>
+      <div className="manual-line-table-grid" role="group" aria-label={`Manual invoice line ${index + 1}`}>
+        <label className="sc-field manual-line-source-cell">
+          <span>Source</span>
           <ProductSourceToggle value={source} onChange={updateSource} />
-        </div>
+        </label>
 
-        <div className="manual-search-grid">
-          <label className="sc-field">
-            <span>{source === 'finished' ? 'Finished Product Lookup' : 'Blank Product Lookup'}</span>
+        <label className="sc-field manual-line-lookup-cell">
+          <span>{source === 'finished' ? 'Finished Product Lookup' : 'Blank Product Lookup'}</span>
+          <div className="manual-inline-search">
             <input
               value={lookup}
               onChange={(e) => setLookup(e.target.value)}
-              placeholder={source === 'finished' ? 'Search SKU, customer, logo, brand, color, or size' : 'Search SKU, name, brand, style, color, or size'}
+              placeholder={source === 'finished' ? 'SKU, customer, logo, brand, color, size' : 'SKU, brand, style, color, size'}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
             />
-          </label>
-          <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => onChange(index, { ...line, brand: e.target.value })} placeholder="Gildan" /></label>
-          <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => onChange(index, { ...line, style: e.target.value })} placeholder="18000" /></label>
-          <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => onChange(index, { ...line, color: e.target.value })} placeholder="Black" /></label>
-          <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => onChange(index, { ...line, size: e.target.value })} placeholder="A2XL" /></label>
-          <div className="manual-search-button-cell">
-            <button type="button" className="sc-btn sc-btn-primary" onClick={runSearch} disabled={loading}>{loading ? 'Searching...' : 'Find Matches'}</button>
+            <button type="button" className="sc-btn sc-btn-primary" onClick={runSearch} disabled={loading}>{loading ? '...' : 'Find'}</button>
           </div>
-        </div>
+        </label>
 
-        {open && (
-          <div className="manual-order-search-results sc-scroll-results">
-            <div className="manual-results-header">
-              <strong>{results.length} {source === 'finished' ? 'finished' : 'blank'} match{results.length === 1 ? '' : 'es'} found</strong>
-              <button type="button" className="sc-text-button" onClick={() => setOpen(false)}>Hide</button>
-            </div>
-            {searchMessage && <div className="sc-alert sc-alert-warning">{searchMessage}</div>}
+        <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => patch({ brand: e.target.value })} placeholder="Gildan" /></label>
+        <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => patch({ style: e.target.value })} placeholder="18000" /></label>
+        <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => patch({ color: e.target.value })} placeholder="Black" /></label>
+        <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => patch({ size: e.target.value })} placeholder="A2XL" /></label>
+        <label className="sc-field"><span>Qty</span><input type="number" min="1" value={line.quantity} onChange={(e) => patch({ quantity: e.target.value })} /></label>
+        <label className="sc-field"><span>Price Each</span><input type="number" step="0.01" min="0" value={line.price_per_item} onChange={(e) => patch({ price_per_item: e.target.value })} /></label>
+        <label className="sc-field"><span>Total</span><input value={money(lineTotal)} readOnly /></label>
+      </div>
+
+      {open && (
+        <div className="manual-order-search-results manual-order-search-results-table sc-scroll-results">
+          <div className="manual-results-header">
+            <strong>{results.length} {source === 'finished' ? 'finished' : 'blank'} match{results.length === 1 ? '' : 'es'} found</strong>
+            <button type="button" className="sc-text-button" onClick={() => setOpen(false)}>Hide</button>
+          </div>
+          {searchMessage && <div className="sc-alert sc-alert-warning">{searchMessage}</div>}
+          <div className="manual-results-grid-list">
             {results.map((row) => {
               const label = productLabel(row);
-              const rowKey = `${row.item_type || source}-${getProductId(row)}-${row.sku_base}`;
+              const rowKey = `${row.item_type || source}-${getProductId(row)}-${row.sku_base || row.sku || row.name}`;
               return (
                 <button type="button" key={rowKey} className="manual-result-card" onClick={() => selectProduct(row)}>
                   <div>
@@ -222,39 +233,27 @@ function ManualLine({ line, index, onChange, onRemove, canRemove }) {
               );
             })}
           </div>
-        )}
-      </div>
-
-      <div className="manual-line-selected-grid">
-        <label className="sc-field"><span>Selected SKU</span><input value={line.sku_base} onChange={(e) => onChange(index, { ...line, sku_base: e.target.value })} placeholder="Select from search" /></label>
-        <label className="sc-field"><span>Item Name</span><input value={line.item_name} onChange={(e) => onChange(index, { ...line, item_name: e.target.value })} /></label>
-        <label className="sc-field"><span>Quantity</span><input type="number" min="1" value={line.quantity} onChange={(e) => onChange(index, { ...line, quantity: e.target.value })} /></label>
-        <label className="sc-field"><span>Price Each</span><input type="number" step="0.01" min="0" value={line.price_per_item} onChange={(e) => onChange(index, { ...line, price_per_item: e.target.value })} /></label>
-        <label className="sc-field"><span>Line Total</span><input value={money(lineTotal)} readOnly /></label>
-      </div>
-
-      {source === 'finished' && (
-        <div className="manual-line-selected-grid">
-          <label className="sc-field"><span>Customer</span><input value={line.customer_name} onChange={(e) => onChange(index, { ...line, customer_name: e.target.value })} /></label>
-          <label className="sc-field"><span>Logo / Artwork</span><input value={line.logo_name} onChange={(e) => onChange(index, { ...line, logo_name: e.target.value })} /></label>
-          <label className="sc-field"><span>Placement</span><input value={line.placement} onChange={(e) => onChange(index, { ...line, placement: e.target.value })} placeholder="Left chest, full front, back" /></label>
         </div>
       )}
 
-      <div className="manual-line-selected-grid">
-        <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => onChange(index, { ...line, brand: e.target.value })} /></label>
-        <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => onChange(index, { ...line, style: e.target.value })} /></label>
-        <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => onChange(index, { ...line, color: e.target.value })} /></label>
-        <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => onChange(index, { ...line, size: e.target.value })} /></label>
-        {source === 'blank' && <label className="sc-field"><span>Placement</span><input value={line.placement} onChange={(e) => onChange(index, { ...line, placement: e.target.value })} placeholder="Left chest, full front, back" /></label>}
-      </div>
-
-      <div className="manual-line-selected-grid">
-        <label className="sc-field"><span>Decoration Size</span><input value={line.decoration_size} onChange={(e) => onChange(index, { ...line, decoration_size: e.target.value })} placeholder="10 inch, 3.5 inch" /></label>
-        <label className="sc-field sc-field-wide"><span>Artwork Note</span><input value={line.artwork_note} onChange={(e) => onChange(index, { ...line, artwork_note: e.target.value })} placeholder="Logo name, artwork code, customer instructions" /></label>
-      </div>
-
-      <label className="sc-field"><span>Internal Line Notes</span><textarea value={line.notes} onChange={(e) => onChange(index, { ...line, notes: e.target.value })} /></label>
+      {detailsOpen && (
+        <div className="manual-line-detail-drawer">
+          <div className="manual-line-detail-grid">
+            <label className="sc-field"><span>Selected SKU</span><input value={line.sku_base} onChange={(e) => patch({ sku_base: e.target.value })} placeholder="Select from search" /></label>
+            <label className="sc-field"><span>Item Name</span><input value={line.item_name} onChange={(e) => patch({ item_name: e.target.value })} /></label>
+            <label className="sc-field"><span>Placement</span><input value={line.placement} onChange={(e) => patch({ placement: e.target.value })} placeholder="Left chest, full front, back" /></label>
+            <label className="sc-field"><span>Decoration Size</span><input value={line.decoration_size} onChange={(e) => patch({ decoration_size: e.target.value })} placeholder="10 inch, 3.5 inch" /></label>
+            {source === 'finished' && (
+              <>
+                <label className="sc-field"><span>Customer</span><input value={line.customer_name} onChange={(e) => patch({ customer_name: e.target.value })} /></label>
+                <label className="sc-field"><span>Logo / Artwork</span><input value={line.logo_name} onChange={(e) => patch({ logo_name: e.target.value })} /></label>
+              </>
+            )}
+            <label className="sc-field sc-field-wide"><span>Artwork Note</span><input value={line.artwork_note} onChange={(e) => patch({ artwork_note: e.target.value })} placeholder="Logo name, artwork code, customer instructions" /></label>
+            <label className="sc-field sc-field-wide"><span>Internal Line Notes</span><textarea value={line.notes} onChange={(e) => patch({ notes: e.target.value })} /></label>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -284,7 +283,7 @@ export default function ManualInvoicedOrders() {
 
   async function loadOrders() {
     const rows = await getManualInvoiceOrders();
-    setOrders(rows);
+    setOrders(rows || []);
   }
 
   useEffect(() => { loadOrders().catch((err) => setError(err.message)); }, []);
@@ -337,7 +336,7 @@ export default function ManualInvoicedOrders() {
     setMessage('');
     try {
       const result = await generateManualInvoiceJob(orderId);
-      setMessage(`Generated job #${result.job_id || result.job_id} for manual invoice order #${orderId}.`);
+      setMessage(`Generated job #${result.job_id || result.generated_job_id || 'new'} for manual invoice order #${orderId}.`);
       await loadOrders();
     } catch (err) {
       setError(err.message || String(err));
@@ -385,14 +384,30 @@ export default function ManualInvoicedOrders() {
           </div>
         </section>
 
-        <section className="sc-panel">
+        <section className="sc-panel manual-line-table-section">
           <div className="sc-panel-header">
-            <div><h2>Line Items</h2><p>Each line defaults to blank inventory. Switch to finished inventory when the customer is buying an already-decorated item.</p></div>
+            <div>
+              <h2>Line Items</h2>
+              <p>Use the table-style entry below to add blanks or finished products. Each line defaults to blank inventory.</p>
+            </div>
             <button type="button" className="sc-btn sc-btn-primary" onClick={() => setItems((current) => [...current, blankLine()])}>+ Add Line</button>
           </div>
-          {items.map((line, index) => (
-            <ManualLine key={index} line={line} index={index} onChange={updateLine} onRemove={removeLine} canRemove={items.length > 1} />
-          ))}
+          <div className="manual-line-table-head" aria-hidden="true">
+            <span>Source</span>
+            <span>Product Lookup</span>
+            <span>Brand</span>
+            <span>Style</span>
+            <span>Color</span>
+            <span>Size</span>
+            <span>Qty</span>
+            <span>Price</span>
+            <span>Total</span>
+          </div>
+          <div className="manual-line-table-list">
+            {items.map((line, index) => (
+              <ManualLineRow key={index} line={line} index={index} onChange={updateLine} onRemove={removeLine} canRemove={items.length > 1} />
+            ))}
+          </div>
         </section>
 
         <section className="sc-panel">
