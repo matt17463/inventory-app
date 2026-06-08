@@ -417,12 +417,11 @@ export async function getBinContents(binId, search = '') {
   return data || [];
 }
 
-export async function receiveBlankInventory({ binId, blankProductId, quantity, notes, unitCost = null }) {
-  const { error } = await supabase.rpc('sc_receive_blank_inventory_v3', {
-    p_blank_product_id_text: String(blankProductId),
-    p_bin_id_text: String(binId),
+export async function receiveBlankInventory({ binId, blankProductId, quantity, notes }) {
+  const { error } = await supabase.rpc('receive_blank_inventory', {
+    p_bin_id: Number(binId),
+    p_blank_product_id: blankProductId,
     p_quantity: Number(quantity),
-    p_unit_cost: unitCost === '' || unitCost == null ? null : Number(unitCost),
     p_notes: notes || null,
   });
 
@@ -976,7 +975,7 @@ export async function getPurchasingSupplierSummary() {
 
 
 // =========================================================
-// Append-only blank product import
+// Blank product + inventory quantity spreadsheet import
 // =========================================================
 
 export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName }) {
@@ -1003,7 +1002,7 @@ export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName 
     source_row_number: row.sourceRowNumber || null,
   }));
 
-  const { data, error } = await supabase.rpc('append_blank_products_from_json', {
+  const { data, error } = await supabase.rpc('sc_import_blank_inventory_spreadsheet_v1', {
     p_rows: payloadRows,
     p_source_file_name: sourceFileName || null,
   });
