@@ -3,9 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   createBin,
   getBins,
-  saveBinDisplayOrder,
-  getBinsDashboardCards,
   getBinContents,
+  getBinsDashboardCards,
+  saveBinDisplayOrder,
 } from "./lib/inventoryApi";
 
 /**
@@ -13,7 +13,8 @@ import {
  *
  * Bins page only.
  * Complete file.
- * Does not import supabaseClient directly, so it avoids client path mismatch.
+ * Uses existing inventoryApi.js exports.
+ * Does not import supabaseClient directly.
  * Does not require App.css or AppShell.jsx changes.
  */
 
@@ -67,6 +68,27 @@ function normalizeBin(row, fallback = {}) {
   };
 }
 
+function normalizeContents(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((row) => ({
+    ...row,
+    sku: row?.sku ?? row?.blank_sku ?? "",
+    product_name:
+      row?.product_name ??
+      row?.name ??
+      row?.title ??
+      row?.display_name ??
+      row?.sku ??
+      "Blank product",
+    brand: row?.brand ?? row?.brand_name ?? "",
+    style: row?.style ?? row?.style_name ?? row?.product_type ?? "",
+    color: row?.color ?? row?.color_name ?? "",
+    size: row?.size ?? row?.size_name ?? "",
+    quantity: Number(row?.quantity ?? row?.quantity_on_hand ?? row?.on_hand ?? 0),
+  }));
+}
+
 async function loadBinsForDashboard() {
   if (typeof getBinsDashboardCards === "function") {
     try {
@@ -82,10 +104,9 @@ async function loadBinsForDashboard() {
 }
 
 async function loadBinContentsForDashboard(binId) {
-  if (typeof getBinContents === "function") {
-    return await getBinContents(binId);
-  }
-  return [];
+  if (typeof getBinContents !== "function") return [];
+  const rows = await getBinContents(binId, "");
+  return normalizeContents(rows);
 }
 
 export default function BinsDashboard() {
@@ -188,7 +209,7 @@ export default function BinsDashboard() {
 
     try {
       const rows = await loadBinContentsForDashboard(bin.id);
-      setContents(Array.isArray(rows) ? rows : []);
+      setContents(rows);
     } catch (error) {
       setMessage(error?.message || "Could not load bin contents.");
       setContents([]);
@@ -252,8 +273,8 @@ export default function BinsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contents.map((row) => (
-                    <tr key={`${row.blank_product_id}-${row.sku}`}>
+                  {contents.map((row, index) => (
+                    <tr key={`${row.blank_product_id || row.id || row.sku}-${index}`}>
                       <td>
                         <strong>{safeText(row.product_name || row.display_name, "Blank product")}</strong>
                       </td>
