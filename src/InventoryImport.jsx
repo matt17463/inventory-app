@@ -57,11 +57,9 @@ function findSheetName(workbook, names) {
 function columnValue(row, possibleNames) {
   for (const name of possibleNames) {
     if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
-
     const found = Object.keys(row).find((key) => normalize(key) === normalize(name));
     if (found) return row[found];
   }
-
   return '';
 }
 
@@ -69,7 +67,6 @@ function buildSkuBase(row) {
   const parts = [row.brand, row.style, row.color, row.size]
     .map((part) => clean(part).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
     .filter(Boolean);
-
   return parts.join('-');
 }
 
@@ -81,19 +78,30 @@ function parseMasterSheet(workbook, sheetName) {
     .map((row, index) => {
       const parsed = {
         sourceRowNumber: index + 2,
-        brand: clean(columnValue(row, ['Brand'])),
-        style: clean(columnValue(row, ['Style', 'Product Style', 'Product Type'])),
-        color: clean(columnValue(row, ['Color', 'Colour'])),
-        size: clean(columnValue(row, ['Size'])),
-        quantity: integerValue(columnValue(row, ['Quantity', 'Qty', 'Count']), 0),
-        bin: clean(columnValue(row, ['Bin', 'Bin Code', 'Location'])),
-        unitCost: numberValue(columnValue(row, ['Unit Cost', 'Cost', 'Blank Cost']), 0),
+        brand: clean(columnValue(row, ['Brand', 'Product Brand', 'Vendor Brand'])),
+        style: clean(columnValue(row, ['Style', 'Product Style', 'Product Type', 'Style Number', 'Style #'])),
+        color: clean(columnValue(row, ['Color', 'Colour', 'Product Color'])),
+        size: clean(columnValue(row, ['Size', 'Product Size'])),
+        quantity: integerValue(columnValue(row, [
+          'Quantity',
+          'Qty',
+          'Count',
+          'On Hand',
+          'On Hand Qty',
+          'Quantity On Hand',
+          'Received Qty',
+          'Qty Received',
+        ]), 0),
+        bin: clean(columnValue(row, ['Bin', 'Bin Code', 'Bin Location', 'Location'])),
+        unitCost: numberValue(columnValue(row, ['Unit Cost', 'Cost', 'Blank Cost', 'Wholesale Cost']), 0),
         lowStockThreshold: integerValue(columnValue(row, [
           'Low Stock Threshold',
           'Low Stock Threshhold',
           'Low Stock',
           'Threshold',
           'Reorder Point',
+          'Minimum Stock',
+          'Min Stock',
         ]), null),
         skuBase: clean(columnValue(row, [
           'SKU Base (optional)',
@@ -104,29 +112,24 @@ function parseMasterSheet(workbook, sheetName) {
         ])),
         barcode: clean(columnValue(row, ['Barcode (optional)', 'Barcode', 'UPC'])),
         name: clean(columnValue(row, ['Product Name (optional)', 'Product Name', 'Name', 'Description'])),
-        imageUrl: clean(columnValue(row, ['Image URL (optional)', 'Image URL', 'Image'])),
+        imageUrl: clean(columnValue(row, ['Image URL (optional)', 'Image URL', 'Image', 'Image Url'])),
         supplier: clean(columnValue(row, ['Supplier (optional)', 'Supplier', 'Vendor'])),
-        supplierSku: clean(columnValue(row, ['Supplier SKU (optional)', 'Supplier SKU', 'Vendor SKU'])),
-        notes: clean(columnValue(row, ['Notes', 'Note'])),
+        supplierSku: clean(columnValue(row, ['Supplier SKU (optional)', 'Supplier SKU', 'Vendor SKU', 'Supplier Style'])),
+        notes: clean(columnValue(row, ['Notes', 'Note', 'Receiving Notes'])),
       };
 
       if (!parsed.skuBase) parsed.skuBase = buildSkuBase(parsed);
-      if (!parsed.name) {
-        parsed.name = [parsed.brand, parsed.style, parsed.color, parsed.size].filter(Boolean).join(' ');
-      }
+      if (!parsed.name) parsed.name = [parsed.brand, parsed.style, parsed.color, parsed.size].filter(Boolean).join(' ');
 
       return parsed;
     })
-    .filter((row) =>
-      row.brand || row.style || row.color || row.size || row.skuBase || row.quantity || row.bin
-    );
+    .filter((row) => row.brand || row.style || row.color || row.size || row.skuBase || row.quantity || row.bin);
 }
 
 function validateRows(rows) {
-  const seen = new Set();
-
   return rows.map((row) => {
     const errors = [];
+    const warnings = [];
 
     if (!row.brand) errors.push('Brand is required.');
     if (!row.style) errors.push('Style is required.');
@@ -139,17 +142,15 @@ function validateRows(rows) {
     if (row.lowStockThreshold !== null && (!Number.isFinite(row.lowStockThreshold) || row.lowStockThreshold < 0)) {
       errors.push('Low Stock Threshold must be blank or zero or greater.');
     }
-
-    const duplicateKey = normalize(row.skuBase);
-    if (duplicateKey && seen.has(duplicateKey)) {
-      errors.push(`Duplicate SKU Base in upload: ${row.skuBase}`);
+    if (Number(row.quantity || 0) === 0) {
+      warnings.push('Quantity is zero. This will update/create the blank product catalog record but will not add inventory units.');
     }
-    if (duplicateKey) seen.add(duplicateKey);
 
     return {
       ...row,
       status: errors.length ? 'error' : 'ready',
       errors,
+      warnings,
     };
   });
 }
@@ -171,13 +172,35 @@ function downloadBrowserTemplate() {
       'Image URL (optional)': '',
       'Supplier (optional)': 'S&S Activewear',
       'Supplier SKU (optional)': '',
-      Notes: 'Master blank product row',
+      Notes: 'Receiving row. Quantity will be added to inventory.',
+    },
+    {
+      Brand: 'Gildan',
+      Style: '18500',
+      Color: 'Navy',
+      Size: 'AL',
+      Quantity: 12,
+      Bin: 'AL1',
+      'Unit Cost': 8.25,
+      'Low Stock Threshold': 12,
+      'SKU Base (optional)': '',
+      'Barcode (optional)': '',
+      'Product Name (optional)': '',
+      'Image URL (optional)': '',
+      'Supplier (optional)': 'S&S Activewear',
+      'Supplier SKU (optional)': '',
+      Notes: 'Existing products are updated and quantity is received into the selected bin.',
     },
   ];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows, { header: MASTER_COLUMNS }), 'Blank Products');
-  XLSX.writeFile(wb, 'skilled-crafting-blank-product-master-template.xlsx');
+  XLSX.writeFile(wb, 'skilled-crafting-blank-inventory-import-template.xlsx');
+}
+
+function resultNumber(result, key) {
+  const value = result?.[key];
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
 export default function InventoryImport() {
@@ -187,7 +210,7 @@ export default function InventoryImport() {
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
-  const [confirmReplace, setConfirmReplace] = useState(false);
+  const [confirmImport, setConfirmImport] = useState(false);
 
   const counts = useMemo(() => {
     const readyRows = rows.filter((row) => row.status === 'ready');
@@ -211,25 +234,24 @@ export default function InventoryImport() {
     setLoading(true);
     setRows([]);
     setResult(null);
-    setConfirmReplace(false);
+    setConfirmImport(false);
     setFileName(file.name);
-    setMessage('Reading blank product master workbook...');
+    setMessage('Reading blank inventory import workbook...');
 
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const sheetName = findSheetName(workbook, MASTER_SHEET_NAMES);
-
-      if (!sheetName) {
-        throw new Error('Workbook does not contain a readable sheet.');
-      }
+      if (!sheetName) throw new Error('Workbook does not contain a readable sheet.');
 
       const parsed = parseMasterSheet(workbook, sheetName);
-      if (!parsed.length) throw new Error('No blank product master rows were found.');
+      if (!parsed.length) throw new Error('No blank inventory rows were found.');
 
       const validated = validateRows(parsed);
       setRows(validated);
-      setMessage(`Loaded ${validated.length} blank product row(s) from ${file.name}. Review before importing new blank products.`);
+      setMessage(
+        `Loaded ${validated.length} row(s) from ${file.name}. Existing blank products will be updated; quantities greater than zero will be received into the selected bin.`
+      );
     } catch (err) {
       setMessage(err.message || 'Failed to read workbook.');
     } finally {
@@ -237,36 +259,31 @@ export default function InventoryImport() {
     }
   }
 
-  async function handleReplaceMaster() {
+  async function handleImport() {
     const readyRows = rows.filter((row) => row.status === 'ready');
-
     if (!readyRows.length) {
       setMessage('No ready rows to import.');
       return;
     }
-
-    if (!confirmReplace) {
-      setMessage('Check the confirmation box before replacing the blank product master.');
+    if (!confirmImport) {
+      setMessage('Check the confirmation box before importing inventory.');
       return;
     }
 
     setImporting(true);
     setResult(null);
-    setMessage('Adding new blank products. Do not close this page...');
+    setMessage('Importing blank products and receiving inventory quantities. Do not close this page...');
 
     try {
-      const response = await appendBlankProductsFromSpreadsheet({
-        rows: readyRows,
-        sourceFileName: fileName,
-      });
-
+      const response = await appendBlankProductsFromSpreadsheet({ rows: readyRows, sourceFileName: fileName });
       setResult(response);
       setMessage(
-        `Blank product import complete. Inserted ${response?.inserted_blank_products ?? 0} blank products and ` +
-        `${response?.inserted_inventory_movements ?? 0} initial inventory movement(s).`
+        `Inventory import complete. Created ${resultNumber(response, 'inserted_blank_products')} blank product(s), ` +
+        `updated ${resultNumber(response, 'updated_blank_products')} existing blank product(s), and received ` +
+        `${resultNumber(response, 'total_quantity_received')} unit(s) through ${resultNumber(response, 'inserted_inventory_movements')} inventory movement(s).`
       );
     } catch (err) {
-      setMessage(err.message || 'Blank product master import failed.');
+      setMessage(err.message || 'Blank inventory import failed.');
     } finally {
       setImporting(false);
     }
@@ -276,10 +293,10 @@ export default function InventoryImport() {
     <main className="page import-page">
       <section className="page-header import-header">
         <div>
-          <p className="eyebrow">Blank Product Master</p>
-          <h1>Add new blank products from spreadsheet</h1>
+          <p className="eyebrow">Blank Inventory Import</p>
+          <h1>Import or update blank products and quantities</h1>
           <p>
-            This import adds new rows to the Supabase <strong>blank_products</strong> catalog only when they do not already exist. Existing blank products are skipped, not deleted or overwritten.
+            Upload a spreadsheet to create missing blank products, update existing blank product details, and add inventory quantities into bins.
           </p>
         </div>
         <button type="button" className="secondary-button" onClick={downloadBrowserTemplate}>
@@ -288,24 +305,25 @@ export default function InventoryImport() {
       </section>
 
       <section className="warning-card">
-        <h2>Important</h2>
+        <h2>How quantity works</h2>
         <p>
-          This is an append-only import. It does not clear existing blank products or inventory history. Rows that already exist are skipped; only new blank products are inserted.
+          Quantity is treated as a <strong>received/additional quantity</strong>. If a spreadsheet row already exists as a blank product,
+          the import updates its catalog details and adds the quantity to the selected bin through an inventory movement. It does not erase
+          previous inventory history.
         </p>
       </section>
 
       <section className="card elevated-card import-upload-card">
         <h2>Required spreadsheet columns</h2>
         <p className="helper-text">
-          Brand • Style • Color • Size • Quantity • Bin • Unit Cost • Low Stock Threshold
+          Required: Brand • Style • Color • Size. Quantity is required if you want to add inventory units. Bin is required when Quantity is greater than zero.
         </p>
         <p className="helper-text">
-          Optional: SKU Base, Barcode, Product Name, Image URL, Supplier, Supplier SKU, Notes.
-          The import also accepts the typo <strong>Low Stock Threshhold</strong>.
+          Optional: Unit Cost, Low Stock Threshold, SKU Base, Barcode, Product Name, Image URL, Supplier, Supplier SKU, Notes.
         </p>
 
         <label>
-          Upload blank product master workbook
+          Upload blank inventory workbook
           <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} disabled={loading || importing} />
         </label>
 
@@ -318,29 +336,29 @@ export default function InventoryImport() {
             <div className="metric-card"><strong>{counts.total}</strong><span>Total rows</span></div>
             <div className="metric-card"><strong>{counts.ready}</strong><span>Ready rows</span></div>
             <div className="metric-card"><strong>{counts.errors}</strong><span>Needs review</span></div>
-            <div className="metric-card"><strong>{counts.totalUnits}</strong><span>Initial units</span></div>
+            <div className="metric-card"><strong>{counts.totalUnits}</strong><span>Units to receive</span></div>
             <div className="metric-card"><strong>{counts.withBins}</strong><span>Rows with bin quantities</span></div>
           </section>
 
           <section className="card elevated-card">
             <div className="import-actions">
-              <label className="checkbox-line danger-check">
+              <label className="checkbox-line">
                 <input
                   type="checkbox"
-                  checked={confirmReplace}
-                  onChange={(event) => setConfirmReplace(event.target.checked)}
+                  checked={confirmImport}
+                  onChange={(event) => setConfirmImport(event.target.checked)}
                   disabled={importing}
                 />
-                I understand this will add only new blank products and skip existing products.
+                I understand this import will create/update blank products and add received quantities to inventory movements.
               </label>
 
               <button
                 type="button"
-                className="danger-button"
-                disabled={importing || loading || counts.ready === 0 || counts.errors > 0 || !confirmReplace}
-                onClick={handleReplaceMaster}
+                className="primary-button"
+                disabled={importing || loading || counts.ready === 0 || counts.errors > 0 || !confirmImport}
+                onClick={handleImport}
               >
-                {importing ? 'Adding New Products...' : `Add New Blank Products (${counts.ready} rows)`}
+                {importing ? 'Importing Inventory...' : `Import / Update Inventory (${counts.ready} rows)`}
               </button>
             </div>
           </section>
@@ -358,16 +376,16 @@ export default function InventoryImport() {
                     <th>Style</th>
                     <th>Color</th>
                     <th>Size</th>
-                    <th>Qty</th>
+                    <th>Qty to Receive</th>
                     <th>Bin</th>
                     <th>Unit Cost</th>
                     <th>Low Stock</th>
-                    <th>Issues</th>
+                    <th>Issues / Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, 500).map((row) => (
-                    <tr key={`${row.sourceRowNumber}-${row.skuBase}`} className={row.status === 'ready' ? '' : 'error-row'}>
+                    <tr key={`${row.sourceRowNumber}-${row.skuBase}-${row.bin}`} className={row.status === 'ready' ? '' : 'error-row'}>
                       <td>{row.status === 'ready' ? 'Ready' : 'Review'}</td>
                       <td>{row.sourceRowNumber}</td>
                       <td>{row.skuBase}</td>
@@ -379,7 +397,7 @@ export default function InventoryImport() {
                       <td>{row.bin}</td>
                       <td>{Number(row.unitCost || 0).toFixed(2)}</td>
                       <td>{row.lowStockThreshold ?? ''}</td>
-                      <td>{row.errors?.join(' ')}</td>
+                      <td>{[...(row.errors || []), ...(row.warnings || [])].join(' ')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -393,6 +411,13 @@ export default function InventoryImport() {
       {result && (
         <section className="card elevated-card">
           <h2>Import Result</h2>
+          <div className="summary-grid">
+            <div className="metric-card"><strong>{resultNumber(result, 'inserted_blank_products')}</strong><span>Products created</span></div>
+            <div className="metric-card"><strong>{resultNumber(result, 'updated_blank_products')}</strong><span>Products updated</span></div>
+            <div className="metric-card"><strong>{resultNumber(result, 'total_quantity_received')}</strong><span>Units received</span></div>
+            <div className="metric-card"><strong>{resultNumber(result, 'inserted_inventory_movements')}</strong><span>Movements saved</span></div>
+            <div className="metric-card"><strong>{resultNumber(result, 'skipped_rows')}</strong><span>Rows skipped</span></div>
+          </div>
           <pre className="result-json">{JSON.stringify(result, null, 2)}</pre>
         </section>
       )}
