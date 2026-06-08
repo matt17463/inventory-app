@@ -975,7 +975,7 @@ export async function getPurchasingSupplierSummary() {
 
 
 // =========================================================
-// Blank product + inventory quantity spreadsheet import
+// Append-only blank product import
 // =========================================================
 
 export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName }) {
@@ -1002,7 +1002,7 @@ export async function appendBlankProductsFromSpreadsheet({ rows, sourceFileName 
     source_row_number: row.sourceRowNumber || null,
   }));
 
-  const { data, error } = await supabase.rpc('sc_import_blank_inventory_spreadsheet_v1', {
+  const { data, error } = await supabase.rpc('append_blank_products_from_json', {
     p_rows: payloadRows,
     p_source_file_name: sourceFileName || null,
   });
@@ -1864,3 +1864,22 @@ export async function savePhase5ArtworkRequest(request) {
   if (error) throw error;
   return data;
 }
+
+// ---------------------------------------------------------
+// Bins Dashboard counts + contents helpers
+// Added for BinsDashboard.jsx card counts and in-page View Contents.
+// ---------------------------------------------------------
+export async function getBinsDashboardCards() {
+  const { data, error } = await supabase.rpc('sc_bins_dashboard_cards_v1');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getBinContents(binId) {
+  const { data, error } = await supabase.rpc('sc_bin_contents_v1', {
+    p_bin_id_text: String(binId || ''),
+  });
+  if (error) throw error;
+  return data || [];
+}
+
