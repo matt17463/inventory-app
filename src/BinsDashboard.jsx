@@ -6,20 +6,23 @@ import {
   getBinContents,
   saveBinDisplayOrder,
 } from "./lib/inventoryApi";
+import { supabase } from "./supabaseClient";
 
 /**
  * BinsDashboard.jsx
  *
  * Bins page only.
  *
- * This version intentionally DOES NOT use a new Supabase RPC for counts.
- * It uses your existing getBinContents(binId) function because that is already
- * wired to your existing bin contents view:
+ * Fixes the issue where samples assigned to a bin did not appear in bin contents.
  *
- *   bin_blank_inventory_contents
+ * Why that happened:
+ * - getBinContents(binId) reads blank inventory from bin_blank_inventory_contents.
+ * - Sample Inventory stores bin assignment on sample_products.bin_id.
+ * - Those are separate inventory sources.
  *
- * That keeps the counts aligned with the same data source that the bin contents
- * page already uses.
+ * This page now shows BOTH:
+ * - Blank inventory items
+ * - Sample inventory items
  *
  * No App.css changes.
  * No AppShell.jsx changes.
@@ -62,14 +65,19 @@ function normalizeBin(row, fallback = {}) {
     location: row?.location ?? fallback?.location ?? "",
     display_name: row?.display_name ?? fallback?.display_name ?? "",
     display_order: Number(row?.display_order ?? fallback?.display_order ?? 999999),
-    item_count: Number(row?.item_count ?? row?.distinct_items ?? row?.product_count ?? fallback?.item_count ?? 0),
-    total_units: Number(row?.total_units ?? row?.units ?? row?.quantity ?? row?.quantity_on_hand ?? fallback?.total_units ?? 0),
+    blank_item_count: 0,
+    blank_units: 0,
+    sample_item_count: 0,
+    sample_units: 0,
+    item_count: 0,
+    total_units: 0,
   };
 }
 
-function normalizeContentRow(row) {
+function normalizeBlankContentRow(row) {
   return {
-    ...row,
+    source_type: "Blank",
+    source_badge: "Blank",
     blank_product_id: row?.blank_product_id ?? row?.product_id ?? row?.id ?? "",
     sku: row?.sku ?? row?.sku_base ?? row?.blank_sku ?? "",
     product_name:
@@ -95,16 +103,67 @@ function normalizeContentRow(row) {
   };
 }
 
-function summarizeContents(rows) {
-  const normalized = Array.isArray(rows) ? rows.map(normalizeContentRow) : [];
-  const totalUnits = normalized.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-  const positiveItems = normalized.filter((row) => Number(row.quantity || 0) !== 0).length;
+function normalizeSampleContentRow(row) {
+  return {
+    source_type: "Sample",
+    source_badge: "Sample",
+    blank_product_id: row?.id ?? "",
+    sku: row?.sku ?? "",
+    product_name:
+      [row?.brand, row?.style, row?.color, row?.size]
+        .filter(Boolean)
+        .join(" ") || row?.product_type || "Sample product",
+    brand: row?.brand ?? "",
+    style: row?.style ?? row?.product_type ?? "",
+    color: row?.color ?? "",
+    size: row?.size ?? "",
+    quantity: Number(row?.quantity ?? 1),
+    customer: row?.customer ?? "",
+    vendor: row?.vendor ?? "",
+    image_url: row?.image_url ?? "",
+    notes: row?.notes ?? "",
+  };
+}
+
+function summarizeRows(blankRows, sampleRows) {
+  const blanks = Array.isArray(blankRows) ? blankRows.map(normalizeBlankContentRow) : [];
+  const samples = Array.isArray(sampleRows) ? sampleRows.map(normalizeSampleContentRow) : [];
+
+  const blankUnits = blanks.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const sampleUnits = samples.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
 
   return {
-    contents: normalized,
-    item_count: positiveItems,
-    total_units: totalUnits,
+    blank_item_count: blanks.filter((row) => Number(row.quantity || 0) !== 0).length,
+    blank_units: blankUnits,
+    sample_item_count: samples.filter((row) => Number(row.quantity || 0) !== 0).length,
+    sample_units: sampleUnits,
+    item_count: blanks.filter((row) => Number(row.quantity || 0) !== 0).length + samples.filter((row) => Number(row.quantity || 0) !== 0).length,
+    total_units: blankUnits + sampleUnits,
+    combined: [...blanks, ...samples],
   };
+}
+
+async function loadSampleContentsForBin(binId) {
+  const { data, error } = await supabase
+    .from("sample_products_with_bins")
+    .select("*")
+    .eq("bin_id", Number(binId))
+    .order("brand", { ascending: true });
+
+  if (!error) return data || [];
+
+  const fallback = await supabase
+    .from("sample_products")
+    .select("*")
+    .eq("bin_id", Number(binId))
+    .order("brand", { ascending: true });
+
+  if (fallback.error) {
+    console.warn("Could not load sample products for bin", fallback.error);
+    return [];
+  }
+
+  return fallback.data || [];
 }
 
 export default function BinsDashboard() {
@@ -130,10 +189,19 @@ export default function BinsDashboard() {
       const withCounts = await Promise.all(
         normalizedBins.map(async (bin) => {
           try {
-            const contentRows = await getBinContents(bin.raw_id || bin.id, "");
-            const summary = summarizeContents(contentRows);
+            const [blankRows, sampleRows] = await Promise.all([
+              getBinContents(bin.raw_id || bin.id, ""),
+              loadSampleContentsForBin(bin.raw_id || bin.id),
+            ]);
+
+            const summary = summarizeRows(blankRows, sampleRows);
+
             return {
               ...bin,
+              blank_item_count: summary.blank_item_count,
+              blank_units: summary.blank_units,
+              sample_item_count: summary.sample_item_count,
+              sample_units: summary.sample_units,
               item_count: summary.item_count,
               total_units: summary.total_units,
             };
@@ -226,15 +294,23 @@ export default function BinsDashboard() {
     setMessage("");
 
     try {
-      const rows = await getBinContents(bin.raw_id || bin.id, "");
-      const summary = summarizeContents(rows);
-      setContents(summary.contents);
+      const [blankRows, sampleRows] = await Promise.all([
+        getBinContents(bin.raw_id || bin.id, ""),
+        loadSampleContentsForBin(bin.raw_id || bin.id),
+      ]);
+
+      const summary = summarizeRows(blankRows, sampleRows);
+      setContents(summary.combined);
 
       setBins((currentBins) =>
         currentBins.map((currentBin) =>
           currentBin.id === bin.id
             ? {
                 ...currentBin,
+                blank_item_count: summary.blank_item_count,
+                blank_units: summary.blank_units,
+                sample_item_count: summary.sample_item_count,
+                sample_units: summary.sample_units,
                 item_count: summary.item_count,
                 total_units: summary.total_units,
               }
@@ -251,6 +327,8 @@ export default function BinsDashboard() {
 
   if (activeBin) {
     const totalUnits = contents.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    const blankCount = contents.filter((row) => row.source_type === "Blank").length;
+    const sampleCount = contents.filter((row) => row.source_type === "Sample").length;
 
     return (
       <div className="bins-page-only">
@@ -281,7 +359,9 @@ export default function BinsDashboard() {
         {message ? <div className="bins-message">{message}</div> : null}
 
         <section className="bins-toolbar">
-          <span className="bins-summary-pill">{contents.length} products</span>
+          <span className="bins-summary-pill">{contents.length} total products</span>
+          <span className="bins-summary-pill">{blankCount} blanks</span>
+          <span className="bins-summary-pill">{sampleCount} samples</span>
           <span className="bins-summary-pill">{totalUnits} total units</span>
         </section>
 
@@ -289,12 +369,13 @@ export default function BinsDashboard() {
           {loadingContents ? (
             <div className="bins-empty">Loading bin contents...</div>
           ) : contents.length === 0 ? (
-            <div className="bins-empty">No active inventory found in this bin.</div>
+            <div className="bins-empty">No active blank or sample inventory found in this bin.</div>
           ) : (
             <div className="bins-table-wrap">
               <table className="bins-content-table">
                 <thead>
                   <tr>
+                    <th>Type</th>
                     <th>Product</th>
                     <th>SKU</th>
                     <th>Brand</th>
@@ -306,9 +387,15 @@ export default function BinsDashboard() {
                 </thead>
                 <tbody>
                   {contents.map((row, index) => (
-                    <tr key={`${row.blank_product_id || row.id || row.sku}-${index}`}>
+                    <tr key={`${row.source_type}-${row.blank_product_id || row.id || row.sku}-${index}`}>
                       <td>
-                        <strong>{safeText(row.product_name || row.display_name, "Blank product")}</strong>
+                        <span className={row.source_type === "Sample" ? "source-pill source-pill-sample" : "source-pill"}>
+                          {row.source_badge}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{safeText(row.product_name || row.display_name, "Product")}</strong>
+                        {row.customer ? <div className="bins-subtext">Customer: {row.customer}</div> : null}
                       </td>
                       <td>{safeText(row.sku)}</td>
                       <td>{safeText(row.brand)}</td>
@@ -340,7 +427,7 @@ export default function BinsDashboard() {
             <h1>Bins</h1>
             <p>
               Use this page to quickly find storage locations, open bin contents,
-              and keep blank inventory organized by location.
+              and keep blank and sample inventory organized by location.
             </p>
           </div>
 
@@ -407,7 +494,7 @@ export default function BinsDashboard() {
                   </p>
                 </div>
 
-                <div className="bin-metrics">
+                <div className="bin-metrics bin-metrics-four">
                   <div className="bin-metric">
                     <span className="bin-metric-value">{Number(bin.total_units || 0)}</span>
                     <span className="bin-metric-label">Units</span>
@@ -415,6 +502,14 @@ export default function BinsDashboard() {
                   <div className="bin-metric">
                     <span className="bin-metric-value">{Number(bin.item_count || 0)}</span>
                     <span className="bin-metric-label">Items</span>
+                  </div>
+                  <div className="bin-metric">
+                    <span className="bin-metric-value">{Number(bin.blank_units || 0)}</span>
+                    <span className="bin-metric-label">Blank Units</span>
+                  </div>
+                  <div className="bin-metric">
+                    <span className="bin-metric-value">{Number(bin.sample_units || 0)}</span>
+                    <span className="bin-metric-label">Sample Units</span>
                   </div>
                 </div>
 
@@ -559,7 +654,8 @@ function BinsScopedStyles() {
         font-weight: 700;
       }
       .bins-summary-pill,
-      .bins-qty-pill {
+      .bins-qty-pill,
+      .source-pill {
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -574,6 +670,22 @@ function BinsScopedStyles() {
         padding: 6px 10px;
         background: rgba(37, 99, 235, .10);
         color: #1d4ed8;
+      }
+      .source-pill {
+        padding: 6px 10px;
+        background: rgba(37, 99, 235, .10);
+        color: #1d4ed8;
+        font-size: .76rem;
+      }
+      .source-pill-sample {
+        background: rgba(219, 39, 119, .10);
+        color: #be185d;
+      }
+      .bins-subtext {
+        margin-top: 3px;
+        color: var(--bin-muted);
+        font-size: .82rem;
+        font-weight: 700;
       }
       .bins-message {
         padding: 12px 14px;
@@ -629,7 +741,7 @@ function BinsScopedStyles() {
         padding: 18px;
         display: grid;
         gap: 14px;
-        min-height: 220px;
+        min-height: 255px;
       }
       .bin-card::before {
         content: "";
@@ -682,6 +794,9 @@ function BinsScopedStyles() {
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
       }
+      .bin-metrics-four {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       .bin-metric {
         border-radius: 16px;
         padding: 12px;
@@ -698,9 +813,9 @@ function BinsScopedStyles() {
       .bin-metric-label {
         display: block;
         margin-top: 4px;
-        font-size: .72rem;
+        font-size: .68rem;
         font-weight: 900;
-        letter-spacing: .05em;
+        letter-spacing: .04em;
         text-transform: uppercase;
         color: var(--bin-muted);
       }
