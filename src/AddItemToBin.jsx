@@ -12,9 +12,16 @@ const lineTemplate = {
   notes: '',
 };
 
+function normalizeId(value) {
+  if (value == null) return '';
+  const text = String(value).trim();
+  if (!text || ['undefined', 'null', 'blank_product_id', 'bin_id'].includes(text.toLowerCase())) return '';
+  return text;
+}
+
 function normalizeBin(row) {
   if (!row) return null;
-  const id = row.id == null ? '' : String(row.id);
+  const id = normalizeId(row.id);
   const code = row.bin_code || row.code || row.name || row.label || id;
   const label = row.label || row.name || row.title || code;
   const location = row.location || row.area || row.zone || '';
@@ -24,22 +31,23 @@ function normalizeBin(row) {
 
 function normalizeLookup(row) {
   if (!row) return null;
+  const id = normalizeId(row.id);
   return {
     ...row,
-    id: row.id == null ? '' : String(row.id),
-    name: row.name || row.label || row.title || row.code || row.id,
+    id,
+    name: row.name || row.label || row.title || row.code || id,
     code: row.code || row.slug || '',
   };
 }
 
 async function loadBins() {
-  const rpc = await supabase.rpc('sc_receiving_bins_v2');
+  const rpc = await supabase.rpc('sc_receiving_bins_v4');
   if (!rpc.error && Array.isArray(rpc.data)) {
     return rpc.data.map(normalizeBin).filter((b) => b?.id);
   }
 
   const direct = await supabase.from('bins').select('*');
-  if (direct.error) throw new Error(`Could not load bins: ${direct.error.message}`);
+  if (direct.error) throw new Error(`Could not load bins: ${direct.error.message}. Run receiving_malformed_array_v4_fix.sql and confirm sc_receiving_bins_v4() works.`);
   return (direct.data || []).map(normalizeBin).filter((b) => b?.id).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
 
@@ -78,9 +86,7 @@ export default function AddItemToBin() {
     }
   }
 
-  useEffect(() => {
-    loadAllLookups();
-  }, []);
+  useEffect(() => { loadAllLookups(); }, []);
 
   const mergedLines = useMemo(() => lines.map((l) => ({
     ...l,
@@ -107,12 +113,7 @@ export default function AddItemToBin() {
         const qty = parts.pop();
         const sizeText = parts.join(' ');
         const size = lookups.sizes.find((s) => [s.name, s.code].filter(Boolean).map((x) => String(x).toUpperCase()).includes(sizeText.toUpperCase()));
-        return {
-          ...lineTemplate,
-          size_id: size?.id || '',
-          quantity: Number(qty) || '',
-          notes: size ? '' : `Review size: ${sizeText}`,
-        };
+        return { ...lineTemplate, size_id: size?.id || '', quantity: Number(qty) || '', notes: size ? '' : `Review size: ${sizeText}` };
       });
     if (parsed.length) setLines(parsed);
   }
@@ -120,7 +121,7 @@ export default function AddItemToBin() {
   async function findBlank(line) {
     const { data, error } = await supabase
       .from('blank_products')
-      .select('id,sku_base,name')
+      .select('id, sku_base, name')
       .eq('brand_id', line.brand_id)
       .eq('product_type_id', line.product_type_id)
       .eq('color_id', line.color_id)
@@ -147,30 +148,34 @@ export default function AddItemToBin() {
     for (const line of valid) {
       try {
         const blank = await findBlank(line);
-        if (!blank?.id) {
+        const blankId = normalizeId(blank?.id);
+        const binId = normalizeId(line.bin_id);
+
+        if (!blankId) {
           errors.push(`No blank product match for ${lookupName(lookups.brands, line.brand_id)} / ${lookupName(lookups.product_types, line.product_type_id)} / ${lookupName(lookups.colors, line.color_id)} / ${lookupName(lookups.sizes, line.size_id)}`);
           continue;
         }
 
-        const note = [
-          defaults.supplier && `Supplier: ${defaults.supplier}`,
-          defaults.po_number && `PO: ${defaults.po_number}`,
-          defaults.notes,
-          line.notes,
-        ].filter(Boolean).join(' | ');
+        if (!binId) {
+          errors.push('Missing valid bin id. Refresh bins and choose the bin again.');
+          continue;
+        }
+
+        const note = [defaults.supplier && `Supplier: ${defaults.supplier}`, defaults.po_number && `PO: ${defaults.po_number}`, defaults.notes, line.notes].filter(Boolean).join(' | ');
 
         const rpcPayload = {
-          p_blank_product_id_text: String(blank.id),
-          p_bin_id_text: String(line.bin_id),
+          p_blank_product_id_text: blankId,
+          p_bin_id_text: binId,
           p_quantity: Number(line.quantity),
           p_unit_cost: line.unit_cost === '' ? null : Number(line.unit_cost),
           p_notes: note || null,
         };
 
-        const rpc = await supabase.rpc('sc_receive_blank_inventory_v3', rpcPayload);
+        const rpc = await supabase.rpc('sc_receive_blank_inventory_v4', rpcPayload);
+        if (rpc.error) throw new Error(rpc.error.message || 'Receiving RPC failed.');
 
-        if (rpc.error) {
-          throw new Error(rpc.error.message || 'Receiving RPC failed.');
+        if (rpc.data && rpc.data.success === false) {
+          throw new Error(rpc.data.message || 'Receiving RPC returned success=false.');
         }
 
         saved += 1;
@@ -179,7 +184,7 @@ export default function AddItemToBin() {
       }
     }
 
-    setMessage(`${saved} receiving row(s) saved.${errors.length ? ` Issues: ${errors.slice(0, 3).join('; ')}` : ''}`);
+    setMessage(`${saved} receiving row(s) saved.${errors.length ? ` Issues: ${errors.slice(0, 4).join('; ')}` : ''}`);
     setSaving(false);
   }
 
@@ -187,16 +192,14 @@ export default function AddItemToBin() {
     <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
       <option value="">{placeholder}</option>
       {list.map((x) => (
-        <option key={x.id} value={x.id}>
-          {type === 'bin' ? (x.display_name || x.label || x.bin_code || x.id) : (x.name || x.label || x.code || x.id)}
-        </option>
+        <option key={x.id} value={x.id}>{type === 'bin' ? (x.display_name || x.label || x.bin_code || x.id) : (x.name || x.label || x.code || x.id)}</option>
       ))}
     </select>
   );
 
   return (
     <div className="sc-page-stack add-bin-page">
-      <div className="sc-page-header-card">
+      <div className="sc-page-header-card receiving-hero">
         <div>
           <div className="sc-kicker">Receiving</div>
           <h2>Add Blank Items to Bin</h2>
@@ -208,12 +211,7 @@ export default function AddItemToBin() {
       {message && <div className="sc-alert">{message}</div>}
 
       <section className="sc-panel">
-        <div className="sc-panel-header">
-          <div>
-            <h3>Receiving Defaults</h3>
-            <p>Choose the default bin, brand, style, and color. Lines can still override these values.</p>
-          </div>
-        </div>
+        <div className="sc-panel-header"><div><h3>Receiving Defaults</h3><p>Choose the default bin, brand, style, and color. Lines can still override these values.</p></div></div>
         <div className="sc-form-grid">
           <label className="sc-field"><span>Supplier</span><input value={defaults.supplier} onChange={(e) => setDefaults({ ...defaults, supplier: e.target.value })} /></label>
           <label className="sc-field"><span>PO / Order Number</span><input value={defaults.po_number} onChange={(e) => setDefaults({ ...defaults, po_number: e.target.value })} /></label>
@@ -226,28 +224,18 @@ export default function AddItemToBin() {
       </section>
 
       <section className="sc-panel">
-        <div className="sc-panel-header">
-          <div><h3>Paste Size Run</h3><p>Example: L 2, M 2, S 2, XL 2, XS 2. One line per size also works.</p></div>
-          <button className="sc-btn" onClick={parseSizeRun}>Parse Size Run</button>
-        </div>
+        <div className="sc-panel-header"><div><h3>Paste Size Run</h3><p>Example: L 2, M 2, S 2, XL 2, XS 2. One line per size also works.</p></div><button className="sc-btn" onClick={parseSizeRun}>Parse Size Run</button></div>
         <textarea className="sc-textarea" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={'L 2\nM 2\nS 2\nXL 2\nXS 2'} />
       </section>
 
       <section className="sc-panel">
-        <div className="sc-panel-header">
-          <div><h3>Receiving Lines</h3><p>Each complete line will be received into the selected bin.</p></div>
-          <button className="sc-btn" onClick={() => setLines([...lines, { ...lineTemplate }])}>Add Line</button>
-        </div>
-
+        <div className="sc-panel-header"><div><h3>Receiving Lines</h3><p>Each complete line will be received into the selected bin.</p></div><button className="sc-btn" onClick={() => setLines([...lines, { ...lineTemplate }])}>Add Line</button></div>
         <div className="sc-receiving-lines">
           {mergedLines.map((line, index) => {
             const missingFields = missing(line);
             return (
               <article className="sc-receiving-card" key={index}>
-                <div className="sc-card-title-row">
-                  <strong>Line {index + 1}</strong>
-                  <span className={`sc-badge ${missingFields.length ? 'warning' : 'success'}`}>{missingFields.length ? `Missing: ${missingFields.join(', ')}` : 'Ready'}</span>
-                </div>
+                <div className="sc-card-title-row"><strong>Line {index + 1}</strong><span className={`sc-badge ${missingFields.length ? 'warning' : 'success'}`}>{missingFields.length ? `Missing: ${missingFields.join(', ')}` : 'Ready'}</span></div>
                 <div className="sc-form-grid compact">
                   <label className="sc-field"><span>Bin</span>{select(line.bin_id, (v) => updateLine(index, { bin_id: v }), lookups.bins, defaults.bin_id ? 'Using default bin' : 'Choose bin', 'bin')}</label>
                   <label className="sc-field"><span>Brand</span>{select(line.brand_id, (v) => updateLine(index, { brand_id: v }), lookups.brands, 'Default / choose')}</label>
@@ -258,9 +246,7 @@ export default function AddItemToBin() {
                   <label className="sc-field"><span>Unit Cost</span><input type="number" step="0.01" min="0" value={line.unit_cost} onChange={(e) => updateLine(index, { unit_cost: e.target.value })} /></label>
                   <label className="sc-field"><span>Line Note</span><input value={line.notes} onChange={(e) => updateLine(index, { notes: e.target.value })} /></label>
                 </div>
-                <div className="sc-receiving-line-actions">
-                  <button className="sc-btn sc-btn-danger sc-btn-small" onClick={() => setLines(lines.filter((_, i) => i !== index))} disabled={lines.length === 1}>Remove Line</button>
-                </div>
+                <div className="sc-receiving-line-actions"><button className="sc-btn sc-btn-danger sc-btn-small" onClick={() => setLines(lines.filter((_, i) => i !== index))} disabled={lines.length === 1}>Remove Line</button></div>
               </article>
             );
           })}
