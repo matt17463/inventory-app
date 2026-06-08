@@ -417,11 +417,12 @@ export async function getBinContents(binId, search = '') {
   return data || [];
 }
 
-export async function receiveBlankInventory({ binId, blankProductId, quantity, notes }) {
-  const { error } = await supabase.rpc('receive_blank_inventory', {
-    p_bin_id: Number(binId),
-    p_blank_product_id: blankProductId,
+export async function receiveBlankInventory({ binId, blankProductId, quantity, notes, unitCost = null }) {
+  const { error } = await supabase.rpc('sc_receive_blank_inventory_v3', {
+    p_blank_product_id_text: String(blankProductId),
+    p_bin_id_text: String(binId),
     p_quantity: Number(quantity),
+    p_unit_cost: unitCost === '' || unitCost == null ? null : Number(unitCost),
     p_notes: notes || null,
   });
 
