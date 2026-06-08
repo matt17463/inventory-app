@@ -1,16 +1,20 @@
 
 import React, { useEffect, useMemo, useState } from "react";
-import { createBin, getBins, saveBinDisplayOrder } from "./lib/inventoryApi";
-import { supabase } from "./lib/supabaseClient";
+import {
+  createBin,
+  getBins,
+  saveBinDisplayOrder,
+  getBinsDashboardCards,
+  getBinContents,
+} from "./lib/inventoryApi";
 
 /**
  * BinsDashboard.jsx
  *
- * Bins page only:
- * - keeps the newer card visual layout
- * - restores accurate item/unit counts using sc_bins_dashboard_cards_v1()
- * - restores "View Contents" behavior by opening bin contents inside this page
- * - does not require App.css or AppShell changes
+ * Bins page only.
+ * Complete file.
+ * Does not import supabaseClient directly, so it avoids client path mismatch.
+ * Does not require App.css or AppShell.jsx changes.
  */
 
 function safeText(value, fallback = "—") {
@@ -27,34 +31,61 @@ function normalizeBin(row, fallback = {}) {
     ...fallback,
     ...row,
     id: String(row?.id ?? fallback?.id ?? ""),
-    bin_code: row?.bin_code ?? row?.code ?? row?.name ?? row?.label ?? fallback?.bin_code ?? fallback?.code ?? fallback?.name ?? fallback?.label ?? "",
+    bin_code:
+      row?.bin_code ??
+      row?.code ??
+      row?.name ??
+      row?.label ??
+      fallback?.bin_code ??
+      fallback?.code ??
+      fallback?.name ??
+      fallback?.label ??
+      "",
     label: row?.label ?? row?.name ?? row?.description ?? fallback?.label ?? fallback?.name ?? "",
     location: row?.location ?? fallback?.location ?? "",
     display_name: row?.display_name ?? fallback?.display_name ?? "",
     display_order: Number(row?.display_order ?? fallback?.display_order ?? 999999),
-    item_count: Number(row?.item_count ?? row?.distinct_items ?? row?.product_count ?? fallback?.item_count ?? fallback?.distinct_items ?? fallback?.product_count ?? 0),
-    total_units: Number(row?.total_units ?? row?.units ?? row?.quantity ?? row?.quantity_on_hand ?? fallback?.total_units ?? fallback?.units ?? fallback?.quantity ?? 0),
+    item_count: Number(
+      row?.item_count ??
+        row?.distinct_items ??
+        row?.product_count ??
+        fallback?.item_count ??
+        fallback?.distinct_items ??
+        fallback?.product_count ??
+        0
+    ),
+    total_units: Number(
+      row?.total_units ??
+        row?.units ??
+        row?.quantity ??
+        row?.quantity_on_hand ??
+        fallback?.total_units ??
+        fallback?.units ??
+        fallback?.quantity ??
+        0
+    ),
   };
 }
 
 async function loadBinsForDashboard() {
-  const { data, error } = await supabase.rpc("sc_bins_dashboard_cards_v1");
-
-  if (!error && Array.isArray(data)) {
-    return data.map((row) => normalizeBin(row));
+  if (typeof getBinsDashboardCards === "function") {
+    try {
+      const rows = await getBinsDashboardCards();
+      if (Array.isArray(rows)) return rows.map((row) => normalizeBin(row));
+    } catch (error) {
+      console.warn("sc_bins_dashboard_cards_v1 failed; falling back to getBins()", error);
+    }
   }
 
   const fallbackRows = await getBins();
   return Array.isArray(fallbackRows) ? fallbackRows.map((row) => normalizeBin(row)) : [];
 }
 
-async function loadBinContents(binId) {
-  const { data, error } = await supabase.rpc("sc_bin_contents_v1", {
-    p_bin_id_text: String(binId),
-  });
-
-  if (error) throw error;
-  return Array.isArray(data) ? data : [];
+async function loadBinContentsForDashboard(binId) {
+  if (typeof getBinContents === "function") {
+    return await getBinContents(binId);
+  }
+  return [];
 }
 
 export default function BinsDashboard() {
@@ -107,6 +138,7 @@ export default function BinsDashboard() {
 
     try {
       const payload = {
+        binCode: newBin.bin_code.trim(),
         bin_code: newBin.bin_code.trim(),
         label: newBin.label.trim(),
         location: newBin.location.trim(),
@@ -155,8 +187,8 @@ export default function BinsDashboard() {
     setMessage("");
 
     try {
-      const rows = await loadBinContents(bin.id);
-      setContents(rows);
+      const rows = await loadBinContentsForDashboard(bin.id);
+      setContents(Array.isArray(rows) ? rows : []);
     } catch (error) {
       setMessage(error?.message || "Could not load bin contents.");
       setContents([]);
@@ -649,13 +681,8 @@ function BinsScopedStyles() {
         color: var(--bin-muted);
         font-weight: 800;
       }
-      .bins-table-wrap {
-        overflow-x: auto;
-      }
-      .bins-content-table {
-        width: 100%;
-        border-collapse: collapse;
-      }
+      .bins-table-wrap { overflow-x: auto; }
+      .bins-content-table { width: 100%; border-collapse: collapse; }
       .bins-content-table th,
       .bins-content-table td {
         padding: 12px 14px;
