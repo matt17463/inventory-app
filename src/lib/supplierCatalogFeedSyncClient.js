@@ -1,6 +1,6 @@
 
 export async function syncSupplierCatalogFeedIncremental(feedId, options = {}) {
-  const chunkSize = Number(options.chunkSize || 150);
+  const chunkSize = Number(options.chunkSize || 25);
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
 
   let offset = 0;
@@ -11,7 +11,7 @@ export async function syncSupplierCatalogFeedIncremental(feedId, options = {}) {
   while (!complete) {
     safetyCounter += 1;
 
-    if (safetyCounter > 1000) {
+    if (safetyCounter > 5000) {
       throw new Error('Supplier catalog sync stopped after too many chunks.');
     }
 
@@ -33,15 +33,15 @@ export async function syncSupplierCatalogFeedIncremental(feedId, options = {}) {
 
     onProgress({
       offset,
-      totalRows: Number(body.total_rows || 0),
       importedThisCall: Number(body.imported_this_call || 0),
+      scannedThisCall: Number(body.scanned_this_call || 0),
       complete,
       message: body.message || '',
       raw: body,
     });
 
     if (!complete) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
 
