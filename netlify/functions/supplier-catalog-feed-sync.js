@@ -1,4 +1,6 @@
 
+const zlib = require("zlib");
+
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -145,94 +147,149 @@ function isUsableSupplierRow(row) {
   return row.brand || row.style || row.color || row.size || row.supplier_sku || row.upc || row.unit_cost !== null;
 }
 
-async function readCsvChunkFromUrl(url, offset, chunkSize) {
+function isZipBuffer(buffer) {
+  return buffer && buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+}
+
+function isGzipBuffer(buffer) {
+  return buffer && buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+}
+
+function decodeBufferText(buffer) {
+  if (!buffer || !buffer.length) return "";
+  if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.slice(3).toString("utf8");
+  }
+  return buffer.toString("utf8");
+}
+
+/**
+ * Minimal ZIP reader for supplier files.
+ * Supports common ZIP entries:
+ * - compression method 0: stored
+ * - compression method 8: deflate
+ *
+ * It selects the first CSV/TXT file in the ZIP, or the first non-directory file.
+ */
+function extractCsvTextFromZipBuffer(zipBuffer) {
+  let offset = 0;
+  const candidates = [];
+
+  while (offset + 30 <= zipBuffer.length) {
+    const signature = zipBuffer.readUInt32LE(offset);
+
+    if (signature !== 0x04034b50) break;
+
+    const flags = zipBuffer.readUInt16LE(offset + 6);
+    const compressionMethod = zipBuffer.readUInt16LE(offset + 8);
+    const compressedSize = zipBuffer.readUInt32LE(offset + 18);
+    const uncompressedSize = zipBuffer.readUInt32LE(offset + 22);
+    const fileNameLength = zipBuffer.readUInt16LE(offset + 26);
+    const extraFieldLength = zipBuffer.readUInt16LE(offset + 28);
+
+    const fileNameStart = offset + 30;
+    const fileNameEnd = fileNameStart + fileNameLength;
+    const fileName = zipBuffer.slice(fileNameStart, fileNameEnd).toString("utf8");
+
+    const dataStart = fileNameEnd + extraFieldLength;
+
+    if (flags & 0x08) {
+      throw new Error("ZIP source uses data descriptors, which this lightweight ZIP reader cannot safely parse. Use a direct CSV URL or provide a ZIP with standard local file sizes.");
+    }
+
+    const dataEnd = dataStart + compressedSize;
+
+    if (dataEnd > zipBuffer.length) {
+      throw new Error("ZIP source appears truncated or invalid.");
+    }
+
+    const isDirectory = fileName.endsWith("/");
+    const lowerName = fileName.toLowerCase();
+
+    if (!isDirectory) {
+      candidates.push({
+        fileName,
+        lowerName,
+        compressionMethod,
+        compressedSize,
+        uncompressedSize,
+        data: zipBuffer.slice(dataStart, dataEnd),
+      });
+    }
+
+    offset = dataEnd;
+  }
+
+  if (!candidates.length) {
+    throw new Error("ZIP source did not contain any files.");
+  }
+
+  const selected =
+    candidates.find((entry) => entry.lowerName.endsWith(".csv")) ||
+    candidates.find((entry) => entry.lowerName.endsWith(".txt")) ||
+    candidates[0];
+
+  let extracted;
+
+  if (selected.compressionMethod === 0) {
+    extracted = selected.data;
+  } else if (selected.compressionMethod === 8) {
+    extracted = zlib.inflateRawSync(selected.data);
+  } else {
+    throw new Error(`ZIP entry "${selected.fileName}" uses unsupported compression method ${selected.compressionMethod}.`);
+  }
+
+  if (!extracted || !extracted.length) {
+    throw new Error(`ZIP entry "${selected.fileName}" was empty.`);
+  }
+
+  return {
+    fileName: selected.fileName,
+    text: decodeBufferText(extracted),
+  };
+}
+
+async function downloadSupplierText(url) {
   const response = await fetch(url, {
     headers: {
       "User-Agent": "SkilledCraftingInventoryApp/1.0",
-      Accept: "text/csv,text/plain,application/csv,*/*",
+      Accept: "text/csv,text/plain,application/csv,application/zip,application/octet-stream,*/*",
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Supplier CSV download failed: HTTP ${response.status}`);
+    throw new Error(`Supplier file download failed: HTTP ${response.status}`);
   }
 
-  if (!response.body || typeof response.body.getReader !== "function") {
-    const text = await response.text();
-    return readCsvChunkFromText(text, offset, chunkSize);
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  if (!buffer.length) {
+    throw new Error("Supplier file downloaded but appears to be empty.");
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  let buffer = "";
-  let headers = null;
-  let dataRowIndex = 0;
-  let sourceRowNumber = 1;
-  let usableSeen = 0;
-  let totalScanned = 0;
-  const selectedRows = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-
-    const split = splitCsvRecords(buffer);
-    buffer = split.remainder;
-
-    for (const record of split.records) {
-      sourceRowNumber += 1;
-
-      if (!headers) {
-        headers = parseCsvLine(record).map((header) => clean(header));
-        continue;
-      }
-
-      dataRowIndex += 1;
-      totalScanned = dataRowIndex;
-
-      const mapped = mapSupplierRow(rowToObject(headers, parseCsvLine(record)), sourceRowNumber);
-
-      if (!isUsableSupplierRow(mapped)) continue;
-
-      if (usableSeen >= offset && selectedRows.length < chunkSize) {
-        selectedRows.push(mapped);
-      }
-
-      usableSeen += 1;
-
-      if (selectedRows.length >= chunkSize) {
-        try {
-          await reader.cancel();
-        } catch {
-          // ignore cancel errors
-        }
-
-        return {
-          rows: selectedRows,
-          total_scanned: totalScanned,
-          usable_seen: usableSeen,
-          has_more_hint: true,
-        };
-      }
-    }
-
-    if (done) break;
+  if (isZipBuffer(buffer)) {
+    const extracted = extractCsvTextFromZipBuffer(buffer);
+    return {
+      text: extracted.text,
+      sourceLabel: `${url} :: ${extracted.fileName}`,
+      sourceKind: "zip",
+    };
   }
 
-  if (clean(buffer) && headers) {
-    const mapped = mapSupplierRow(rowToObject(headers, parseCsvLine(buffer)), sourceRowNumber + 1);
-    if (isUsableSupplierRow(mapped)) {
-      if (usableSeen >= offset && selectedRows.length < chunkSize) selectedRows.push(mapped);
-      usableSeen += 1;
-    }
+  if (isGzipBuffer(buffer)) {
+    const extracted = zlib.gunzipSync(buffer);
+    return {
+      text: decodeBufferText(extracted),
+      sourceLabel: url,
+      sourceKind: "gzip",
+    };
   }
 
   return {
-    rows: selectedRows,
-    total_scanned: totalScanned,
-    usable_seen: usableSeen,
-    has_more_hint: false,
+    text: decodeBufferText(buffer),
+    sourceLabel: url,
+    sourceKind: "csv",
   };
 }
 
@@ -343,10 +400,16 @@ exports.handler = async (event) => {
 
     await updateFeed(feedId, {
       last_sync_status: "running",
-      last_sync_message: `Reading supplier CSV chunk starting at usable row ${offset + 1}...`,
+      last_sync_message: `Downloading supplier source and reading chunk starting at usable row ${offset + 1}...`,
     });
 
-    const chunk = await readCsvChunkFromUrl(feed.feed_url, offset, chunkSize);
+    const downloaded = await downloadSupplierText(feed.feed_url);
+
+    if (!downloaded.text || downloaded.text.trim().length < 10) {
+      throw new Error("Supplier source downloaded but did not contain usable CSV text.");
+    }
+
+    const chunk = readCsvChunkFromText(downloaded.text, offset, chunkSize);
 
     if (!chunk.rows.length) {
       await updateFeed(feedId, {
@@ -364,20 +427,21 @@ exports.handler = async (event) => {
         next_offset: offset,
         imported_this_call: 0,
         has_more: false,
+        source_kind: downloaded.sourceKind,
         message: "Supplier catalog sync complete.",
       });
     }
 
     await updateFeed(feedId, {
       last_sync_status: "running",
-      last_sync_message: `Importing ${chunk.rows.length} supplier row(s) from offset ${offset}...`,
+      last_sync_message: `Importing ${chunk.rows.length} row(s) from ${downloaded.sourceKind.toUpperCase()} source...`,
     });
 
     const result = await supabaseFetch(`/rpc/import_supplier_catalog_rows`, {
       method: "POST",
       body: JSON.stringify({
         p_supplier_name: feed.supplier_name,
-        p_source_file_name: feed.source_file_name || feed.feed_name || feed.feed_url,
+        p_source_file_name: feed.source_file_name || feed.feed_name || downloaded.sourceLabel || feed.feed_url,
         p_rows: chunk.rows,
         p_update_blank_products: Boolean(feed.update_blank_products),
         p_create_missing_lookups: Boolean(feed.create_missing_lookups),
@@ -391,7 +455,7 @@ exports.handler = async (event) => {
       last_sync_at: hasMore ? feed.last_sync_at : new Date().toISOString(),
       last_sync_status: hasMore ? "running" : "success",
       last_sync_message: hasMore
-        ? `Imported through usable row ${nextOffset}. Continue sync...`
+        ? `Imported through usable row ${nextOffset} from ${downloaded.sourceKind.toUpperCase()} source. Continue sync...`
         : `Supplier catalog sync complete. Imported through usable row ${nextOffset}.`,
       last_row_count: nextOffset,
       last_catalog_rows_inserted: Number(feed.last_catalog_rows_inserted || 0) + Number(result?.catalog_rows_inserted || 0),
@@ -408,6 +472,7 @@ exports.handler = async (event) => {
       next_offset: nextOffset,
       has_more: hasMore,
       scanned_this_call: chunk.total_scanned,
+      source_kind: downloaded.sourceKind,
       import_result: result,
       message: hasMore
         ? `Imported ${nextOffset} usable supplier row(s).`
@@ -430,10 +495,10 @@ exports.handler = async (event) => {
       success: false,
       message: error.message || "Supplier catalog feed sync failed.",
       troubleshooting: [
-        "This streaming version reads only the needed CSV chunk.",
-        "Use SUPPLIER_CATALOG_SYNC_CHUNK_SIZE=10 or 25 if the supplier feed is still slow.",
-        "Confirm the supplier CSV URL is a direct public CSV URL.",
-        "If this still returns 502, check the Netlify function log for a syntax/runtime error or supplier network block.",
+        "This version supports direct CSV, GZIP CSV, and common ZIP files containing a CSV.",
+        "If ZIP fails, confirm the ZIP contains a normal .csv file and is not password-protected.",
+        "ZIP entries using data descriptors may need a direct CSV URL or a supplier-specific extractor.",
+        "Use SUPPLIER_CATALOG_SYNC_CHUNK_SIZE=10 if the supplier file is slow.",
       ],
     });
   }
