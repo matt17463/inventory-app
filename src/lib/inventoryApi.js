@@ -1866,13 +1866,61 @@ export async function savePhase5ArtworkRequest(request) {
 }
 
 // ---------------------------------------------------------
-// Bins Dashboard card-count helper.
-// Added for the card-style BinsDashboard page.
-// NOTE: getBinContents already exists in this file, so do not add
-// another getBinContents export.
+// Supplier Catalog Reference Review Workflow
 // ---------------------------------------------------------
-export async function getBinsDashboardCards() {
-  const { data, error } = await supabase.rpc('sc_bins_dashboard_cards_v1');
+export async function getSupplierCatalogReviewStats() {
+  const { data, error } = await supabase.rpc('sc_supplier_catalog_review_stats');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateSupplierCatalogReviewItem({
+  itemId,
+  review_status,
+  use_in_quote_builder = false,
+  use_in_substitution_suggestions = false,
+  create_blank_candidate = false,
+  review_notes = '',
+  updated_by = null,
+}) {
+  const { data, error } = await supabase.rpc('sc_update_supplier_catalog_review_item', {
+    p_item_id: itemId,
+    p_review_status: review_status || 'unreviewed',
+    p_use_in_quote_builder: Boolean(use_in_quote_builder),
+    p_use_in_substitution_suggestions: Boolean(use_in_substitution_suggestions),
+    p_create_blank_candidate: Boolean(create_blank_candidate),
+    p_review_notes: review_notes || null,
+    p_updated_by: updated_by || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getSupplierCatalogQuoteReference(search = '') {
+  let query = supabase
+    .from('supplier_catalog_quote_reference')
+    .select('*')
+    .order('supplier_name', { ascending: true })
+    .limit(5000);
+
+  const term = String(search || '').trim();
+
+  if (term) {
+    const escaped = escapeOrTerm(term);
+    query = query.or([
+      `supplier_name.ilike.%${escaped}%`,
+      `brand.ilike.%${escaped}%`,
+      `style.ilike.%${escaped}%`,
+      `color.ilike.%${escaped}%`,
+      `size.ilike.%${escaped}%`,
+      `supplier_sku.ilike.%${escaped}%`,
+      `upc.ilike.%${escaped}%`,
+      `blank_sku_base.ilike.%${escaped}%`,
+    ].join(','));
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
