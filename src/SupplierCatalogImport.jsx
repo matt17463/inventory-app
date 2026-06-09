@@ -1,10 +1,28 @@
-import { useMemo, useState } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { importSupplierCatalogRows } from './lib/inventoryApi';
+import {
+  createSupplierCatalogFeed,
+  deleteSupplierCatalogFeed,
+  importSupplierCatalogRows,
+  listSupplierCatalogFeeds,
+  syncSupplierCatalogFeed,
+  updateSupplierCatalogFeed,
+} from './lib/inventoryApi';
 
 const TEMPLATE_HEADERS = [
   'Brand', 'Style', 'Color', 'Size', 'Supplier SKU', 'UPC', 'Unit Cost', 'Case Pack Qty', 'Description', 'Notes'
 ];
+
+const EMPTY_FEED = {
+  supplier_name: '',
+  feed_name: '',
+  feed_url: '',
+  source_file_name: '',
+  is_active: true,
+  update_blank_products: false,
+  create_missing_lookups: true,
+};
 
 function clean(value) {
   return String(value ?? '').trim();
@@ -70,6 +88,15 @@ function downloadTemplate() {
   XLSX.writeFile(workbook, 'supplier-catalog-import-template.xlsx');
 }
 
+function formatDate(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return '';
+  }
+}
+
 export default function SupplierCatalogImport() {
   const [supplierName, setSupplierName] = useState('');
   const [sourceFileName, setSourceFileName] = useState('');
@@ -80,12 +107,30 @@ export default function SupplierCatalogImport() {
   const [updateBlankProducts, setUpdateBlankProducts] = useState(true);
   const [createMissingLookups, setCreateMissingLookups] = useState(true);
 
+  const [feeds, setFeeds] = useState([]);
+  const [feedForm, setFeedForm] = useState(EMPTY_FEED);
+  const [editingFeedId, setEditingFeedId] = useState(null);
+  const [syncingFeedId, setSyncingFeedId] = useState(null);
+
   const stats = useMemo(() => {
     const withCost = rows.filter((row) => row.unit_cost !== null).length;
     const withUpc = rows.filter((row) => row.upc).length;
     const withSupplierSku = rows.filter((row) => row.supplier_sku).length;
     return { total: rows.length, withCost, withUpc, withSupplierSku };
   }, [rows]);
+
+  async function loadFeeds() {
+    try {
+      const data = await listSupplierCatalogFeeds();
+      setFeeds(data);
+    } catch (err) {
+      setMessage(err.message || 'Failed to load supplier catalog feeds.');
+    }
+  }
+
+  useEffect(() => {
+    loadFeeds();
+  }, []);
 
   async function handleFile(event) {
     const file = event.target.files?.[0];
@@ -135,6 +180,7 @@ export default function SupplierCatalogImport() {
       });
       setResult(data);
       setMessage(`Catalog import complete. ${data?.catalog_rows_inserted ?? 0} catalog row(s) saved. ${data?.blank_products_updated ?? 0} blank item(s) updated.`);
+      await loadFeeds();
     } catch (err) {
       setMessage(err.message || 'Supplier catalog import failed.');
     } finally {
@@ -142,21 +188,211 @@ export default function SupplierCatalogImport() {
     }
   }
 
+  function updateFeedForm(field, value) {
+    setFeedForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function beginEditFeed(feed) {
+    setEditingFeedId(feed.id);
+    setFeedForm({
+      supplier_name: feed.supplier_name || '',
+      feed_name: feed.feed_name || '',
+      feed_url: feed.feed_url || '',
+      source_file_name: feed.source_file_name || '',
+      is_active: feed.is_active !== false,
+      update_blank_products: Boolean(feed.update_blank_products),
+      create_missing_lookups: feed.create_missing_lookups !== false,
+    });
+  }
+
+  function resetFeedForm() {
+    setEditingFeedId(null);
+    setFeedForm(EMPTY_FEED);
+  }
+
+  async function saveFeed(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      if (!feedForm.supplier_name.trim()) throw new Error('Supplier name is required.');
+      if (!feedForm.feed_url.trim()) throw new Error('CSV feed URL is required.');
+      if (!/^https?:\/\//i.test(feedForm.feed_url.trim())) throw new Error('Feed URL must start with http:// or https://.');
+
+      if (editingFeedId) {
+        await updateSupplierCatalogFeed(editingFeedId, feedForm);
+        setMessage('Supplier catalog feed updated.');
+      } else {
+        await createSupplierCatalogFeed(feedForm);
+        setMessage('Supplier catalog feed saved.');
+      }
+
+      resetFeedForm();
+      await loadFeeds();
+    } catch (err) {
+      setMessage(err.message || 'Failed to save supplier catalog feed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeFeed(feed) {
+    const confirmed = window.confirm(`Delete supplier catalog feed "${feed.feed_name || feed.supplier_name}"?`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      await deleteSupplierCatalogFeed(feed.id);
+      setMessage('Supplier catalog feed deleted.');
+      await loadFeeds();
+    } catch (err) {
+      setMessage(err.message || 'Failed to delete supplier catalog feed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function syncFeed(feed) {
+    setSyncingFeedId(feed.id);
+    setMessage(`Syncing ${feed.feed_name || feed.supplier_name}...`);
+
+    try {
+      const data = await syncSupplierCatalogFeed(feed.id);
+      setResult(data);
+      setMessage(data.message || 'Supplier catalog feed synced.');
+      await loadFeeds();
+    } catch (err) {
+      setMessage(err.message || 'Supplier catalog feed sync failed.');
+      await loadFeeds();
+    } finally {
+      setSyncingFeedId(null);
+    }
+  }
+
   return (
-    <main className="page phase3-page">
+    <main className="page phase3-page supplier-import-page-only">
+      <SupplierImportScopedStyles />
+
       <section className="page-header">
         <div>
           <p className="eyebrow">Phase 3 · Supplier Catalog</p>
           <h1>Supplier Catalog Import</h1>
-          <p>Upload supplier pricing, UPC, vendor SKU, and case-pack data. Matched blank products can be updated automatically.</p>
+          <p>Upload supplier catalog files manually or save supplier-hosted CSV feed URLs and refresh them with a button.</p>
         </div>
         <button type="button" className="secondary-button" onClick={downloadTemplate}>Download Template</button>
       </section>
 
       {message && <p className="message">{message}</p>}
 
+      <section className="card elevated-card supplier-feed-card">
+        <div className="supplier-feed-header">
+          <div>
+            <h2>Website CSV Feeds</h2>
+            <p className="helper-text">
+              Save supplier-hosted CSV URLs here. The button downloads the supplier file through a Netlify function,
+              parses it, and imports rows into the supplier catalog reference library.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={saveFeed} className="supplier-feed-form">
+          <label>
+            Supplier Name
+            <input value={feedForm.supplier_name} onChange={(event) => updateFeedForm('supplier_name', event.target.value)} placeholder="Example: S&S Activewear" />
+          </label>
+
+          <label>
+            Feed Name
+            <input value={feedForm.feed_name} onChange={(event) => updateFeedForm('feed_name', event.target.value)} placeholder="Example: Daily Inventory CSV" />
+          </label>
+
+          <label className="wide-field">
+            CSV Feed URL
+            <input value={feedForm.feed_url} onChange={(event) => updateFeedForm('feed_url', event.target.value)} placeholder="https://supplier.com/path/catalog.csv" />
+          </label>
+
+          <label>
+            Source File Label
+            <input value={feedForm.source_file_name} onChange={(event) => updateFeedForm('source_file_name', event.target.value)} placeholder="Optional display label" />
+          </label>
+
+          <label className="checkbox-line">
+            <input type="checkbox" checked={feedForm.is_active} onChange={(event) => updateFeedForm('is_active', event.target.checked)} />
+            Active
+          </label>
+
+          <label className="checkbox-line">
+            <input type="checkbox" checked={feedForm.create_missing_lookups} onChange={(event) => updateFeedForm('create_missing_lookups', event.target.checked)} />
+            Create missing lookup values
+          </label>
+
+          <label className="checkbox-line supplier-warning-check">
+            <input type="checkbox" checked={feedForm.update_blank_products} onChange={(event) => updateFeedForm('update_blank_products', event.target.checked)} />
+            Also update matched blank products with supplier data
+          </label>
+
+          <div className="supplier-feed-actions">
+            <button type="submit" disabled={loading}>
+              {editingFeedId ? 'Save Feed Changes' : 'Add Feed'}
+            </button>
+            {editingFeedId && <button type="button" onClick={resetFeedForm}>Cancel Edit</button>}
+          </div>
+        </form>
+
+        <div className="responsive-table supplier-feed-table-wrap">
+          <table className="data-table supplier-feed-table">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Feed</th>
+                <th>Status</th>
+                <th>Last Sync</th>
+                <th>Rows</th>
+                <th>Message</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {feeds.map((feed) => (
+                <tr key={feed.id}>
+                  <td><strong>{feed.supplier_name}</strong></td>
+                  <td>
+                    <div>{feed.feed_name || feed.source_file_name || 'Website CSV'}</div>
+                    <small className="supplier-feed-url">{feed.feed_url}</small>
+                  </td>
+                  <td>
+                    <span className={`supplier-feed-status supplier-feed-status-${feed.last_sync_status || 'never'}`}>
+                      {feed.last_sync_status || 'never synced'}
+                    </span>
+                    {!feed.is_active && <span className="supplier-feed-status supplier-feed-status-inactive">inactive</span>}
+                  </td>
+                  <td>{formatDate(feed.last_sync_at)}</td>
+                  <td>{feed.last_row_count || 0}</td>
+                  <td>{feed.last_sync_message || ''}</td>
+                  <td>
+                    <div className="supplier-feed-row-actions">
+                      <button type="button" onClick={() => syncFeed(feed)} disabled={syncingFeedId === feed.id || !feed.is_active}>
+                        {syncingFeedId === feed.id ? 'Syncing...' : 'Update from Website'}
+                      </button>
+                      <button type="button" onClick={() => beginEditFeed(feed)}>Edit</button>
+                      <button type="button" className="danger-button" onClick={() => removeFeed(feed)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!feeds.length && (
+                <tr><td colSpan="7">No supplier website CSV feeds saved yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section className="card elevated-card">
-        <h2>Import Settings</h2>
+        <h2>Manual File Import Settings</h2>
         <div className="form-grid">
           <label>
             Supplier Name
@@ -203,10 +439,120 @@ export default function SupplierCatalogImport() {
 
       {result && (
         <section className="card elevated-card">
-          <h2>Import Result</h2>
+          <h2>Import / Sync Result</h2>
           <pre className="code-block">{JSON.stringify(result, null, 2)}</pre>
         </section>
       )}
     </main>
+  );
+}
+
+function SupplierImportScopedStyles() {
+  return (
+    <style>{`
+      .supplier-import-page-only {
+        display: grid;
+        gap: 18px;
+      }
+
+      .supplier-feed-card {
+        border: 1px solid rgba(37, 99, 235, 0.14);
+        background:
+          radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26rem),
+          #ffffff;
+      }
+
+      .supplier-feed-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .supplier-feed-form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .supplier-feed-form .wide-field {
+        grid-column: 1 / -1;
+      }
+
+      .supplier-feed-actions,
+      .supplier-feed-row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .supplier-feed-actions {
+        grid-column: 1 / -1;
+      }
+
+      .supplier-warning-check {
+        color: #9a3412;
+        font-weight: 800;
+      }
+
+      .supplier-feed-table {
+        min-width: 980px;
+      }
+
+      .supplier-feed-url {
+        display: block;
+        max-width: 360px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #64748b;
+      }
+
+      .supplier-feed-status {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 0.74rem;
+        font-weight: 900;
+        background: rgba(100, 116, 139, 0.12);
+        color: #475569;
+        margin-right: 4px;
+      }
+
+      .supplier-feed-status-success {
+        background: rgba(5, 150, 105, 0.12);
+        color: #047857;
+      }
+
+      .supplier-feed-status-running {
+        background: rgba(37, 99, 235, 0.12);
+        color: #1d4ed8;
+      }
+
+      .supplier-feed-status-failed {
+        background: rgba(225, 29, 72, 0.12);
+        color: #be123c;
+      }
+
+      .supplier-feed-status-inactive {
+        background: rgba(249, 115, 22, 0.12);
+        color: #c2410c;
+      }
+
+      @media (max-width: 760px) {
+        .supplier-feed-form {
+          grid-template-columns: 1fr;
+        }
+
+        .supplier-feed-header,
+        .supplier-feed-actions,
+        .supplier-feed-row-actions {
+          display: grid;
+        }
+      }
+    `}</style>
   );
 }
