@@ -6,9 +6,9 @@ import {
   deleteSupplierCatalogFeed,
   importSupplierCatalogRows,
   listSupplierCatalogFeeds,
-  syncSupplierCatalogFeed,
   updateSupplierCatalogFeed,
 } from './lib/inventoryApi';
+import { syncSupplierCatalogFeedIncremental } from './lib/supplierCatalogFeedSyncClient';
 
 const TEMPLATE_HEADERS = [
   'Brand', 'Style', 'Color', 'Size', 'Supplier SKU', 'UPC', 'Unit Cost', 'Case Pack Qty', 'Description', 'Notes'
@@ -111,6 +111,7 @@ export default function SupplierCatalogImport() {
   const [feedForm, setFeedForm] = useState(EMPTY_FEED);
   const [editingFeedId, setEditingFeedId] = useState(null);
   const [syncingFeedId, setSyncingFeedId] = useState(null);
+  const [syncProgress, setSyncProgress] = useState(null);
 
   const stats = useMemo(() => {
     const withCost = rows.filter((row) => row.unit_cost !== null).length;
@@ -257,15 +258,26 @@ export default function SupplierCatalogImport() {
 
   async function syncFeed(feed) {
     setSyncingFeedId(feed.id);
-    setMessage(`Syncing ${feed.feed_name || feed.supplier_name}...`);
+    setSyncProgress({ offset: 0, totalRows: 0, message: 'Starting incremental sync...' });
+    setMessage(`Syncing ${feed.feed_name || feed.supplier_name} in smaller chunks...`);
 
     try {
-      const data = await syncSupplierCatalogFeed(feed.id);
+      const data = await syncSupplierCatalogFeedIncremental(feed.id, {
+        chunkSize: 150,
+        onProgress: (progress) => {
+          setSyncProgress(progress);
+          const total = progress.totalRows || '?';
+          setMessage(progress.message || `Imported ${progress.offset} of ${total} row(s)...`);
+        },
+      });
+
       setResult(data);
       setMessage(data.message || 'Supplier catalog feed synced.');
+      setSyncProgress(null);
       await loadFeeds();
     } catch (err) {
       setMessage(err.message || 'Supplier catalog feed sync failed.');
+      setSyncProgress(null);
       await loadFeeds();
     } finally {
       setSyncingFeedId(null);
@@ -280,20 +292,29 @@ export default function SupplierCatalogImport() {
         <div>
           <p className="eyebrow">Phase 3 · Supplier Catalog</p>
           <h1>Supplier Catalog Import</h1>
-          <p>Upload supplier catalog files manually or save supplier-hosted CSV feed URLs and refresh them with a button.</p>
+          <p>Upload supplier catalog files manually or save supplier-hosted CSV feed URLs and refresh them in smaller chunks.</p>
         </div>
         <button type="button" className="secondary-button" onClick={downloadTemplate}>Download Template</button>
       </section>
 
       {message && <p className="message">{message}</p>}
 
+      {syncProgress && (
+        <section className="card supplier-progress-card">
+          <h2>Supplier Feed Sync Progress</h2>
+          <div className="supplier-progress-bar">
+            <span style={{ width: `${syncProgress.totalRows ? Math.min(100, (syncProgress.offset / syncProgress.totalRows) * 100) : 5}%` }} />
+          </div>
+          <p>{syncProgress.offset || 0} of {syncProgress.totalRows || '?'} row(s) processed.</p>
+        </section>
+      )}
+
       <section className="card elevated-card supplier-feed-card">
         <div className="supplier-feed-header">
           <div>
             <h2>Website CSV Feeds</h2>
             <p className="helper-text">
-              Save supplier-hosted CSV URLs here. The button downloads the supplier file through a Netlify function,
-              parses it, and imports rows into the supplier catalog reference library.
+              This version updates supplier-hosted CSVs in multiple smaller requests so large supplier files do not hit Netlify's request timeout.
             </p>
           </div>
         </div>
@@ -455,11 +476,28 @@ function SupplierImportScopedStyles() {
         gap: 18px;
       }
 
-      .supplier-feed-card {
+      .supplier-feed-card,
+      .supplier-progress-card {
         border: 1px solid rgba(37, 99, 235, 0.14);
         background:
           radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26rem),
           #ffffff;
+      }
+
+      .supplier-progress-bar {
+        width: 100%;
+        height: 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(100, 116, 139, 0.16);
+      }
+
+      .supplier-progress-bar span {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        transition: width 0.2s ease;
       }
 
       .supplier-feed-header {
