@@ -1866,62 +1866,83 @@ export async function savePhase5ArtworkRequest(request) {
 }
 
 // ---------------------------------------------------------
-// Supplier Catalog Reference Review Workflow
+// Supplier Catalog Website CSV Feed Sync
 // ---------------------------------------------------------
-export async function getSupplierCatalogReviewStats() {
-  const { data, error } = await supabase.rpc('sc_supplier_catalog_review_stats');
+export async function listSupplierCatalogFeeds() {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .select('*')
+    .order('created_at', { ascending: false });
+
   if (error) throw error;
   return data || [];
 }
 
-export async function updateSupplierCatalogReviewItem({
-  itemId,
-  review_status,
-  use_in_quote_builder = false,
-  use_in_substitution_suggestions = false,
-  create_blank_candidate = false,
-  review_notes = '',
-  updated_by = null,
-}) {
-  const { data, error } = await supabase.rpc('sc_update_supplier_catalog_review_item', {
-    p_item_id: itemId,
-    p_review_status: review_status || 'unreviewed',
-    p_use_in_quote_builder: Boolean(use_in_quote_builder),
-    p_use_in_substitution_suggestions: Boolean(use_in_substitution_suggestions),
-    p_create_blank_candidate: Boolean(create_blank_candidate),
-    p_review_notes: review_notes || null,
-    p_updated_by: updated_by || null,
-  });
+export async function createSupplierCatalogFeed(feed) {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .insert({
+      supplier_name: feed.supplier_name,
+      feed_name: feed.feed_name || null,
+      feed_url: feed.feed_url,
+      source_file_name: feed.source_file_name || null,
+      is_active: feed.is_active !== false,
+      update_blank_products: Boolean(feed.update_blank_products),
+      create_missing_lookups: feed.create_missing_lookups !== false,
+    })
+    .select('*')
+    .single();
 
   if (error) throw error;
   return data;
 }
 
-export async function getSupplierCatalogQuoteReference(search = '') {
-  let query = supabase
-    .from('supplier_catalog_quote_reference')
+export async function updateSupplierCatalogFeed(feedId, values) {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .update({
+      supplier_name: values.supplier_name,
+      feed_name: values.feed_name || null,
+      feed_url: values.feed_url,
+      source_file_name: values.source_file_name || null,
+      is_active: values.is_active !== false,
+      update_blank_products: Boolean(values.update_blank_products),
+      create_missing_lookups: values.create_missing_lookups !== false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', feedId)
     .select('*')
-    .order('supplier_name', { ascending: true })
-    .limit(5000);
+    .single();
 
-  const term = String(search || '').trim();
+  if (error) throw error;
+  return data;
+}
 
-  if (term) {
-    const escaped = escapeOrTerm(term);
-    query = query.or([
-      `supplier_name.ilike.%${escaped}%`,
-      `brand.ilike.%${escaped}%`,
-      `style.ilike.%${escaped}%`,
-      `color.ilike.%${escaped}%`,
-      `size.ilike.%${escaped}%`,
-      `supplier_sku.ilike.%${escaped}%`,
-      `upc.ilike.%${escaped}%`,
-      `blank_sku_base.ilike.%${escaped}%`,
-    ].join(','));
+export async function deleteSupplierCatalogFeed(feedId) {
+  const { error } = await supabase
+    .from('supplier_catalog_feeds')
+    .delete()
+    .eq('id', feedId);
+
+  if (error) throw error;
+  return true;
+}
+
+export async function syncSupplierCatalogFeed(feedId) {
+  const response = await fetch('/.netlify/functions/supplier-catalog-feed-sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ feed_id: feedId }),
+  });
+
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok || body?.success === false) {
+    throw new Error(body?.message || `Supplier catalog feed sync failed: HTTP ${response.status}`);
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+  return body;
 }
 
