@@ -2,18 +2,22 @@
 /**
  * Browser-side ZIP supplier file extractor.
  *
+ * This version reads the ZIP Central Directory instead of relying only on
+ * sequential Local File Headers. That matters because many supplier ZIP files
+ * use ZIP features that make sequential parsing stop after the first entry.
+ *
  * Purpose:
  * - Let you manually download a supplier ZIP file and upload it into the app.
  * - Avoids server-side 403 blocking from supplier/CDN downloads.
- * - Extracts CSV/TXT/XLS/XLSX/XLSM files from common ZIP archives.
+ * - Extracts ALL CSV/TXT/XLS/XLSX/XLSM files from common ZIP archives.
  *
  * Supports:
  * - ZIP compression method 0: stored
  * - ZIP compression method 8: deflate, using browser DecompressionStream
  *
  * Limitations:
- * - Does not support password-protected ZIPs.
- * - Does not support ZIP entries using data descriptors.
+ * - Does not support password-protected/encrypted ZIPs.
+ * - Does not support ZIP64 archives larger than classic ZIP size fields.
  */
 
 function clean(value) {
@@ -53,6 +57,86 @@ function getFileKind(fileName) {
   return '';
 }
 
+function decodeFileName(bytes, utf8Flag) {
+  // Bit 11 means UTF-8 file name. Most supplier ZIPs use ASCII/UTF-8.
+  // TextDecoder handles ASCII correctly either way.
+  if (utf8Flag) return new TextDecoder('utf-8').decode(bytes);
+  try {
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return Array.from(bytes).map((byte) => String.fromCharCode(byte)).join('');
+  }
+}
+
+function findEndOfCentralDirectory(bytes) {
+  // EOCD record can have a variable comment up to 65,535 bytes.
+  const minOffset = Math.max(0, bytes.length - 22 - 65535);
+
+  for (let offset = bytes.length - 22; offset >= minOffset; offset -= 1) {
+    if (readUInt32LE(bytes, offset) === 0x06054b50) {
+      return offset;
+    }
+  }
+
+  throw new Error('Could not find the ZIP central directory. The file may be corrupted, ZIP64-only, or not a standard ZIP.');
+}
+
+function listCentralDirectoryEntries(bytes) {
+  const eocdOffset = findEndOfCentralDirectory(bytes);
+
+  const totalEntries = readUInt16LE(bytes, eocdOffset + 10);
+  const centralDirectorySize = readUInt32LE(bytes, eocdOffset + 12);
+  const centralDirectoryOffset = readUInt32LE(bytes, eocdOffset + 16);
+
+  if (centralDirectoryOffset <= 0 || centralDirectoryOffset >= bytes.length) {
+    throw new Error('ZIP central directory offset is invalid.');
+  }
+
+  if (centralDirectoryOffset + centralDirectorySize > bytes.length) {
+    throw new Error('ZIP central directory appears truncated.');
+  }
+
+  const entries = [];
+  let offset = centralDirectoryOffset;
+
+  for (let i = 0; i < totalEntries; i += 1) {
+    const signature = readUInt32LE(bytes, offset);
+
+    if (signature !== 0x02014b50) {
+      throw new Error(`ZIP central directory entry ${i + 1} is invalid.`);
+    }
+
+    const flags = readUInt16LE(bytes, offset + 8);
+    const compressionMethod = readUInt16LE(bytes, offset + 10);
+    const compressedSize = readUInt32LE(bytes, offset + 20);
+    const uncompressedSize = readUInt32LE(bytes, offset + 24);
+    const fileNameLength = readUInt16LE(bytes, offset + 28);
+    const extraFieldLength = readUInt16LE(bytes, offset + 30);
+    const fileCommentLength = readUInt16LE(bytes, offset + 32);
+    const localHeaderOffset = readUInt32LE(bytes, offset + 42);
+
+    const fileNameStart = offset + 46;
+    const fileNameEnd = fileNameStart + fileNameLength;
+    const fileNameBytes = bytes.slice(fileNameStart, fileNameEnd);
+    const fileName = decodeFileName(fileNameBytes, Boolean(flags & 0x0800));
+
+    entries.push({
+      fileName,
+      flags,
+      compressionMethod,
+      compressedSize,
+      uncompressedSize,
+      localHeaderOffset,
+      isDirectory: fileName.endsWith('/'),
+      kind: getFileKind(fileName),
+    });
+
+    offset = fileNameEnd + extraFieldLength + fileCommentLength;
+  }
+
+  return entries;
+}
+
 async function inflateRaw(bytes) {
   if (typeof DecompressionStream !== 'function') {
     throw new Error(
@@ -76,6 +160,25 @@ async function inflateRaw(bytes) {
   throw lastError || new Error('Could not decompress ZIP entry.');
 }
 
+function getCompressedDataFromLocalHeader(bytes, entry) {
+  const offset = entry.localHeaderOffset;
+
+  if (offset + 30 > bytes.length || readUInt32LE(bytes, offset) !== 0x04034b50) {
+    throw new Error(`Local ZIP header for "${entry.fileName}" is invalid.`);
+  }
+
+  const localFileNameLength = readUInt16LE(bytes, offset + 26);
+  const localExtraFieldLength = readUInt16LE(bytes, offset + 28);
+  const dataStart = offset + 30 + localFileNameLength + localExtraFieldLength;
+  const dataEnd = dataStart + entry.compressedSize;
+
+  if (dataEnd > bytes.length) {
+    throw new Error(`ZIP entry "${entry.fileName}" appears truncated or invalid.`);
+  }
+
+  return bytes.slice(dataStart, dataEnd);
+}
+
 export async function extractSupplierFilesFromZip(file) {
   const arrayBuffer = await file.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);
@@ -84,77 +187,56 @@ export async function extractSupplierFilesFromZip(file) {
     throw new Error('The selected file does not appear to be a ZIP file.');
   }
 
-  const entries = [];
-  let offset = 0;
+  const centralEntries = listCentralDirectoryEntries(bytes);
+  const supportedEntries = centralEntries.filter((entry) => !entry.isDirectory && entry.kind);
 
-  while (offset + 30 <= bytes.length) {
-    const signature = readUInt32LE(bytes, offset);
+  if (!supportedEntries.length) {
+    const fileList = centralEntries
+      .filter((entry) => !entry.isDirectory)
+      .slice(0, 20)
+      .map((entry) => entry.fileName)
+      .join(', ');
 
-    if (signature !== 0x04034b50) break;
+    throw new Error(
+      `No CSV, TXT, XLS, XLSX, or XLSM files were found inside the ZIP. Files seen: ${fileList || 'none'}`
+    );
+  }
 
-    const flags = readUInt16LE(bytes, offset + 6);
-    const compressionMethod = readUInt16LE(bytes, offset + 8);
-    const compressedSize = readUInt32LE(bytes, offset + 18);
-    const fileNameLength = readUInt16LE(bytes, offset + 26);
-    const extraFieldLength = readUInt16LE(bytes, offset + 28);
+  const extractedEntries = [];
 
-    const fileNameStart = offset + 30;
-    const fileNameEnd = fileNameStart + fileNameLength;
-    const fileName = decodeText(bytes.slice(fileNameStart, fileNameEnd));
+  for (const entry of supportedEntries) {
+    const compressedData = getCompressedDataFromLocalHeader(bytes, entry);
+    let extracted;
 
-    const dataStart = fileNameEnd + extraFieldLength;
+    if (entry.compressionMethod === 0) {
+      extracted = compressedData;
+    } else if (entry.compressionMethod === 8) {
+      extracted = await inflateRaw(compressedData);
+    } else {
+      throw new Error(`ZIP entry "${entry.fileName}" uses unsupported compression method ${entry.compressionMethod}.`);
+    }
 
-    if (flags & 0x08) {
-      throw new Error(
-        `ZIP entry "${fileName}" uses a ZIP format that cannot be parsed safely in the browser importer. Unzip the file manually and import the Excel/CSV files separately.`
+    if (extracted?.length) {
+      const arrayBufferCopy = extracted.buffer.slice(
+        extracted.byteOffset,
+        extracted.byteOffset + extracted.byteLength
       );
+
+      extractedEntries.push({
+        fileName: entry.fileName,
+        kind: entry.kind,
+        size: extracted.length || entry.uncompressedSize,
+        text: entry.kind === 'csv' || entry.kind === 'txt' ? decodeText(extracted) : '',
+        arrayBuffer: arrayBufferCopy,
+      });
     }
-
-    const dataEnd = dataStart + compressedSize;
-
-    if (dataEnd > bytes.length) {
-      throw new Error(`ZIP entry "${fileName}" appears truncated or invalid.`);
-    }
-
-    const isDirectory = fileName.endsWith('/');
-    const kind = getFileKind(fileName);
-
-    if (!isDirectory && kind) {
-      const compressedData = bytes.slice(dataStart, dataEnd);
-      let extracted;
-
-      if (compressionMethod === 0) {
-        extracted = compressedData;
-      } else if (compressionMethod === 8) {
-        extracted = await inflateRaw(compressedData);
-      } else {
-        throw new Error(`ZIP entry "${fileName}" uses unsupported compression method ${compressionMethod}.`);
-      }
-
-      if (extracted?.length) {
-        const arrayBufferCopy = extracted.buffer.slice(
-          extracted.byteOffset,
-          extracted.byteOffset + extracted.byteLength
-        );
-
-        entries.push({
-          fileName,
-          kind,
-          size: extracted.length,
-          text: kind === 'csv' || kind === 'txt' ? decodeText(extracted) : '',
-          arrayBuffer: arrayBufferCopy,
-        });
-      }
-    }
-
-    offset = dataEnd;
   }
 
-  if (!entries.length) {
-    throw new Error('No CSV, TXT, XLS, XLSX, or XLSM files were found inside the ZIP.');
+  if (!extractedEntries.length) {
+    throw new Error('Supported files were found in the ZIP, but none could be extracted.');
   }
 
-  return entries;
+  return extractedEntries;
 }
 
 // Backward-compatible alias used by earlier builds.
