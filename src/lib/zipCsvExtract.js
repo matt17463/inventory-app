@@ -2,10 +2,8 @@
 /**
  * Browser-side ZIP CSV extractor.
  *
- * Purpose:
- * - Let you manually download a supplier ZIP file and upload it into the app.
- * - Avoids server-side 403 blocking from supplier/CDN downloads.
- * - Extracts CSV/TXT files from common ZIP archives.
+ * This supports the manual supplier ZIP workflow.
+ * It extracts CSV/TXT files from common ZIP archives.
  *
  * Supports:
  * - ZIP compression method 0: stored
@@ -14,7 +12,6 @@
  * Limitations:
  * - Does not support password-protected ZIPs.
  * - Does not support ZIP entries using data descriptors.
- * - Requires a modern browser for deflated files.
  */
 
 function clean(value) {
@@ -44,7 +41,9 @@ function readUInt32LE(bytes, offset) {
 
 async function inflateRaw(bytes) {
   if (typeof DecompressionStream !== 'function') {
-    throw new Error('This browser cannot decompress ZIP files in the app. Try Chrome/Edge, or unzip the supplier file and upload/import the CSV files separately.');
+    throw new Error(
+      'This browser cannot decompress ZIP files in the app. Try Chrome/Edge, or unzip the supplier file and import the CSV files separately.'
+    );
   }
 
   const attempts = ['deflate-raw', 'deflate'];
@@ -92,7 +91,9 @@ export async function extractCsvFilesFromZip(file) {
     const dataStart = fileNameEnd + extraFieldLength;
 
     if (flags & 0x08) {
-      throw new Error(`ZIP entry "${fileName}" uses data descriptors, which the browser importer cannot safely parse. Try extracting the ZIP manually and importing the CSV files separately.`);
+      throw new Error(
+        `ZIP entry "${fileName}" uses a ZIP format that cannot be parsed safely in the browser importer. Unzip the file manually and import the CSV files using the single-file importer.`
+      );
     }
 
     const dataEnd = dataStart + compressedSize;
