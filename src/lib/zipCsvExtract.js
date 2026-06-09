@@ -1,9 +1,11 @@
 
 /**
- * Browser-side ZIP CSV extractor.
+ * Browser-side ZIP supplier file extractor.
  *
- * This supports the manual supplier ZIP workflow.
- * It extracts CSV/TXT files from common ZIP archives.
+ * Purpose:
+ * - Let you manually download a supplier ZIP file and upload it into the app.
+ * - Avoids server-side 403 blocking from supplier/CDN downloads.
+ * - Extracts CSV/TXT/XLS/XLSX/XLSM files from common ZIP archives.
  *
  * Supports:
  * - ZIP compression method 0: stored
@@ -39,10 +41,22 @@ function readUInt32LE(bytes, offset) {
   ) >>> 0;
 }
 
+function getFileKind(fileName) {
+  const lowerName = String(fileName || '').toLowerCase();
+
+  if (lowerName.endsWith('.csv')) return 'csv';
+  if (lowerName.endsWith('.txt')) return 'txt';
+  if (lowerName.endsWith('.xlsx')) return 'xlsx';
+  if (lowerName.endsWith('.xlsm')) return 'xlsm';
+  if (lowerName.endsWith('.xls')) return 'xls';
+
+  return '';
+}
+
 async function inflateRaw(bytes) {
   if (typeof DecompressionStream !== 'function') {
     throw new Error(
-      'This browser cannot decompress ZIP files in the app. Try Chrome/Edge, or unzip the supplier file and import the CSV files separately.'
+      'This browser cannot decompress ZIP files in the app. Try Chrome/Edge, or unzip the supplier file and import the Excel/CSV files separately.'
     );
   }
 
@@ -62,7 +76,7 @@ async function inflateRaw(bytes) {
   throw lastError || new Error('Could not decompress ZIP entry.');
 }
 
-export async function extractCsvFilesFromZip(file) {
+export async function extractSupplierFilesFromZip(file) {
   const arrayBuffer = await file.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);
 
@@ -92,7 +106,7 @@ export async function extractCsvFilesFromZip(file) {
 
     if (flags & 0x08) {
       throw new Error(
-        `ZIP entry "${fileName}" uses a ZIP format that cannot be parsed safely in the browser importer. Unzip the file manually and import the CSV files using the single-file importer.`
+        `ZIP entry "${fileName}" uses a ZIP format that cannot be parsed safely in the browser importer. Unzip the file manually and import the Excel/CSV files separately.`
       );
     }
 
@@ -103,9 +117,9 @@ export async function extractCsvFilesFromZip(file) {
     }
 
     const isDirectory = fileName.endsWith('/');
-    const lowerName = fileName.toLowerCase();
+    const kind = getFileKind(fileName);
 
-    if (!isDirectory && (lowerName.endsWith('.csv') || lowerName.endsWith('.txt'))) {
+    if (!isDirectory && kind) {
       const compressedData = bytes.slice(dataStart, dataEnd);
       let extracted;
 
@@ -117,13 +131,18 @@ export async function extractCsvFilesFromZip(file) {
         throw new Error(`ZIP entry "${fileName}" uses unsupported compression method ${compressionMethod}.`);
       }
 
-      const text = decodeText(extracted);
+      if (extracted?.length) {
+        const arrayBufferCopy = extracted.buffer.slice(
+          extracted.byteOffset,
+          extracted.byteOffset + extracted.byteLength
+        );
 
-      if (clean(text)) {
         entries.push({
           fileName,
+          kind,
           size: extracted.length,
-          text,
+          text: kind === 'csv' || kind === 'txt' ? decodeText(extracted) : '',
+          arrayBuffer: arrayBufferCopy,
         });
       }
     }
@@ -132,8 +151,13 @@ export async function extractCsvFilesFromZip(file) {
   }
 
   if (!entries.length) {
-    throw new Error('No CSV or TXT files were found inside the ZIP.');
+    throw new Error('No CSV, TXT, XLS, XLSX, or XLSM files were found inside the ZIP.');
   }
 
   return entries;
+}
+
+// Backward-compatible alias used by earlier builds.
+export async function extractCsvFilesFromZip(file) {
+  return extractSupplierFilesFromZip(file);
 }
