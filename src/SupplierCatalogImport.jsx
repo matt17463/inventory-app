@@ -9,6 +9,7 @@ import {
   updateSupplierCatalogFeed,
 } from './lib/inventoryApi';
 import { syncSupplierCatalogFeedIncremental } from './lib/supplierCatalogFeedSyncClient';
+import { extractCsvFilesFromZip } from './lib/zipCsvExtract';
 
 const TEMPLATE_HEADERS = [
   'Brand', 'Style', 'Color', 'Size', 'Supplier SKU', 'UPC', 'Unit Cost', 'Case Pack Qty', 'Description', 'Notes'
@@ -47,21 +48,26 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseCsvText(csvText) {
+  const workbook = XLSX.read(csvText, { type: 'string' });
+  return parseWorkbook(workbook);
+}
+
 function parseWorkbook(workbook) {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
 
   return rows.map((row, index) => ({
     source_row: index + 2,
-    brand: clean(columnValue(row, ['Brand', 'Manufacturer'])),
-    style: clean(columnValue(row, ['Style', 'Style Number', 'Product Style', 'Item Style'])),
-    color: clean(columnValue(row, ['Color', 'Colour'])),
-    size: clean(columnValue(row, ['Size'])),
-    supplier_sku: clean(columnValue(row, ['Supplier SKU', 'Vendor SKU', 'Vendor Item', 'Item Number', 'SKU'])),
-    upc: clean(columnValue(row, ['UPC', 'Barcode', 'GTIN'])),
-    unit_cost: numberValue(columnValue(row, ['Unit Cost', 'Cost', 'Price', 'Net Price'])),
-    case_pack_qty: numberValue(columnValue(row, ['Case Pack Qty', 'Case Pack', 'Pack Qty', 'Pack Quantity'])),
-    description: clean(columnValue(row, ['Description', 'Product Name', 'Name'])),
+    brand: clean(columnValue(row, ['Brand', 'Manufacturer', 'Mfg', 'Vendor Brand'])),
+    style: clean(columnValue(row, ['Style', 'Style Number', 'Style #', 'Product Style', 'Item Style', 'Item Number', 'Item #'])),
+    color: clean(columnValue(row, ['Color', 'Colour', 'Color Name'])),
+    size: clean(columnValue(row, ['Size', 'Size Name'])),
+    supplier_sku: clean(columnValue(row, ['Supplier SKU', 'Vendor SKU', 'Vendor Item', 'Item Number', 'Item #', 'SKU', 'Product SKU'])),
+    upc: clean(columnValue(row, ['UPC', 'Barcode', 'GTIN', 'EAN'])),
+    unit_cost: numberValue(columnValue(row, ['Unit Cost', 'Cost', 'Price', 'Net Price', 'Customer Price', 'Piece Price'])),
+    case_pack_qty: numberValue(columnValue(row, ['Case Pack Qty', 'Case Pack', 'Pack Qty', 'Pack Quantity', 'Case Qty'])),
+    description: clean(columnValue(row, ['Description', 'Product Name', 'Name', 'Item Description'])),
     notes: clean(columnValue(row, ['Notes', 'Note'])),
   })).filter((row) => row.brand || row.style || row.color || row.size || row.supplier_sku || row.upc || row.unit_cost !== null);
 }
@@ -97,6 +103,54 @@ function formatDate(value) {
   }
 }
 
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+async function importRowsInChunks({
+  supplierName,
+  sourceFileName,
+  rows,
+  updateBlankProducts,
+  createMissingLookups,
+  onProgress,
+  chunkSize = 250,
+}) {
+  let catalogRowsInserted = 0;
+  let blankProductsUpdated = 0;
+  let chunks = 0;
+
+  for (let start = 0; start < rows.length; start += chunkSize) {
+    const chunk = rows.slice(start, start + chunkSize);
+    chunks += 1;
+
+    if (typeof onProgress === 'function') {
+      onProgress({
+        current: Math.min(start + chunk.length, rows.length),
+        total: rows.length,
+        sourceFileName,
+      });
+    }
+
+    const result = await importSupplierCatalogRows({
+      supplierName,
+      sourceFileName,
+      rows: chunk,
+      updateBlankProducts,
+      createMissingLookups,
+    });
+
+    catalogRowsInserted += Number(result?.catalog_rows_inserted || 0);
+    blankProductsUpdated += Number(result?.blank_products_updated || 0);
+  }
+
+  return {
+    catalog_rows_inserted: catalogRowsInserted,
+    blank_products_updated: blankProductsUpdated,
+    chunks_imported: chunks,
+  };
+}
+
 export default function SupplierCatalogImport() {
   const [supplierName, setSupplierName] = useState('');
   const [sourceFileName, setSourceFileName] = useState('');
@@ -113,12 +167,33 @@ export default function SupplierCatalogImport() {
   const [syncingFeedId, setSyncingFeedId] = useState(null);
   const [syncProgress, setSyncProgress] = useState(null);
 
+  const [zipSupplierName, setZipSupplierName] = useState('S&S Activewear');
+  const [zipFiles, setZipFiles] = useState([]);
+  const [selectedZipFiles, setSelectedZipFiles] = useState([]);
+  const [zipUpdateBlankProducts, setZipUpdateBlankProducts] = useState(false);
+  const [zipCreateMissingLookups, setZipCreateMissingLookups] = useState(true);
+  const [zipImportProgress, setZipImportProgress] = useState(null);
+
   const stats = useMemo(() => {
     const withCost = rows.filter((row) => row.unit_cost !== null).length;
     const withUpc = rows.filter((row) => row.upc).length;
     const withSupplierSku = rows.filter((row) => row.supplier_sku).length;
     return { total: rows.length, withCost, withUpc, withSupplierSku };
   }, [rows]);
+
+  const zipStats = useMemo(() => {
+    const totalRows = zipFiles.reduce((sum, file) => sum + Number(file.rows?.length || 0), 0);
+    const selectedRows = zipFiles
+      .filter((file) => selectedZipFiles.includes(file.fileName))
+      .reduce((sum, file) => sum + Number(file.rows?.length || 0), 0);
+
+    return {
+      fileCount: zipFiles.length,
+      selectedCount: selectedZipFiles.length,
+      totalRows,
+      selectedRows,
+    };
+  }, [zipFiles, selectedZipFiles]);
 
   async function loadFeeds() {
     try {
@@ -172,13 +247,15 @@ export default function SupplierCatalogImport() {
     setResult(null);
 
     try {
-      const data = await importSupplierCatalogRows({
+      const data = await importRowsInChunks({
         supplierName,
         sourceFileName,
         rows,
         updateBlankProducts,
         createMissingLookups,
+        onProgress: ({ current, total }) => setMessage(`Importing ${current} of ${total} row(s)...`),
       });
+
       setResult(data);
       setMessage(`Catalog import complete. ${data?.catalog_rows_inserted ?? 0} catalog row(s) saved. ${data?.blank_products_updated ?? 0} blank item(s) updated.`);
       await loadFeeds();
@@ -263,11 +340,10 @@ export default function SupplierCatalogImport() {
 
     try {
       const data = await syncSupplierCatalogFeedIncremental(feed.id, {
-        chunkSize: 150,
+        chunkSize: 25,
         onProgress: (progress) => {
           setSyncProgress(progress);
-          const total = progress.totalRows || '?';
-          setMessage(progress.message || `Imported ${progress.offset} of ${total} row(s)...`);
+          setMessage(progress.message || `Imported ${progress.offset} supplier row(s)...`);
         },
       });
 
@@ -284,6 +360,131 @@ export default function SupplierCatalogImport() {
     }
   }
 
+  async function handleZipUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setZipFiles([]);
+    setSelectedZipFiles([]);
+    setZipImportProgress(null);
+    setMessage(`Reading ZIP file ${file.name}...`);
+
+    try {
+      const extracted = await extractCsvFilesFromZip(file);
+      const parsedFiles = extracted.map((entry) => {
+        const parsedRows = parseCsvText(entry.text);
+        return {
+          fileName: entry.fileName,
+          size: entry.size,
+          rows: parsedRows,
+        };
+      }).filter((entry) => entry.rows.length > 0);
+
+      if (!parsedFiles.length) {
+        throw new Error('CSV files were found in the ZIP, but no usable catalog rows were parsed.');
+      }
+
+      setZipFiles(parsedFiles);
+      setSelectedZipFiles(parsedFiles.map((entry) => entry.fileName));
+      setMessage(`ZIP loaded. Found ${parsedFiles.length} CSV file(s) with ${parsedFiles.reduce((sum, entry) => sum + entry.rows.length, 0)} total usable row(s).`);
+    } catch (err) {
+      setMessage(err.message || 'Failed to read supplier ZIP file.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggleZipFile(fileName) {
+    setSelectedZipFiles((current) => current.includes(fileName)
+      ? current.filter((name) => name !== fileName)
+      : [...current, fileName]);
+  }
+
+  async function importSelectedZipFiles() {
+    if (!zipSupplierName.trim()) {
+      setMessage('Enter supplier name before importing the ZIP.');
+      return;
+    }
+
+    const filesToImport = zipFiles.filter((file) => selectedZipFiles.includes(file.fileName));
+
+    if (!filesToImport.length) {
+      setMessage('Select at least one CSV file from the ZIP.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Import ${filesToImport.length} CSV file(s) from this ZIP for ${zipSupplierName}? This will add/update supplier catalog reference rows.`
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    setResult(null);
+    setZipImportProgress({ currentFile: '', fileIndex: 0, fileCount: filesToImport.length, current: 0, total: 0 });
+    setMessage('Starting ZIP import...');
+
+    try {
+      let totalCatalogRowsInserted = 0;
+      let totalBlankProductsUpdated = 0;
+      let totalChunks = 0;
+      const fileResults = [];
+
+      for (let i = 0; i < filesToImport.length; i += 1) {
+        const zipFile = filesToImport[i];
+
+        setMessage(`Importing ${zipFile.fileName} (${i + 1} of ${filesToImport.length})...`);
+
+        const fileResult = await importRowsInChunks({
+          supplierName: zipSupplierName,
+          sourceFileName: zipFile.fileName,
+          rows: zipFile.rows,
+          updateBlankProducts: zipUpdateBlankProducts,
+          createMissingLookups: zipCreateMissingLookups,
+          onProgress: ({ current, total }) => {
+            setZipImportProgress({
+              currentFile: zipFile.fileName,
+              fileIndex: i + 1,
+              fileCount: filesToImport.length,
+              current,
+              total,
+            });
+            setMessage(`Importing ${zipFile.fileName}: ${current} of ${total} row(s)...`);
+          },
+        });
+
+        totalCatalogRowsInserted += Number(fileResult.catalog_rows_inserted || 0);
+        totalBlankProductsUpdated += Number(fileResult.blank_products_updated || 0);
+        totalChunks += Number(fileResult.chunks_imported || 0);
+        fileResults.push({
+          fileName: zipFile.fileName,
+          rows: zipFile.rows.length,
+          ...fileResult,
+        });
+      }
+
+      const finalResult = {
+        success: true,
+        supplier_name: zipSupplierName,
+        files_imported: filesToImport.length,
+        catalog_rows_inserted: totalCatalogRowsInserted,
+        blank_products_updated: totalBlankProductsUpdated,
+        chunks_imported: totalChunks,
+        file_results: fileResults,
+      };
+
+      setResult(finalResult);
+      setMessage(`ZIP import complete. Imported ${filesToImport.length} file(s), saved ${formatNumber(totalCatalogRowsInserted)} catalog row(s).`);
+      setZipImportProgress(null);
+      await loadFeeds();
+    } catch (err) {
+      setMessage(err.message || 'Supplier ZIP import failed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="page phase3-page supplier-import-page-only">
       <SupplierImportScopedStyles />
@@ -292,7 +493,7 @@ export default function SupplierCatalogImport() {
         <div>
           <p className="eyebrow">Phase 3 · Supplier Catalog</p>
           <h1>Supplier Catalog Import</h1>
-          <p>Upload supplier catalog files manually or save supplier-hosted CSV feed URLs and refresh them in smaller chunks.</p>
+          <p>Upload supplier catalog files manually, import S&S ZIP downloads, or refresh supplier-hosted CSV feed URLs.</p>
         </div>
         <button type="button" className="secondary-button" onClick={downloadTemplate}>Download Template</button>
       </section>
@@ -303,18 +504,113 @@ export default function SupplierCatalogImport() {
         <section className="card supplier-progress-card">
           <h2>Supplier Feed Sync Progress</h2>
           <div className="supplier-progress-bar">
-            <span style={{ width: `${syncProgress.totalRows ? Math.min(100, (syncProgress.offset / syncProgress.totalRows) * 100) : 5}%` }} />
+            <span style={{ width: '15%' }} />
           </div>
-          <p>{syncProgress.offset || 0} of {syncProgress.totalRows || '?'} row(s) processed.</p>
+          <p>{syncProgress.offset || 0} supplier row(s) processed.</p>
         </section>
       )}
+
+      {zipImportProgress && (
+        <section className="card supplier-progress-card">
+          <h2>Manual ZIP Import Progress</h2>
+          <div className="supplier-progress-bar">
+            <span style={{ width: `${zipImportProgress.total ? Math.min(100, (zipImportProgress.current / zipImportProgress.total) * 100) : 5}%` }} />
+          </div>
+          <p>
+            File {zipImportProgress.fileIndex} of {zipImportProgress.fileCount}: {zipImportProgress.currentFile}
+            <br />
+            {formatNumber(zipImportProgress.current)} of {formatNumber(zipImportProgress.total)} row(s)
+          </p>
+        </section>
+      )}
+
+      <section className="card elevated-card supplier-zip-card">
+        <div className="supplier-feed-header">
+          <div>
+            <h2>Manual Supplier ZIP Upload</h2>
+            <p className="helper-text">
+              Use this for S&S Activewear or any supplier whose ZIP download is blocked from server-side sync.
+              Download the ZIP yourself, then upload it here. The app will read all CSV files inside the ZIP.
+            </p>
+          </div>
+        </div>
+
+        <div className="supplier-feed-form">
+          <label>
+            Supplier Name
+            <input value={zipSupplierName} onChange={(event) => setZipSupplierName(event.target.value)} placeholder="S&S Activewear" />
+          </label>
+
+          <label>
+            Supplier ZIP File
+            <input type="file" accept=".zip" onChange={handleZipUpload} />
+          </label>
+
+          <label className="checkbox-line">
+            <input type="checkbox" checked={zipCreateMissingLookups} onChange={(event) => setZipCreateMissingLookups(event.target.checked)} />
+            Create missing lookup values
+          </label>
+
+          <label className="checkbox-line supplier-warning-check">
+            <input type="checkbox" checked={zipUpdateBlankProducts} onChange={(event) => setZipUpdateBlankProducts(event.target.checked)} />
+            Also update matched blank products with supplier data
+          </label>
+        </div>
+
+        {zipFiles.length > 0 && (
+          <>
+            <div className="supplier-zip-summary">
+              <span>{formatNumber(zipStats.fileCount)} CSV file(s)</span>
+              <span>{formatNumber(zipStats.totalRows)} total usable row(s)</span>
+              <span>{formatNumber(zipStats.selectedRows)} selected row(s)</span>
+            </div>
+
+            <div className="responsive-table supplier-feed-table-wrap">
+              <table className="data-table supplier-feed-table">
+                <thead>
+                  <tr>
+                    <th>Import</th>
+                    <th>CSV File in ZIP</th>
+                    <th>Rows</th>
+                    <th>Size</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zipFiles.map((file) => (
+                    <tr key={file.fileName}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedZipFiles.includes(file.fileName)}
+                          onChange={() => toggleZipFile(file.fileName)}
+                        />
+                      </td>
+                      <td><strong>{file.fileName}</strong></td>
+                      <td>{formatNumber(file.rows.length)}</td>
+                      <td>{formatNumber(file.size)} bytes</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="supplier-feed-actions">
+              <button type="button" onClick={importSelectedZipFiles} disabled={loading || !selectedZipFiles.length}>
+                {loading ? 'Importing...' : `Import Selected CSVs (${selectedZipFiles.length})`}
+              </button>
+              <button type="button" onClick={() => setSelectedZipFiles(zipFiles.map((file) => file.fileName))}>Select All</button>
+              <button type="button" onClick={() => setSelectedZipFiles([])}>Select None</button>
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="card elevated-card supplier-feed-card">
         <div className="supplier-feed-header">
           <div>
             <h2>Website CSV Feeds</h2>
             <p className="helper-text">
-              This version updates supplier-hosted CSVs in multiple smaller requests so large supplier files do not hit Netlify's request timeout.
+              Use this only for suppliers with URLs that can be reached by the app. For blocked S&S ZIP downloads, use Manual Supplier ZIP Upload above.
             </p>
           </div>
         </div>
@@ -413,7 +709,7 @@ export default function SupplierCatalogImport() {
       </section>
 
       <section className="card elevated-card">
-        <h2>Manual File Import Settings</h2>
+        <h2>Manual Single File Import Settings</h2>
         <div className="form-grid">
           <label>
             Supplier Name
@@ -477,10 +773,18 @@ function SupplierImportScopedStyles() {
       }
 
       .supplier-feed-card,
+      .supplier-zip-card,
       .supplier-progress-card {
         border: 1px solid rgba(37, 99, 235, 0.14);
         background:
           radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 26rem),
+          #ffffff;
+      }
+
+      .supplier-zip-card {
+        border-color: rgba(219, 39, 119, 0.18);
+        background:
+          radial-gradient(circle at top left, rgba(219, 39, 119, 0.08), transparent 26rem),
           #ffffff;
       }
 
@@ -525,6 +829,7 @@ function SupplierImportScopedStyles() {
         flex-wrap: wrap;
         gap: 8px;
         align-items: center;
+        margin-top: 12px;
       }
 
       .supplier-feed-actions {
@@ -578,6 +883,22 @@ function SupplierImportScopedStyles() {
       .supplier-feed-status-inactive {
         background: rgba(249, 115, 22, 0.12);
         color: #c2410c;
+      }
+
+      .supplier-zip-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 12px 0;
+      }
+
+      .supplier-zip-summary span {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: rgba(219, 39, 119, 0.10);
+        color: #be185d;
+        font-weight: 900;
       }
 
       @media (max-width: 760px) {
