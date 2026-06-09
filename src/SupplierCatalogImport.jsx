@@ -168,11 +168,13 @@ export default function SupplierCatalogImport() {
   const [syncProgress, setSyncProgress] = useState(null);
 
   const [zipSupplierName, setZipSupplierName] = useState('S&S Activewear');
+  const [zipUploadFile, setZipUploadFile] = useState(null);
   const [zipFiles, setZipFiles] = useState([]);
   const [selectedZipFiles, setSelectedZipFiles] = useState([]);
   const [zipUpdateBlankProducts, setZipUpdateBlankProducts] = useState(false);
   const [zipCreateMissingLookups, setZipCreateMissingLookups] = useState(true);
   const [zipImportProgress, setZipImportProgress] = useState(null);
+  const [zipParseStatus, setZipParseStatus] = useState('idle');
 
   const stats = useMemo(() => {
     const withCost = rows.filter((row) => row.unit_cost !== null).length;
@@ -360,18 +362,35 @@ export default function SupplierCatalogImport() {
     }
   }
 
-  async function handleZipUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  function handleZipFileSelected(event) {
+    const file = event.target.files?.[0] || null;
+
+    setZipUploadFile(file);
+    setZipFiles([]);
+    setSelectedZipFiles([]);
+    setZipImportProgress(null);
+    setZipParseStatus(file ? 'selected' : 'idle');
+
+    if (file) {
+      setMessage(`Selected ZIP file: ${file.name}. Click "Read ZIP / Show CSV Files" to prepare the import.`);
+    }
+  }
+
+  async function readZipFile() {
+    if (!zipUploadFile) {
+      setMessage('Choose a supplier ZIP file first.');
+      return;
+    }
 
     setLoading(true);
     setZipFiles([]);
     setSelectedZipFiles([]);
     setZipImportProgress(null);
-    setMessage(`Reading ZIP file ${file.name}...`);
+    setZipParseStatus('reading');
+    setMessage(`Reading ZIP file ${zipUploadFile.name}...`);
 
     try {
-      const extracted = await extractCsvFilesFromZip(file);
+      const extracted = await extractCsvFilesFromZip(zipUploadFile);
       const parsedFiles = extracted.map((entry) => {
         const parsedRows = parseCsvText(entry.text);
         return {
@@ -387,8 +406,10 @@ export default function SupplierCatalogImport() {
 
       setZipFiles(parsedFiles);
       setSelectedZipFiles(parsedFiles.map((entry) => entry.fileName));
-      setMessage(`ZIP loaded. Found ${parsedFiles.length} CSV file(s) with ${parsedFiles.reduce((sum, entry) => sum + entry.rows.length, 0)} total usable row(s).`);
+      setZipParseStatus('ready');
+      setMessage(`ZIP ready. Found ${parsedFiles.length} CSV file(s) with ${parsedFiles.reduce((sum, entry) => sum + entry.rows.length, 0)} total usable row(s). The import button is now available.`);
     } catch (err) {
+      setZipParseStatus('error');
       setMessage(err.message || 'Failed to read supplier ZIP file.');
     } finally {
       setLoading(false);
@@ -530,7 +551,7 @@ export default function SupplierCatalogImport() {
             <h2>Manual Supplier ZIP Upload</h2>
             <p className="helper-text">
               Use this for S&S Activewear or any supplier whose ZIP download is blocked from server-side sync.
-              Download the ZIP yourself, then upload it here. The app will read all CSV files inside the ZIP.
+              Step 1: choose the ZIP. Step 2: read the ZIP. Step 3: import selected CSV files.
             </p>
           </div>
         </div>
@@ -543,7 +564,7 @@ export default function SupplierCatalogImport() {
 
           <label>
             Supplier ZIP File
-            <input type="file" accept=".zip" onChange={handleZipUpload} />
+            <input type="file" accept=".zip" onChange={handleZipFileSelected} />
           </label>
 
           <label className="checkbox-line">
@@ -556,6 +577,28 @@ export default function SupplierCatalogImport() {
             Also update matched blank products with supplier data
           </label>
         </div>
+
+        <div className="supplier-zip-step-actions">
+          <button type="button" onClick={readZipFile} disabled={!zipUploadFile || loading}>
+            {zipParseStatus === 'reading' ? 'Reading ZIP...' : 'Read ZIP / Show CSV Files'}
+          </button>
+
+          <button
+            type="button"
+            onClick={importSelectedZipFiles}
+            disabled={loading || zipFiles.length === 0 || selectedZipFiles.length === 0}
+            className={zipFiles.length > 0 && selectedZipFiles.length > 0 ? 'primary-import-button' : ''}
+            title={zipFiles.length === 0 ? 'Read the ZIP first before importing.' : ''}
+          >
+            Import Selected CSVs ({selectedZipFiles.length})
+          </button>
+        </div>
+
+        {zipUploadFile && zipFiles.length === 0 && (
+          <p className="helper-text supplier-zip-guidance">
+            File selected: <strong>{zipUploadFile.name}</strong>. The import button is disabled until the ZIP has been read and CSV files are listed.
+          </p>
+        )}
 
         {zipFiles.length > 0 && (
           <>
@@ -595,9 +638,6 @@ export default function SupplierCatalogImport() {
             </div>
 
             <div className="supplier-feed-actions">
-              <button type="button" onClick={importSelectedZipFiles} disabled={loading || !selectedZipFiles.length}>
-                {loading ? 'Importing...' : `Import Selected CSVs (${selectedZipFiles.length})`}
-              </button>
               <button type="button" onClick={() => setSelectedZipFiles(zipFiles.map((file) => file.fileName))}>Select All</button>
               <button type="button" onClick={() => setSelectedZipFiles([])}>Select None</button>
             </div>
@@ -824,7 +864,8 @@ function SupplierImportScopedStyles() {
       }
 
       .supplier-feed-actions,
-      .supplier-feed-row-actions {
+      .supplier-feed-row-actions,
+      .supplier-zip-step-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
@@ -834,6 +875,16 @@ function SupplierImportScopedStyles() {
 
       .supplier-feed-actions {
         grid-column: 1 / -1;
+      }
+
+      .supplier-zip-step-actions button {
+        min-height: 44px;
+      }
+
+      .supplier-zip-step-actions .primary-import-button {
+        background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+        color: #ffffff !important;
+        box-shadow: 0 12px 26px rgba(37, 99, 235, 0.24);
       }
 
       .supplier-warning-check {
@@ -901,6 +952,13 @@ function SupplierImportScopedStyles() {
         font-weight: 900;
       }
 
+      .supplier-zip-guidance {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(37, 99, 235, 0.08);
+      }
+
       @media (max-width: 760px) {
         .supplier-feed-form {
           grid-template-columns: 1fr;
@@ -908,7 +966,8 @@ function SupplierImportScopedStyles() {
 
         .supplier-feed-header,
         .supplier-feed-actions,
-        .supplier-feed-row-actions {
+        .supplier-feed-row-actions,
+        .supplier-zip-step-actions {
           display: grid;
         }
       }
