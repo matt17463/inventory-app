@@ -4,8 +4,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
-const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 150);
-const MAX_ROWS_TOTAL = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_ROWS || 25000);
+const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 25);
+const MAX_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_CHUNK_SIZE || 100);
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -41,15 +41,14 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseCsv(csvText) {
-  const rows = [];
-  let current = [];
+function parseCsvLine(line) {
+  const cells = [];
   let value = "";
   let inQuotes = false;
 
-  for (let i = 0; i < csvText.length; i += 1) {
-    const char = csvText[i];
-    const next = csvText[i + 1];
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
 
     if (char === '"' && inQuotes && next === '"') {
       value += '"';
@@ -63,27 +62,50 @@ function parseCsv(csvText) {
     }
 
     if (char === "," && !inQuotes) {
-      current.push(value);
+      cells.push(value);
       value = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") i += 1;
-      current.push(value);
-      value = "";
-      if (current.some((cell) => clean(cell) !== "")) rows.push(current);
-      current = [];
       continue;
     }
 
     value += char;
   }
 
-  current.push(value);
-  if (current.some((cell) => clean(cell) !== "")) rows.push(current);
+  cells.push(value);
+  return cells;
+}
 
-  return rows;
+function splitCsvRecords(buffer) {
+  const records = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < buffer.length; i += 1) {
+    const char = buffer[i];
+    const next = buffer[i + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += char + next;
+      i += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i += 1;
+      if (clean(current) !== "") records.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  return { records, remainder: current };
 }
 
 function rowToObject(headers, row) {
@@ -103,9 +125,9 @@ function columnValue(row, names) {
   return "";
 }
 
-function mapSupplierRow(row, index) {
+function mapSupplierRow(row, sourceRowNumber) {
   return {
-    source_row: index + 2,
+    source_row: sourceRowNumber,
     brand: clean(columnValue(row, ["Brand", "Manufacturer", "Mfg", "Vendor Brand"])),
     style: clean(columnValue(row, ["Style", "Style Number", "Style #", "Product Style", "Item Style", "Item Number", "Item #"])),
     color: clean(columnValue(row, ["Color", "Colour", "Color Name"])),
@@ -119,16 +141,135 @@ function mapSupplierRow(row, index) {
   };
 }
 
-function parseSupplierCatalogCsv(csvText) {
-  const parsedRows = parseCsv(csvText);
-  if (!parsedRows.length) return [];
+function isUsableSupplierRow(row) {
+  return row.brand || row.style || row.color || row.size || row.supplier_sku || row.upc || row.unit_cost !== null;
+}
 
-  const headers = parsedRows[0].map((header) => clean(header));
-  const dataRows = parsedRows.slice(1, MAX_ROWS_TOTAL + 1);
+async function readCsvChunkFromUrl(url, offset, chunkSize) {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "SkilledCraftingInventoryApp/1.0",
+      Accept: "text/csv,text/plain,application/csv,*/*",
+    },
+  });
 
-  return dataRows
-    .map((row, index) => mapSupplierRow(rowToObject(headers, row), index))
-    .filter((row) => row.brand || row.style || row.color || row.size || row.supplier_sku || row.upc || row.unit_cost !== null);
+  if (!response.ok) {
+    throw new Error(`Supplier CSV download failed: HTTP ${response.status}`);
+  }
+
+  if (!response.body || typeof response.body.getReader !== "function") {
+    const text = await response.text();
+    return readCsvChunkFromText(text, offset, chunkSize);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  let buffer = "";
+  let headers = null;
+  let dataRowIndex = 0;
+  let sourceRowNumber = 1;
+  let usableSeen = 0;
+  let totalScanned = 0;
+  const selectedRows = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    const split = splitCsvRecords(buffer);
+    buffer = split.remainder;
+
+    for (const record of split.records) {
+      sourceRowNumber += 1;
+
+      if (!headers) {
+        headers = parseCsvLine(record).map((header) => clean(header));
+        continue;
+      }
+
+      dataRowIndex += 1;
+      totalScanned = dataRowIndex;
+
+      const mapped = mapSupplierRow(rowToObject(headers, parseCsvLine(record)), sourceRowNumber);
+
+      if (!isUsableSupplierRow(mapped)) continue;
+
+      if (usableSeen >= offset && selectedRows.length < chunkSize) {
+        selectedRows.push(mapped);
+      }
+
+      usableSeen += 1;
+
+      if (selectedRows.length >= chunkSize) {
+        try {
+          await reader.cancel();
+        } catch {
+          // ignore cancel errors
+        }
+
+        return {
+          rows: selectedRows,
+          total_scanned: totalScanned,
+          usable_seen: usableSeen,
+          has_more_hint: true,
+        };
+      }
+    }
+
+    if (done) break;
+  }
+
+  if (clean(buffer) && headers) {
+    const mapped = mapSupplierRow(rowToObject(headers, parseCsvLine(buffer)), sourceRowNumber + 1);
+    if (isUsableSupplierRow(mapped)) {
+      if (usableSeen >= offset && selectedRows.length < chunkSize) selectedRows.push(mapped);
+      usableSeen += 1;
+    }
+  }
+
+  return {
+    rows: selectedRows,
+    total_scanned: totalScanned,
+    usable_seen: usableSeen,
+    has_more_hint: false,
+  };
+}
+
+function readCsvChunkFromText(csvText, offset, chunkSize) {
+  const records = splitCsvRecords(csvText).records;
+  if (!records.length) return { rows: [], total_scanned: 0, usable_seen: 0, has_more_hint: false };
+
+  const headers = parseCsvLine(records[0]).map((header) => clean(header));
+  const selectedRows = [];
+  let usableSeen = 0;
+
+  for (let i = 1; i < records.length; i += 1) {
+    const mapped = mapSupplierRow(rowToObject(headers, parseCsvLine(records[i])), i + 1);
+    if (!isUsableSupplierRow(mapped)) continue;
+
+    if (usableSeen >= offset && selectedRows.length < chunkSize) {
+      selectedRows.push(mapped);
+    }
+
+    usableSeen += 1;
+
+    if (selectedRows.length >= chunkSize) {
+      return {
+        rows: selectedRows,
+        total_scanned: i,
+        usable_seen: usableSeen,
+        has_more_hint: true,
+      };
+    }
+  }
+
+  return {
+    rows: selectedRows,
+    total_scanned: records.length - 1,
+    usable_seen: usableSeen,
+    has_more_hint: false,
+  };
 }
 
 async function supabaseFetch(path, options = {}) {
@@ -178,13 +319,9 @@ async function getFeed(feedId) {
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: CORS_HEADERS, body: "" };
-  }
+  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: CORS_HEADERS, body: "" };
 
-  if (event.httpMethod !== "POST") {
-    return json(405, { success: false, message: "Use POST." });
-  }
+  if (event.httpMethod !== "POST") return json(405, { success: false, message: "Use POST." });
 
   let feedId = null;
 
@@ -195,7 +332,7 @@ exports.handler = async (event) => {
     feedId = payload.feed_id;
     const offset = Math.max(0, Number(payload.offset || 0));
     const requestedChunkSize = Number(payload.chunk_size || DEFAULT_CHUNK_SIZE);
-    const chunkSize = Math.min(Math.max(requestedChunkSize, 25), 500);
+    const chunkSize = Math.min(Math.max(requestedChunkSize, 5), MAX_CHUNK_SIZE);
 
     if (!feedId) return json(400, { success: false, message: "Missing feed_id." });
 
@@ -206,62 +343,34 @@ exports.handler = async (event) => {
 
     await updateFeed(feedId, {
       last_sync_status: "running",
-      last_sync_message: offset === 0
-        ? "Downloading supplier CSV and preparing incremental sync..."
-        : `Continuing supplier CSV sync at row ${offset + 1}...`,
+      last_sync_message: `Reading supplier CSV chunk starting at usable row ${offset + 1}...`,
     });
 
-    const csvResponse = await fetch(feed.feed_url, {
-      headers: {
-        "User-Agent": "SkilledCraftingInventoryApp/1.0",
-        Accept: "text/csv,text/plain,application/csv,*/*",
-      },
-    });
+    const chunk = await readCsvChunkFromUrl(feed.feed_url, offset, chunkSize);
 
-    if (!csvResponse.ok) {
-      throw new Error(`Supplier CSV download failed: HTTP ${csvResponse.status}`);
-    }
-
-    const csvText = await csvResponse.text();
-
-    if (!csvText || csvText.trim().length < 10) {
-      throw new Error("Supplier CSV downloaded but appears to be empty.");
-    }
-
-    const allRows = parseSupplierCatalogCsv(csvText);
-
-    if (!allRows.length) {
-      throw new Error("CSV downloaded, but no usable supplier catalog rows were found.");
-    }
-
-    const chunk = allRows.slice(offset, offset + chunkSize);
-    const nextOffset = offset + chunk.length;
-    const hasMore = nextOffset < allRows.length;
-
-    if (!chunk.length) {
+    if (!chunk.rows.length) {
       await updateFeed(feedId, {
         last_sync_at: new Date().toISOString(),
         last_sync_status: "success",
-        last_sync_message: `Supplier catalog already complete. ${allRows.length} row(s) available.`,
-        last_row_count: allRows.length,
+        last_sync_message: `Sync complete. No more supplier rows after offset ${offset}.`,
+        last_row_count: offset,
       });
 
       return json(200, {
         success: true,
         complete: true,
         feed_id: feedId,
-        total_rows: allRows.length,
-        imported_this_call: 0,
+        offset,
         next_offset: offset,
+        imported_this_call: 0,
         has_more: false,
-        message: "Supplier catalog sync already complete.",
+        message: "Supplier catalog sync complete.",
       });
     }
 
     await updateFeed(feedId, {
       last_sync_status: "running",
-      last_sync_message: `Importing rows ${offset + 1}-${nextOffset} of ${allRows.length}...`,
-      last_row_count: allRows.length,
+      last_sync_message: `Importing ${chunk.rows.length} supplier row(s) from offset ${offset}...`,
     });
 
     const result = await supabaseFetch(`/rpc/import_supplier_catalog_rows`, {
@@ -269,19 +378,22 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         p_supplier_name: feed.supplier_name,
         p_source_file_name: feed.source_file_name || feed.feed_name || feed.feed_url,
-        p_rows: chunk,
+        p_rows: chunk.rows,
         p_update_blank_products: Boolean(feed.update_blank_products),
         p_create_missing_lookups: Boolean(feed.create_missing_lookups),
       }),
     });
 
+    const nextOffset = offset + chunk.rows.length;
+    const hasMore = chunk.has_more_hint && chunk.rows.length === chunkSize;
+
     await updateFeed(feedId, {
       last_sync_at: hasMore ? feed.last_sync_at : new Date().toISOString(),
       last_sync_status: hasMore ? "running" : "success",
       last_sync_message: hasMore
-        ? `Imported ${nextOffset} of ${allRows.length} row(s). Continue sync...`
-        : `Imported ${allRows.length} row(s). Sync complete.`,
-      last_row_count: allRows.length,
+        ? `Imported through usable row ${nextOffset}. Continue sync...`
+        : `Supplier catalog sync complete. Imported through usable row ${nextOffset}.`,
+      last_row_count: nextOffset,
       last_catalog_rows_inserted: Number(feed.last_catalog_rows_inserted || 0) + Number(result?.catalog_rows_inserted || 0),
       last_blank_products_updated: Number(feed.last_blank_products_updated || 0) + Number(result?.blank_products_updated || 0),
     });
@@ -290,16 +402,16 @@ exports.handler = async (event) => {
       success: true,
       complete: !hasMore,
       feed_id: feedId,
-      total_rows: allRows.length,
       offset,
       chunk_size: chunkSize,
-      imported_this_call: chunk.length,
+      imported_this_call: chunk.rows.length,
       next_offset: nextOffset,
       has_more: hasMore,
+      scanned_this_call: chunk.total_scanned,
       import_result: result,
       message: hasMore
-        ? `Imported ${nextOffset} of ${allRows.length} row(s).`
-        : `Supplier catalog sync complete. Imported ${allRows.length} row(s).`,
+        ? `Imported ${nextOffset} usable supplier row(s).`
+        : `Supplier catalog sync complete. Imported through ${nextOffset} usable supplier row(s).`,
     });
   } catch (error) {
     if (feedId) {
@@ -310,7 +422,7 @@ exports.handler = async (event) => {
           last_sync_message: error.message || "Supplier catalog sync failed.",
         });
       } catch {
-        // Do not mask the original error.
+        // Do not mask original error.
       }
     }
 
@@ -318,10 +430,10 @@ exports.handler = async (event) => {
       success: false,
       message: error.message || "Supplier catalog feed sync failed.",
       troubleshooting: [
-        "A 504 means the request took too long. This incremental version only processes one chunk per request.",
-        "Reduce SUPPLIER_CATALOG_SYNC_CHUNK_SIZE to 75 or 100 if the supplier file is still slow.",
-        "Confirm the CSV URL is a direct public CSV URL.",
-        "Confirm SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Netlify.",
+        "This streaming version reads only the needed CSV chunk.",
+        "Use SUPPLIER_CATALOG_SYNC_CHUNK_SIZE=10 or 25 if the supplier feed is still slow.",
+        "Confirm the supplier CSV URL is a direct public CSV URL.",
+        "If this still returns 502, check the Netlify function log for a syntax/runtime error or supplier network block.",
       ],
     });
   }
