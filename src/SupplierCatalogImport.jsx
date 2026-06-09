@@ -9,7 +9,7 @@ import {
   updateSupplierCatalogFeed,
 } from './lib/inventoryApi';
 import { syncSupplierCatalogFeedIncremental } from './lib/supplierCatalogFeedSyncClient';
-import { extractCsvFilesFromZip } from './lib/zipCsvExtract';
+import { extractSupplierFilesFromZip } from './lib/zipCsvExtract';
 
 const TEMPLATE_HEADERS = [
   'Brand', 'Style', 'Color', 'Size', 'Supplier SKU', 'UPC', 'Unit Cost', 'Case Pack Qty', 'Description', 'Notes'
@@ -48,9 +48,20 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseCsvText(csvText) {
-  const workbook = XLSX.read(csvText, { type: 'string' });
-  return parseWorkbook(workbook);
+function parseSupplierZipEntry(entry) {
+  const kind = String(entry.kind || '').toLowerCase();
+
+  if (kind === 'csv' || kind === 'txt') {
+    const workbook = XLSX.read(entry.text, { type: 'string' });
+    return parseWorkbook(workbook);
+  }
+
+  if (kind === 'xlsx' || kind === 'xls' || kind === 'xlsm') {
+    const workbook = XLSX.read(entry.arrayBuffer, { type: 'array' });
+    return parseWorkbook(workbook);
+  }
+
+  return [];
 }
 
 function parseWorkbook(workbook) {
@@ -372,7 +383,7 @@ export default function SupplierCatalogImport() {
     setZipParseStatus(file ? 'selected' : 'idle');
 
     if (file) {
-      setMessage(`Selected ZIP file: ${file.name}. Click "Read ZIP / Show CSV Files" to prepare the import.`);
+      setMessage(`Selected ZIP file: ${file.name}. Click "Read ZIP / Show Excel/CSV Files" to prepare the import.`);
     }
   }
 
@@ -390,24 +401,25 @@ export default function SupplierCatalogImport() {
     setMessage(`Reading ZIP file ${zipUploadFile.name}...`);
 
     try {
-      const extracted = await extractCsvFilesFromZip(zipUploadFile);
+      const extracted = await extractSupplierFilesFromZip(zipUploadFile);
       const parsedFiles = extracted.map((entry) => {
-        const parsedRows = parseCsvText(entry.text);
+        const parsedRows = parseSupplierZipEntry(entry);
         return {
           fileName: entry.fileName,
+          kind: entry.kind,
           size: entry.size,
           rows: parsedRows,
         };
       }).filter((entry) => entry.rows.length > 0);
 
       if (!parsedFiles.length) {
-        throw new Error('CSV files were found in the ZIP, but no usable catalog rows were parsed.');
+        throw new Error('Excel/CSV files were found in the ZIP, but no usable catalog rows were parsed.');
       }
 
       setZipFiles(parsedFiles);
       setSelectedZipFiles(parsedFiles.map((entry) => entry.fileName));
       setZipParseStatus('ready');
-      setMessage(`ZIP ready. Found ${parsedFiles.length} CSV file(s) with ${parsedFiles.reduce((sum, entry) => sum + entry.rows.length, 0)} total usable row(s). The import button is now available.`);
+      setMessage(`ZIP ready. Found ${parsedFiles.length} Excel/CSV file(s) with ${parsedFiles.reduce((sum, entry) => sum + entry.rows.length, 0)} total usable row(s). The import button is now available.`);
     } catch (err) {
       setZipParseStatus('error');
       setMessage(err.message || 'Failed to read supplier ZIP file.');
@@ -436,7 +448,7 @@ export default function SupplierCatalogImport() {
     }
 
     const confirmed = window.confirm(
-      `Import ${filesToImport.length} CSV file(s) from this ZIP for ${zipSupplierName}? This will add/update supplier catalog reference rows.`
+      `Import ${filesToImport.length} Excel/CSV file(s) from this ZIP for ${zipSupplierName}? This will add/update supplier catalog reference rows.`
     );
 
     if (!confirmed) return;
@@ -551,7 +563,7 @@ export default function SupplierCatalogImport() {
             <h2>Manual Supplier ZIP Upload</h2>
             <p className="helper-text">
               Use this for S&S Activewear or any supplier whose ZIP download is blocked from server-side sync.
-              Step 1: choose the ZIP. Step 2: read the ZIP. Step 3: import selected CSV files.
+              Step 1: choose the ZIP. Step 2: read the ZIP. Step 3: import selected Excel/CSV files.
             </p>
           </div>
         </div>
@@ -580,7 +592,7 @@ export default function SupplierCatalogImport() {
 
         <div className="supplier-zip-step-actions">
           <button type="button" onClick={readZipFile} disabled={!zipUploadFile || loading}>
-            {zipParseStatus === 'reading' ? 'Reading ZIP...' : 'Read ZIP / Show CSV Files'}
+            {zipParseStatus === 'reading' ? 'Reading ZIP...' : 'Read ZIP / Show Excel/CSV Files'}
           </button>
 
           <button
@@ -590,20 +602,20 @@ export default function SupplierCatalogImport() {
             className={zipFiles.length > 0 && selectedZipFiles.length > 0 ? 'primary-import-button' : ''}
             title={zipFiles.length === 0 ? 'Read the ZIP first before importing.' : ''}
           >
-            Import Selected CSVs ({selectedZipFiles.length})
+            Import Selected Files ({selectedZipFiles.length})
           </button>
         </div>
 
         {zipUploadFile && zipFiles.length === 0 && (
           <p className="helper-text supplier-zip-guidance">
-            File selected: <strong>{zipUploadFile.name}</strong>. The import button is disabled until the ZIP has been read and CSV files are listed.
+            File selected: <strong>{zipUploadFile.name}</strong>. The import button is disabled until the ZIP has been read and Excel/CSV files are listed.
           </p>
         )}
 
         {zipFiles.length > 0 && (
           <>
             <div className="supplier-zip-summary">
-              <span>{formatNumber(zipStats.fileCount)} CSV file(s)</span>
+              <span>{formatNumber(zipStats.fileCount)} Excel/CSV file(s)</span>
               <span>{formatNumber(zipStats.totalRows)} total usable row(s)</span>
               <span>{formatNumber(zipStats.selectedRows)} selected row(s)</span>
             </div>
@@ -613,7 +625,8 @@ export default function SupplierCatalogImport() {
                 <thead>
                   <tr>
                     <th>Import</th>
-                    <th>CSV File in ZIP</th>
+                    <th>File in ZIP</th>
+                    <th>Type</th>
                     <th>Rows</th>
                     <th>Size</th>
                   </tr>
@@ -629,6 +642,7 @@ export default function SupplierCatalogImport() {
                         />
                       </td>
                       <td><strong>{file.fileName}</strong></td>
+                      <td>{String(file.kind || '').toUpperCase()}</td>
                       <td>{formatNumber(file.rows.length)}</td>
                       <td>{formatNumber(file.size)} bytes</td>
                     </tr>
