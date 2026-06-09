@@ -4,6 +4,9 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
+const MAX_ROWS_PER_RPC = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 500);
+const MAX_ROWS_TOTAL = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_ROWS || 25000);
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -121,7 +124,7 @@ function parseSupplierCatalogCsv(csvText) {
   if (!parsedRows.length) return [];
 
   const headers = parsedRows[0].map((header) => clean(header));
-  const dataRows = parsedRows.slice(1);
+  const dataRows = parsedRows.slice(1, MAX_ROWS_TOTAL + 1);
 
   return dataRows
     .map((row, index) => mapSupplierRow(rowToObject(headers, row), index))
@@ -150,7 +153,8 @@ async function supabaseFetch(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(typeof body === "string" ? body : body?.message || `Supabase request failed: ${response.status}`);
+    const message = typeof body === "string" ? body : body?.message || body?.hint || body?.details || `Supabase request failed: ${response.status}`;
+    throw new Error(message);
   }
 
   return body;
@@ -166,18 +170,59 @@ async function updateFeed(feedId, values) {
   });
 }
 
+async function importRowsInChunks(feed, rows) {
+  let catalogRowsInserted = 0;
+  let blankProductsUpdated = 0;
+  let chunksImported = 0;
+
+  for (let start = 0; start < rows.length; start += MAX_ROWS_PER_RPC) {
+    const chunk = rows.slice(start, start + MAX_ROWS_PER_RPC);
+    chunksImported += 1;
+
+    await updateFeed(feed.id, {
+      last_sync_status: "running",
+      last_sync_message: `Importing rows ${start + 1}-${start + chunk.length} of ${rows.length}...`,
+      last_row_count: rows.length,
+    });
+
+    const result = await supabaseFetch(`/rpc/import_supplier_catalog_rows`, {
+      method: "POST",
+      body: JSON.stringify({
+        p_supplier_name: feed.supplier_name,
+        p_source_file_name: feed.source_file_name || feed.feed_name || feed.feed_url,
+        p_rows: chunk,
+        p_update_blank_products: Boolean(feed.update_blank_products),
+        p_create_missing_lookups: Boolean(feed.create_missing_lookups),
+      }),
+    });
+
+    catalogRowsInserted += Number(result?.catalog_rows_inserted || 0);
+    blankProductsUpdated += Number(result?.blank_products_updated || 0);
+  }
+
+  return {
+    chunks_imported: chunksImported,
+    catalog_rows_inserted: catalogRowsInserted,
+    blank_products_updated: blankProductsUpdated,
+  };
+}
+
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: CORS_HEADERS, body: "" };
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: CORS_HEADERS, body: "" };
+  }
 
   if (event.httpMethod !== "POST") {
     return json(405, { success: false, message: "Use POST." });
   }
 
+  let feedId = null;
+
   try {
     requireConfig();
 
     const payload = JSON.parse(event.body || "{}");
-    const feedId = payload.feed_id;
+    feedId = payload.feed_id;
 
     if (!feedId) return json(400, { success: false, message: "Missing feed_id." });
 
@@ -195,7 +240,7 @@ exports.handler = async (event) => {
     const csvResponse = await fetch(feed.feed_url, {
       headers: {
         "User-Agent": "SkilledCraftingInventoryApp/1.0",
-        Accept: "text/csv,*/*",
+        Accept: "text/csv,text/plain,application/csv,*/*",
       },
     });
 
@@ -204,36 +249,26 @@ exports.handler = async (event) => {
     }
 
     const csvText = await csvResponse.text();
+
+    if (!csvText || csvText.trim().length < 10) {
+      throw new Error("Supplier CSV downloaded but appears to be empty.");
+    }
+
     const rows = parseSupplierCatalogCsv(csvText);
 
     if (!rows.length) {
       throw new Error("CSV downloaded, but no usable supplier catalog rows were found.");
     }
 
-    await updateFeed(feedId, {
-      last_sync_status: "running",
-      last_sync_message: `Downloaded and parsed ${rows.length} row(s). Importing...`,
-      last_row_count: rows.length,
-    });
-
-    const importResult = await supabaseFetch(`/rpc/import_supplier_catalog_rows`, {
-      method: "POST",
-      body: JSON.stringify({
-        p_supplier_name: feed.supplier_name,
-        p_source_file_name: feed.source_file_name || feed.feed_name || feed.feed_url,
-        p_rows: rows,
-        p_update_blank_products: Boolean(feed.update_blank_products),
-        p_create_missing_lookups: Boolean(feed.create_missing_lookups),
-      }),
-    });
+    const importResult = await importRowsInChunks(feed, rows);
 
     await updateFeed(feedId, {
       last_sync_at: new Date().toISOString(),
       last_sync_status: "success",
-      last_sync_message: `Imported ${rows.length} row(s).`,
+      last_sync_message: `Imported ${rows.length} row(s) in ${importResult.chunks_imported} chunk(s).`,
       last_row_count: rows.length,
-      last_catalog_rows_inserted: importResult?.catalog_rows_inserted ?? null,
-      last_blank_products_updated: importResult?.blank_products_updated ?? null,
+      last_catalog_rows_inserted: importResult.catalog_rows_inserted,
+      last_blank_products_updated: importResult.blank_products_updated,
     });
 
     return json(200, {
@@ -244,22 +279,27 @@ exports.handler = async (event) => {
       import_result: importResult,
     });
   } catch (error) {
-    try {
-      const payload = JSON.parse(event.body || "{}");
-      if (payload.feed_id) {
-        await updateFeed(payload.feed_id, {
+    if (feedId) {
+      try {
+        await updateFeed(feedId, {
           last_sync_at: new Date().toISOString(),
           last_sync_status: "failed",
           last_sync_message: error.message || "Supplier catalog sync failed.",
         });
+      } catch {
+        // Do not mask the original error.
       }
-    } catch {
-      // Ignore secondary logging errors.
     }
 
     return json(500, {
       success: false,
       message: error.message || "Supplier catalog feed sync failed.",
+      troubleshooting: [
+        "Confirm the CSV URL is publicly reachable.",
+        "Confirm Netlify environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.",
+        "Confirm supplier_catalog_feeds exists by running the website CSV feed sync SQL.",
+        "If the supplier catalog is very large, reduce SUPPLIER_CATALOG_SYNC_CHUNK_SIZE to 250.",
+      ],
     });
   }
 };
