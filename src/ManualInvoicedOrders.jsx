@@ -3,7 +3,9 @@ import {
   createManualInvoiceOrder,
   generateManualInvoiceJob,
   getManualInvoiceOrders,
+  getManualInvoiceOrderItems,
   searchManualInvoiceProducts,
+  updateManualInvoiceOrder,
   updateManualInvoicePaymentStatus,
 } from './lib/manualOrdersApi';
 
@@ -122,8 +124,8 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
       if (!rows?.length) {
         setSearchMessage(
           source === 'finished'
-            ? 'No finished products matched these search terms. Try customer, logo, SKU, brand, color, or size.'
-            : 'No blank products matched these search terms. Try brand, style, color, size, or SKU.'
+            ? 'No finished products matched these search terms. Try customer, logo, placement, SKU, brand, style, color, size, notes, or any attribute.'
+            : 'No blank products matched these search terms. Try SKU, UPC/barcode, brand, style, color, size, name, notes, or any attribute/variation.'
         );
       }
     } catch (err) {
@@ -190,7 +192,7 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
             <input
               value={lookup}
               onChange={(e) => setLookup(e.target.value)}
-              placeholder={source === 'finished' ? 'SKU, customer, logo, brand, color, size' : 'SKU, brand, style, color, size'}
+              placeholder={source === 'finished' ? 'SKU, customer, logo, placement, brand, style, color, size, notes' : 'SKU, UPC, barcode, brand, style, color, size, name, notes, any attribute'}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
             />
             <button type="button" className="sc-btn sc-btn-primary" onClick={runSearch} disabled={loading}>{loading ? '...' : 'Find'}</button>
@@ -264,6 +266,8 @@ export default function ManualInvoicedOrders() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [generateJob, setGenerateJob] = useState(true);
+  const [editingOrderId, setEditingOrderId] = useState(null);
+  const [editingGeneratedJobId, setEditingGeneratedJobId] = useState(null);
   const [order, setOrder] = useState({
     invoice_number: '',
     customer_name: '',
@@ -319,15 +323,103 @@ export default function ManualInvoicedOrders() {
 
     setSaving(true);
     try {
-      const result = await createManualInvoiceOrder(order, items, generateJob);
-      setMessage(`Manual invoice order saved. Manual order ID: ${result.manual_order_id}${result.generated?.job_id ? `, Job ID: ${result.generated.job_id}` : ''}.`);
-      setOrder({ invoice_number: '', customer_name: '', organization: '', customer_email: '', customer_phone: '', order_date: today(), due_date: '', tax_amount: 0, shipping_amount: 0, total_payment_amount: 0, invoice_sent: false, payment_received: false, notes: '' });
-      setItems([blankLine()]);
+      if (editingOrderId) {
+        const result = await updateManualInvoiceOrder(editingOrderId, order, items, {
+          regenerateJob: Boolean(generateJob && editingGeneratedJobId),
+        });
+        setMessage(`Manual invoice order #${editingOrderId} updated.${result?.job_result?.job_id ? ` Job refreshed: #${result.job_result.job_id}.` : ''}`);
+      } else {
+        const result = await createManualInvoiceOrder(order, items, generateJob);
+        setMessage(`Manual invoice order saved. Manual order ID: ${result.manual_order_id}${result.generated?.job_id ? `, Job ID: ${result.generated.job_id}` : ''}.`);
+      }
+
+      resetForm();
       await loadOrders();
     } catch (err) {
       setError(err.message || String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function resetForm() {
+    setEditingOrderId(null);
+    setEditingGeneratedJobId(null);
+    setGenerateJob(true);
+    setOrder({
+      invoice_number: '',
+      customer_name: '',
+      organization: '',
+      customer_email: '',
+      customer_phone: '',
+      order_date: today(),
+      due_date: '',
+      tax_amount: 0,
+      shipping_amount: 0,
+      total_payment_amount: 0,
+      invoice_sent: false,
+      payment_received: false,
+      notes: '',
+    });
+    setItems([blankLine()]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function mapExistingItem(item) {
+    const itemType = item.item_type === 'finished' || item.product_source === 'finished' || item.finished_product_id ? 'finished' : 'blank';
+
+    return {
+      ...blankLine(),
+      item_type: itemType,
+      product_source: itemType,
+      blank_product_id: itemType === 'blank' ? String(item.blank_product_id || '') : '',
+      finished_product_id: itemType === 'finished' ? String(item.finished_product_id || '') : '',
+      sku_base: item.sku_base || item.finished_sku || item.sku || '',
+      item_name: item.item_name || item.name || '',
+      brand: item.brand || '',
+      style: item.style || '',
+      color: item.color || '',
+      size: item.size || '',
+      customer_name: item.customer_name || '',
+      logo_name: item.logo_name || '',
+      placement: item.placement || '',
+      quantity: Number(item.quantity || 1),
+      price_per_item: Number(item.price_per_item || 0),
+      artwork_note: item.artwork_note || '',
+      decoration_size: item.decoration_size || '',
+      notes: item.notes || '',
+    };
+  }
+
+  async function editExisting(row) {
+    setError('');
+    setMessage('');
+
+    try {
+      const detailItems = await getManualInvoiceOrderItems(row.id);
+      setEditingOrderId(row.id);
+      setEditingGeneratedJobId(row.generated_job_id || null);
+      setGenerateJob(Boolean(row.generated_job_id));
+      setOrder({
+        invoice_number: row.invoice_number || '',
+        customer_name: row.customer_name || '',
+        organization: row.organization || '',
+        customer_email: row.customer_email || '',
+        customer_phone: row.customer_phone || '',
+        order_date: row.order_date || today(),
+        due_date: row.due_date || '',
+        tax_amount: Number(row.tax_amount || 0),
+        shipping_amount: Number(row.shipping_amount || 0),
+        total_payment_amount: Number(row.total_payment_amount || row.calculated_total || 0),
+        invoice_sent: Boolean(row.invoice_sent),
+        payment_received: Boolean(row.payment_received),
+        notes: row.notes || '',
+      });
+      setItems((detailItems || []).length ? detailItems.map(mapExistingItem) : [blankLine()]);
+      setMessage(`Editing manual invoice order #${row.id}. Make changes above, then click Update Manual Invoice Order.`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setError(err.message || String(err));
     }
   }
 
@@ -356,6 +448,20 @@ export default function ManualInvoicedOrders() {
 
   return (
     <div className="sc-page-stack manual-invoice-page">
+      <style>{`
+        .manual-edit-banner {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .manual-order-row-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+        }
+      `}</style>
       <div className="sc-page-header-card sc-page-header-blue">
         <div>
           <div className="sc-kicker">Management</div>
@@ -366,6 +472,13 @@ export default function ManualInvoicedOrders() {
 
       {message && <div className="sc-alert sc-alert-success">{message}</div>}
       {error && <div className="sc-alert sc-alert-error">{error}</div>}
+      {editingOrderId && (
+        <div className="sc-alert sc-alert-warning manual-edit-banner">
+          <strong>Editing previous manual invoice order #{editingOrderId}.</strong>
+          <span> Saving will update the existing order and replace its line items with the current form lines.</span>
+          <button type="button" className="sc-btn" onClick={resetForm}>Cancel Edit</button>
+        </div>
+      )}
 
       <form onSubmit={submit} className="manual-invoice-form">
         <section className="sc-panel">
@@ -421,11 +534,12 @@ export default function ManualInvoicedOrders() {
           <div className="manual-invoice-checks">
             <label><input type="checkbox" checked={order.invoice_sent} onChange={(e) => setOrder({ ...order, invoice_sent: e.target.checked })} /> Invoice sent</label>
             <label><input type="checkbox" checked={order.payment_received} onChange={(e) => setOrder({ ...order, payment_received: e.target.checked })} /> Payment received</label>
-            <label><input type="checkbox" checked={generateJob} onChange={(e) => setGenerateJob(e.target.checked)} /> Generate job immediately</label>
+            <label><input type="checkbox" checked={generateJob} onChange={(e) => setGenerateJob(e.target.checked)} /> {editingOrderId ? 'Refresh generated job after update' : 'Generate job immediately'}</label>
           </div>
           <label className="sc-field"><span>Order Notes</span><textarea value={order.notes} onChange={(e) => setOrder({ ...order, notes: e.target.value })} /></label>
           <div className="sc-form-actions">
-            <button className="sc-btn sc-btn-primary sc-btn-large" disabled={saving}>{saving ? 'Saving...' : 'Save Manual Invoice Order'}</button>
+            <button className="sc-btn sc-btn-primary sc-btn-large" disabled={saving}>{saving ? 'Saving...' : (editingOrderId ? 'Update Manual Invoice Order' : 'Save Manual Invoice Order')}</button>
+            {editingOrderId && <button type="button" className="sc-btn sc-btn-large" onClick={resetForm}>Cancel Edit</button>}
           </div>
         </section>
       </form>
@@ -451,7 +565,12 @@ export default function ManualInvoicedOrders() {
                   <td><input type="checkbox" checked={Boolean(row.invoice_sent)} onChange={() => togglePayment(row, 'invoice_sent')} /></td>
                   <td><input type="checkbox" checked={Boolean(row.payment_received)} onChange={() => togglePayment(row, 'payment_received')} /></td>
                   <td>{row.generated_job_id ? `#${row.generated_job_id}` : 'Not generated'}</td>
-                  <td>{!row.generated_job_id && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}</td>
+                  <td>
+                    <div className="manual-order-row-actions">
+                      <button className="sc-btn" type="button" onClick={() => editExisting(row)}>Edit Order</button>
+                      {!row.generated_job_id && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {!orders.length && <tr><td colSpan="10">No manual invoice orders yet.</td></tr>}
