@@ -214,3 +214,23 @@ export async function updateManualInvoiceOrder(manualOrderId, order, items, opti
   return data;
 }
 
+export async function createMissingBlankProductForManualInvoice(line = {}) {
+  const payload = {
+    sku_base: clean(line.sku_base),
+    name: clean(line.name || line.item_name),
+    brand: clean(line.brand),
+    style: clean(line.style),
+    color: clean(line.color),
+    size: clean(line.size),
+    unit_cost: Number(line.unit_cost || line.price_per_item || 0),
+    notes: clean(line.notes),
+  };
+
+  const { data, error } = await supabase.rpc('sc_create_blank_product_from_manual_invoice_line', {
+    p_line: payload,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
