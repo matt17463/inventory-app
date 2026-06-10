@@ -22,7 +22,7 @@ function normalizeSearchArgs(input = '') {
 export async function searchManualInvoiceProducts(input = {}) {
   const args = normalizeSearchArgs(input);
 
-  const { data, error } = await supabase.rpc('sc_search_manual_invoice_products_v1', {
+  const payload = {
     p_product_source: args.productSource,
     p_search: args.search,
     p_brand: args.brand,
@@ -30,10 +30,16 @@ export async function searchManualInvoiceProducts(input = {}) {
     p_color: args.color,
     p_size: args.size,
     p_limit: args.limit,
-  });
+  };
 
-  if (error) throw error;
-  return data || [];
+  const v2 = await supabase.rpc('sc_search_manual_invoice_products_v2', payload);
+
+  if (!v2.error) return v2.data || [];
+
+  const v1 = await supabase.rpc('sc_search_manual_invoice_products_v1', payload);
+
+  if (v1.error) throw v2.error;
+  return v1.data || [];
 }
 
 export async function searchBlanksForManualInvoice(input = '') {
