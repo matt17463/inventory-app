@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   createManualInvoiceOrder,
   generateManualInvoiceJob,
+  createMissingBlankProductForManualInvoice,
   getManualInvoiceOrders,
   getManualInvoiceOrderItems,
   searchManualInvoiceProducts,
@@ -161,6 +162,61 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
     setDetailsOpen(true);
   }
 
+  async function createMissingBlankProduct() {
+    setLoading(true);
+    setSearchMessage('');
+
+    try {
+      const payload = {
+        sku_base: line.sku_base || lookup,
+        name: line.item_name || lookup,
+        brand: line.brand,
+        style: line.style,
+        color: line.color,
+        size: line.size,
+        unit_cost: Number(line.price_per_item || 0),
+        notes: line.notes || line.artwork_note || '',
+      };
+
+      if (!payload.brand || !payload.style || !payload.color || !payload.size) {
+        setSearchMessage('Before creating a blank product, fill in Brand, Style, Color, and Size on this line.');
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Create missing blank product for ${payload.brand} ${payload.style} ${payload.color} ${payload.size}?`
+      );
+
+      if (!confirmed) return;
+
+      const created = await createMissingBlankProductForManualInvoice(payload);
+
+      if (!created?.success) {
+        throw new Error(created?.message || 'Blank product was not created.');
+      }
+
+      const product = created.product || created;
+      selectProduct({
+        item_type: 'blank',
+        product_id: product.blank_product_id || product.id,
+        blank_product_id: product.blank_product_id || product.id,
+        sku_base: product.sku_base || payload.sku_base,
+        name: product.name || payload.name,
+        brand: product.brand || payload.brand,
+        style: product.style || payload.style,
+        color: product.color || payload.color,
+        size: product.size || payload.size,
+        unit_cost: product.unit_cost || payload.unit_cost || 0,
+      });
+
+      setSearchMessage(`Created and selected blank product ${product.sku_base || payload.sku_base}.`);
+    } catch (err) {
+      setSearchMessage(err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="manual-line-table-row sc-panel-soft">
       <div className="manual-line-row-title">
@@ -196,6 +252,11 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
             />
             <button type="button" className="sc-btn sc-btn-primary" onClick={runSearch} disabled={loading}>{loading ? '...' : 'Find'}</button>
+            {source === 'blank' && (
+              <button type="button" className="sc-btn" onClick={createMissingBlankProduct} disabled={loading}>
+                Create Blank
+              </button>
+            )}
           </div>
         </label>
 
@@ -214,7 +275,21 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
             <strong>{results.length} {source === 'finished' ? 'finished' : 'blank'} match{results.length === 1 ? '' : 'es'} found</strong>
             <button type="button" className="sc-text-button" onClick={() => setOpen(false)}>Hide</button>
           </div>
-          {searchMessage && <div className="sc-alert sc-alert-warning">{searchMessage}</div>}
+          {searchMessage && (
+            <div className="sc-alert sc-alert-warning manual-missing-blank-alert">
+              <span>{searchMessage}</span>
+              {source === 'blank' && results.length === 0 && (
+                <button
+                  type="button"
+                  className="sc-btn sc-btn-primary"
+                  onClick={createMissingBlankProduct}
+                  disabled={loading}
+                >
+                  Create Missing Blank Product
+                </button>
+              )}
+            </div>
+          )}
           <div className="manual-results-grid-list">
             {results.map((row) => {
               const label = productLabel(row);
@@ -455,11 +530,16 @@ export default function ManualInvoicedOrders() {
           align-items: center;
           flex-wrap: wrap;
         }
-        .manual-order-row-actions {
+        .manual-order-row-actions,
+        .manual-missing-blank-alert {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
           align-items: center;
+        }
+
+        .manual-missing-blank-alert span {
+          flex: 1 1 280px;
         }
       `}</style>
       <div className="sc-page-header-card sc-page-header-blue">
