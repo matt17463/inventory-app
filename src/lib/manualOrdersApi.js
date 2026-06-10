@@ -154,3 +154,57 @@ export async function updateManualInvoicePaymentStatus(manualOrderId, invoiceSen
   if (error) throw error;
   return data;
 }
+
+export async function updateManualInvoiceOrder(manualOrderId, order, items, options = {}) {
+  const header = {
+    order_source: 'manual_invoice',
+    invoice_number: clean(order.invoice_number),
+    customer_name: clean(order.customer_name),
+    organization: clean(order.organization),
+    customer_email: clean(order.customer_email),
+    customer_phone: clean(order.customer_phone),
+    order_date: order.order_date || null,
+    due_date: order.due_date || null,
+    status: clean(order.status || 'entered') || 'entered',
+    invoice_sent: Boolean(order.invoice_sent),
+    payment_received: Boolean(order.payment_received),
+    tax_amount: Number(order.tax_amount || 0),
+    shipping_amount: Number(order.shipping_amount || 0),
+    total_payment_amount: Number(order.total_payment_amount || 0),
+    notes: clean(order.notes),
+  };
+
+  const safeItems = (items || []).map((item, index) => {
+    const itemType = clean(item.item_type || item.product_source || 'blank').toLowerCase() === 'finished' ? 'finished' : 'blank';
+    return {
+      line_number: index + 1,
+      item_type: itemType,
+      product_source: itemType,
+      blank_product_id: itemType === 'blank' ? clean(item.blank_product_id) : '',
+      finished_product_id: itemType === 'finished' ? clean(item.finished_product_id) : '',
+      sku_base: clean(item.sku_base),
+      item_name: clean(item.item_name),
+      brand: clean(item.brand),
+      style: clean(item.style),
+      color: clean(item.color),
+      size: clean(item.size),
+      quantity: Number(item.quantity || 0),
+      price_per_item: Number(item.price_per_item || 0),
+      artwork_note: clean(item.artwork_note),
+      placement: clean(item.placement),
+      decoration_size: clean(item.decoration_size),
+      notes: clean(item.notes),
+    };
+  });
+
+  const { data, error } = await supabase.rpc('sc_update_manual_invoice_order', {
+    p_manual_order_id: manualOrderId,
+    p_order: header,
+    p_items: safeItems,
+    p_regenerate_job: Boolean(options.regenerateJob),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
