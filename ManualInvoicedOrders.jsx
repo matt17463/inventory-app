@@ -34,6 +34,13 @@ const blankLine = () => ({
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value) => Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 
+function buildAttributeName(line) {
+  return [line.brand, line.style, line.color, line.size]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 function getProductId(row) {
   return row.product_id || row.blank_product_id || row.finished_product_id || row.id || '';
 }
@@ -82,6 +89,22 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
 
   function patch(patchValues) {
     onChange(index, { ...line, ...patchValues });
+  }
+
+  function patchAttribute(patchValues) {
+    onChange(index, {
+      ...line,
+      ...patchValues,
+      blank_product_id: '',
+      finished_product_id: '',
+      sku_base: '',
+      item_name: '',
+    });
+
+    setLookup('');
+    setResults([]);
+    setOpen(false);
+    setSearchMessage('');
   }
 
   function updateSource(nextSource) {
@@ -167,9 +190,14 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
     setSearchMessage('');
 
     try {
+      const attributeName = buildAttributeName(line);
+
       const payload = {
-        sku_base: line.sku_base || lookup,
-        name: line.item_name || lookup,
+        // Intentionally blank: the database should generate the SKU from the
+        // visible Brand + Style + Color + Size fields. This prevents stale
+        // lookup SKUs, such as KELLYGREEN, from overriding a changed color.
+        sku_base: '',
+        name: attributeName,
         brand: line.brand,
         style: line.style,
         color: line.color,
@@ -260,10 +288,10 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
           </div>
         </label>
 
-        <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => patch({ brand: e.target.value })} placeholder="Gildan" /></label>
-        <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => patch({ style: e.target.value })} placeholder="18000" /></label>
-        <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => patch({ color: e.target.value })} placeholder="Black" /></label>
-        <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => patch({ size: e.target.value })} placeholder="A2XL" /></label>
+        <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => patchAttribute({ brand: e.target.value })} placeholder="Gildan" /></label>
+        <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => patchAttribute({ style: e.target.value })} placeholder="18000" /></label>
+        <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => patchAttribute({ color: e.target.value })} placeholder="Black" /></label>
+        <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => patchAttribute({ size: e.target.value })} placeholder="A2XL" /></label>
         <label className="sc-field"><span>Qty</span><input type="number" min="1" value={line.quantity} onChange={(e) => patch({ quantity: e.target.value })} /></label>
         <label className="sc-field"><span>Price Each</span><input type="number" step="0.01" min="0" value={line.price_per_item} onChange={(e) => patch({ price_per_item: e.target.value })} /></label>
         <label className="sc-field"><span>Total</span><input value={money(lineTotal)} readOnly /></label>
