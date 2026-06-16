@@ -19,6 +19,21 @@ function normalizeId(value) {
   return text;
 }
 
+function dbId(value) {
+  const text = normalizeId(value);
+  if (!text) return null;
+  return /^\d+$/.test(text) ? Number(text) : text;
+}
+
+function skuPiece(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function normalizeBin(row) {
   if (!row) return null;
   const id = normalizeId(row.id);
@@ -59,7 +74,16 @@ async function loadLookupTable(tableName) {
 
 export default function AddItemToBin() {
   const [lookups, setLookups] = useState({ brands: [], product_types: [], colors: [], sizes: [], bins: [] });
-  const [defaults, setDefaults] = useState({ brand_id: '', product_type_id: '', color_id: '', bin_id: '', supplier: '', po_number: '', notes: '' });
+  const [defaults, setDefaults] = useState({
+    brand_id: '',
+    product_type_id: '',
+    color_id: '',
+    bin_id: '',
+    supplier: '',
+    po_number: '',
+    notes: '',
+    auto_create_missing_blanks: true,
+  });
   const [lines, setLines] = useState([{ ...lineTemplate }]);
   const [paste, setPaste] = useState('');
   const [message, setMessage] = useState('');
@@ -96,7 +120,13 @@ export default function AddItemToBin() {
     bin_id: l.bin_id || defaults.bin_id,
   })), [lines, defaults]);
 
-  const lookupName = (list, id) => list.find((x) => String(x.id) === String(id))?.name || '';
+  const lookupRow = (list, id) => list.find((x) => String(x.id) === String(id));
+  const lookupName = (list, id) => lookupRow(list, id)?.name || '';
+  const lookupCodeOrName = (list, id) => {
+    const row = lookupRow(list, id);
+    return row?.code || row?.name || '';
+  };
+
   const missing = (line) => ['bin_id', 'brand_id', 'product_type_id', 'color_id', 'size_id', 'quantity'].filter((k) => !line[k] || (k === 'quantity' && Number(line[k]) <= 0));
 
   function updateLine(index, patch) {
@@ -118,17 +148,135 @@ export default function AddItemToBin() {
     if (parsed.length) setLines(parsed);
   }
 
+  function blankDescription(line) {
+    return `${lookupName(lookups.brands, line.brand_id)} / ${lookupName(lookups.product_types, line.product_type_id)} / ${lookupName(lookups.colors, line.color_id)} / ${lookupName(lookups.sizes, line.size_id)}`;
+  }
+
+  function buildBlankSku(line) {
+    const parts = [
+      lookupCodeOrName(lookups.brands, line.brand_id),
+      lookupCodeOrName(lookups.product_types, line.product_type_id),
+      lookupCodeOrName(lookups.colors, line.color_id),
+      lookupCodeOrName(lookups.sizes, line.size_id),
+    ].map(skuPiece).filter(Boolean);
+
+    return parts.join('-');
+  }
+
+  function buildBlankName(line) {
+    return [
+      lookupName(lookups.brands, line.brand_id),
+      lookupName(lookups.product_types, line.product_type_id),
+      lookupName(lookups.colors, line.color_id),
+      lookupName(lookups.sizes, line.size_id),
+    ].filter(Boolean).join(' ');
+  }
+
   async function findBlank(line) {
     const { data, error } = await supabase
       .from('blank_products')
-      .select('id, sku_base, name')
-      .eq('brand_id', line.brand_id)
-      .eq('product_type_id', line.product_type_id)
-      .eq('color_id', line.color_id)
-      .eq('size_id', line.size_id)
-      .maybeSingle();
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('brand_id', dbId(line.brand_id))
+      .eq('product_type_id', dbId(line.product_type_id))
+      .eq('color_id', dbId(line.color_id))
+      .eq('size_id', dbId(line.size_id))
+      .limit(1);
+
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : null;
+  }
+
+  async function findBlankBySku(skuBase) {
+    if (!skuBase) return null;
+
+    const { data, error } = await supabase
+      .from('blank_products')
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('sku_base', skuBase)
+      .limit(1);
+
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : null;
+  }
+
+  async function updateBlankAttributes(blank, line, skuBase, name) {
+    const patch = {
+      sku_base: blank.sku_base || skuBase,
+      name: blank.name || name || skuBase,
+      brand_id: dbId(line.brand_id),
+      product_type_id: dbId(line.product_type_id),
+      color_id: dbId(line.color_id),
+      size_id: dbId(line.size_id),
+    };
+
+    Object.keys(patch).forEach((key) => {
+      if (patch[key] === null || patch[key] === '') delete patch[key];
+    });
+
+    const { data, error } = await supabase
+      .from('blank_products')
+      .update(patch)
+      .eq('id', blank.id)
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .single();
+
     if (error) throw error;
     return data;
+  }
+
+  async function createMissingBlank(line) {
+    const skuBase = buildBlankSku(line);
+    const name = buildBlankName(line) || skuBase;
+
+    if (!skuBase || !name) {
+      throw new Error(`Could not build a blank product SKU/name for ${blankDescription(line)}.`);
+    }
+
+    const existingBySku = await findBlankBySku(skuBase);
+    if (existingBySku?.id) {
+      return updateBlankAttributes(existingBySku, line, skuBase, name);
+    }
+
+    const payload = {
+      sku_base: skuBase,
+      name,
+      brand_id: dbId(line.brand_id),
+      product_type_id: dbId(line.product_type_id),
+      color_id: dbId(line.color_id),
+      size_id: dbId(line.size_id),
+    };
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === null || payload[key] === '') delete payload[key];
+    });
+
+    const { data, error } = await supabase
+      .from('blank_products')
+      .insert(payload)
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .single();
+
+    if (!error) return data;
+
+    // If another process created the SKU between our lookup and insert, retry by SKU.
+    const retry = await findBlankBySku(skuBase);
+    if (retry?.id) {
+      return updateBlankAttributes(retry, line, skuBase, name);
+    }
+
+    throw error;
+  }
+
+  async function findOrCreateBlank(line) {
+    const existing = await findBlank(line);
+    if (existing?.id) return { blank: existing, created: false };
+
+    if (!defaults.auto_create_missing_blanks) {
+      return { blank: null, created: false };
+    }
+
+    const created = await createMissingBlank(line);
+    return { blank: created, created: true };
   }
 
   async function saveAll() {
@@ -143,18 +291,21 @@ export default function AddItemToBin() {
     }
 
     let saved = 0;
+    let createdBlanks = 0;
     const errors = [];
 
     for (const line of valid) {
       try {
-        const blank = await findBlank(line);
+        const { blank, created } = await findOrCreateBlank(line);
         const blankId = normalizeId(blank?.id);
         const binId = normalizeId(line.bin_id);
 
         if (!blankId) {
-          errors.push(`No blank product match for ${lookupName(lookups.brands, line.brand_id)} / ${lookupName(lookups.product_types, line.product_type_id)} / ${lookupName(lookups.colors, line.color_id)} / ${lookupName(lookups.sizes, line.size_id)}`);
+          errors.push(`No blank product match for ${blankDescription(line)}`);
           continue;
         }
+
+        if (created) createdBlanks += 1;
 
         if (!binId) {
           errors.push('Missing valid bin id. Refresh bins and choose the bin again.');
@@ -184,7 +335,7 @@ export default function AddItemToBin() {
       }
     }
 
-    setMessage(`${saved} receiving row(s) saved.${errors.length ? ` Issues: ${errors.slice(0, 4).join('; ')}` : ''}`);
+    setMessage(`${saved} receiving row(s) saved.${createdBlanks ? ` Created ${createdBlanks} missing blank product${createdBlanks === 1 ? '' : 's'}.` : ''}${errors.length ? ` Issues: ${errors.slice(0, 4).join('; ')}` : ''}`);
     setSaving(false);
   }
 
@@ -220,6 +371,17 @@ export default function AddItemToBin() {
           <label className="sc-field"><span>Default Style</span>{select(defaults.product_type_id, (v) => setDefaults({ ...defaults, product_type_id: v }), lookups.product_types, 'Choose style')}</label>
           <label className="sc-field"><span>Default Color</span>{select(defaults.color_id, (v) => setDefaults({ ...defaults, color_id: v }), lookups.colors, 'Choose color')}</label>
           <label className="sc-field sc-field-wide"><span>Receiving Notes</span><input value={defaults.notes} onChange={(e) => setDefaults({ ...defaults, notes: e.target.value })} /></label>
+          <label className="sc-field sc-field-wide">
+            <span>Missing Blank Products</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(defaults.auto_create_missing_blanks)}
+                onChange={(e) => setDefaults({ ...defaults, auto_create_missing_blanks: e.target.checked })}
+              />
+              Create missing blank products while receiving
+            </label>
+          </label>
         </div>
       </section>
 
