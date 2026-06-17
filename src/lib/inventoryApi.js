@@ -587,6 +587,31 @@ export async function getDashboardMetrics() {
   };
 }
 
+function normalizeActivityRow(row) {
+  const payload = row?.payload || row?.metadata || row?.details_json || row?.raw_payload || null;
+  const payloadObject = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+
+  return {
+    ...payloadObject,
+    ...row,
+    source_table:
+      row?.source_table ||
+      row?.table_name ||
+      row?.entity_table ||
+      payloadObject.source_table ||
+      payloadObject.table_name ||
+      null,
+    source_id:
+      row?.source_id ||
+      row?.movement_id ||
+      row?.blank_inventory_movement_id ||
+      row?.entity_id ||
+      payloadObject.source_id ||
+      payloadObject.movement_id ||
+      null,
+  };
+}
+
 export async function getActivityFeed(limit = 25) {
   const { data, error } = await supabase
     .from('inventory_activity_feed')
@@ -595,7 +620,63 @@ export async function getActivityFeed(limit = 25) {
     .limit(limit);
 
   if (error) throw error;
-  return data || [];
+
+  const rows = (data || []).map(normalizeActivityRow);
+  const activityIds = rows.map((row) => row.id).filter((id) => id !== null && id !== undefined).map(String);
+
+  if (activityIds.length) {
+    const undoLog = await supabase
+      .from('sc_activity_undo_log')
+      .select('activity_id, source_table, source_id, reversal_movement_id, undone_at, reason')
+      .in('activity_id', activityIds);
+
+    if (!undoLog.error && Array.isArray(undoLog.data)) {
+      const byActivityId = new Map(undoLog.data.map((entry) => [String(entry.activity_id), entry]));
+      rows.forEach((row) => {
+        const undo = byActivityId.get(String(row.id));
+        if (undo) {
+          row.undone_at = undo.undone_at;
+          row.undo_reason = undo.reason;
+          row.undo_reversal_movement_id = undo.reversal_movement_id;
+        }
+      });
+    }
+  }
+
+  return rows;
+}
+
+export async function undoActivityFeedEntry(activity, reason = '') {
+  if (!activity?.id && !activity?.source_id && !activity?.movement_id && !activity?.blank_inventory_movement_id) {
+    throw new Error('This activity entry does not include an ID that can be undone.');
+  }
+
+  const payload = {
+    p_activity_id: activity?.id == null ? null : String(activity.id),
+    p_source_table: activity?.source_table || activity?.table_name || activity?.entity_table || null,
+    p_source_id: activity?.source_id || activity?.movement_id || activity?.blank_inventory_movement_id || activity?.entity_id || null,
+    p_reason: reason || null,
+  };
+
+  let { data, error } = await supabase.rpc('sc_undo_activity_feed_entry', payload);
+
+  // Older SQL installs may expose a smaller argument list. Try the minimal
+  // version before surfacing the error.
+  if (error && /function .* does not exist|could not find/i.test(error.message || '')) {
+    const fallback = await supabase.rpc('sc_undo_activity_feed_entry', {
+      p_activity_id: payload.p_activity_id,
+      p_reason: payload.p_reason,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) throw error;
+  if (data && data.success === false) {
+    throw new Error(data.message || 'Activity could not be undone.');
+  }
+
+  return data || { success: true, message: 'Activity was undone.' };
 }
 
 export async function getWooSyncQueue(limit = 50) {
