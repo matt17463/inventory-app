@@ -588,28 +588,56 @@ export async function getDashboardMetrics() {
 }
 
 function normalizeActivityRow(row) {
-  const payload = row?.payload || row?.metadata || row?.details_json || row?.raw_payload || null;
+  const unwrapped = row?.activity && typeof row.activity === 'object' && !Array.isArray(row.activity)
+    ? row.activity
+    : row;
+  const payload = unwrapped?.payload || unwrapped?.metadata || unwrapped?.details_json || unwrapped?.raw_payload || null;
   const payloadObject = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
 
   return {
     ...payloadObject,
-    ...row,
+    ...unwrapped,
     source_table:
-      row?.source_table ||
-      row?.table_name ||
-      row?.entity_table ||
+      unwrapped?.source_table ||
+      unwrapped?.table_name ||
+      unwrapped?.entity_table ||
       payloadObject.source_table ||
       payloadObject.table_name ||
       null,
     source_id:
-      row?.source_id ||
-      row?.movement_id ||
-      row?.blank_inventory_movement_id ||
-      row?.entity_id ||
+      unwrapped?.source_id ||
+      unwrapped?.movement_id ||
+      unwrapped?.blank_inventory_movement_id ||
+      unwrapped?.entity_id ||
       payloadObject.source_id ||
       payloadObject.movement_id ||
       null,
   };
+}
+
+async function attachUndoMetadata(rows) {
+  const activityIds = rows.map((row) => row.id).filter((id) => id !== null && id !== undefined).map(String);
+
+  if (!activityIds.length) return rows;
+
+  const undoLog = await supabase
+    .from('sc_activity_undo_log')
+    .select('activity_id, source_table, source_id, reversal_movement_id, undone_at, reason')
+    .in('activity_id', activityIds);
+
+  if (!undoLog.error && Array.isArray(undoLog.data)) {
+    const byActivityId = new Map(undoLog.data.map((entry) => [String(entry.activity_id), entry]));
+    rows.forEach((row) => {
+      const undo = byActivityId.get(String(row.id));
+      if (undo) {
+        row.undone_at = undo.undone_at;
+        row.undo_reason = undo.reason;
+        row.undo_reversal_movement_id = undo.reversal_movement_id;
+      }
+    });
+  }
+
+  return rows;
 }
 
 export async function getActivityFeed(limit = 25) {
@@ -621,29 +649,65 @@ export async function getActivityFeed(limit = 25) {
 
   if (error) throw error;
 
-  const rows = (data || []).map(normalizeActivityRow);
-  const activityIds = rows.map((row) => row.id).filter((id) => id !== null && id !== undefined).map(String);
+  return attachUndoMetadata((data || []).map(normalizeActivityRow));
+}
 
-  if (activityIds.length) {
-    const undoLog = await supabase
-      .from('sc_activity_undo_log')
-      .select('activity_id, source_table, source_id, reversal_movement_id, undone_at, reason')
-      .in('activity_id', activityIds);
+function rowMatchesPullSheet(row, jobId) {
+  const target = String(jobId || '').trim();
+  if (!target) return true;
 
-    if (!undoLog.error && Array.isArray(undoLog.data)) {
-      const byActivityId = new Map(undoLog.data.map((entry) => [String(entry.activity_id), entry]));
-      rows.forEach((row) => {
-        const undo = byActivityId.get(String(row.id));
-        if (undo) {
-          row.undone_at = undo.undone_at;
-          row.undo_reason = undo.reason;
-          row.undo_reversal_movement_id = undo.reversal_movement_id;
-        }
-      });
-    }
+  const directFields = [
+    row.job_id,
+    row.pullsheet_job_id,
+    row.pull_sheet_id,
+    row.pullsheet_id,
+    row.source_job_id,
+    row.order_job_id,
+  ];
+
+  if (directFields.some((value) => String(value ?? '').trim() === target)) return true;
+
+  const text = [
+    row.description,
+    row.summary,
+    row.details,
+    row.notes,
+    row.activity_type,
+    row.action_type,
+    row.action,
+    row.order_ref,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return [
+    `job ${target}`,
+    `job:${target}`,
+    `job_id ${target}`,
+    `job_id:${target}`,
+    `pullsheet ${target}`,
+    `pull sheet ${target}`,
+  ].some((needle) => text.includes(needle));
+}
+
+export async function getActivityFeedForPullSheet(jobId, limit = 250) {
+  if (!jobId) return getActivityFeed(limit);
+
+  let { data, error } = await supabase.rpc('sc_activity_feed_for_pullsheet', {
+    p_job_id: Number(jobId),
+    p_limit: Number(limit),
+  });
+
+  if (error && /function .* does not exist|could not find/i.test(error.message || '')) {
+    const allRows = await getActivityFeed(Math.max(Number(limit) * 4, 500));
+    return allRows.filter((row) => rowMatchesPullSheet(row, jobId)).slice(0, Number(limit));
   }
 
-  return rows;
+  if (error) throw error;
+
+  const rows = (data || []).map(normalizeActivityRow);
+  return attachUndoMetadata(rows);
 }
 
 export async function undoActivityFeedEntry(activity, reason = '') {
