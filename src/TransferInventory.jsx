@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   formatBinLabel,
-  formatBlankProductLabel,
   getBins,
   getBlankItemsInBin,
   transferBlankInventory,
@@ -18,6 +17,12 @@ export default function TransferInventory() {
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(false);
+
+  const selectedItem = useMemo(
+    () => items.find((item) => String(item.blank_product_id) === String(blankProductId)) || null,
+    [items, blankProductId]
+  );
 
   async function loadBins() {
     try {
@@ -29,19 +34,33 @@ export default function TransferInventory() {
 
   async function loadItems(binId = fromBinId, term = search) {
     setBlankProductId('');
+
     if (!binId) {
       setItems([]);
       return;
     }
 
+    setItemsLoading(true);
+    setMessage('');
+
     try {
       const rows = await getBlankItemsInBin(binId, term);
       setItems(rows);
+
       if (rows.length === 1) {
-        setBlankProductId(rows[0].blank_product_id);
+        setBlankProductId(String(rows[0].blank_product_id));
+      }
+
+      if (!rows.length) {
+        setMessage('No items with on-hand quantity were found in the selected source bin. Try clearing the search or confirm this bin has received inventory.');
+      } else {
+        setMessage(`Loaded ${rows.length} item${rows.length === 1 ? '' : 's'} from the selected source bin.`);
       }
     } catch (err) {
+      setItems([]);
       setMessage(err.message || 'Failed to load items in selected bin.');
+    } finally {
+      setItemsLoading(false);
     }
   }
 
@@ -50,12 +69,18 @@ export default function TransferInventory() {
   }, []);
 
   useEffect(() => {
-    loadItems(fromBinId, search);
+    loadItems(fromBinId, '');
+    setSearch('');
   }, [fromBinId]);
 
   async function runSearch(event) {
     event.preventDefault();
     await loadItems(fromBinId, search);
+  }
+
+  async function clearSearch() {
+    setSearch('');
+    await loadItems(fromBinId, '');
   }
 
   async function submit(event) {
@@ -69,12 +94,11 @@ export default function TransferInventory() {
       if (String(fromBinId) === String(toBinId)) throw new Error('Source and destination bins must be different.');
       if (!blankProductId) throw new Error('Choose an item from the source bin.');
 
-      const selected = items.find((item) => String(item.blank_product_id) === String(blankProductId));
       const qty = Number(quantity || 0);
 
       if (!qty || qty <= 0) throw new Error('Quantity must be greater than zero.');
-      if (selected && qty > Number(selected.on_hand_quantity || 0)) {
-        throw new Error(`The source bin only has ${selected.on_hand_quantity} available.`);
+      if (selectedItem && qty > Number(selectedItem.on_hand_quantity || 0)) {
+        throw new Error(`The source bin only has ${selectedItem.on_hand_quantity} available.`);
       }
 
       await transferBlankInventory({
@@ -136,15 +160,28 @@ export default function TransferInventory() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search within selected bin by SKU, brand, style, color, size..."
-            disabled={!fromBinId}
+            disabled={!fromBinId || itemsLoading}
           />
-          <button type="button" onClick={runSearch} disabled={!fromBinId}>Search Bin Items</button>
+          <button type="button" onClick={runSearch} disabled={!fromBinId || itemsLoading}>
+            {itemsLoading ? 'Searching...' : 'Search Bin Items'}
+          </button>
+          <button type="button" onClick={clearSearch} disabled={!fromBinId || itemsLoading || !search}>
+            Clear
+          </button>
         </div>
 
         <label>
           Item in Source Bin
-          <select value={blankProductId} onChange={(event) => setBlankProductId(event.target.value)} required>
-            <option value="">{fromBinId ? 'Choose item from source bin...' : 'Choose source bin first...'}</option>
+          <select value={blankProductId} onChange={(event) => setBlankProductId(event.target.value)} required disabled={!fromBinId || itemsLoading}>
+            <option value="">
+              {!fromBinId
+                ? 'Choose source bin first...'
+                : itemsLoading
+                  ? 'Loading items...'
+                  : items.length
+                    ? 'Choose item from source bin...'
+                    : 'No on-hand items found in this bin'}
+            </option>
             {items.map((item) => (
               <option key={item.blank_product_id} value={item.blank_product_id}>
                 {[item.sku_base, item.name, item.brand, item.style, item.color, item.size, `${item.on_hand_quantity} on hand`].filter(Boolean).join(' / ')}
@@ -152,6 +189,12 @@ export default function TransferInventory() {
             ))}
           </select>
         </label>
+
+        {selectedItem ? (
+          <p className="muted">
+            Selected: {[selectedItem.sku_base, selectedItem.name, selectedItem.brand, selectedItem.style, selectedItem.color, selectedItem.size].filter(Boolean).join(' / ')} · {selectedItem.on_hand_quantity} on hand
+          </p>
+        ) : null}
 
         <div className="form-grid">
           <label>
@@ -165,7 +208,7 @@ export default function TransferInventory() {
           </label>
         </div>
 
-        <button type="submit" disabled={busy}>
+        <button type="submit" disabled={busy || itemsLoading}>
           {busy ? 'Transferring...' : 'Transfer Inventory'}
         </button>
       </form>
