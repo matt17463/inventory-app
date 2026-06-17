@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getActivityFeed, undoActivityFeedEntry } from './lib/inventoryApi';
+import { getActivityFeed, getActivityFeedForPullSheet, getPullSheets, undoActivityFeedEntry } from './lib/inventoryApi';
 
 const CORE_FIELDS = new Set([
   'id',
@@ -53,6 +53,18 @@ function getBin(row) {
   return row.bin_code || row.bin_label || row.bin_name || row.bin || row.to_bin || row.from_bin || null;
 }
 
+function getPullSheetId(row) {
+  return row.job_id || row.pullsheet_job_id || row.pull_sheet_id || row.pullsheet_id || row.source_job_id || row.order_job_id || null;
+}
+
+function getPullSheetLabel(row) {
+  const id = row.id || row.job_id;
+  const order = row.order_number || row.woocommerce_order_id || row.source_invoice_number || row.invoice_number;
+  const customer = row.customer_name || row.customer || row.client_name;
+  const name = row.job_name || row.name || row.title || `Pull Sheet ${id}`;
+  return [name, order ? `Order ${order}` : null, customer].filter(Boolean).join(' · ');
+}
+
 function getUndoAvailable(row) {
   if (row.undone_at || row.reversed_at || row.undo_activity_id || row.is_undo === true) return false;
   if (row.can_undo === true || row.undo_available === true) return true;
@@ -77,7 +89,10 @@ function getDetailEntries(row) {
     ['Style', row.product_type || row.style || row.blank_style],
     ['Color', row.color || row.blank_color],
     ['Size', row.size || row.blank_size],
-    ['Order / job', row.order_ref || row.job_id || row.order_id || row.woocommerce_order_id],
+    ['Pull sheet / job', getPullSheetId(row)],
+    ['Job item', row.job_item_id || row.pullsheet_item_id],
+    ['Order / job', row.order_ref || row.order_id || row.woocommerce_order_id],
+    ['Manual order', row.manual_order_id || row.manual_invoice_order_id],
     ['Source', row.source_table || row.entity_type || row.table_name],
     ['Source ID', row.source_id || row.movement_id || row.blank_inventory_movement_id || row.entity_id || row.id],
     ['Notes', row.notes],
@@ -92,17 +107,36 @@ function getDetailEntries(row) {
 
 export default function ActivityPage() {
   const [rows, setRows] = useState([]);
+  const [pullSheets, setPullSheets] = useState([]);
+  const [selectedPullSheetId, setSelectedPullSheetId] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingPullSheets, setLoadingPullSheets] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [undoingId, setUndoingId] = useState(null);
   const [limit, setLimit] = useState(100);
 
+  async function loadPullSheets() {
+    setLoadingPullSheets(true);
+    try {
+      const data = await getPullSheets();
+      setPullSheets(data || []);
+    } catch (err) {
+      setMessage(err.message || 'Failed to load pull sheet list for the activity filter.');
+    } finally {
+      setLoadingPullSheets(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setMessage('');
+    setExpandedId(null);
     try {
-      setRows(await getActivityFeed(limit));
+      const data = selectedPullSheetId
+        ? await getActivityFeedForPullSheet(selectedPullSheetId, limit)
+        : await getActivityFeed(limit);
+      setRows(data);
     } catch (err) {
       setMessage(err.message || 'Failed to load activity feed.');
     } finally {
@@ -111,9 +145,13 @@ export default function ActivityPage() {
   }
 
   useEffect(() => {
+    loadPullSheets();
+  }, []);
+
+  useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedPullSheetId, limit]);
 
   async function handleUndo(row) {
     const label = getActivityDescription(row);
@@ -135,6 +173,11 @@ export default function ActivityPage() {
     }
   }
 
+  const selectedPullSheet = useMemo(
+    () => pullSheets.find((sheet) => String(sheet.id || sheet.job_id) === String(selectedPullSheetId)),
+    [pullSheets, selectedPullSheetId]
+  );
+
   const rowsWithMeta = useMemo(() => rows.map((row) => ({ ...row, undoable: getUndoAvailable(row) })), [rows]);
 
   return (
@@ -144,20 +187,47 @@ export default function ActivityPage() {
           <p className="eyebrow">Audit Trail</p>
           <h1>Activity Feed</h1>
           <p className="helper-text">
-            Review inventory activity, open each entry for details, and undo reversible inventory movements when a receiving, transfer, or deduction mistake is made.
+            Review inventory activity, filter by pull sheet, open each entry for details, and undo reversible inventory movements when a receiving, transfer, or deduction mistake is made.
           </p>
         </div>
         <div className="activity-toolbar">
+          <select
+            value={selectedPullSheetId}
+            onChange={(e) => setSelectedPullSheetId(e.target.value)}
+            disabled={loadingPullSheets}
+            title="Show activity generated by a specific pull sheet."
+          >
+            <option value="">All activity</option>
+            {pullSheets.map((sheet) => {
+              const id = sheet.id || sheet.job_id;
+              return (
+                <option key={id} value={id}>
+                  {getPullSheetLabel(sheet)}
+                </option>
+              );
+            })}
+          </select>
           <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
             <option value={50}>Last 50</option>
             <option value={100}>Last 100</option>
             <option value={250}>Last 250</option>
+            <option value={500}>Last 500</option>
           </select>
           <button type="button" className="sc-btn secondary" onClick={load} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
       </div>
+
+      {selectedPullSheetId && (
+        <div className="card subtle-card">
+          <strong>Filtered by pull sheet:</strong>{' '}
+          {selectedPullSheet ? getPullSheetLabel(selectedPullSheet) : `Pull Sheet ${selectedPullSheetId}`}
+          <button type="button" className="sc-btn link" onClick={() => setSelectedPullSheetId('')}>
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {message && <p className="message">{message}</p>}
 
@@ -168,7 +238,7 @@ export default function ActivityPage() {
           const undoable = row.undoable;
 
           return (
-            <article key={row.id} className={`activity-row full ${isExpanded ? 'expanded' : ''}`}>
+            <article key={row.id || `${row.source_table}-${row.source_id}`} className={`activity-row full ${isExpanded ? 'expanded' : ''}`}>
               <div className="activity-main-row">
                 <button
                   type="button"
@@ -201,6 +271,7 @@ export default function ActivityPage() {
                 {getQuantity(row) !== null && <span>Qty {formatValue(getQuantity(row))}</span>}
                 {getSku(row) && <span>{getSku(row)}</span>}
                 {getBin(row) && <span>{getBin(row)}</span>}
+                {getPullSheetId(row) && <span>Pull Sheet {getPullSheetId(row)}</span>}
                 {!undoable && <span className="muted-chip">No safe undo</span>}
               </div>
 
@@ -239,7 +310,9 @@ export default function ActivityPage() {
             </article>
           );
         })}
-        {rows.length === 0 && <p>{loading ? 'Loading activity…' : 'No activity yet.'}</p>}
+        {rows.length === 0 && (
+          <p>{loading ? 'Loading activity…' : selectedPullSheetId ? 'No activity was found for this pull sheet.' : 'No activity yet.'}</p>
+        )}
       </section>
     </main>
   );
