@@ -36,6 +36,28 @@ function isClosedLine(row) {
   return /complete|void|cancel|deduct/.test(rowStatus(row));
 }
 
+function isClosedJob(job) {
+  const status = String(job?.status || '').toLowerCase();
+  return /complete|void|cancel|closed|archiv/.test(status);
+}
+
+function sanitizeSearchTerm(term = '') {
+  return String(term || '').trim().replace(/[%_,]/g, '');
+}
+
+function blankResultLabel(bp = {}) {
+  const pieces = [
+    bp.sku_base || bp.sku || '',
+    bp.name || '',
+    bp.brands?.name || bp.brand_name || bp.brand || '',
+    bp.product_types?.name || bp.product_type_name || bp.product_type || bp.style || '',
+    bp.colors?.name || bp.color_name || bp.color || '',
+    bp.sizes?.name || bp.sizes?.code || bp.size_name || bp.size || '',
+  ];
+
+  return pieces.filter(Boolean).join(' / ');
+}
+
 function binDisplayName(bin) {
   const qty = value(bin.quantity_on_hand, bin.on_hand_quantity, bin.total_quantity, bin.quantity, bin.available_quantity, 0);
   return [
@@ -88,6 +110,8 @@ export default function PullSheetView() {
   const [completingAll, setCompletingAll] = useState(false);
   const [jobStatusBusy, setJobStatusBusy] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
+  const [editClosedMode, setEditClosedMode] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
 
   async function fetchFallbackItems() {
     const fallback = await supabase.rpc('sc_pull_sheet_items', { p_job_id: Number(resolvedJobId) });
@@ -241,9 +265,28 @@ export default function PullSheetView() {
   }, [items]);
 
   async function searchBlanks() {
-    const term = String(blankSearch || '').trim();
-    let query = supabase.from('blank_products').select('id, sku_base, name, brand_id, product_type_id, color_id, size_id').limit(25);
-    if (term) query = query.or(`sku_base.ilike.%${term.replace(/[%_,]/g, '')}%,name.ilike.%${term.replace(/[%_,]/g, '')}%`);
+    const term = sanitizeSearchTerm(blankSearch);
+    let query = supabase
+      .from('blank_products')
+      .select(`
+        id,
+        sku_base,
+        name,
+        brand_id,
+        product_type_id,
+        color_id,
+        size_id,
+        brands:brand_id(name, code),
+        product_types:product_type_id(name, code),
+        colors:color_id(name, code),
+        sizes:size_id(name, code)
+      `)
+      .limit(35);
+
+    if (term) {
+      query = query.or(`sku_base.ilike.%${term}%,name.ilike.%${term}%`);
+    }
+
     const { data, error } = await query;
     if (error) alert(error.message);
     else setBlankResults(data || []);
@@ -251,21 +294,58 @@ export default function PullSheetView() {
 
   async function applyOverride(blankProductId) {
     if (!overrideRow) return;
+
     const jobItemId = overrideRow.job_item_id || overrideRow.id;
-    const { error } = await supabase.rpc('override_job_item_blank_pairing', {
-      p_job_item_id: Number(jobItemId),
-      p_new_blank_product_id: blankProductId,
-      p_reason: 'Manual override from pull sheet screen',
-    });
+    const completedCorrection = isClosedJob(job) || isClosedLine(overrideRow);
+    const reason = String(overrideReason || '').trim() || (completedCorrection
+      ? 'Completed pull sheet pairing correction from pull sheet screen. Inventory was not changed.'
+      : 'Manual override from pull sheet screen');
+
+    if (completedCorrection) {
+      const confirmed = window.confirm(
+        'Change the paired blank on this completed/closed pull sheet line?\n\n'
+        + 'This updates the pull sheet pairing record only. It does not automatically reverse or create inventory movements. Use Activity Feed undo or a manual inventory adjustment if inventory was deducted from the wrong blank.'
+      );
+      if (!confirmed) return;
+    }
+
+    let error = null;
+
+    if (completedCorrection) {
+      const completedOverride = await supabase.rpc('sc_override_pullsheet_pairing_after_completion', {
+        p_job_item_id: Number(jobItemId),
+        p_new_blank_product_id: blankProductId,
+        p_reason: reason,
+      });
+
+      error = completedOverride.error;
+    }
+
+    if (!completedCorrection || error) {
+      const fallback = await supabase.rpc('override_job_item_blank_pairing', {
+        p_job_item_id: Number(jobItemId),
+        p_new_blank_product_id: blankProductId,
+        p_reason: reason,
+      });
+
+      error = fallback.error;
+    }
+
     if (error) {
       alert(error.message);
       return;
     }
+
     setOverrideRow(null);
+    setOverrideReason('');
     setBlankSearch('');
     setBlankResults([]);
+    setBulkMessage(completedCorrection
+      ? 'Completed pull sheet pairing was corrected. Inventory was not changed.'
+      : 'Blank pairing was updated.');
     await load();
   }
+
 
   async function markPulledOnly(row, idx) {
     const key = rowKey(row, idx);
@@ -398,9 +478,15 @@ export default function PullSheetView() {
     return 'info';
   }, [job]);
 
+  const closedJob = isClosedJob(job);
+  const hasClosedLines = items.some((row) => isClosedLine(row));
+
   const jobActions = (
     <div className="sc-button-row">
       <ActionButton tone="secondary" onClick={load}>Refresh</ActionButton>
+      <ActionButton tone={editClosedMode ? 'warning' : 'secondary'} onClick={() => setEditClosedMode((current) => !current)}>
+        {editClosedMode ? 'Lock Pairing Edit Mode' : 'Enable Pairing Edit Mode'}
+      </ActionButton>
       <ActionButton tone="primary" disabled={completingAll || !items.length} onClick={completeAllAndDeduct}>
         {completingAll ? 'Completing all…' : 'Complete All + Deduct Blanks'}
       </ActionButton>
@@ -423,10 +509,21 @@ export default function PullSheetView() {
       />
 
       <HelpPanel>
-        <p>Each card shows the finished product ordered by the customer on the left and the blank item the app plans to pull on the right. If the pairing is wrong, use Override Blank Pairing before production starts.</p>
+        <p>Each card shows the finished product ordered by the customer on the left and the blank item the app plans to pull on the right. If the pairing is wrong, use Override Blank Pairing. Use Enable Pairing Edit Mode to correct paired blank products after a pull sheet has been completed. Pairing corrections do not move inventory automatically.</p>
       </HelpPanel>
 
       {bulkMessage ? <SectionCard tone={bulkMessage.toLowerCase().includes('failed') || bulkMessage.toLowerCase().includes('choose') ? 'warning' : 'default'}><p>{bulkMessage}</p></SectionCard> : null}
+
+      <SectionCard tone={editClosedMode ? 'warning' : 'default'} title={editClosedMode ? 'Pairing edit mode is unlocked' : 'Pairing edit mode'}>
+        <div className="sc-button-row" style={{ alignItems: 'center' }}>
+          <p style={{ margin: 0, flex: 1 }}>{editClosedMode
+            ? 'You can change paired blank products on this pull sheet. Corrections update the production record only; they do not reverse or deduct inventory.'
+            : 'Enable this when you need to correct a paired blank product after a pull sheet was completed or after inventory was already pulled.'}</p>
+          <ActionButton tone={editClosedMode ? 'warning' : 'secondary'} onClick={() => setEditClosedMode((current) => !current)}>
+            {editClosedMode ? 'Lock Pairing Edit Mode' : 'Enable Pairing Edit Mode'}
+          </ActionButton>
+        </div>
+      </SectionCard>
 
       {job ? (
         <SectionCard title="Job Summary" actions={<StatusBadge status={job.status || 'open'} tone={statusTone} />}>
@@ -452,6 +549,8 @@ export default function PullSheetView() {
           const selectedBinId = selectedBinByLine[key] || '';
           const lineMessage = lineMessages[key] || '';
           const isCompleting = completingLine === key;
+          const closedLine = isClosedLine(row);
+          const canEditPairing = !closedLine || editClosedMode;
 
           return (
             <article className="sc-pullsheet-line-card" key={key}>
@@ -487,6 +586,9 @@ export default function PullSheetView() {
                 </section>
               </div>
               {warning ? <div className="sc-warning-callout">{warning}</div> : null}
+              {closedLine && !editClosedMode ? (
+                <div className="sc-warning-callout">This line is completed/closed. Use Enable Pairing Edit Mode to change the paired blank product.</div>
+              ) : null}
 
               {blankProductId ? (
                 <div className="sc-button-row" style={{ alignItems: 'center' }}>
@@ -494,6 +596,7 @@ export default function PullSheetView() {
                     <span style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>Blank Source Bin</span>
                     <select
                       value={selectedBinId}
+                      disabled={closedLine}
                       onChange={(event) => setSelectedBinByLine((current) => ({ ...current, [key]: event.target.value }))}
                     >
                       <option value="">Choose bin…</option>
@@ -502,16 +605,16 @@ export default function PullSheetView() {
                       ))}
                     </select>
                   </label>
-                  <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
-                  <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
-                  <ActionButton tone="primary" disabled={isCompleting || isClosedLine(row)} onClick={() => completeAndDeduct(row, idx)}>
+                  <ActionButton tone="warning" disabled={!canEditPairing} onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="secondary" disabled={closedLine} onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
+                  <ActionButton tone="primary" disabled={isCompleting || closedLine} onClick={() => completeAndDeduct(row, idx)}>
                     {isCompleting ? 'Completing…' : 'Complete + Deduct Blank'}
                   </ActionButton>
                 </div>
               ) : (
                 <div className="sc-button-row">
-                  <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
-                  <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
+                  <ActionButton tone="warning" disabled={!canEditPairing} onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="secondary" disabled={closedLine} onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled>Complete + Deduct Blank</ActionButton>
                 </div>
               )}
@@ -527,6 +630,19 @@ export default function PullSheetView() {
           <div className="sc-modal-card">
             <h2>Override Blank Pairing</h2>
             <p>Search for the correct blank product and select it for this pull sheet line.</p>
+            {(isClosedJob(job) || isClosedLine(overrideRow)) ? (
+              <div className="sc-warning-callout">
+                This is a completed/closed pull sheet correction. Selecting a new blank changes the pairing record only and does not move inventory.
+              </div>
+            ) : null}
+            <label className="sc-field">
+              <span>Correction reason</span>
+              <input
+                value={overrideReason}
+                onChange={(event) => setOverrideReason(event.target.value)}
+                placeholder="Example: original blank was paired to wrong size"
+              />
+            </label>
             <div className="sc-inline-search">
               <input value={blankSearch} onChange={(e) => setBlankSearch(e.target.value)} placeholder="Search SKU or blank product name" />
               <ActionButton tone="secondary" onClick={searchBlanks}>Search</ActionButton>
@@ -534,11 +650,14 @@ export default function PullSheetView() {
             <div className="sc-blank-result-list">
               {blankResults.map((bp) => (
                 <button key={bp.id} type="button" onClick={() => applyOverride(bp.id)}>
-                  <strong>{bp.sku_base || bp.name}</strong><span>{bp.name}</span>
+                  <strong>{bp.sku_base || bp.name}</strong>
+                  <span>{blankResultLabel(bp)}</span>
                 </button>
               ))}
             </div>
-            <div className="sc-button-row"><ActionButton tone="secondary" onClick={() => setOverrideRow(null)}>Close</ActionButton></div>
+            <div className="sc-button-row">
+              <ActionButton tone="secondary" onClick={() => { setOverrideRow(null); setOverrideReason(''); }}>Close</ActionButton>
+            </div>
           </div>
         </div>
       ) : null}
