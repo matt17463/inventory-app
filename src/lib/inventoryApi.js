@@ -1329,13 +1329,113 @@ export async function getStandaloneSampleProducts(search = '') {
 export async function getBlankItemsInBin(binId, search = '') {
   if (!binId) return [];
 
-  const { data, error } = await supabase.rpc('get_blank_items_in_bin', {
-    p_bin_id: Number(binId),
-    p_search: String(search || '').trim(),
+  const numericBinId = Number(binId);
+  const normalizedSearch = String(search || '').trim();
+  const matchesSearch = (row) => rowMatchesAllTokens(row, normalizedSearch, (item) => [
+    item?.blank_product_id,
+    item?.sku_base,
+    item?.name,
+    item?.brand,
+    item?.style,
+    item?.product_type,
+    item?.color,
+    item?.size,
+    item?.on_hand_quantity,
+  ].filter(Boolean).join(' '));
+
+  const normalizeRows = (rows = []) => rows
+    .map((row) => ({
+      ...row,
+      bin_id: row.bin_id ?? numericBinId,
+      blank_product_id: row.blank_product_id ?? row.id,
+      sku_base: row.sku_base ?? row.blank_sku_base ?? row.sku,
+      name: row.name ?? row.blank_name ?? row.product_name,
+      brand: row.brand ?? row.brand_name,
+      style: row.style ?? row.product_type ?? row.product_type_name,
+      color: row.color ?? row.color_name,
+      size: row.size ?? row.size_name ?? row.size_code,
+      on_hand_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0),
+    }))
+    .filter((row) => row.blank_product_id && Number(row.on_hand_quantity || 0) > 0)
+    .filter(matchesSearch)
+    .sort((a, b) => [a.brand, a.style, a.color, a.size, a.sku_base, a.name].filter(Boolean).join(' ').localeCompare(
+      [b.brand, b.style, b.color, b.size, b.sku_base, b.name].filter(Boolean).join(' ')
+    ));
+
+  // Preferred path: the Supabase RPC. Some older deployments return no rows
+  // for the UNASSIGNED/System bin, so the page falls back to direct reads below.
+  const rpc = await supabase.rpc('get_blank_items_in_bin', {
+    p_bin_id: numericBinId,
+    p_search: normalizedSearch,
   });
 
-  if (error) throw error;
-  return data || [];
+  if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length) {
+    return normalizeRows(rpc.data);
+  }
+
+  // Fallback 1: app-facing inventory view.
+  const view = await supabase
+    .from('bin_blank_inventory_contents')
+    .select('*')
+    .eq('bin_id', numericBinId)
+    .order('sku_base', { ascending: true });
+
+  if (!view.error && Array.isArray(view.data) && view.data.length) {
+    return normalizeRows(view.data);
+  }
+
+  // Fallback 2: raw movement table. This is intentionally broader so that
+  // the transfer page still works if the RPC/view is stale or missing a bin.
+  const movement = await supabase
+    .from('blank_inventory_movements')
+    .select(`
+      bin_id,
+      blank_product_id,
+      quantity_change,
+      blank_products:blank_product_id(
+        id,
+        sku_base,
+        name,
+        brand_id,
+        product_type_id,
+        color_id,
+        size_id,
+        brands:brand_id(name, code),
+        product_types:product_type_id(name, code),
+        colors:color_id(name, code),
+        sizes:size_id(name, code)
+      )
+    `)
+    .eq('bin_id', numericBinId);
+
+  if (movement.error) {
+    // If all paths fail, surface the most useful error to the screen.
+    throw rpc.error || view.error || movement.error;
+  }
+
+  const byProduct = new Map();
+  (movement.data || []).forEach((row) => {
+    const product = row.blank_products || {};
+    const id = row.blank_product_id || product.id;
+    if (!id) return;
+
+    const current = byProduct.get(id) || {
+      bin_id: row.bin_id,
+      blank_product_id: id,
+      sku_base: product.sku_base,
+      name: product.name,
+      brand: product.brands?.name || product.brands?.code || '',
+      style: product.product_types?.name || product.product_types?.code || '',
+      color: product.colors?.name || product.colors?.code || '',
+      size: product.sizes?.name || product.sizes?.code || '',
+      on_hand_quantity: 0,
+    };
+
+    current.on_hand_quantity += Number(row.quantity_change || 0);
+    byProduct.set(id, current);
+  });
+
+  return normalizeRows(Array.from(byProduct.values()));
 }
 
 // =========================================================
