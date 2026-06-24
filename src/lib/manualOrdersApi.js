@@ -234,3 +234,64 @@ export async function createMissingBlankProductForManualInvoice(line = {}) {
   return data;
 }
 
+
+function normalizeLookupRow(row) {
+  const id = row?.id == null ? '' : String(row.id);
+  return {
+    ...row,
+    id,
+    name: row?.name || row?.label || row?.title || row?.code || id,
+    code: row?.code || row?.slug || '',
+  };
+}
+
+async function loadManualInvoiceLookupTable(tableName) {
+  const { data, error } = await supabase.from(tableName).select('*');
+  if (error) throw error;
+  return (data || [])
+    .map(normalizeLookupRow)
+    .filter((row) => row.id)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+export async function getManualInvoiceSizeRunLookups() {
+  const [brands, productTypes, colors, sizes] = await Promise.all([
+    loadManualInvoiceLookupTable('brands'),
+    loadManualInvoiceLookupTable('product_types'),
+    loadManualInvoiceLookupTable('colors'),
+    loadManualInvoiceLookupTable('sizes'),
+  ]);
+
+  return {
+    brands,
+    product_types: productTypes,
+    colors,
+    sizes,
+  };
+}
+
+export async function ensureBlankProductForManualSizeRun(line = {}) {
+  const payload = {
+    brand_id: clean(line.brand_id),
+    product_type_id: clean(line.product_type_id),
+    color_id: clean(line.color_id),
+    size_id: clean(line.size_id),
+    brand: clean(line.brand),
+    style: clean(line.style),
+    color: clean(line.color),
+    size: clean(line.size),
+    sku_base: clean(line.sku_base),
+    name: clean(line.name || line.item_name),
+    unit_cost: Number(line.unit_cost || line.price_per_item || 0),
+    notes: clean(line.notes),
+  };
+
+  const { data, error } = await supabase.rpc('sc_ensure_manual_invoice_blank_for_size_run', {
+    p_line: payload,
+  });
+
+  if (!error) return data;
+
+  // Fallback for databases that have not run the newest SQL yet.
+  return createMissingBlankProductForManualInvoice(payload);
+}
