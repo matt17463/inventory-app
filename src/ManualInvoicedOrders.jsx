@@ -3,6 +3,8 @@ import {
   createManualInvoiceOrder,
   generateManualInvoiceJob,
   createMissingBlankProductForManualInvoice,
+  ensureBlankProductForManualSizeRun,
+  getManualInvoiceSizeRunLookups,
   getManualInvoiceOrders,
   getManualInvoiceOrderItems,
   searchManualInvoiceProducts,
@@ -34,6 +36,13 @@ const blankLine = () => ({
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value) => Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 
+function buildAttributeName(line) {
+  return [line.brand, line.style, line.color, line.size]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 function getProductId(row) {
   return row.product_id || row.blank_product_id || row.finished_product_id || row.id || '';
 }
@@ -45,6 +54,84 @@ function productLabel(row) {
   const specs = [row.brand, row.style, row.color, row.size].filter(Boolean).join(' / ');
   const finishedDetails = [row.customer_name, row.logo_name, row.placement].filter(Boolean).join(' · ');
   return { itemType, sku, name, specs, finishedDetails };
+}
+
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeForCompare(value) {
+  return normalizeText(value).toUpperCase().replace(/[^A-Z0-9]+/g, '');
+}
+
+function skuPiece(value) {
+  return normalizeText(value)
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function lookupById(list = [], id) {
+  return list.find((row) => String(row.id) === String(id));
+}
+
+function lookupName(list = [], id) {
+  const row = lookupById(list, id);
+  return row?.name || row?.label || row?.code || '';
+}
+
+function lookupCodeOrName(list = [], id) {
+  const row = lookupById(list, id);
+  return row?.code || row?.name || row?.label || '';
+}
+
+function findSizeFromText(sizes = [], sizeText = '') {
+  const wanted = normalizeForCompare(sizeText);
+  if (!wanted) return null;
+  return sizes.find((size) => {
+    const options = [size.name, size.code, size.label, size.title].filter(Boolean);
+    return options.some((option) => normalizeForCompare(option) === wanted);
+  }) || null;
+}
+
+function parseSizeRunRows(text = '', sizes = []) {
+  return String(text || '')
+    .split(/\n|,/)
+    .map((row) => row.trim())
+    .filter(Boolean)
+    .map((row) => {
+      let sizeText = '';
+      let quantityText = '';
+
+      const trailingQty = row.match(/^(.+?)[\s,:;xX*\-]+(\d+(?:\.\d+)?)$/);
+      const leadingQty = row.match(/^(\d+(?:\.\d+)?)[\s,:;xX*\-]+(.+)$/);
+
+      if (trailingQty) {
+        sizeText = trailingQty[1].trim();
+        quantityText = trailingQty[2].trim();
+      } else if (leadingQty) {
+        quantityText = leadingQty[1].trim();
+        sizeText = leadingQty[2].trim();
+      } else {
+        const parts = row.split(/\s+/);
+        quantityText = parts.pop() || '';
+        sizeText = parts.join(' ').trim();
+      }
+
+      const size = findSizeFromText(sizes, sizeText);
+      return {
+        original: row,
+        size_id: size?.id || '',
+        size_name: size?.name || size?.code || sizeText,
+        quantity: Number(quantityText) || 0,
+        unresolved_size: !size,
+      };
+    });
+}
+
+function buildSkuFromParts(brand, style, color, size) {
+  return [brand, style, color, size].map(skuPiece).filter(Boolean).join('-');
 }
 
 function ProductSourceToggle({ value, onChange }) {
@@ -82,6 +169,22 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
 
   function patch(patchValues) {
     onChange(index, { ...line, ...patchValues });
+  }
+
+  function patchAttribute(patchValues) {
+    onChange(index, {
+      ...line,
+      ...patchValues,
+      blank_product_id: '',
+      finished_product_id: '',
+      sku_base: '',
+      item_name: '',
+    });
+
+    setLookup('');
+    setResults([]);
+    setOpen(false);
+    setSearchMessage('');
   }
 
   function updateSource(nextSource) {
@@ -167,9 +270,14 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
     setSearchMessage('');
 
     try {
+      const attributeName = buildAttributeName(line);
+
       const payload = {
-        sku_base: line.sku_base || lookup,
-        name: line.item_name || lookup,
+        // Intentionally blank: the database should generate the SKU from the
+        // visible Brand + Style + Color + Size fields. This prevents stale
+        // lookup SKUs, such as KELLYGREEN, from overriding a changed color.
+        sku_base: '',
+        name: attributeName,
         brand: line.brand,
         style: line.style,
         color: line.color,
@@ -260,10 +368,10 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
           </div>
         </label>
 
-        <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => patch({ brand: e.target.value })} placeholder="Gildan" /></label>
-        <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => patch({ style: e.target.value })} placeholder="18000" /></label>
-        <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => patch({ color: e.target.value })} placeholder="Black" /></label>
-        <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => patch({ size: e.target.value })} placeholder="A2XL" /></label>
+        <label className="sc-field"><span>Brand</span><input value={line.brand} onChange={(e) => patchAttribute({ brand: e.target.value })} placeholder="Gildan" /></label>
+        <label className="sc-field"><span>Style</span><input value={line.style} onChange={(e) => patchAttribute({ style: e.target.value })} placeholder="18000" /></label>
+        <label className="sc-field"><span>Color</span><input value={line.color} onChange={(e) => patchAttribute({ color: e.target.value })} placeholder="Black" /></label>
+        <label className="sc-field"><span>Size</span><input value={line.size} onChange={(e) => patchAttribute({ size: e.target.value })} placeholder="A2XL" /></label>
         <label className="sc-field"><span>Qty</span><input type="number" min="1" value={line.quantity} onChange={(e) => patch({ quantity: e.target.value })} /></label>
         <label className="sc-field"><span>Price Each</span><input type="number" step="0.01" min="0" value={line.price_per_item} onChange={(e) => patch({ price_per_item: e.target.value })} /></label>
         <label className="sc-field"><span>Total</span><input value={money(lineTotal)} readOnly /></label>
@@ -359,13 +467,36 @@ export default function ManualInvoicedOrders() {
     notes: '',
   });
   const [items, setItems] = useState([blankLine()]);
+  const [quickLookups, setQuickLookups] = useState({ brands: [], product_types: [], colors: [], sizes: [] });
+  const [quickRun, setQuickRun] = useState({
+    brand_id: '',
+    product_type_id: '',
+    color_id: '',
+    paste: '',
+    price_per_item: '',
+    placement: '',
+    decoration_size: '',
+    artwork_note: '',
+    notes: '',
+    replace_existing: false,
+  });
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [quickMessage, setQuickMessage] = useState('');
 
   async function loadOrders() {
     const rows = await getManualInvoiceOrders();
     setOrders(rows || []);
   }
 
-  useEffect(() => { loadOrders().catch((err) => setError(err.message)); }, []);
+  async function loadQuickLookups() {
+    const rows = await getManualInvoiceSizeRunLookups();
+    setQuickLookups(rows || { brands: [], product_types: [], colors: [], sizes: [] });
+  }
+
+  useEffect(() => {
+    loadOrders().catch((err) => setError(err.message));
+    loadQuickLookups().catch((err) => setError(err.message || String(err)));
+  }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.price_per_item || 0)), 0), [items]);
   const calculatedTotal = subtotal + Number(order.tax_amount || 0) + Number(order.shipping_amount || 0);
@@ -380,6 +511,123 @@ export default function ManualInvoicedOrders() {
 
   function removeLine(index) {
     setItems((current) => current.filter((_, i) => i !== index));
+  }
+
+  function updateQuickRun(patchValues) {
+    setQuickRun((prev) => ({ ...prev, ...patchValues }));
+  }
+
+  function quickSelect(value, onChange, list, placeholder) {
+    return (
+      <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{placeholder}</option>
+        {list.map((row) => (
+          <option key={row.id} value={row.id}>{row.name || row.label || row.code || row.id}</option>
+        ))}
+      </select>
+    );
+  }
+
+  function previewQuickSizeRows() {
+    return parseSizeRunRows(quickRun.paste, quickLookups.sizes);
+  }
+
+  async function addQuickSizeRunLines(replaceExisting = false) {
+    setQuickBusy(true);
+    setQuickMessage('');
+    setError('');
+
+    try {
+      const brand = lookupName(quickLookups.brands, quickRun.brand_id);
+      const brandCode = lookupCodeOrName(quickLookups.brands, quickRun.brand_id) || brand;
+      const style = lookupName(quickLookups.product_types, quickRun.product_type_id);
+      const styleCode = lookupCodeOrName(quickLookups.product_types, quickRun.product_type_id) || style;
+      const color = lookupName(quickLookups.colors, quickRun.color_id);
+      const colorCode = lookupCodeOrName(quickLookups.colors, quickRun.color_id) || color;
+      const parsed = previewQuickSizeRows();
+
+      if (!quickRun.brand_id || !quickRun.product_type_id || !quickRun.color_id) {
+        throw new Error('Choose a default Brand, Style, and Color before creating size-run line items.');
+      }
+
+      if (!parsed.length) {
+        throw new Error('Paste a size run first. Example: L 2, M 2, S 2, XL 2, XS 2.');
+      }
+
+      const badQty = parsed.filter((row) => Number(row.quantity || 0) <= 0);
+      if (badQty.length) {
+        throw new Error(`Every size-run row needs a quantity greater than zero. Check: ${badQty.map((row) => row.original).join(', ')}`);
+      }
+
+      const newLines = [];
+      let createdOrResolved = 0;
+      const unresolvedSizes = [];
+
+      for (const row of parsed) {
+        if (row.unresolved_size) unresolvedSizes.push(row.size_name);
+
+        const size = row.size_name;
+        const sizeCode = lookupCodeOrName(quickLookups.sizes, row.size_id) || size;
+        const fallbackSku = buildSkuFromParts(brandCode, styleCode, colorCode, sizeCode);
+        const fallbackName = [brand, style, color, size].filter(Boolean).join(' ');
+
+        const result = await ensureBlankProductForManualSizeRun({
+          brand_id: quickRun.brand_id,
+          product_type_id: quickRun.product_type_id,
+          color_id: quickRun.color_id,
+          size_id: row.size_id,
+          brand,
+          style,
+          color,
+          size,
+          sku_base: fallbackSku,
+          name: fallbackName,
+          unit_cost: Number(quickRun.price_per_item || 0),
+          notes: quickRun.notes,
+        });
+
+        if (result?.success === false) {
+          throw new Error(result?.message || `Could not create/select blank product for ${fallbackName}.`);
+        }
+
+        const product = result?.product || result || {};
+        if (product.blank_product_id || product.id) createdOrResolved += 1;
+
+        newLines.push({
+          ...blankLine(),
+          item_type: 'blank',
+          product_source: 'blank',
+          blank_product_id: String(product.blank_product_id || product.id || ''),
+          sku_base: product.sku_base || fallbackSku,
+          item_name: product.name || fallbackName,
+          brand: product.brand || brand,
+          style: product.style || style,
+          color: product.color || color,
+          size: product.size || size,
+          quantity: Number(row.quantity || 0),
+          price_per_item: quickRun.price_per_item === '' ? 0 : Number(quickRun.price_per_item || 0),
+          placement: quickRun.placement,
+          decoration_size: quickRun.decoration_size,
+          artwork_note: quickRun.artwork_note,
+          notes: quickRun.notes,
+        });
+      }
+
+      setItems((current) => {
+        const shouldReplace = replaceExisting || Boolean(quickRun.replace_existing);
+        if (shouldReplace) return newLines;
+        const hasOnlyEmptyLine = current.length === 1 && !current[0].sku_base && !current[0].item_name && !current[0].brand && !current[0].style && !current[0].color && !current[0].size;
+        return hasOnlyEmptyLine ? newLines : [...current, ...newLines];
+      });
+
+      setQuickMessage(
+        `Added ${newLines.length} line item${newLines.length === 1 ? '' : 's'} from the size run.${createdOrResolved ? ` Created/selected ${createdOrResolved} blank product${createdOrResolved === 1 ? '' : 's'}.` : ''}${unresolvedSizes.length ? ` Review newly-created size label${unresolvedSizes.length === 1 ? '' : 's'}: ${unresolvedSizes.join(', ')}.` : ''}`
+      );
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setQuickBusy(false);
+    }
   }
 
   async function submit(e) {
@@ -541,6 +789,36 @@ export default function ManualInvoicedOrders() {
         .manual-missing-blank-alert span {
           flex: 1 1 280px;
         }
+
+        .manual-size-run-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 12px;
+          align-items: end;
+        }
+        .manual-size-run-preview {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .manual-size-run-pill {
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          border-radius: 999px;
+          padding: 6px 10px;
+          background: rgba(14, 165, 233, 0.08);
+          font-weight: 800;
+        }
+        .manual-size-run-pill.warning {
+          background: rgba(245, 158, 11, 0.14);
+        }
+        .manual-size-run-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          align-items: center;
+          margin-top: 12px;
+        }
       `}</style>
       <div className="sc-page-header-card sc-page-header-blue">
         <div>
@@ -574,6 +852,58 @@ export default function ManualInvoicedOrders() {
             <label className="sc-field"><span>Order Date</span><input type="date" value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></label>
             <label className="sc-field"><span>Due Date</span><input type="date" value={order.due_date} onChange={(e) => setOrder({ ...order, due_date: e.target.value })} /></label>
             <label className="sc-field"><span>Source</span><input value="Manual Invoice" readOnly /></label>
+          </div>
+        </section>
+
+        <section className="sc-panel manual-size-run-section">
+          <div className="sc-panel-header">
+            <div>
+              <h2>Quick Size Run Line Builder</h2>
+              <p>Choose one blank product family, paste sizes and quantities, and create all matching manual invoice line items at once.</p>
+            </div>
+          </div>
+
+          {quickMessage && <div className="sc-alert sc-alert-success">{quickMessage}</div>}
+
+          <div className="manual-size-run-grid">
+            <label className="sc-field"><span>Default Brand</span>{quickSelect(quickRun.brand_id, (v) => updateQuickRun({ brand_id: v }), quickLookups.brands, 'Choose brand')}</label>
+            <label className="sc-field"><span>Default Style</span>{quickSelect(quickRun.product_type_id, (v) => updateQuickRun({ product_type_id: v }), quickLookups.product_types, 'Choose style')}</label>
+            <label className="sc-field"><span>Default Color</span>{quickSelect(quickRun.color_id, (v) => updateQuickRun({ color_id: v }), quickLookups.colors, 'Choose color')}</label>
+            <label className="sc-field"><span>Price Each</span><input type="number" min="0" step="0.01" value={quickRun.price_per_item} onChange={(e) => updateQuickRun({ price_per_item: e.target.value })} placeholder="0.00" /></label>
+            <label className="sc-field"><span>Placement</span><input value={quickRun.placement} onChange={(e) => updateQuickRun({ placement: e.target.value })} placeholder="Left chest, full front, back" /></label>
+            <label className="sc-field"><span>Decoration Size</span><input value={quickRun.decoration_size} onChange={(e) => updateQuickRun({ decoration_size: e.target.value })} placeholder="10 inch, 3.5 inch" /></label>
+            <label className="sc-field sc-field-wide"><span>Artwork Note</span><input value={quickRun.artwork_note} onChange={(e) => updateQuickRun({ artwork_note: e.target.value })} placeholder="Logo name, artwork code, customer instructions" /></label>
+            <label className="sc-field sc-field-wide"><span>Internal Line Notes</span><input value={quickRun.notes} onChange={(e) => updateQuickRun({ notes: e.target.value })} /></label>
+          </div>
+
+          <label className="sc-field sc-field-wide" style={{ marginTop: 12 }}>
+            <span>Paste Size Run</span>
+            <textarea
+              value={quickRun.paste}
+              onChange={(e) => updateQuickRun({ paste: e.target.value })}
+              placeholder={'L 2\nM 2\nS 2\nXL 2\nXS 2'}
+            />
+          </label>
+
+          <div className="manual-size-run-preview" aria-label="Size run preview">
+            {previewQuickSizeRows().map((row, index) => (
+              <span key={`${row.original}-${index}`} className={`manual-size-run-pill ${row.unresolved_size ? 'warning' : ''}`}>
+                {row.size_name || 'Unknown size'} × {row.quantity || '?'}{row.unresolved_size ? ' · new/review' : ''}
+              </span>
+            ))}
+          </div>
+
+          <div className="manual-size-run-actions">
+            <button type="button" className="sc-btn sc-btn-primary" disabled={quickBusy} onClick={() => addQuickSizeRunLines(false)}>
+              {quickBusy ? 'Creating...' : 'Add Size Run Lines'}
+            </button>
+            <button type="button" className="sc-btn" disabled={quickBusy} onClick={() => addQuickSizeRunLines(true)}>
+              Replace Current Lines with Size Run
+            </button>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 800 }}>
+              <input type="checkbox" checked={Boolean(quickRun.replace_existing)} onChange={(e) => updateQuickRun({ replace_existing: e.target.checked })} />
+              Replace existing lines by default
+            </label>
           </div>
         </section>
 
