@@ -12,6 +12,8 @@ import {
   updateManualInvoicePaymentStatus,
   receiveManualInvoiceBlankLine,
   receiveManualInvoiceOrderBlanks,
+  getManualInvoiceBlankReceiptSummary,
+  setManualInvoiceLineReceivedQuantity,
 } from './lib/manualOrdersApi';
 
 const blankLine = () => ({
@@ -495,6 +497,9 @@ export default function ManualInvoicedOrders() {
   });
   const [receiveBusy, setReceiveBusy] = useState(false);
   const [receiveMessage, setReceiveMessage] = useState('');
+  const [receiveQuantities, setReceiveQuantities] = useState({});
+  const [receiptSummary, setReceiptSummary] = useState({});
+  const [receiptSummaryBusy, setReceiptSummaryBusy] = useState(false);
 
   async function loadOrders() {
     const rows = await getManualInvoiceOrders();
@@ -510,6 +515,28 @@ export default function ManualInvoicedOrders() {
     loadOrders().catch((err) => setError(err.message));
     loadQuickLookups().catch((err) => setError(err.message || String(err)));
   }, []);
+
+  useEffect(() => {
+    setReceiveQuantities((current) => {
+      const next = { ...current };
+      items.forEach((line, index) => {
+        const key = receiveLineKey(line, index);
+        if (next[key] === undefined || next[key] === null || next[key] === '') {
+          next[key] = String(Number(line.quantity || 0));
+        }
+      });
+      return next;
+    });
+  }, [items]);
+
+  useEffect(() => {
+    if (!editingOrderId) {
+      setReceiptSummary({});
+      return;
+    }
+
+    loadReceiptSummaryForCurrentOrder().catch((err) => setError(err.message || String(err)));
+  }, [editingOrderId, receiveDefaults.bin_id]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.price_per_item || 0)), 0), [items]);
   const calculatedTotal = subtotal + Number(order.tax_amount || 0) + Number(order.shipping_amount || 0);
@@ -698,6 +725,8 @@ export default function ManualInvoicedOrders() {
       notes: '',
     });
     setItems([blankLine()]);
+    setReceiveQuantities({});
+    setReceiptSummary({});
     setReceiveMessage('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -766,6 +795,43 @@ export default function ManualInvoicedOrders() {
     setReceiveDefaults((prev) => ({ ...prev, ...patchValues }));
   }
 
+
+  function receiveLineKey(line, index) {
+    return String(line?.manual_order_item_id || line?.id || `current-${index}`);
+  }
+
+  function receiveQuantityForLine(line, index) {
+    const key = receiveLineKey(line, index);
+    const stored = receiveQuantities[key];
+    return stored === undefined || stored === null || stored === '' ? String(Number(line?.quantity || 0)) : String(stored);
+  }
+
+  function updateReceiveQuantity(line, index, value) {
+    const key = receiveLineKey(line, index);
+    setReceiveQuantities((current) => ({ ...current, [key]: value }));
+  }
+
+  function receiptSummaryForLine(line, index) {
+    return receiptSummary[receiveLineKey(line, index)] || null;
+  }
+
+  async function loadReceiptSummaryForCurrentOrder() {
+    if (!editingOrderId) return;
+    setReceiptSummaryBusy(true);
+    try {
+      const rows = await getManualInvoiceBlankReceiptSummary(editingOrderId, receiveDefaults.bin_id || '');
+      const next = {};
+      (rows || []).forEach((row) => {
+        if (row.manual_order_item_id !== null && row.manual_order_item_id !== undefined) {
+          next[String(row.manual_order_item_id)] = row;
+        }
+      });
+      setReceiptSummary(next);
+    } finally {
+      setReceiptSummaryBusy(false);
+    }
+  }
+
   function receiveBinSelect() {
     const bins = quickLookups.bins || [];
     return quickSelect(
@@ -804,19 +870,30 @@ export default function ManualInvoicedOrders() {
       return;
     }
 
+    const requestedQuantity = Number(receiveQuantityForLine(line, index) || 0);
+    if (requestedQuantity < 0) {
+      setError(`Line ${index + 1} cannot have a negative received quantity.`);
+      return;
+    }
+
     setReceiveBusy(true);
     try {
-      const result = await receiveManualInvoiceBlankLine({
+      const args = {
         manualOrderId: editingOrderId || null,
         manualOrderItemId: line.manual_order_item_id || null,
         line,
         binId: receiveDefaults.bin_id,
-        quantity: Number(line.quantity || 0),
+        targetQuantity: requestedQuantity,
+        quantity: requestedQuantity,
         unitCost: receiveDefaults.unit_cost,
         notes: receiveDefaults.notes,
         supplier: receiveDefaults.supplier,
         poNumber: receiveDefaults.po_number,
-      });
+      };
+
+      const result = editingOrderId && line.manual_order_item_id
+        ? await setManualInvoiceLineReceivedQuantity(args)
+        : await receiveManualInvoiceBlankLine(args);
 
       const product = result?.product || result?.blank_product || {};
       setItems((current) => current.map((currentLine, lineIndex) => {
@@ -833,8 +910,13 @@ export default function ManualInvoicedOrders() {
         };
       }));
 
-      setReceiveMessage(`Received ${Number(result?.quantity || line.quantity || 0)} blank item(s) for ${receiveLineLabel(line, index)} into the selected bin.`);
-      if (editingOrderId) await loadOrders();
+      if (editingOrderId && line.manual_order_item_id) {
+        setReceiveMessage(`Set received quantity for ${receiveLineLabel(line, index)} to ${Number(result?.target_quantity ?? requestedQuantity)} item(s). Adjustment: ${Number(result?.delta_quantity || 0)}.`);
+        await loadReceiptSummaryForCurrentOrder();
+        await loadOrders();
+      } else {
+        setReceiveMessage(`Received ${Number(result?.quantity || requestedQuantity || 0)} blank item(s) for ${receiveLineLabel(line, index)} into the selected bin.`);
+      }
     } catch (err) {
       setError(err.message || String(err));
     } finally {
@@ -862,58 +944,63 @@ export default function ManualInvoicedOrders() {
 
     setReceiveBusy(true);
     try {
-      if (editingOrderId) {
-        const result = await receiveManualInvoiceOrderBlanks({
-          manualOrderId: editingOrderId,
-          binId: receiveDefaults.bin_id,
-          unitCost: receiveDefaults.unit_cost,
-          notes: receiveDefaults.notes,
-          supplier: receiveDefaults.supplier,
-          poNumber: receiveDefaults.po_number,
-        });
+      let receivedLines = 0;
+      let receivedQuantity = 0;
+      let adjustmentQuantity = 0;
+      const updatedLines = [...items];
+      const issues = [];
 
-        setReceiveMessage(`Received blanks for manual invoice order #${editingOrderId}. ${result?.received_lines || 0} line(s), ${result?.received_quantity || 0} total blank item(s).${result?.error_count ? ` Issues: ${result.error_count}.` : ''}`);
-        await loadOrders();
-        const detailItems = await getManualInvoiceOrderItems(editingOrderId);
-        setItems((detailItems || []).length ? detailItems.map(mapExistingItem) : [blankLine()]);
-      } else {
-        let receivedLines = 0;
-        let receivedQuantity = 0;
-        const updatedLines = [...items];
-        const issues = [];
-
-        for (const { line, index } of readyIndexes) {
-          try {
-            const result = await receiveManualInvoiceBlankLine({
-              manualOrderId: null,
-              manualOrderItemId: null,
-              line,
-              binId: receiveDefaults.bin_id,
-              quantity: Number(line.quantity || 0),
-              unitCost: receiveDefaults.unit_cost,
-              notes: receiveDefaults.notes,
-              supplier: receiveDefaults.supplier,
-              poNumber: receiveDefaults.po_number,
-            });
-            const product = result?.product || result?.blank_product || {};
-            updatedLines[index] = {
-              ...updatedLines[index],
-              blank_product_id: String(result?.blank_product_id || product.blank_product_id || product.id || updatedLines[index].blank_product_id || ''),
-              sku_base: product.sku_base || result?.sku_base || updatedLines[index].sku_base,
-              item_name: product.name || result?.blank_name || updatedLines[index].item_name,
-              brand: product.brand || updatedLines[index].brand,
-              style: product.style || updatedLines[index].style,
-              color: product.color || updatedLines[index].color,
-              size: product.size || updatedLines[index].size,
-            };
-            receivedLines += 1;
-            receivedQuantity += Number(result?.quantity || line.quantity || 0);
-          } catch (lineError) {
-            issues.push(`Line ${index + 1}: ${lineError.message || String(lineError)}`);
-          }
+      for (const { line, index } of readyIndexes) {
+        const requestedQuantity = Number(receiveQuantityForLine(line, index) || 0);
+        if (requestedQuantity < 0) {
+          issues.push(`Line ${index + 1}: received quantity cannot be negative`);
+          continue;
         }
 
-        setItems(updatedLines);
+        try {
+          const args = {
+            manualOrderId: editingOrderId || null,
+            manualOrderItemId: line.manual_order_item_id || null,
+            line,
+            binId: receiveDefaults.bin_id,
+            targetQuantity: requestedQuantity,
+            quantity: requestedQuantity,
+            unitCost: receiveDefaults.unit_cost,
+            notes: receiveDefaults.notes,
+            supplier: receiveDefaults.supplier,
+            poNumber: receiveDefaults.po_number,
+          };
+
+          const result = editingOrderId && line.manual_order_item_id
+            ? await setManualInvoiceLineReceivedQuantity(args)
+            : await receiveManualInvoiceBlankLine(args);
+
+          const product = result?.product || result?.blank_product || {};
+          updatedLines[index] = {
+            ...updatedLines[index],
+            blank_product_id: String(result?.blank_product_id || product.blank_product_id || product.id || updatedLines[index].blank_product_id || ''),
+            sku_base: product.sku_base || result?.sku_base || updatedLines[index].sku_base,
+            item_name: product.name || result?.blank_name || updatedLines[index].item_name,
+            brand: product.brand || updatedLines[index].brand,
+            style: product.style || updatedLines[index].style,
+            color: product.color || updatedLines[index].color,
+            size: product.size || updatedLines[index].size,
+          };
+          receivedLines += 1;
+          receivedQuantity += Number(result?.quantity || requestedQuantity || 0);
+          adjustmentQuantity += Number(result?.delta_quantity ?? result?.quantity ?? requestedQuantity ?? 0);
+        } catch (lineError) {
+          issues.push(`Line ${index + 1}: ${lineError.message || String(lineError)}`);
+        }
+      }
+
+      setItems(updatedLines);
+
+      if (editingOrderId) {
+        await loadReceiptSummaryForCurrentOrder();
+        await loadOrders();
+        setReceiveMessage(`Applied received quantity targets for manual invoice order #${editingOrderId}. ${receivedLines} line(s) processed. Net inventory adjustment: ${adjustmentQuantity}.${issues.length ? ` Issues: ${issues.slice(0, 3).join('; ')}` : ''}`);
+      } else {
         setReceiveMessage(`Received ${receivedQuantity} blank item(s) across ${receivedLines} line(s).${issues.length ? ` Issues: ${issues.slice(0, 3).join('; ')}` : ''}`);
       }
     } catch (err) {
@@ -1021,6 +1108,13 @@ export default function ManualInvoicedOrders() {
           margin-top: 4px;
           color: #64748b;
           font-weight: 700;
+        }
+        .manual-receive-qty-field {
+          min-width: 150px;
+          margin: 0;
+        }
+        .manual-receive-qty-field input {
+          max-width: 140px;
         }
       `}</style>
       <div className="sc-page-header-card sc-page-header-blue">
@@ -1140,10 +1234,10 @@ export default function ManualInvoicedOrders() {
           <div className="sc-panel-header">
             <div>
               <h2>Receive Corresponding Blanks</h2>
-              <p>Receive the blank items from this manual invoice into a bin. Works before saving a new invoice or after loading a previously-created one.</p>
+              <p>Receive or adjust the blank quantities for this manual invoice into a bin. For saved invoices, entering a lower target quantity creates a reversing inventory adjustment.</p>
             </div>
             <button type="button" className="sc-btn sc-btn-primary" disabled={receiveBusy} onClick={receiveAllCurrentLines}>
-              {receiveBusy ? 'Receiving...' : 'Receive All Lines to Bin'}
+              {receiveBusy ? 'Applying...' : editingOrderId ? 'Apply All Received Qty Targets' : 'Receive All Entered Qty'}
             </button>
           </div>
 
@@ -1157,20 +1251,36 @@ export default function ManualInvoicedOrders() {
             <label className="sc-field"><span>Receiving Notes</span><input value={receiveDefaults.notes} onChange={(e) => updateReceiveDefaults({ notes: e.target.value })} placeholder="Optional" /></label>
           </div>
 
+          {editingOrderId && receiptSummaryBusy && <div className="sc-alert">Loading received quantities...</div>}
+
           <div className="manual-receive-line-list">
             {items.map((line, index) => {
               const ready = isReceivableLine(line);
+              const summary = receiptSummaryForLine(line, index);
+              const targetQty = receiveQuantityForLine(line, index);
+              const receivedSoFar = Number(summary?.received_quantity || 0);
               return (
                 <div className="manual-receive-line-card" key={`receive-${index}-${line.manual_order_item_id || line.sku_base || line.item_name}`}>
                   <div>
                     <strong>Line {index + 1}: {receiveLineLabel(line, index)}</strong>
                     <small>
-                      Qty {Number(line.quantity || 0)} · {[line.brand, line.style, line.color, line.size].filter(Boolean).join(' / ') || 'No attributes'}
+                      Ordered Qty {Number(line.quantity || 0)} · {[line.brand, line.style, line.color, line.size].filter(Boolean).join(' / ') || 'No attributes'}
                       {line.manual_order_item_id ? ` · saved line #${line.manual_order_item_id}` : ' · unsaved/current line'}
+                      {editingOrderId ? ` · Received in selected bin: ${receivedSoFar}` : ''}
                     </small>
                   </div>
+                  <label className="sc-field manual-receive-qty-field">
+                    <span>{editingOrderId ? 'Target Received Qty' : 'Receive Qty'}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={targetQty}
+                      onChange={(e) => updateReceiveQuantity(line, index, e.target.value)}
+                    />
+                  </label>
                   <button type="button" className="sc-btn sc-btn-small" disabled={receiveBusy || !ready} onClick={() => receiveSingleLine(index)}>
-                    Receive This Line
+                    {editingOrderId ? 'Set Received Qty' : 'Receive This Qty'}
                   </button>
                 </div>
               );
