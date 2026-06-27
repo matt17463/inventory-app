@@ -414,3 +414,45 @@ export async function ensureBlankProductForManualSizeRun(line = {}) {
   // Fallback for databases that have not run the newest SQL yet.
   return createMissingBlankProductForManualInvoice(payload);
 }
+
+export async function getManualInvoiceBlankReceiptSummary(manualOrderId = null, binId = '') {
+  const { data, error } = await supabase.rpc('sc_manual_invoice_blank_receipt_summary', {
+    p_manual_order_id: manualOrderId || null,
+    p_bin_id_text: clean(binId),
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setManualInvoiceLineReceivedQuantity({
+  manualOrderId = null,
+  manualOrderItemId = null,
+  line = {},
+  binId,
+  targetQuantity = 0,
+  unitCost = null,
+  notes = '',
+  supplier = '',
+  poNumber = '',
+} = {}) {
+  const payloadLine = manualLinePayload(line);
+  const unitCostValue = unitCost === null || unitCost === undefined || unitCost === ''
+    ? null
+    : Number(unitCost || 0);
+
+  const { data, error } = await supabase.rpc('sc_set_manual_invoice_blank_received_quantity', {
+    p_manual_order_id: manualOrderId || null,
+    p_manual_order_item_id: manualOrderItemId || payloadLine.manual_order_item_id || null,
+    p_line: payloadLine,
+    p_bin_id_text: clean(binId),
+    p_target_quantity: Number(targetQuantity || 0),
+    p_unit_cost: unitCostValue,
+    p_notes: clean(notes),
+    p_supplier: clean(supplier),
+    p_po_number: clean(poNumber),
+  });
+
+  if (error) throw error;
+  if (data?.success === false) throw new Error(data.message || 'Manual invoice received quantity update failed.');
+  return data;
+}
