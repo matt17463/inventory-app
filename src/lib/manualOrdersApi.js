@@ -270,6 +270,125 @@ export async function getManualInvoiceSizeRunLookups() {
   };
 }
 
+
+function normalizeBin(row) {
+  if (!row) return null;
+  const id = row.id == null ? '' : String(row.id);
+  const code = row.bin_code || row.code || row.name || row.label || id;
+  const label = row.label || row.name || row.title || code;
+  const location = row.location || row.area || row.zone || '';
+  const display_name = row.display_name || [code, label !== code ? label : '', location].filter(Boolean).join(' · ');
+  return { ...row, id, bin_code: code, label, location, display_name };
+}
+
+export async function getManualInvoiceBins() {
+  const rpc = await supabase.rpc('sc_receiving_bins_v4');
+  if (!rpc.error && Array.isArray(rpc.data)) {
+    return rpc.data.map(normalizeBin).filter((row) => row?.id);
+  }
+
+  const direct = await supabase.from('bins').select('*');
+  if (direct.error) throw direct.error;
+  return (direct.data || [])
+    .map(normalizeBin)
+    .filter((row) => row?.id)
+    .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || '')));
+}
+
+export async function getManualInvoiceReceivingLookups() {
+  const [lookups, bins] = await Promise.all([
+    getManualInvoiceSizeRunLookups(),
+    getManualInvoiceBins(),
+  ]);
+
+  return { ...lookups, bins };
+}
+
+function manualLinePayload(line = {}) {
+  return {
+    manual_order_item_id: clean(line.manual_order_item_id || line.id),
+    item_type: clean(line.item_type || line.product_source || 'blank'),
+    product_source: clean(line.product_source || line.item_type || 'blank'),
+    blank_product_id: clean(line.blank_product_id),
+    finished_product_id: clean(line.finished_product_id),
+    sku_base: clean(line.sku_base || line.sku),
+    item_name: clean(line.item_name || line.name),
+    brand: clean(line.brand),
+    style: clean(line.style || line.product_type),
+    color: clean(line.color),
+    size: clean(line.size),
+    quantity: Number(line.quantity || 0),
+    price_per_item: Number(line.price_per_item || 0),
+    artwork_note: clean(line.artwork_note),
+    placement: clean(line.placement),
+    decoration_size: clean(line.decoration_size),
+    notes: clean(line.notes),
+  };
+}
+
+export async function receiveManualInvoiceBlankLine({
+  manualOrderId = null,
+  manualOrderItemId = null,
+  line = {},
+  binId,
+  quantity = null,
+  unitCost = null,
+  notes = '',
+  supplier = '',
+  poNumber = '',
+} = {}) {
+  const payloadLine = manualLinePayload(line);
+  const resolvedQuantity = quantity === null || quantity === undefined || quantity === ''
+    ? Number(payloadLine.quantity || 0)
+    : Number(quantity || 0);
+
+  const unitCostValue = unitCost === null || unitCost === undefined || unitCost === ''
+    ? null
+    : Number(unitCost || 0);
+
+  const { data, error } = await supabase.rpc('sc_receive_manual_invoice_blank_to_bin', {
+    p_manual_order_id: manualOrderId || null,
+    p_manual_order_item_id: manualOrderItemId || payloadLine.manual_order_item_id || null,
+    p_line: payloadLine,
+    p_bin_id_text: clean(binId),
+    p_quantity: resolvedQuantity,
+    p_unit_cost: unitCostValue,
+    p_notes: clean(notes),
+    p_supplier: clean(supplier),
+    p_po_number: clean(poNumber),
+  });
+
+  if (error) throw error;
+  if (data?.success === false) throw new Error(data.message || 'Manual invoice blank receiving failed.');
+  return data;
+}
+
+export async function receiveManualInvoiceOrderBlanks({
+  manualOrderId,
+  binId,
+  unitCost = null,
+  notes = '',
+  supplier = '',
+  poNumber = '',
+} = {}) {
+  const unitCostValue = unitCost === null || unitCost === undefined || unitCost === ''
+    ? null
+    : Number(unitCost || 0);
+
+  const { data, error } = await supabase.rpc('sc_receive_manual_invoice_order_blanks_to_bin', {
+    p_manual_order_id: manualOrderId,
+    p_bin_id_text: clean(binId),
+    p_unit_cost: unitCostValue,
+    p_notes: clean(notes),
+    p_supplier: clean(supplier),
+    p_po_number: clean(poNumber),
+  });
+
+  if (error) throw error;
+  if (data?.success === false) throw new Error(data.message || 'Manual invoice order blank receiving failed.');
+  return data;
+}
+
 export async function ensureBlankProductForManualSizeRun(line = {}) {
   const payload = {
     brand_id: clean(line.brand_id),
