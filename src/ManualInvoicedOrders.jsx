@@ -4,15 +4,19 @@ import {
   generateManualInvoiceJob,
   createMissingBlankProductForManualInvoice,
   ensureBlankProductForManualSizeRun,
-  getManualInvoiceSizeRunLookups,
+  getManualInvoiceReceivingLookups,
   getManualInvoiceOrders,
   getManualInvoiceOrderItems,
   searchManualInvoiceProducts,
   updateManualInvoiceOrder,
   updateManualInvoicePaymentStatus,
+  receiveManualInvoiceBlankLine,
+  receiveManualInvoiceOrderBlanks,
 } from './lib/manualOrdersApi';
 
 const blankLine = () => ({
+  manual_order_item_id: '',
+  generated_job_item_id: '',
   item_type: 'blank',
   product_source: 'blank',
   blank_product_id: '',
@@ -482,6 +486,15 @@ export default function ManualInvoicedOrders() {
   });
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickMessage, setQuickMessage] = useState('');
+  const [receiveDefaults, setReceiveDefaults] = useState({
+    bin_id: '',
+    supplier: '',
+    po_number: '',
+    unit_cost: '',
+    notes: '',
+  });
+  const [receiveBusy, setReceiveBusy] = useState(false);
+  const [receiveMessage, setReceiveMessage] = useState('');
 
   async function loadOrders() {
     const rows = await getManualInvoiceOrders();
@@ -489,8 +502,8 @@ export default function ManualInvoicedOrders() {
   }
 
   async function loadQuickLookups() {
-    const rows = await getManualInvoiceSizeRunLookups();
-    setQuickLookups(rows || { brands: [], product_types: [], colors: [], sizes: [] });
+    const rows = await getManualInvoiceReceivingLookups();
+    setQuickLookups(rows || { brands: [], product_types: [], colors: [], sizes: [], bins: [] });
   }
 
   useEffect(() => {
@@ -685,6 +698,7 @@ export default function ManualInvoicedOrders() {
       notes: '',
     });
     setItems([blankLine()]);
+    setReceiveMessage('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -693,6 +707,8 @@ export default function ManualInvoicedOrders() {
 
     return {
       ...blankLine(),
+      manual_order_item_id: item.id || item.manual_order_item_id || '',
+      generated_job_item_id: item.generated_job_item_id || '',
       item_type: itemType,
       product_source: itemType,
       blank_product_id: itemType === 'blank' ? String(item.blank_product_id || '') : '',
@@ -744,6 +760,172 @@ export default function ManualInvoicedOrders() {
     } catch (err) {
       setError(err.message || String(err));
     }
+  }
+
+  function updateReceiveDefaults(patchValues) {
+    setReceiveDefaults((prev) => ({ ...prev, ...patchValues }));
+  }
+
+  function receiveBinSelect() {
+    const bins = quickLookups.bins || [];
+    return quickSelect(
+      receiveDefaults.bin_id,
+      (value) => updateReceiveDefaults({ bin_id: value }),
+      bins.map((bin) => ({ ...bin, name: bin.display_name || bin.label || bin.bin_code || bin.name || bin.id })),
+      'Choose receiving bin'
+    );
+  }
+
+  function isReceivableLine(line) {
+    const source = line.item_type === 'finished' || line.product_source === 'finished' ? 'finished' : 'blank';
+    const hasBlank = Boolean(line.blank_product_id);
+    const hasFinished = Boolean(line.finished_product_id);
+    const hasAttributes = Boolean(line.brand && line.style && line.color && line.size);
+    return Number(line.quantity || 0) > 0 && (hasBlank || hasFinished || hasAttributes || source === 'blank');
+  }
+
+  function receiveLineLabel(line, index) {
+    return line.sku_base || line.item_name || buildAttributeName(line) || `Line ${index + 1}`;
+  }
+
+  async function receiveSingleLine(index) {
+    const line = items[index];
+    if (!line) return;
+    setError('');
+    setReceiveMessage('');
+
+    if (!receiveDefaults.bin_id) {
+      setError('Choose a receiving bin before receiving blanks from a manual invoice.');
+      return;
+    }
+
+    if (!isReceivableLine(line)) {
+      setError(`Line ${index + 1} is not ready to receive. Confirm product/attributes and quantity.`);
+      return;
+    }
+
+    setReceiveBusy(true);
+    try {
+      const result = await receiveManualInvoiceBlankLine({
+        manualOrderId: editingOrderId || null,
+        manualOrderItemId: line.manual_order_item_id || null,
+        line,
+        binId: receiveDefaults.bin_id,
+        quantity: Number(line.quantity || 0),
+        unitCost: receiveDefaults.unit_cost,
+        notes: receiveDefaults.notes,
+        supplier: receiveDefaults.supplier,
+        poNumber: receiveDefaults.po_number,
+      });
+
+      const product = result?.product || result?.blank_product || {};
+      setItems((current) => current.map((currentLine, lineIndex) => {
+        if (lineIndex !== index) return currentLine;
+        return {
+          ...currentLine,
+          blank_product_id: String(result?.blank_product_id || product.blank_product_id || product.id || currentLine.blank_product_id || ''),
+          sku_base: product.sku_base || result?.sku_base || currentLine.sku_base,
+          item_name: product.name || result?.blank_name || currentLine.item_name,
+          brand: product.brand || currentLine.brand,
+          style: product.style || currentLine.style,
+          color: product.color || currentLine.color,
+          size: product.size || currentLine.size,
+        };
+      }));
+
+      setReceiveMessage(`Received ${Number(result?.quantity || line.quantity || 0)} blank item(s) for ${receiveLineLabel(line, index)} into the selected bin.`);
+      if (editingOrderId) await loadOrders();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setReceiveBusy(false);
+    }
+  }
+
+  async function receiveAllCurrentLines() {
+    setError('');
+    setReceiveMessage('');
+
+    if (!receiveDefaults.bin_id) {
+      setError('Choose a receiving bin before receiving blanks from a manual invoice.');
+      return;
+    }
+
+    const readyIndexes = items
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => isReceivableLine(line));
+
+    if (!readyIndexes.length) {
+      setError('No manual invoice lines are ready to receive. Add blank lines or fill Brand, Style, Color, Size, and Quantity first.');
+      return;
+    }
+
+    setReceiveBusy(true);
+    try {
+      if (editingOrderId) {
+        const result = await receiveManualInvoiceOrderBlanks({
+          manualOrderId: editingOrderId,
+          binId: receiveDefaults.bin_id,
+          unitCost: receiveDefaults.unit_cost,
+          notes: receiveDefaults.notes,
+          supplier: receiveDefaults.supplier,
+          poNumber: receiveDefaults.po_number,
+        });
+
+        setReceiveMessage(`Received blanks for manual invoice order #${editingOrderId}. ${result?.received_lines || 0} line(s), ${result?.received_quantity || 0} total blank item(s).${result?.error_count ? ` Issues: ${result.error_count}.` : ''}`);
+        await loadOrders();
+        const detailItems = await getManualInvoiceOrderItems(editingOrderId);
+        setItems((detailItems || []).length ? detailItems.map(mapExistingItem) : [blankLine()]);
+      } else {
+        let receivedLines = 0;
+        let receivedQuantity = 0;
+        const updatedLines = [...items];
+        const issues = [];
+
+        for (const { line, index } of readyIndexes) {
+          try {
+            const result = await receiveManualInvoiceBlankLine({
+              manualOrderId: null,
+              manualOrderItemId: null,
+              line,
+              binId: receiveDefaults.bin_id,
+              quantity: Number(line.quantity || 0),
+              unitCost: receiveDefaults.unit_cost,
+              notes: receiveDefaults.notes,
+              supplier: receiveDefaults.supplier,
+              poNumber: receiveDefaults.po_number,
+            });
+            const product = result?.product || result?.blank_product || {};
+            updatedLines[index] = {
+              ...updatedLines[index],
+              blank_product_id: String(result?.blank_product_id || product.blank_product_id || product.id || updatedLines[index].blank_product_id || ''),
+              sku_base: product.sku_base || result?.sku_base || updatedLines[index].sku_base,
+              item_name: product.name || result?.blank_name || updatedLines[index].item_name,
+              brand: product.brand || updatedLines[index].brand,
+              style: product.style || updatedLines[index].style,
+              color: product.color || updatedLines[index].color,
+              size: product.size || updatedLines[index].size,
+            };
+            receivedLines += 1;
+            receivedQuantity += Number(result?.quantity || line.quantity || 0);
+          } catch (lineError) {
+            issues.push(`Line ${index + 1}: ${lineError.message || String(lineError)}`);
+          }
+        }
+
+        setItems(updatedLines);
+        setReceiveMessage(`Received ${receivedQuantity} blank item(s) across ${receivedLines} line(s).${issues.length ? ` Issues: ${issues.slice(0, 3).join('; ')}` : ''}`);
+      }
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setReceiveBusy(false);
+    }
+  }
+
+  async function receiveExisting(row) {
+    await editExisting(row);
+    setReceiveMessage(`Manual invoice order #${row.id} loaded. Choose a receiving bin, then receive all lines or individual line items.`);
   }
 
   async function generateExisting(orderId) {
@@ -818,6 +1000,27 @@ export default function ManualInvoicedOrders() {
           flex-wrap: wrap;
           align-items: center;
           margin-top: 12px;
+        }
+        .manual-receive-line-list {
+          display: grid;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .manual-receive-line-card {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          border-radius: 16px;
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.72);
+        }
+        .manual-receive-line-card small {
+          display: block;
+          margin-top: 4px;
+          color: #64748b;
+          font-weight: 700;
         }
       `}</style>
       <div className="sc-page-header-card sc-page-header-blue">
@@ -933,6 +1136,48 @@ export default function ManualInvoicedOrders() {
           </div>
         </section>
 
+        <section className="sc-panel manual-invoice-receive-panel">
+          <div className="sc-panel-header">
+            <div>
+              <h2>Receive Corresponding Blanks</h2>
+              <p>Receive the blank items from this manual invoice into a bin. Works before saving a new invoice or after loading a previously-created one.</p>
+            </div>
+            <button type="button" className="sc-btn sc-btn-primary" disabled={receiveBusy} onClick={receiveAllCurrentLines}>
+              {receiveBusy ? 'Receiving...' : 'Receive All Lines to Bin'}
+            </button>
+          </div>
+
+          {receiveMessage && <div className="sc-alert sc-alert-success">{receiveMessage}</div>}
+
+          <div className="sc-form-grid sc-form-grid-5">
+            <label className="sc-field"><span>Receiving Bin</span>{receiveBinSelect()}</label>
+            <label className="sc-field"><span>Supplier</span><input value={receiveDefaults.supplier} onChange={(e) => updateReceiveDefaults({ supplier: e.target.value })} placeholder="Optional" /></label>
+            <label className="sc-field"><span>PO / Order #</span><input value={receiveDefaults.po_number} onChange={(e) => updateReceiveDefaults({ po_number: e.target.value })} placeholder="Optional" /></label>
+            <label className="sc-field"><span>Unit Cost Override</span><input type="number" min="0" step="0.01" value={receiveDefaults.unit_cost} onChange={(e) => updateReceiveDefaults({ unit_cost: e.target.value })} placeholder="Optional" /></label>
+            <label className="sc-field"><span>Receiving Notes</span><input value={receiveDefaults.notes} onChange={(e) => updateReceiveDefaults({ notes: e.target.value })} placeholder="Optional" /></label>
+          </div>
+
+          <div className="manual-receive-line-list">
+            {items.map((line, index) => {
+              const ready = isReceivableLine(line);
+              return (
+                <div className="manual-receive-line-card" key={`receive-${index}-${line.manual_order_item_id || line.sku_base || line.item_name}`}>
+                  <div>
+                    <strong>Line {index + 1}: {receiveLineLabel(line, index)}</strong>
+                    <small>
+                      Qty {Number(line.quantity || 0)} · {[line.brand, line.style, line.color, line.size].filter(Boolean).join(' / ') || 'No attributes'}
+                      {line.manual_order_item_id ? ` · saved line #${line.manual_order_item_id}` : ' · unsaved/current line'}
+                    </small>
+                  </div>
+                  <button type="button" className="sc-btn sc-btn-small" disabled={receiveBusy || !ready} onClick={() => receiveSingleLine(index)}>
+                    Receive This Line
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <section className="sc-panel">
           <div className="sc-panel-header"><div><h2>Totals + Payment</h2><p>Confirm tax, shipping, payment status, and whether this should immediately generate a production job.</p></div></div>
           <div className="sc-form-grid sc-form-grid-4">
@@ -978,6 +1223,7 @@ export default function ManualInvoicedOrders() {
                   <td>
                     <div className="manual-order-row-actions">
                       <button className="sc-btn" type="button" onClick={() => editExisting(row)}>Edit Order</button>
+                      <button className="sc-btn" type="button" onClick={() => receiveExisting(row)}>Receive Blanks</button>
                       {!row.generated_job_id && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
                     </div>
                   </td>
