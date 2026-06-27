@@ -498,6 +498,8 @@ export default function ManualInvoicedOrders() {
   const [receiveBusy, setReceiveBusy] = useState(false);
   const [receiveMessage, setReceiveMessage] = useState('');
   const [receiveQuantities, setReceiveQuantities] = useState({});
+  const [receiveProcessed, setReceiveProcessed] = useState({});
+  const [hideProcessedReceiveLines, setHideProcessedReceiveLines] = useState(false);
   const [receiptSummary, setReceiptSummary] = useState({});
   const [receiptSummaryBusy, setReceiptSummaryBusy] = useState(false);
 
@@ -528,6 +530,10 @@ export default function ManualInvoicedOrders() {
       return next;
     });
   }, [items]);
+
+  useEffect(() => {
+    setReceiveProcessed({});
+  }, [editingOrderId, receiveDefaults.bin_id]);
 
   useEffect(() => {
     if (!editingOrderId) {
@@ -815,6 +821,38 @@ export default function ManualInvoicedOrders() {
     return receiptSummary[receiveLineKey(line, index)] || null;
   }
 
+  function processedReceiveForLine(line, index) {
+    return receiveProcessed[receiveLineKey(line, index)] || null;
+  }
+
+  function receivedQuantityForLine(line, index) {
+    const summary = receiptSummaryForLine(line, index);
+    const processed = processedReceiveForLine(line, index);
+    return Number(summary?.received_quantity ?? processed?.received_quantity ?? processed?.quantity ?? 0);
+  }
+
+  function isReceiveLineProcessed(line, index) {
+    const target = Number(receiveQuantityForLine(line, index) || 0);
+    if (target <= 0) return false;
+    return receivedQuantityForLine(line, index) >= target;
+  }
+
+  function markReceiveLineProcessed(line, index, result, requestedQuantity) {
+    const key = receiveLineKey(line, index);
+    const target = Number(result?.target_quantity ?? requestedQuantity ?? 0);
+    const received = Number(result?.target_quantity ?? result?.quantity ?? requestedQuantity ?? 0);
+    setReceiveProcessed((current) => ({
+      ...current,
+      [key]: {
+        processed_at: new Date().toISOString(),
+        target_quantity: target,
+        received_quantity: received,
+        quantity: Number(result?.quantity ?? requestedQuantity ?? 0),
+        delta_quantity: Number(result?.delta_quantity ?? result?.quantity ?? requestedQuantity ?? 0),
+      },
+    }));
+  }
+
   async function loadReceiptSummaryForCurrentOrder() {
     if (!editingOrderId) return;
     setReceiptSummaryBusy(true);
@@ -910,6 +948,8 @@ export default function ManualInvoicedOrders() {
         };
       }));
 
+      markReceiveLineProcessed(line, index, result, requestedQuantity);
+
       if (editingOrderId && line.manual_order_item_id) {
         setReceiveMessage(`Set received quantity for ${receiveLineLabel(line, index)} to ${Number(result?.target_quantity ?? requestedQuantity)} item(s). Adjustment: ${Number(result?.delta_quantity || 0)}.`);
         await loadReceiptSummaryForCurrentOrder();
@@ -986,6 +1026,7 @@ export default function ManualInvoicedOrders() {
             color: product.color || updatedLines[index].color,
             size: product.size || updatedLines[index].size,
           };
+          markReceiveLineProcessed(line, index, result, requestedQuantity);
           receivedLines += 1;
           receivedQuantity += Number(result?.quantity || requestedQuantity || 0);
           adjustmentQuantity += Number(result?.delta_quantity ?? result?.quantity ?? requestedQuantity ?? 0);
@@ -1253,20 +1294,44 @@ export default function ManualInvoicedOrders() {
 
           {editingOrderId && receiptSummaryBusy && <div className="sc-alert">Loading received quantities...</div>}
 
+          <div className="manual-receive-controls" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', margin: '12px 0' }}>
+            <div className="sc-muted" style={{ fontSize: 13 }}>
+              Processed lines turn green when their received quantity matches the target for the selected bin.
+            </div>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 800 }}>
+              <input
+                type="checkbox"
+                checked={hideProcessedReceiveLines}
+                onChange={(e) => setHideProcessedReceiveLines(e.target.checked)}
+              />
+              Hide processed lines
+            </label>
+          </div>
+
           <div className="manual-receive-line-list">
             {items.map((line, index) => {
               const ready = isReceivableLine(line);
               const summary = receiptSummaryForLine(line, index);
+              const processed = processedReceiveForLine(line, index);
               const targetQty = receiveQuantityForLine(line, index);
-              const receivedSoFar = Number(summary?.received_quantity || 0);
+              const receivedSoFar = receivedQuantityForLine(line, index);
+              const processedLine = isReceiveLineProcessed(line, index);
+              if (hideProcessedReceiveLines && processedLine) return null;
               return (
-                <div className="manual-receive-line-card" key={`receive-${index}-${line.manual_order_item_id || line.sku_base || line.item_name}`}>
+                <div
+                  className={`manual-receive-line-card ${processedLine ? 'manual-receive-line-card-processed' : ''}`}
+                  key={`receive-${index}-${line.manual_order_item_id || line.sku_base || line.item_name}`}
+                  style={processedLine ? { borderColor: '#15803d', background: '#ecfdf3', boxShadow: '0 0 0 1px rgba(21,128,61,0.18)' } : undefined}
+                >
                   <div>
                     <strong>Line {index + 1}: {receiveLineLabel(line, index)}</strong>
                     <small>
                       Ordered Qty {Number(line.quantity || 0)} · {[line.brand, line.style, line.color, line.size].filter(Boolean).join(' / ') || 'No attributes'}
                       {line.manual_order_item_id ? ` · saved line #${line.manual_order_item_id}` : ' · unsaved/current line'}
-                      {editingOrderId ? ` · Received in selected bin: ${receivedSoFar}` : ''}
+                      {` · Received in selected bin: ${receivedSoFar}`}
+                      {processedLine ? ' · RECEIVED/PROCESSED' : ''}
+                      {summary?.latest_received_at ? ` · Last receipt: ${new Date(summary.latest_received_at).toLocaleString()}` : ''}
+                      {processed?.processed_at && !summary?.latest_received_at ? ` · Processed: ${new Date(processed.processed_at).toLocaleString()}` : ''}
                     </small>
                   </div>
                   <label className="sc-field manual-receive-qty-field">
@@ -1279,8 +1344,8 @@ export default function ManualInvoicedOrders() {
                       onChange={(e) => updateReceiveQuantity(line, index, e.target.value)}
                     />
                   </label>
-                  <button type="button" className="sc-btn sc-btn-small" disabled={receiveBusy || !ready} onClick={() => receiveSingleLine(index)}>
-                    {editingOrderId ? 'Set Received Qty' : 'Receive This Qty'}
+                  <button type="button" className={processedLine ? 'sc-btn sc-btn-small sc-btn-success' : 'sc-btn sc-btn-small'} disabled={receiveBusy || !ready} onClick={() => receiveSingleLine(index)}>
+                    {processedLine ? 'Update Received Qty' : (editingOrderId ? 'Set Received Qty' : 'Receive This Qty')}
                   </button>
                 </div>
               );
