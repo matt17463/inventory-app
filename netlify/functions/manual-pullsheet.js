@@ -535,6 +535,7 @@ async function processOrder(order) {
     items_existing: 0,
     items_updated: 0,
     reservations_created: 0,
+    items_needing_pairing: 0,
     errors: [],
   };
 
@@ -553,25 +554,45 @@ async function processOrder(order) {
       const blankProduct = lookup.blankProduct;
       const parsed = lookup.parsed;
 
+      const site = getLineItemMeta(lineItem, ['site', 'school', 'location', 'store', 'department']) || parsed.logoName;
+      const placement = getLineItemMeta(lineItem, ['logo placement', 'placement', 'print location', 'decoration location', 'location']) || parsed.placement;
+      const logoName = getLineItemMeta(lineItem, ['logo', 'design', 'artwork', 'graphic']) || site || parsed.logoName;
+      const decorationSize = getLineItemMeta(lineItem, ['decoration size', 'logo size', 'size']) || parsed.decorationSize;
+
       if (!blankProduct) {
+        const jobItem = await createJobItem({
+          jobId: job.id,
+          rawLineItem: lineItem,
+          blankProductId: null,
+          finishedProductId: null,
+          logoId: null,
+          parsed,
+          site,
+          placement,
+          decorationSize,
+          lookupSource: lookup.source || 'not_found',
+          pairingWarning: lookup.warning || 'blank_product_not_found_needs_pairing',
+        });
+
+        if (jobItem.created) orderResult.items_created += 1;
+        else if (jobItem.updated) orderResult.items_updated += 1;
+        else orderResult.items_existing += 1;
+
+        orderResult.items_needing_pairing += 1;
         orderResult.errors.push({
           sku,
+          job_item_id: jobItem.id,
           product_id: lineItem.product_id || null,
           variation_id: lineItem.variation_id || null,
           selected_color: lineItem.selected_color || null,
           selected_size: lineItem.selected_size || null,
           lookup_source: lookup.source,
-          pairing_warning: lookup.warning,
+          pairing_warning: lookup.warning || 'blank_product_not_found_needs_pairing',
           blank_sku_base: parsed.blankSkuBase,
-          error: 'Matching blank product was not found. Verify WooCommerce variation ID, selected color/size attributes, product sync, and product_sku_mappings.',
+          error: 'Created visible pull sheet line item, but matching blank product was not found. Pair this line item in the app or verify product sync/product_sku_mappings.',
         });
         continue;
       }
-
-      const site = getLineItemMeta(lineItem, ['site', 'school', 'location', 'store', 'department']) || parsed.logoName;
-      const placement = getLineItemMeta(lineItem, ['logo placement', 'placement', 'print location', 'decoration location', 'location']) || parsed.placement;
-      const logoName = getLineItemMeta(lineItem, ['logo', 'design', 'artwork', 'graphic']) || site || parsed.logoName;
-      const decorationSize = getLineItemMeta(lineItem, ['decoration size', 'logo size', 'size']) || parsed.decorationSize;
 
       const logoId = await findOrCreateLogo(logoName);
       const finishedProductId = await findOrCreateFinishedProduct({ blankProductId: blankProduct.id, customerId, logoId, finishedSku: sku, name: lineItem.name, placement, decorationSize });
@@ -624,7 +645,7 @@ async function processOrder(order) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
-      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet variation capture v1.3.0 active' }) };
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet visible-unpaired-line-items v1.4.0 active' }) };
     }
 
     if (event.httpMethod !== 'POST') {
@@ -655,6 +676,7 @@ exports.handler = async (event) => {
     let itemsCreated = 0;
     let itemsUpdated = 0;
     let reservationsCreated = 0;
+    let itemsNeedingPairing = 0;
     const errors = [];
 
     for (const order of orders) {
@@ -664,17 +686,19 @@ exports.handler = async (event) => {
       itemsCreated += result.items_created;
       itemsUpdated += result.items_updated || 0;
       reservationsCreated += result.reservations_created;
+      itemsNeedingPairing += result.items_needing_pairing || 0;
       if (result.errors.length > 0) errors.push(...result.errors.map((error) => ({ order_id: result.order_id, ...error })));
     }
 
     return {
       statusCode: errors.length && itemsCreated === 0 && itemsUpdated === 0 ? 400 : 200,
       body: JSON.stringify({
-        success: itemsCreated > 0 || itemsUpdated > 0 || reservationsCreated > 0,
+        success: itemsCreated > 0 || itemsUpdated > 0 || reservationsCreated > 0 || itemsNeedingPairing > 0,
         jobs_created: jobsCreated,
         items_created: itemsCreated,
         items_updated: itemsUpdated,
         reservations_created: reservationsCreated,
+        items_needing_pairing: itemsNeedingPairing,
         errors,
         results,
       }),
