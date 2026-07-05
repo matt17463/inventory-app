@@ -355,38 +355,82 @@ export async function findBlankProductByScannedValue(value) {
   return products[0] || null;
 }
 
+function normalizeCatalogInventoryRow(row) {
+  return {
+    ...row,
+    blank_product_id: row.blank_product_id || row.product_row_id,
+    sku_base: row.blank_sku || row.sku_base || row.woo_sku || row.sku_base,
+    name: row.blank_product_name || row.name || row.woo_product_name,
+    product_type: row.product_type || row.style,
+    style: row.style || row.product_type,
+    quantity_on_hand: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? 0),
+    total_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? 0),
+    reserved_quantity: Number(row.reserved_quantity ?? 0),
+    available_quantity: Number(row.available_quantity ?? row.on_hand_quantity ?? row.quantity_on_hand ?? 0),
+    inventory_status: row.inventory_status || (Number(row.on_hand_quantity ?? row.quantity_on_hand ?? 0) > 0 ? 'in_stock' : 'zero_on_hand'),
+  };
+}
+
+function inventoryCatalogSearchParts(row) {
+  return [
+    row.product_row_id,
+    row.blank_product_id,
+    row.woo_sku,
+    row.sku,
+    row.sku_base,
+    row.blank_sku,
+    row.woo_product_name,
+    row.blank_product_name,
+    row.name,
+    row.brand,
+    row.product_type,
+    row.style,
+    row.color,
+    row.size,
+    row.inventory_status,
+  ].filter(Boolean).map((part) => ({
+    text: textSearchValue(part),
+    normalized: normalizeSearchValue(part),
+  }));
+}
+
 export async function getBlankInventory(search = '') {
-  const { data, error } = await supabase
-    .from('blank_inventory_by_product')
+  let rows = [];
+  let catalogError = null;
+
+  const catalog = await supabase
+    .from('app_synced_inventory_catalog_v1')
     .select('*')
     .order('name', { ascending: true })
-    .limit(10000);
+    .limit(20000);
 
-  if (error) throw error;
+  if (!catalog.error) {
+    rows = (catalog.data || []).map(normalizeCatalogInventoryRow);
+  } else {
+    catalogError = catalog.error;
 
-  const rows = data || [];
+    // Backward-compatible fallback so the app still loads before the SQL patch is installed.
+    const legacy = await supabase
+      .from('blank_inventory_by_product')
+      .select('*')
+      .order('name', { ascending: true })
+      .limit(10000);
+
+    if (legacy.error) {
+      throw catalogError || legacy.error;
+    }
+
+    rows = legacy.data || [];
+  }
+
   const term = String(search || '').trim();
-
   if (!term) return rows;
 
   const tokens = searchTokens(term);
   if (!tokens.length) return rows;
 
   return rows.filter((row) => {
-    const searchable = [
-      row.blank_product_id,
-      row.sku_base,
-      row.name,
-      row.brand,
-      row.product_type,
-      row.style,
-      row.color,
-      row.size,
-    ].filter(Boolean).map((part) => ({
-      text: textSearchValue(part),
-      normalized: normalizeSearchValue(part),
-    }));
-
+    const searchable = inventoryCatalogSearchParts(row);
     return tokens.every((token) => {
       const normalizedToken = normalizeSearchValue(token);
       return searchable.some((part) =>
@@ -587,59 +631,6 @@ export async function getDashboardMetrics() {
   };
 }
 
-function normalizeActivityRow(row) {
-  const unwrapped = row?.activity && typeof row.activity === 'object' && !Array.isArray(row.activity)
-    ? row.activity
-    : row;
-  const payload = unwrapped?.payload || unwrapped?.metadata || unwrapped?.details_json || unwrapped?.raw_payload || null;
-  const payloadObject = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-
-  return {
-    ...payloadObject,
-    ...unwrapped,
-    source_table:
-      unwrapped?.source_table ||
-      unwrapped?.table_name ||
-      unwrapped?.entity_table ||
-      payloadObject.source_table ||
-      payloadObject.table_name ||
-      null,
-    source_id:
-      unwrapped?.source_id ||
-      unwrapped?.movement_id ||
-      unwrapped?.blank_inventory_movement_id ||
-      unwrapped?.entity_id ||
-      payloadObject.source_id ||
-      payloadObject.movement_id ||
-      null,
-  };
-}
-
-async function attachUndoMetadata(rows) {
-  const activityIds = rows.map((row) => row.id).filter((id) => id !== null && id !== undefined).map(String);
-
-  if (!activityIds.length) return rows;
-
-  const undoLog = await supabase
-    .from('sc_activity_undo_log')
-    .select('activity_id, source_table, source_id, reversal_movement_id, undone_at, reason')
-    .in('activity_id', activityIds);
-
-  if (!undoLog.error && Array.isArray(undoLog.data)) {
-    const byActivityId = new Map(undoLog.data.map((entry) => [String(entry.activity_id), entry]));
-    rows.forEach((row) => {
-      const undo = byActivityId.get(String(row.id));
-      if (undo) {
-        row.undone_at = undo.undone_at;
-        row.undo_reason = undo.reason;
-        row.undo_reversal_movement_id = undo.reversal_movement_id;
-      }
-    });
-  }
-
-  return rows;
-}
-
 export async function getActivityFeed(limit = 25) {
   const { data, error } = await supabase
     .from('inventory_activity_feed')
@@ -648,99 +639,7 @@ export async function getActivityFeed(limit = 25) {
     .limit(limit);
 
   if (error) throw error;
-
-  return attachUndoMetadata((data || []).map(normalizeActivityRow));
-}
-
-function rowMatchesPullSheet(row, jobId) {
-  const target = String(jobId || '').trim();
-  if (!target) return true;
-
-  const directFields = [
-    row.job_id,
-    row.pullsheet_job_id,
-    row.pull_sheet_id,
-    row.pullsheet_id,
-    row.source_job_id,
-    row.order_job_id,
-  ];
-
-  if (directFields.some((value) => String(value ?? '').trim() === target)) return true;
-
-  const text = [
-    row.description,
-    row.summary,
-    row.details,
-    row.notes,
-    row.activity_type,
-    row.action_type,
-    row.action,
-    row.order_ref,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  return [
-    `job ${target}`,
-    `job:${target}`,
-    `job_id ${target}`,
-    `job_id:${target}`,
-    `pullsheet ${target}`,
-    `pull sheet ${target}`,
-  ].some((needle) => text.includes(needle));
-}
-
-export async function getActivityFeedForPullSheet(jobId, limit = 250) {
-  if (!jobId) return getActivityFeed(limit);
-
-  let { data, error } = await supabase.rpc('sc_activity_feed_for_pullsheet', {
-    p_job_id: Number(jobId),
-    p_limit: Number(limit),
-  });
-
-  if (error && /function .* does not exist|could not find/i.test(error.message || '')) {
-    const allRows = await getActivityFeed(Math.max(Number(limit) * 4, 500));
-    return allRows.filter((row) => rowMatchesPullSheet(row, jobId)).slice(0, Number(limit));
-  }
-
-  if (error) throw error;
-
-  const rows = (data || []).map(normalizeActivityRow);
-  return attachUndoMetadata(rows);
-}
-
-export async function undoActivityFeedEntry(activity, reason = '') {
-  if (!activity?.id && !activity?.source_id && !activity?.movement_id && !activity?.blank_inventory_movement_id) {
-    throw new Error('This activity entry does not include an ID that can be undone.');
-  }
-
-  const payload = {
-    p_activity_id: activity?.id == null ? null : String(activity.id),
-    p_source_table: activity?.source_table || activity?.table_name || activity?.entity_table || null,
-    p_source_id: activity?.source_id || activity?.movement_id || activity?.blank_inventory_movement_id || activity?.entity_id || null,
-    p_reason: reason || null,
-  };
-
-  let { data, error } = await supabase.rpc('sc_undo_activity_feed_entry', payload);
-
-  // Older SQL installs may expose a smaller argument list. Try the minimal
-  // version before surfacing the error.
-  if (error && /function .* does not exist|could not find/i.test(error.message || '')) {
-    const fallback = await supabase.rpc('sc_undo_activity_feed_entry', {
-      p_activity_id: payload.p_activity_id,
-      p_reason: payload.p_reason,
-    });
-    data = fallback.data;
-    error = fallback.error;
-  }
-
-  if (error) throw error;
-  if (data && data.success === false) {
-    throw new Error(data.message || 'Activity could not be undone.');
-  }
-
-  return data || { success: true, message: 'Activity was undone.' };
+  return data || [];
 }
 
 export async function getWooSyncQueue(limit = 50) {
