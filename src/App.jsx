@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import AddItemToBin from './AddItemToBin';
+import AssignBin from './AssignBin';
 import AuditMode from './AuditMode';
 import BinContents from './BinContents';
 import BinsDashboard from './BinsDashboard';
@@ -24,7 +25,10 @@ import Reservations from './Reservations';
 import ReturnFinishedInventory from './ReturnFinishedInventory';
 import SampleInventory from './SampleInventory';
 import ScanInventory from './ScanInventory';
+import SelectProduct from './SelectProduct';
 import TestTag from './TestTag';
+import ThemeSettings from './ThemeSettings';
+import TestingMode from './TestingMode';
 import TransferInventory from './TransferInventory';
 import WooSync from './WooSync';
 import ActivityPage from './ActivityPage';
@@ -36,6 +40,7 @@ import SpoilageTracking from './SpoilageTracking';
 import FinishedMatchSuggestions from './FinishedMatchSuggestions';
 import ProductionBoard from './ProductionBoard';
 import ArtworkRequests from './ArtworkRequests';
+import ArtworkPluginBridge from './ArtworkPluginBridge';
 import ShopTvMode from './ShopTvMode';
 import VendorPriceComparison from './VendorPriceComparison';
 import CapacityPlanning from './CapacityPlanning';
@@ -51,6 +56,7 @@ import ProductMappingRepair from './ProductMappingRepair';
 import ExceptionCenter from './ExceptionCenter';
 import CustomerPortalAdmin from './CustomerPortalAdmin';
 import CustomerPortal from './CustomerPortal';
+import CustomerPortalPreview from './CustomerPortalPreview';
 import ApprovalAutomation from './ApprovalAutomation';
 import AuditTrail from './AuditTrail';
 import QuoteToOrder from './QuoteToOrder';
@@ -62,6 +68,7 @@ import AppShell from './components/AppShell';
 import './App.css';
 import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
+import CreateProduct from './CreateProduct';
 import WarehouseAuditReport from './WarehouseAuditReport';
 
 export default function App() {
@@ -72,13 +79,18 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
+          <Route path="/inventory" element={<BlankInventory />} />
           <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
+          <Route path="/edit-blank-items" element={<EditBlankItems />} />
           <Route path="/inventory/import" element={<InventoryImport />} />
           <Route path="/inventory/samples" element={<SampleInventory />} />
           <Route path="/bins" element={<BinsDashboard />} />
           <Route path="/bin/:binId" element={<BinContents />} />
           <Route path="/add-item" element={<AddItemToBin />} />
           <Route path="/scan" element={<ScanInventory />} />
+          <Route path="/select-product" element={<SelectProduct />} />
+          <Route path="/assign-bin" element={<AssignBin />} />
+          <Route path="/create-product" element={<CreateProduct />} />
           <Route path="/transfer" element={<TransferInventory />} />
           <Route path="/audit" element={<AuditMode />} />
           <Route path="/reservations" element={<Reservations />} />
@@ -93,6 +105,7 @@ export default function App() {
           <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
           <Route path="/job-costing" element={<JobCosting />} />
           <Route path="/artwork-requests" element={<ArtworkRequests />} />
+          <Route path="/artwork-bridge" element={<ArtworkPluginBridge />} />
           <Route path="/shop-tv" element={<ShopTvMode />} />
           <Route path="/vendor-prices" element={<VendorPriceComparison />} />
           <Route path="/capacity-planning" element={<CapacityPlanning />} />
@@ -117,6 +130,7 @@ export default function App() {
           <Route path="/exception-center" element={<ExceptionCenter />} />
           <Route path="/customer-portal-admin" element={<CustomerPortalAdmin />} />
           <Route path="/customer-portal" element={<CustomerPortal />} />
+          <Route path="/customer-portal-preview" element={<CustomerPortalPreview />} />
           <Route path="/approval-automation" element={<ApprovalAutomation />} />
           <Route path="/audit-trail" element={<AuditTrail />} />
           <Route path="/quote-to-order" element={<QuoteToOrder />} />
@@ -126,8 +140,12 @@ export default function App() {
           <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />
           <Route path="/nfc-writer" element={<NfcWriter />} />
           <Route path="/test-tag" element={<TestTag />} />
+          <Route path="/testing-mode" element={<TestingMode />} />
+          <Route path="/theme-settings" element={<ThemeSettings />} />
           <Route path="/pullsheets" element={<PullSheetList />} />
+          <Route path="/pull-sheets" element={<PullSheetList />} />
           <Route path="/pullsheets/:jobId" element={<PullSheetView />} />
+          <Route path="/pull-sheets/:jobId" element={<PullSheetView />} />
           <Route path="/return-finished" element={<ReturnFinishedInventory />} />
                   <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
                   <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />

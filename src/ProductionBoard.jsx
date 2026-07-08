@@ -79,7 +79,7 @@ export default function ProductionBoard() {
                     <span>Created: {job.created_at ? new Date(job.created_at).toLocaleDateString() : '—'}</span>
                   </div>
                   <label className="sc-field"><span>Move Status</span><select value={normalizeStatus(job.status)} onChange={(e) => updateStatus(job, e.target.value)}>{columns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
-                  <div className="sc-card-actions"><Link className="sc-btn sc-btn-small" to={`/pull-sheets/${job.id}`}>Open Pull Sheet</Link></div>
+                  <div className="sc-card-actions"><Link className="sc-btn sc-btn-small" to={`/pullsheets/${job.id}`}>Open Pull Sheet</Link></div>
                 </article>
               ))}
               {!grouped[col.key]?.length && <div className="sc-empty-card">No jobs</div>}

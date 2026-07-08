@@ -123,6 +123,8 @@ export const navSections = [
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },
+      { label: 'Testing Mode', path: '/testing-mode', keywords: 'testing mode simulate writes safe test workflow' },
+      { label: 'Theme Settings', path: '/theme-settings', keywords: 'theme dark mode display layout density settings' },
     ],
   },
 ];
