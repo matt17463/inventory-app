@@ -356,18 +356,29 @@ export async function findBlankProductByScannedValue(value) {
 }
 
 function normalizeCatalogInventoryRow(row) {
+  const onHand = Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0);
+  const reserved = Number(row.reserved_quantity ?? row.quantity_reserved ?? row.reserved ?? 0);
+  const available = Number(row.available_quantity ?? (onHand - reserved));
+  const skuBase = row.blank_sku || row.sku_base || row.blank_sku_base || row.woo_sku || row.sku || '';
+  const displayName = row.blank_product_name || row.product_display_name || row.name || row.woo_product_name || skuBase;
+
   return {
     ...row,
-    blank_product_id: row.blank_product_id || row.product_row_id,
-    sku_base: row.blank_sku || row.sku_base || row.woo_sku || row.sku_base,
-    name: row.blank_product_name || row.name || row.woo_product_name,
+    product_row_id: row.product_row_id || row.synced_product_id || row.product_id || null,
+    blank_product_id: row.blank_product_id || row.product_row_id || row.id || null,
+    sku_base: skuBase,
+    blank_sku: row.blank_sku || row.sku_base || row.blank_sku_base || skuBase,
+    woo_sku: row.woo_sku || row.sku || row.linked_woo_skus || '',
+    name: displayName,
+    blank_product_name: row.blank_product_name || displayName,
     product_type: row.product_type || row.style,
     style: row.style || row.product_type,
-    quantity_on_hand: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? 0),
-    total_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? 0),
-    reserved_quantity: Number(row.reserved_quantity ?? 0),
-    available_quantity: Number(row.available_quantity ?? row.on_hand_quantity ?? row.quantity_on_hand ?? 0),
-    inventory_status: row.inventory_status || (Number(row.on_hand_quantity ?? row.quantity_on_hand ?? 0) > 0 ? 'in_stock' : 'zero_on_hand'),
+    quantity_on_hand: Number.isFinite(onHand) ? onHand : 0,
+    total_quantity: Number.isFinite(onHand) ? onHand : 0,
+    reserved_quantity: Number.isFinite(reserved) ? reserved : 0,
+    available_quantity: Number.isFinite(available) ? available : 0,
+    inventory_status: row.inventory_status || (onHand > 0 ? 'in_stock' : 'zero_on_hand'),
+    search_text: row.search_text || '',
   };
 }
 
@@ -388,6 +399,12 @@ function inventoryCatalogSearchParts(row) {
     row.color,
     row.size,
     row.inventory_status,
+    row.search_text,
+    row.barcode,
+    row.linked_woo_skus,
+    row.supplier_skus,
+    row.vendor,
+    row.supplier,
   ].filter(Boolean).map((part) => ({
     text: textSearchValue(part),
     normalized: normalizeSearchValue(part),
@@ -398,29 +415,41 @@ export async function getBlankInventory(search = '') {
   let rows = [];
   let catalogError = null;
 
-  const catalog = await supabase
-    .from('app_synced_inventory_catalog_v1')
+  const preferred = await supabase
+    .from('app_blank_inventory_overview_v2')
     .select('*')
-    .order('name', { ascending: true })
-    .limit(20000);
+    .order('blank_product_name', { ascending: true })
+    .limit(30000);
 
-  if (!catalog.error) {
-    rows = (catalog.data || []).map(normalizeCatalogInventoryRow);
+  if (!preferred.error) {
+    rows = (preferred.data || []).map(normalizeCatalogInventoryRow);
   } else {
-    catalogError = catalog.error;
+    catalogError = preferred.error;
 
-    // Backward-compatible fallback so the app still loads before the SQL patch is installed.
-    const legacy = await supabase
-      .from('blank_inventory_by_product')
+    const catalog = await supabase
+      .from('app_synced_inventory_catalog_v1')
       .select('*')
       .order('name', { ascending: true })
-      .limit(10000);
+      .limit(20000);
 
-    if (legacy.error) {
-      throw catalogError || legacy.error;
+    if (!catalog.error) {
+      rows = (catalog.data || []).map(normalizeCatalogInventoryRow);
+    } else {
+      catalogError = catalogError || catalog.error;
+
+      // Backward-compatible fallback so the app still loads before the SQL patch is installed.
+      const legacy = await supabase
+        .from('blank_inventory_by_product')
+        .select('*')
+        .order('name', { ascending: true })
+        .limit(10000);
+
+      if (legacy.error) {
+        throw catalogError || legacy.error;
+      }
+
+      rows = (legacy.data || []).map(normalizeCatalogInventoryRow);
     }
-
-    rows = legacy.data || [];
   }
 
   const term = String(search || '').trim();
@@ -459,6 +488,68 @@ export async function getBinContents(binId, search = '') {
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
+}
+
+export async function getBinItemReceiveHistory({ binId, blankProductId, skuBase } = {}) {
+  const normalizedBinId = binId == null ? '' : String(binId);
+  const normalizedBlankId = blankProductId == null ? null : String(blankProductId);
+  const normalizedSkuBase = skuBase == null ? null : String(skuBase);
+
+  if (!normalizedBinId) {
+    throw new Error('Missing bin ID for receiving history.');
+  }
+
+  const rpc = await supabase.rpc('sc_get_bin_blank_receive_history_v1', {
+    p_bin_id_text: normalizedBinId,
+    p_blank_product_id_text: normalizedBlankId,
+    p_sku_base_text: normalizedSkuBase,
+  });
+
+  if (!rpc.error) {
+    return rpc.data || [];
+  }
+
+  // Fallback for deployments before the SQL patch is installed.
+  let query = supabase
+    .from('blank_inventory_movements')
+    .select(`
+      *,
+      blank_products:blank_product_id(sku_base,name)
+    `)
+    .eq('bin_id', Number(binId))
+    .order('created_at', { ascending: false })
+    .limit(250);
+
+  if (normalizedBlankId) {
+    query = query.eq('blank_product_id', normalizedBlankId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw rpc.error || error;
+
+  return (data || [])
+    .filter((row) => {
+      const sku = row?.blank_products?.sku_base || row?.sku_base || '';
+      if (normalizedSkuBase && normalizeSearchValue(sku) !== normalizeSearchValue(normalizedSkuBase)) return false;
+      const quantity = Number(row.quantity_change ?? row.quantity ?? 0);
+      return Number.isFinite(quantity) && quantity > 0;
+    })
+    .map((row) => ({
+      movement_id: row.id,
+      received_at: row.created_at,
+      quantity: Number(row.quantity_change ?? row.quantity ?? 0),
+      unit_cost: row.unit_cost ?? row.price ?? row.cost ?? null,
+      vendor: row.vendor || row.supplier || null,
+      supplier: row.supplier || row.vendor || null,
+      po_number: row.po_number || row.purchase_order_number || null,
+      source: row.source || row.source_type || row.movement_type || null,
+      movement_type: row.movement_type || null,
+      notes: row.notes || '',
+      blank_product_id: row.blank_product_id,
+      sku_base: row?.blank_products?.sku_base || row.sku_base || '',
+      blank_name: row?.blank_products?.name || row.name || '',
+      details: row,
+    }));
 }
 
 export async function receiveBlankInventory({ binId, blankProductId, quantity, notes }) {
