@@ -51,14 +51,14 @@ export default function Home() {
       value: number(stats.units_on_hand),
       help: 'Blank + finished units currently counted as on hand.',
       tone: 'onhand',
-      to: '/inventory',
+      to: '/inventory/blanks',
     },
     {
       label: 'Blank Units on Hand',
       value: number(stats.blank_units_on_hand),
       help: 'Undecorated blanks currently counted in inventory.',
       tone: 'blank',
-      to: '/inventory',
+      to: '/inventory/blanks',
     },
     {
       label: 'Reserved Units',
@@ -86,7 +86,7 @@ export default function Home() {
       value: number(stats.open_pull_sheets),
       help: 'Active jobs that still need production attention.',
       tone: 'pullsheets',
-      to: '/pull-sheets',
+      to: '/pullsheets',
     },
     {
       label: 'Pending Artwork',
@@ -111,7 +111,7 @@ export default function Home() {
             Start here each day to check active work, receive inventory, review production, and catch issues before they slow down the shop.
           </p>
           <div className="sc-hero-actions">
-            <Link className="sc-btn sc-btn-primary" to="/pull-sheets">Open Pull Sheets</Link>
+            <Link className="sc-btn sc-btn-primary" to="/pullsheets">Open Pull Sheets</Link>
             <Link className="sc-btn sc-btn-green" to="/add-item">Receive Inventory</Link>
             <Link className="sc-btn sc-btn-purple" to="/artwork-requests">Artwork Queue</Link>
             <Link className="sc-btn" to="/production-board">Production Board</Link>
@@ -165,7 +165,7 @@ export default function Home() {
             </div>
           </div>
           <div className="sc-quick-grid sc-quick-grid-colored">
-            <Link to="/edit-blank-items">Edit Blank Items</Link>
+            <Link to="/inventory/edit-blanks">Edit Blank Items</Link>
             <Link to="/manual-orders">Manual Invoiced Order</Link>
             <Link to="/purchase-orders/new">Generate PO</Link>
             <Link to="/pricing-rules">Pricing Rules</Link>
