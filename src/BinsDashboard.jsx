@@ -4,6 +4,7 @@ import {
   createBin,
   getBins,
   getBinContents,
+  getBinItemReceiveHistory,
   saveBinDisplayOrder,
 } from "./lib/inventoryApi";
 import { supabase } from "./supabaseClient";
@@ -177,6 +178,7 @@ export default function BinsDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [newBin, setNewBin] = useState({ bin_code: "", label: "", location: "" });
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState({ open: false, loading: false, rows: [], item: null, error: "" });
 
   async function loadBins() {
     setLoading(true);
@@ -325,6 +327,49 @@ export default function BinsDashboard() {
     }
   }
 
+
+  async function openReceiveHistory(row) {
+    if (!activeBin || row.source_type !== "Blank") return;
+
+    setHistory({ open: true, loading: true, rows: [], item: row, error: "" });
+
+    try {
+      const rows = await getBinItemReceiveHistory({
+        binId: activeBin.raw_id || activeBin.id,
+        blankProductId: row.blank_product_id || row.product_id || row.id || null,
+        skuBase: row.sku || row.sku_base || row.blank_sku || null,
+      });
+
+      setHistory({ open: true, loading: false, rows: Array.isArray(rows) ? rows : [], item: row, error: "" });
+    } catch (error) {
+      setHistory({
+        open: true,
+        loading: false,
+        rows: [],
+        item: row,
+        error: error?.message || "Could not load receiving history for this bin item.",
+      });
+    }
+  }
+
+  function closeReceiveHistory() {
+    setHistory({ open: false, loading: false, rows: [], item: null, error: "" });
+  }
+
+  function formatHistoryDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString();
+  }
+
+  function formatMoney(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const number = Number(value);
+    if (!Number.isFinite(number)) return String(value);
+    return number.toLocaleString(undefined, { style: "currency", currency: "USD" });
+  }
+
   if (activeBin) {
     const totalUnits = contents.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
     const blankCount = contents.filter((row) => row.source_type === "Blank").length;
@@ -383,6 +428,7 @@ export default function BinsDashboard() {
                     <th>Color</th>
                     <th>Size</th>
                     <th>Qty</th>
+                    <th>History</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -405,6 +451,20 @@ export default function BinsDashboard() {
                       <td>
                         <span className="bins-qty-pill">{Number(row.quantity || 0)}</span>
                       </td>
+                      <td>
+                        {row.source_type === "Blank" ? (
+                          <button
+                            type="button"
+                            className="bin-history-link"
+                            onClick={() => openReceiveHistory(row)}
+                            title="View receiving history for this item in this bin"
+                          >
+                            View history
+                          </button>
+                        ) : (
+                          <span className="bins-subtext">Sample</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -412,6 +472,61 @@ export default function BinsDashboard() {
             </div>
           )}
         </section>
+
+        {history.open ? (
+          <section className="bin-history-panel" role="dialog" aria-label="Bin item receiving history">
+            <div className="bin-history-header">
+              <div>
+                <span className="bins-eyebrow">Receiving History</span>
+                <h2>{safeText(history.item?.product_name || history.item?.sku, "Item")}</h2>
+                <p>
+                  Bin {safeText(activeBin.bin_code || activeBin.label, "—")} · SKU {safeText(history.item?.sku)} · Current qty {Number(history.item?.quantity || 0)}
+                </p>
+              </div>
+              <button type="button" className="bins-button bins-button-secondary" onClick={closeReceiveHistory}>
+                Close
+              </button>
+            </div>
+
+            {history.loading ? (
+              <div className="bins-empty">Loading receiving history...</div>
+            ) : history.error ? (
+              <div className="bins-message bins-message-error">{history.error}</div>
+            ) : history.rows.length === 0 ? (
+              <div className="bins-empty">No receiving history was found for this item in this bin.</div>
+            ) : (
+              <div className="bins-table-wrap">
+                <table className="bins-content-table bin-history-table">
+                  <thead>
+                    <tr>
+                      <th>Date Received</th>
+                      <th>Qty Added</th>
+                      <th>Vendor / Supplier</th>
+                      <th>Unit Cost</th>
+                      <th>PO / Source</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.rows.map((entry, index) => (
+                      <tr key={entry.movement_id || `${entry.received_at}-${index}`}>
+                        <td>{formatHistoryDate(entry.received_at || entry.created_at)}</td>
+                        <td><span className="bins-qty-pill">{Number(entry.quantity || 0)}</span></td>
+                        <td>{safeText(entry.vendor || entry.supplier)}</td>
+                        <td>{formatMoney(entry.unit_cost)}</td>
+                        <td>
+                          {entry.po_number ? <strong>{entry.po_number}</strong> : safeText(entry.source || entry.movement_type)}
+                          {entry.movement_id ? <div className="bins-subtext">Movement: {entry.movement_id}</div> : null}
+                        </td>
+                        <td>{safeText(entry.notes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : null}
       </div>
     );
   }
