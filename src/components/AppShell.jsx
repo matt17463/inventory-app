@@ -20,16 +20,16 @@ function normalizeNavigation(raw) {
 const fallbackNav = [
   { title: 'Dashboard', items: [{ label: 'Home', path: '/' }, { label: 'Command Center', path: '/command-center' }] },
   { title: 'Inventory', items: [
-    { label: 'Inventory Overview', path: '/inventory' },
+    { label: 'Inventory Overview', path: '/inventory/blanks' },
     { label: 'Add Item to Bin', path: '/add-item' },
-    { label: 'Edit Blank Items', path: '/edit-blank-items' },
+    { label: 'Edit Blank Items', path: '/inventory/edit-blanks' },
     { label: 'Bins', path: '/bins' },
     { label: 'Bin Contents', path: '/bin-contents' },
     { label: 'Inventory Audit', path: '/inventory-audit' },
     { label: 'Product Data Health', path: '/product-data-health' },
   ]},
   { title: 'Production', items: [
-    { label: 'Pull Sheets', path: '/pull-sheets' },
+    { label: 'Pull Sheets', path: '/pullsheets' },
     { label: 'Production Board', path: '/production-board' },
     { label: 'QC Checklist', path: '/qc-checklist' },
     { label: 'Production Calendar', path: '/production-calendar' },
