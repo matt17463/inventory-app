@@ -794,6 +794,23 @@ export async function updatePullSheetStatus({ jobId, status }) {
   if (error) throw error;
 }
 
+export async function updatePullSheetStatuses({ jobIds, status }) {
+  const ids = Array.from(new Set((jobIds || []).filter((id) => id !== undefined && id !== null && String(id).trim() !== '')));
+  const nextStatus = String(status || '').trim();
+
+  if (!ids.length) throw new Error('Choose at least one pull sheet.');
+  if (!nextStatus) throw new Error('Choose a status.');
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({ status: nextStatus })
+    .in('id', ids)
+    .select('id, status');
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getPullSheetItems(jobId) {
   const { data, error } = await supabase.rpc('sc_pull_sheet_items', {
     p_job_id: Number(jobId),
