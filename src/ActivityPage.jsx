@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getActivityFeed, getActivityFeedForPullSheet, getPullSheets, undoActivityFeedEntry } from './lib/inventoryApi';
+import {
+  applyBulkUndoActivity,
+  getActivityFeed,
+  getActivityFeedForPullSheet,
+  getPullSheets,
+  previewBulkUndoActivity,
+  undoActivityFeedEntry,
+} from './lib/inventoryApi';
 
 const CORE_FIELDS = new Set([
   'id',
@@ -105,6 +112,21 @@ function getDetailEntries(row) {
   return { preferred, extras };
 }
 
+function bulkResultItems(result) {
+  return Array.isArray(result?.items) ? result.items : [];
+}
+
+function bulkResultCount(result, key) {
+  const value = Number(result?.[key] || 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function defaultBulkReason(scope) {
+  if (scope === 'pullsheet') return 'Bulk undo for selected pull sheet.';
+  if (scope === 'order') return 'Bulk undo for selected WooCommerce order.';
+  return 'Bulk undo for selected activity time range.';
+}
+
 export default function ActivityPage() {
   const [rows, setRows] = useState([]);
   const [pullSheets, setPullSheets] = useState([]);
@@ -115,6 +137,16 @@ export default function ActivityPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [undoingId, setUndoingId] = useState(null);
   const [limit, setLimit] = useState(100);
+
+  const [bulkScope, setBulkScope] = useState('time');
+  const [bulkStartAt, setBulkStartAt] = useState('');
+  const [bulkEndAt, setBulkEndAt] = useState('');
+  const [bulkPullSheetId, setBulkPullSheetId] = useState('');
+  const [bulkOrderId, setBulkOrderId] = useState('');
+  const [bulkLimit, setBulkLimit] = useState(250);
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkPreview, setBulkPreview] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   async function loadPullSheets() {
     setLoadingPullSheets(true);
@@ -153,6 +185,91 @@ export default function ActivityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPullSheetId, limit]);
 
+  useEffect(() => {
+    if (selectedPullSheetId && !bulkPullSheetId) {
+      setBulkPullSheetId(selectedPullSheetId);
+    }
+  }, [selectedPullSheetId, bulkPullSheetId]);
+
+  function buildBulkUndoOptions() {
+    const reason = bulkReason.trim() || defaultBulkReason(bulkScope);
+
+    if (bulkScope === 'time') {
+      if (!bulkStartAt && !bulkEndAt) {
+        throw new Error('Choose a start time, end time, or both before previewing a time-range undo.');
+      }
+      return {
+        startAt: bulkStartAt || null,
+        endAt: bulkEndAt || null,
+        limit: bulkLimit,
+        reason,
+      };
+    }
+
+    if (bulkScope === 'pullsheet') {
+      if (!bulkPullSheetId) throw new Error('Choose a pull sheet before previewing a pull-sheet undo.');
+      return {
+        jobId: bulkPullSheetId,
+        limit: bulkLimit,
+        reason,
+      };
+    }
+
+    if (bulkScope === 'order') {
+      if (!bulkOrderId) throw new Error('Enter a WooCommerce order number before previewing an order undo.');
+      return {
+        orderId: bulkOrderId,
+        limit: bulkLimit,
+        reason,
+      };
+    }
+
+    throw new Error('Choose a bulk undo scope.');
+  }
+
+  async function handleBulkPreview() {
+    setBulkBusy(true);
+    setMessage('');
+    setBulkPreview(null);
+    try {
+      const result = await previewBulkUndoActivity(buildBulkUndoOptions());
+      setBulkPreview(result);
+      setMessage(result?.message || 'Bulk undo preview complete.');
+    } catch (err) {
+      setMessage(err.message || 'Bulk undo preview failed.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkApply() {
+    const previewCount = bulkResultCount(bulkPreview, 'candidate_count');
+    if (!previewCount) {
+      setMessage('Preview the bulk undo first. No undoable activity is currently selected.');
+      return;
+    }
+
+    const ok = window.confirm(
+      `Undo ${previewCount} activity entr${previewCount === 1 ? 'y' : 'ies'}?\n\nThis will create reversing inventory movements. It will not delete the original activity records. This should only be used to reverse mistakes.`
+    );
+    if (!ok) return;
+
+    setBulkBusy(true);
+    setMessage('');
+    try {
+      const result = await applyBulkUndoActivity(buildBulkUndoOptions());
+      setBulkPreview(result);
+      setMessage(
+        `Bulk undo complete. Undone: ${bulkResultCount(result, 'undone_count')}. Failed/skipped: ${bulkResultCount(result, 'failed_count')}.`
+      );
+      await load();
+    } catch (err) {
+      setMessage(err.message || 'Bulk undo failed.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function handleUndo(row) {
     const label = getActivityDescription(row);
     const ok = window.confirm(
@@ -179,6 +296,7 @@ export default function ActivityPage() {
   );
 
   const rowsWithMeta = useMemo(() => rows.map((row) => ({ ...row, undoable: getUndoAvailable(row) })), [rows]);
+  const bulkItems = bulkResultItems(bulkPreview);
 
   return (
     <main className="page activity-page">
@@ -228,6 +346,149 @@ export default function ActivityPage() {
           </button>
         </div>
       )}
+
+      <section className="card wide-card">
+        <div className="page-heading-row">
+          <div>
+            <p className="eyebrow">Bulk Undo</p>
+            <h2>Undo activity by time, order, or pull sheet</h2>
+            <p className="helper-text">
+              Preview first, then apply. Bulk undo only reverses safe inventory movement activity by creating opposite inventory movements. Other activity is skipped.
+            </p>
+          </div>
+          <div className="activity-toolbar">
+            <button type="button" className="sc-btn secondary" onClick={handleBulkPreview} disabled={bulkBusy}>
+              {bulkBusy ? 'Working…' : 'Preview Bulk Undo'}
+            </button>
+            <button
+              type="button"
+              className="sc-btn danger"
+              onClick={handleBulkApply}
+              disabled={bulkBusy || bulkResultCount(bulkPreview, 'candidate_count') === 0 || bulkPreview?.dry_run === false}
+            >
+              Apply Bulk Undo
+            </button>
+          </div>
+        </div>
+
+        <div className="activity-detail-grid">
+          <label>
+            <b>Undo scope</b>
+            <select
+              value={bulkScope}
+              onChange={(e) => {
+                setBulkScope(e.target.value);
+                setBulkPreview(null);
+              }}
+            >
+              <option value="time">Time range</option>
+              <option value="pullsheet">Specific pull sheet</option>
+              <option value="order">Specific WooCommerce order</option>
+            </select>
+          </label>
+
+          {bulkScope === 'time' && (
+            <>
+              <label>
+                <b>Start time</b>
+                <input type="datetime-local" value={bulkStartAt} onChange={(e) => setBulkStartAt(e.target.value)} />
+              </label>
+              <label>
+                <b>End time</b>
+                <input type="datetime-local" value={bulkEndAt} onChange={(e) => setBulkEndAt(e.target.value)} />
+              </label>
+            </>
+          )}
+
+          {bulkScope === 'pullsheet' && (
+            <label>
+              <b>Pull sheet</b>
+              <select value={bulkPullSheetId} onChange={(e) => setBulkPullSheetId(e.target.value)} disabled={loadingPullSheets}>
+                <option value="">Choose pull sheet…</option>
+                {pullSheets.map((sheet) => {
+                  const id = sheet.id || sheet.job_id;
+                  return (
+                    <option key={id} value={id}>
+                      {getPullSheetLabel(sheet)}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          )}
+
+          {bulkScope === 'order' && (
+            <label>
+              <b>WooCommerce order number</b>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={bulkOrderId}
+                onChange={(e) => setBulkOrderId(e.target.value)}
+                placeholder="Example: 11879"
+              />
+            </label>
+          )}
+
+          <label>
+            <b>Max actions</b>
+            <select value={bulkLimit} onChange={(e) => setBulkLimit(Number(e.target.value))}>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={250}>250</option>
+              <option value={500}>500</option>
+              <option value={1000}>1000</option>
+            </select>
+          </label>
+
+          <label>
+            <b>Reason / note</b>
+            <input
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+              placeholder={defaultBulkReason(bulkScope)}
+            />
+          </label>
+        </div>
+
+        {bulkPreview && (
+          <div className="activity-detail-panel">
+            <h3>{bulkPreview.dry_run ? 'Bulk undo preview' : 'Bulk undo result'}</h3>
+            <div className="activity-chips">
+              <span>Candidates: {bulkResultCount(bulkPreview, 'candidate_count')}</span>
+              {!bulkPreview.dry_run && <span>Undone: {bulkResultCount(bulkPreview, 'undone_count')}</span>}
+              {!bulkPreview.dry_run && <span>Failed: {bulkResultCount(bulkPreview, 'failed_count')}</span>}
+              <span>Limit: {bulkResultCount(bulkPreview, 'limit')}</span>
+            </div>
+
+            {bulkItems.length > 0 ? (
+              <div className="activity-list">
+                {bulkItems.slice(0, 12).map((item, index) => (
+                  <article key={`${item.activity_id || item.source_id || index}`} className="activity-row full">
+                    <div className="activity-main-row">
+                      <div>
+                        <strong>{labelize(item.activity_type || item.status || 'Activity')}</strong>
+                        <span>{item.description || item.result?.message || 'No description was provided.'}</span>
+                        <small>{safeDate(item.created_at)}</small>
+                      </div>
+                      <div className="activity-chips">
+                        {item.status && <span>{labelize(item.status)}</span>}
+                        {item.quantity && <span>Qty {item.quantity}</span>}
+                        {item.sku && <span>{item.sku}</span>}
+                        {item.job_id && <span>Pull Sheet {item.job_id}</span>}
+                        {item.order_id && <span>Order {item.order_id}</span>}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {bulkItems.length > 12 && <p className="helper-text">Showing first 12 of {bulkItems.length} previewed actions.</p>}
+              </div>
+            ) : (
+              <p className="helper-text">No undoable inventory activity matched this scope.</p>
+            )}
+          </div>
+        )}
+      </section>
 
       {message && <p className="message">{message}</p>}
 
