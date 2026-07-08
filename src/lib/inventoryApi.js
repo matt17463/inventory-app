@@ -787,6 +787,62 @@ export async function undoActivityFeedEntry(activity, reason = '') {
   return data || { success: true, message: 'Activity was undone.' };
 }
 
+
+function toBulkUndoTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function normalizeBulkUndoOptions(options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.limit || 250), 2000));
+  const jobId = options.jobId || options.pullSheetId || null;
+  const orderId = options.orderId || options.woocommerceOrderId || null;
+
+  return {
+    p_start_at: toBulkUndoTimestamp(options.startAt),
+    p_end_at: toBulkUndoTimestamp(options.endAt),
+    p_job_id: jobId ? Number(jobId) : null,
+    p_woocommerce_order_id: orderId ? Number(orderId) : null,
+    p_limit: limit,
+    p_reason: String(options.reason || '').trim() || null,
+    p_dry_run: options.dryRun !== false,
+  };
+}
+
+async function runBulkUndoActivity(options = {}) {
+  const payload = normalizeBulkUndoOptions(options);
+
+  const hasScope = payload.p_start_at || payload.p_end_at || payload.p_job_id || payload.p_woocommerce_order_id;
+  if (!hasScope) {
+    throw new Error('Choose a time range, pull sheet, or WooCommerce order before running bulk undo.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_bulk_undo_activity_feed', payload);
+
+  if (error) {
+    if (/function .* does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Bulk undo SQL has not been installed yet. Run supabase_activity_feed_bulk_undo.sql in Supabase first.');
+    }
+    throw error;
+  }
+
+  if (data && data.success === false) {
+    throw new Error(data.message || 'Bulk undo could not be completed.');
+  }
+
+  return data || { success: true, items: [] };
+}
+
+export async function previewBulkUndoActivity(options = {}) {
+  return runBulkUndoActivity({ ...options, dryRun: true });
+}
+
+export async function applyBulkUndoActivity(options = {}) {
+  return runBulkUndoActivity({ ...options, dryRun: false });
+}
+
 export async function getWooSyncQueue(limit = 50) {
   const { data, error } = await supabase
     .from('woo_sync_queue')
