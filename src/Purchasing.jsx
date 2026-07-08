@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   getPurchasingLowStock,
   getPurchasingRecommendedOrders,
@@ -47,6 +48,77 @@ function getEstimatedValue(row) {
   return Number(row.estimated_order_value || 0);
 }
 
+
+function demandSources(row) {
+  return Array.isArray(row?.demand_sources) ? row.demand_sources : [];
+}
+
+function sourceOrderLabel(source) {
+  const raw = source?.order_number || source?.woocommerce_order_id || source?.order_id || '';
+  return raw ? `Order #${raw}` : 'Order not recorded';
+}
+
+function sourcePullSheetLabel(source) {
+  const raw = source?.job_id || source?.pullsheet_number || '';
+  return raw ? `Pull Sheet #${raw}` : 'Pull sheet not recorded';
+}
+
+function sourceQuantity(source) {
+  return Number(source?.quantity || source?.reserved_quantity || 0);
+}
+
+function DemandSourcesCell({ row, expanded, onToggle }) {
+  const sources = demandSources(row);
+  const visibleSources = expanded ? sources : sources.slice(0, 2);
+  const sourceCount = Number(row?.demand_source_count || sources.length || 0);
+
+  if (!sources.length) {
+    return (
+      <td className="purchasing-source-cell muted-cell">
+        {Number(row?.reserved_quantity || 0) > 0 ? 'No source details' : '—'}
+      </td>
+    );
+  }
+
+  return (
+    <td className="purchasing-source-cell">
+      <div className="source-summary-line">
+        <strong>{sourceCount} source{sourceCount === 1 ? '' : 's'}</strong>
+        {Number(row?.demand_total_quantity || 0) > 0 && (
+          <span>Qty {number(row.demand_total_quantity)}</span>
+        )}
+      </div>
+
+      <div className="source-chip-list">
+        {visibleSources.map((source, index) => (
+          <div className="source-chip" key={`${source.job_id || 'job'}-${source.job_item_id || index}`}>
+            <div>
+              <span>{sourceOrderLabel(source)}</span>
+              {source?.customer_name && <small>{source.customer_name}</small>}
+            </div>
+            {source?.job_id ? (
+              <Link to={`/pullsheets/${source.job_id}`}>{sourcePullSheetLabel(source)}</Link>
+            ) : (
+              <span>{sourcePullSheetLabel(source)}</span>
+            )}
+            <small>
+              Qty {number(sourceQuantity(source))}
+              {source?.order_sku ? ` • ${source.order_sku}` : ''}
+            </small>
+            {source?.pairing_warning && <small className="warning-text">{source.pairing_warning}</small>}
+          </div>
+        ))}
+      </div>
+
+      {sources.length > 2 && (
+        <button type="button" className="link-button compact-button" onClick={onToggle}>
+          {expanded ? 'Show fewer' : `Show ${sources.length - 2} more`}
+        </button>
+      )}
+    </td>
+  );
+}
+
 export default function Purchasing() {
   const [tab, setTab] = useState('recommended');
   const [search, setSearch] = useState('');
@@ -56,6 +128,7 @@ export default function Purchasing() {
   const [summary, setSummary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [expandedSources, setExpandedSources] = useState(() => new Set());
 
   async function loadData() {
     setLoading(true);
@@ -101,6 +174,18 @@ export default function Purchasing() {
     };
   }, [activeRows, tab]);
 
+  function toggleSourceDetails(rowKey) {
+    setExpandedSources((current) => {
+      const next = new Set(current);
+      if (next.has(rowKey)) {
+        next.delete(rowKey);
+      } else {
+        next.add(rowKey);
+      }
+      return next;
+    });
+  }
+
   function exportActiveRows() {
     if (tab === 'summary') {
       downloadCsv('purchasing-supplier-summary.csv', summary);
@@ -121,7 +206,10 @@ export default function Purchasing() {
       unit_cost: row.unit_cost,
       need_to_order: getOrderQuantity(row, tab),
       estimated_order_value: row.estimated_order_value,
-    }));
+      related_orders: row.demand_order_numbers || '',
+      related_pull_sheets: row.demand_pullsheet_numbers || '',
+      related_source_count: row.demand_source_count || 0,
+        }));
 
     const filenameMap = {
       shortages: 'purchasing-current-shortages.csv',
@@ -190,7 +278,7 @@ export default function Purchasing() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') loadData(); }}
-            placeholder="Search brand, style, color, size, SKU, or product name..."
+            placeholder="Search brand, style, color, size, SKU, order #, or pull sheet #..."
           />
           <button type="button" onClick={loadData}>Search</button>
         </div>
@@ -216,6 +304,7 @@ export default function Purchasing() {
                   <th>Size</th>
                   <th>On Hand</th>
                   <th>Reserved</th>
+                  <th>Orders / Pull Sheets</th>
                   <th>Available</th>
                   <th>Threshold</th>
                   <th>Order Qty</th>
@@ -224,23 +313,32 @@ export default function Purchasing() {
               </thead>
               <tbody>
                 {activeRows.length === 0 ? (
-                  <tr><td colSpan="12">No purchasing needs found for this section.</td></tr>
-                ) : activeRows.map((row) => (
-                  <tr key={`${tab}-${row.blank_product_id}`} className={Number(row.available_quantity) < 0 ? 'shortage-row' : ''}>
-                    <td><strong>{row.sku_base}</strong></td>
-                    <td>{row.name}</td>
-                    <td>{row.brand}</td>
-                    <td>{row.product_type}</td>
-                    <td>{row.color}</td>
-                    <td>{row.size}</td>
-                    <td>{number(row.quantity_on_hand)}</td>
-                    <td>{number(row.reserved_quantity)}</td>
-                    <td>{number(row.available_quantity)}</td>
-                    <td>{number(row.low_stock_threshold)}</td>
-                    <td><strong>{number(getOrderQuantity(row, tab))}</strong></td>
-                    <td>{money(row.estimated_order_value)}</td>
-                  </tr>
-                ))}
+                  <tr><td colSpan="13">No purchasing needs found for this section.</td></tr>
+                ) : activeRows.map((row) => {
+                  const rowKey = `${tab}-${row.blank_product_id}`;
+
+                  return (
+                    <tr key={rowKey} className={Number(row.available_quantity) < 0 ? 'shortage-row' : ''}>
+                      <td><strong>{row.sku_base}</strong></td>
+                      <td>{row.name}</td>
+                      <td>{row.brand}</td>
+                      <td>{row.product_type}</td>
+                      <td>{row.color}</td>
+                      <td>{row.size}</td>
+                      <td>{number(row.quantity_on_hand)}</td>
+                      <td>{number(row.reserved_quantity)}</td>
+                      <DemandSourcesCell
+                        row={row}
+                        expanded={expandedSources.has(rowKey)}
+                        onToggle={() => toggleSourceDetails(rowKey)}
+                      />
+                      <td>{number(row.available_quantity)}</td>
+                      <td>{number(row.low_stock_threshold)}</td>
+                      <td><strong>{number(getOrderQuantity(row, tab))}</strong></td>
+                      <td>{money(row.estimated_order_value)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -286,6 +384,7 @@ export default function Purchasing() {
           <li><strong>Current Shortages</strong>: order immediately if production depends on these blanks.</li>
           <li><strong>Low Stock</strong>: monitor and reorder when you want to maintain minimum shelf stock.</li>
           <li><strong>Recommended Orders</strong>: primary buying list. Formula: Reserved + Threshold - On Hand.</li>
+          <li><strong>Orders / Pull Sheets</strong>: use these links to open the related pull sheet when a blank appears paired incorrectly.</li>
           <li><strong>Supplier Summary</strong>: use this to group the recommended order by brand and style before placing vendor orders.</li>
         </ol>
       </section>

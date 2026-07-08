@@ -1363,3 +1363,78 @@ body.dark .manual-order-search-results-table {
     width: 100%;
   }
 }
+
+/* Purchasing demand source links */
+.purchasing-source-cell {
+  min-width: 260px;
+  max-width: 380px;
+}
+
+.purchasing-source-cell.muted-cell {
+  color: var(--sc-muted);
+  font-weight: 800;
+}
+
+.source-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.source-summary-line span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--sc-soft-blue);
+  color: var(--sc-logo-navy);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.source-chip-list {
+  display: grid;
+  gap: 8px;
+}
+
+.source-chip {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(14, 165, 233, .18);
+  background: rgba(255, 255, 255, .74);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .04);
+}
+
+.source-chip span,
+.source-chip a {
+  font-weight: 950;
+}
+
+.source-chip a {
+  color: var(--sc-logo-blue);
+  text-decoration: none;
+}
+
+.source-chip a:hover {
+  text-decoration: underline;
+}
+
+.source-chip small {
+  color: var(--sc-muted);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.link-button.compact-button {
+  margin-top: 8px;
+  min-height: 30px;
+  padding: 5px 9px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--sc-logo-blue) !important;
+  box-shadow: none !important;
+}
