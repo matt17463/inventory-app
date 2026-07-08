@@ -1,16 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { bulkUpdateBlankProducts } from './inventoryApi';
 
 const empty = { sku_base: '', name: '', barcode: '', brand_id: '', product_type_id: '', color_id: '', size_id: '', unit_cost: '', low_stock_threshold: '', image_url: '' };
+
+const emptyBulkForm = {
+  updateLowStockThreshold: false,
+  lowStockThreshold: '',
+  updateImageUrl: false,
+  imageUrl: '',
+  clearImageUrl: false,
+};
+
+function normalizeRowId(id) {
+  return id == null ? '' : String(id);
+}
+
+function formatCost(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return String(value);
+  return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+}
 
 export default function EditBlankItems() {
   const [rows, setRows] = useState([]);
   const [lookups, setLookups] = useState({ brands: [], product_types: [], colors: [], sizes: [] });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [form, setForm] = useState(empty);
+  const [bulkForm, setBulkForm] = useState(emptyBulkForm);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   async function loadLookups() {
     const [brands, productTypes, colors, sizes] = await Promise.all([
@@ -32,20 +55,27 @@ export default function EditBlankItems() {
     setMessage('');
     let data = [];
     let error = null;
-    const rpc = await supabase.rpc('search_blank_products_for_edit', { p_search: search.trim() });
+    const trimmedSearch = search.trim();
+    const rpc = await supabase.rpc('search_blank_products_for_edit', { p_search: trimmedSearch });
     if (!rpc.error) {
       data = rpc.data || [];
     } else {
-      const res = await supabase
+      const query = supabase
         .from('blank_products')
-        .select('id,sku_base,name,barcode,brand_id,product_type_id,color_id,size_id,unit_cost,low_stock_threshold,image_url')
-        .or(`sku_base.ilike.%${search}%,name.ilike.%${search}%,barcode.ilike.%${search}%`)
-        .limit(250);
+        .select('id,sku_base,name,barcode,brand_id,product_type_id,color_id,size_id,unit_cost,low_stock_threshold,image_url,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)')
+        .limit(500);
+
+      if (trimmedSearch) {
+        query.or(`sku_base.ilike.%${trimmedSearch}%,name.ilike.%${trimmedSearch}%,barcode.ilike.%${trimmedSearch}%`);
+      }
+
+      const res = await query;
       data = res.data || [];
       error = res.error;
     }
     if (error) setMessage(error.message);
     setRows(data);
+    setSelectedIds((current) => current.filter((id) => data.some((row) => normalizeRowId(row.id) === id)));
     setLoading(false);
   }
 
@@ -87,6 +117,79 @@ export default function EditBlankItems() {
   }
 
   const visibleRows = useMemo(() => rows || [], [rows]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedRows = useMemo(
+    () => visibleRows.filter((row) => selectedSet.has(normalizeRowId(row.id))),
+    [visibleRows, selectedSet]
+  );
+  const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((row) => selectedSet.has(normalizeRowId(row.id)));
+
+  function toggleRow(row) {
+    const id = normalizeRowId(row.id);
+    if (!id) return;
+    setSelectedIds((current) => current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
+  }
+
+  function selectVisible() {
+    setSelectedIds(Array.from(new Set(visibleRows.map((row) => normalizeRowId(row.id)).filter(Boolean))));
+  }
+
+  function clearSelection() {
+    setSelectedIds([]);
+  }
+
+  function toggleAllVisible() {
+    if (allVisibleSelected) clearSelection();
+    else selectVisible();
+  }
+
+  async function applyBulkEdit() {
+    if (!selectedIds.length) {
+      setMessage('Select at least one blank item to bulk edit.');
+      return;
+    }
+
+    const input = {};
+
+    if (bulkForm.updateLowStockThreshold) {
+      input.low_stock_threshold = bulkForm.lowStockThreshold === '' ? null : bulkForm.lowStockThreshold;
+    }
+
+    if (bulkForm.updateImageUrl) {
+      input.image_url = bulkForm.clearImageUrl ? '' : bulkForm.imageUrl;
+    }
+
+    if (!Object.keys(input).length) {
+      setMessage('Choose at least one bulk edit field: low stock threshold and/or image URL.');
+      return;
+    }
+
+    const summary = [];
+    if (Object.prototype.hasOwnProperty.call(input, 'low_stock_threshold')) {
+      summary.push(input.low_stock_threshold === null ? 'clear low-stock threshold' : `set low-stock threshold to ${input.low_stock_threshold}`);
+    }
+    if (Object.prototype.hasOwnProperty.call(input, 'image_url')) {
+      summary.push(input.image_url ? 'update image URL' : 'clear image URL');
+    }
+
+    const confirmed = window.confirm(`Apply bulk edit to ${selectedIds.length} blank item(s)?\n\nThis will ${summary.join(' and ')}.`);
+    if (!confirmed) return;
+
+    setBulkLoading(true);
+    setMessage('');
+    try {
+      const updated = await bulkUpdateBlankProducts(selectedIds, input);
+      setMessage(`Bulk edit complete. Updated ${updated.length || selectedIds.length} blank item(s).`);
+      setBulkForm(emptyBulkForm);
+      setSelectedIds([]);
+      await loadRows();
+    } catch (err) {
+      setMessage(err.message || 'Bulk edit failed.');
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   const select = (key, label) => (
     <label className="sc-field">
       <span>{label}</span>
@@ -119,9 +222,83 @@ export default function EditBlankItems() {
             <label className="sc-field"><span>Unit Cost</span><input type="number" step="0.01" value={form.unit_cost || ''} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></label>
             <label className="sc-field"><span>Low Stock Threshold</span><input type="number" value={form.low_stock_threshold || ''} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} /></label>
             <label className="sc-field sc-field-wide"><span>Image URL</span><input value={form.image_url || ''} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></label>
+            {form.image_url && <div className="sc-field"><span>Image Preview</span><img className="sc-thumb" src={form.image_url} alt="Blank product preview" /></div>}
             <div className="sc-form-actions"><button className="sc-btn sc-btn-primary" onClick={save} disabled={loading}>Save Blank Item</button><button className="sc-btn" onClick={() => { setSelected(null); setForm(empty); }}>Cancel</button></div>
           </div>
-        ) : <p className="sc-muted">Search below and choose an item to edit.</p>}
+        ) : <p className="sc-muted">Search below and choose an item to edit, or select multiple rows for bulk changes.</p>}
+      </section>
+
+      <section className="sc-panel">
+        <div className="sc-panel-header">
+          <div>
+            <h3>Bulk Edit Selected Blank Items</h3>
+            <p>Use this for shared low-stock thresholds or applying the same product image to several size/color variants.</p>
+          </div>
+          <div className="sc-kpi-pill">{selectedIds.length} selected</div>
+        </div>
+
+        <div className="sc-form-grid">
+          <label className="sc-field sc-checkbox-field">
+            <span>
+              <input
+                type="checkbox"
+                checked={bulkForm.updateLowStockThreshold}
+                onChange={(e) => setBulkForm({ ...bulkForm, updateLowStockThreshold: e.target.checked })}
+              />
+              Update low-stock threshold
+            </span>
+            <input
+              type="number"
+              min="0"
+              value={bulkForm.lowStockThreshold}
+              disabled={!bulkForm.updateLowStockThreshold}
+              placeholder="Leave blank to clear threshold"
+              onChange={(e) => setBulkForm({ ...bulkForm, lowStockThreshold: e.target.value })}
+            />
+          </label>
+
+          <label className="sc-field sc-field-wide sc-checkbox-field">
+            <span>
+              <input
+                type="checkbox"
+                checked={bulkForm.updateImageUrl}
+                onChange={(e) => setBulkForm({ ...bulkForm, updateImageUrl: e.target.checked })}
+              />
+              Update product image URL
+            </span>
+            <input
+              value={bulkForm.imageUrl}
+              disabled={!bulkForm.updateImageUrl || bulkForm.clearImageUrl}
+              placeholder="https://..."
+              onChange={(e) => setBulkForm({ ...bulkForm, imageUrl: e.target.value })}
+            />
+          </label>
+
+          <label className="sc-field sc-checkbox-field">
+            <span>
+              <input
+                type="checkbox"
+                checked={bulkForm.clearImageUrl}
+                disabled={!bulkForm.updateImageUrl}
+                onChange={(e) => setBulkForm({ ...bulkForm, clearImageUrl: e.target.checked })}
+              />
+              Clear existing image URL
+            </span>
+            {bulkForm.updateImageUrl && bulkForm.imageUrl && !bulkForm.clearImageUrl ? <img className="sc-thumb" src={bulkForm.imageUrl} alt="Bulk image preview" /> : <div className="sc-muted">Optional image preview appears here.</div>}
+          </label>
+        </div>
+
+        <div className="sc-form-actions">
+          <button className="sc-btn" onClick={selectVisible} disabled={!visibleRows.length || bulkLoading}>Select Visible</button>
+          <button className="sc-btn" onClick={clearSelection} disabled={!selectedIds.length || bulkLoading}>Clear Selection</button>
+          <button className="sc-btn sc-btn-primary" onClick={applyBulkEdit} disabled={!selectedIds.length || bulkLoading}>{bulkLoading ? 'Applying...' : 'Apply Bulk Edit'}</button>
+        </div>
+
+        {selectedRows.length > 0 && (
+          <p className="sc-muted">
+            Selected preview: {selectedRows.slice(0, 4).map((row) => row.sku_base || row.name).join(', ')}{selectedRows.length > 4 ? `, +${selectedRows.length - 4} more` : ''}
+          </p>
+        )}
       </section>
 
       <section className="sc-panel">
@@ -131,10 +308,27 @@ export default function EditBlankItems() {
         </div>
         <div className="sc-responsive-table-wrap">
           <table className="sc-table">
-            <thead><tr><th>SKU</th><th>Name</th><th>Brand</th><th>Style</th><th>Color</th><th>Size</th><th>Cost</th><th></th></tr></thead>
+            <thead><tr><th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible blank products" /></th><th>Image</th><th>SKU</th><th>Name</th><th>Brand</th><th>Style</th><th>Color</th><th>Size</th><th>Cost</th><th>Low Stock</th><th></th></tr></thead>
             <tbody>
-              {visibleRows.map((row) => <tr key={row.id}><td>{row.sku_base || '—'}</td><td>{row.name || '—'}</td><td>{row.brand || row.brands?.name || '—'}</td><td>{row.product_type || row.product_types?.name || '—'}</td><td>{row.color || row.colors?.name || '—'}</td><td>{row.size || row.sizes?.name || '—'}</td><td>{row.unit_cost ?? '—'}</td><td><button className="sc-btn sc-btn-small" onClick={() => startEdit(row)}>Edit</button></td></tr>)}
-              {!visibleRows.length && <tr><td colSpan="8" className="sc-empty-cell">No blank products found.</td></tr>}
+              {visibleRows.map((row) => {
+                const id = normalizeRowId(row.id);
+                return (
+                  <tr key={row.id}>
+                    <td><input type="checkbox" checked={selectedSet.has(id)} onChange={() => toggleRow(row)} aria-label={`Select ${row.sku_base || row.name || 'blank product'}`} /></td>
+                    <td>{row.image_url ? <img className="sc-thumb sc-thumb-small" src={row.image_url} alt="" /> : <span className="sc-muted">No image</span>}</td>
+                    <td>{row.sku_base || '—'}</td>
+                    <td>{row.name || '—'}</td>
+                    <td>{row.brand || row.brands?.name || '—'}</td>
+                    <td>{row.product_type || row.product_types?.name || '—'}</td>
+                    <td>{row.color || row.colors?.name || '—'}</td>
+                    <td>{row.size || row.sizes?.name || '—'}</td>
+                    <td>{formatCost(row.unit_cost)}</td>
+                    <td>{row.low_stock_threshold ?? '—'}</td>
+                    <td><button className="sc-btn sc-btn-small" onClick={() => startEdit(row)}>Edit</button></td>
+                  </tr>
+                );
+              })}
+              {!visibleRows.length && <tr><td colSpan="11" className="sc-empty-cell">No blank products found.</td></tr>}
             </tbody>
           </table>
         </div>
