@@ -787,62 +787,6 @@ export async function undoActivityFeedEntry(activity, reason = '') {
   return data || { success: true, message: 'Activity was undone.' };
 }
 
-
-function toBulkUndoTimestamp(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
-function normalizeBulkUndoOptions(options = {}) {
-  const limit = Math.max(1, Math.min(Number(options.limit || 250), 2000));
-  const jobId = options.jobId || options.pullSheetId || null;
-  const orderId = options.orderId || options.woocommerceOrderId || null;
-
-  return {
-    p_start_at: toBulkUndoTimestamp(options.startAt),
-    p_end_at: toBulkUndoTimestamp(options.endAt),
-    p_job_id: jobId ? Number(jobId) : null,
-    p_woocommerce_order_id: orderId ? Number(orderId) : null,
-    p_limit: limit,
-    p_reason: String(options.reason || '').trim() || null,
-    p_dry_run: options.dryRun !== false,
-  };
-}
-
-async function runBulkUndoActivity(options = {}) {
-  const payload = normalizeBulkUndoOptions(options);
-
-  const hasScope = payload.p_start_at || payload.p_end_at || payload.p_job_id || payload.p_woocommerce_order_id;
-  if (!hasScope) {
-    throw new Error('Choose a time range, pull sheet, or WooCommerce order before running bulk undo.');
-  }
-
-  const { data, error } = await supabase.rpc('sc_bulk_undo_activity_feed', payload);
-
-  if (error) {
-    if (/function .* does not exist|could not find/i.test(error.message || '')) {
-      throw new Error('Bulk undo SQL has not been installed yet. Run supabase_activity_feed_bulk_undo.sql in Supabase first.');
-    }
-    throw error;
-  }
-
-  if (data && data.success === false) {
-    throw new Error(data.message || 'Bulk undo could not be completed.');
-  }
-
-  return data || { success: true, items: [] };
-}
-
-export async function previewBulkUndoActivity(options = {}) {
-  return runBulkUndoActivity({ ...options, dryRun: true });
-}
-
-export async function applyBulkUndoActivity(options = {}) {
-  return runBulkUndoActivity({ ...options, dryRun: false });
-}
-
 export async function getWooSyncQueue(limit = 50) {
   const { data, error } = await supabase
     .from('woo_sync_queue')
@@ -1166,6 +1110,26 @@ export async function returnPullSheetItemToFinishedInventory({ jobItemId, binId,
 }
 
 
+function purchasingDemandSourceText(row) {
+  const sources = Array.isArray(row?.demand_sources) ? row.demand_sources : [];
+  return sources
+    .map((source) => [
+      source?.order_number,
+      source?.order_label,
+      source?.job_id,
+      source?.pullsheet_label,
+      source?.job_name,
+      source?.customer_name,
+      source?.order_sku,
+      source?.item_name,
+      source?.job_status,
+      source?.job_item_status,
+      source?.pairing_source,
+      source?.pairing_warning,
+    ].filter(Boolean).join(' '))
+    .join(' ');
+}
+
 function purchasingSearchText(row) {
   return [
     row?.sku_base,
@@ -1180,43 +1144,121 @@ function purchasingSearchText(row) {
     row?.size_code,
     row?.vendor,
     row?.supplier,
+    row?.demand_order_numbers,
+    row?.demand_pullsheet_numbers,
+    purchasingDemandSourceText(row),
   ].filter(Boolean).join(' ');
 }
 
-export async function getPurchasingShortages(search = '') {
+function normalizePurchasingDemandSourceRow(row) {
+  let sources = row?.sources || [];
+
+  if (typeof sources === 'string') {
+    try {
+      sources = JSON.parse(sources);
+    } catch (_err) {
+      sources = [];
+    }
+  }
+
+  if (!Array.isArray(sources)) sources = [];
+
+  return {
+    blank_product_id: row?.blank_product_id,
+    demand_source_count: Number(row?.source_count || 0),
+    demand_total_quantity: Number(row?.total_quantity || 0),
+    demand_order_numbers: row?.order_numbers || '',
+    demand_pullsheet_numbers: row?.pullsheet_numbers || '',
+    demand_sources: sources,
+  };
+}
+
+async function getPurchasingDemandSourceMap() {
   const { data, error } = await supabase
-    .from('purchasing_shortages')
-    .select('*')
-    .order('need_to_order', { ascending: false });
+    .from('purchasing_demand_sources_v1')
+    .select('*');
 
-  if (error) throw error;
+  if (error) {
+    // The purchasing page still works before the SQL patch is installed;
+    // order/pull sheet references simply show as unavailable.
+    console.warn('Purchasing demand source view unavailable:', error.message || error);
+    return new Map();
+  }
 
-  const rows = data || [];
+  return new Map((data || []).map((row) => {
+    const normalized = normalizePurchasingDemandSourceRow(row);
+    return [String(normalized.blank_product_id || ''), normalized];
+  }));
+}
+
+function attachPurchasingDemandSources(rows, sourceMap) {
+  return (rows || []).map((row) => {
+    const source = sourceMap.get(String(row?.blank_product_id || ''));
+    if (!source) {
+      return {
+        ...row,
+        demand_source_count: 0,
+        demand_total_quantity: 0,
+        demand_order_numbers: '',
+        demand_pullsheet_numbers: '',
+        demand_sources: [],
+      };
+    }
+
+    return {
+      ...row,
+      demand_source_count: source.demand_source_count,
+      demand_total_quantity: source.demand_total_quantity,
+      demand_order_numbers: source.demand_order_numbers,
+      demand_pullsheet_numbers: source.demand_pullsheet_numbers,
+      demand_sources: source.demand_sources,
+    };
+  });
+}
+
+export async function getPurchasingShortages(search = '') {
+  const [rowsRes, sourceMap] = await Promise.all([
+    supabase
+      .from('purchasing_shortages')
+      .select('*')
+      .order('need_to_order', { ascending: false }),
+    getPurchasingDemandSourceMap(),
+  ]);
+
+  if (rowsRes.error) throw rowsRes.error;
+
+  const rows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
 
 export async function getPurchasingLowStock(search = '') {
-  const { data, error } = await supabase
-    .from('low_stock_blank_inventory')
-    .select('*')
-    .order('reorder_quantity', { ascending: false });
+  const [rowsRes, sourceMap] = await Promise.all([
+    supabase
+      .from('low_stock_blank_inventory')
+      .select('*')
+      .order('reorder_quantity', { ascending: false }),
+    getPurchasingDemandSourceMap(),
+  ]);
 
-  if (error) throw error;
+  if (rowsRes.error) throw rowsRes.error;
 
-  const rows = data || [];
+  const rows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
 export async function getPurchasingRecommendedOrders(search = '') {
-  const { data, error } = await supabase
-    .from('purchasing_recommended_orders')
-    .select('*')
-    .order('recommended_order_quantity', { ascending: false });
+  const [rowsRes, sourceMap] = await Promise.all([
+    supabase
+      .from('purchasing_recommended_orders')
+      .select('*')
+      .order('recommended_order_quantity', { ascending: false }),
+    getPurchasingDemandSourceMap(),
+  ]);
 
-  if (error) throw error;
+  if (rowsRes.error) throw rowsRes.error;
 
-  const rows = data || [];
+  const rows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
