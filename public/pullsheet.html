@@ -1,63 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>Create Pull Sheet</title>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-
-        input, select, button {
-            padding: 10px;
-            margin: 6px 0;
-            width: 100%;
-            font-size: 16px;
-        }
-
-        .item-row {
-            padding: 10px;
-            border-bottom: 1px solid #ccc;
-            margin-bottom: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pull Sheets</title>
+  <meta http-equiv="refresh" content="0; url=/pullsheets" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 32px; line-height: 1.5; }
+    a { color: #14532d; font-weight: 700; }
+  </style>
 </head>
-
 <body>
-
-    <h2>Create Pull Sheet</h2>
-
-    <label>Customer Name</label>
-    <input id="customerName" type="text" />
-
-    <label>Job Name</label>
-    <input id="jobName" type="text" />
-
-    <label>Due Date</label>
-    <input id="dueDate" type="date" />
-
-    <label>Notes</label>
-    <input id="notes" type="text" />
-
-    <hr />
-
-    <h3>Add Items</h3>
-
-    <label>Select Product</label>
-    <select id="productSelect"></select>
-
-    <label>Quantity</label>
-    <input id="quantityInput" type="number" min="1" />
-
-    <button onclick="addItem()">Add Item</button>
-
-    <h3>Items Added</h3>
-    <div id="itemsList"></div>
-
-    <button onclick="savePullsheet()">Save Pull Sheet</button>
-
-    <script src="pullsheet.js"></script>
+  <h1>Pull Sheets moved</h1>
+  <p>The old standalone pull sheet page has been retired. Continue to the current pull sheet page:</p>
+  <p><a href="/pullsheets">Open Pull Sheets</a></p>
+  <script>window.location.replace('/pullsheets');</script>
 </body>
 </html>
