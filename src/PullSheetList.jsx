@@ -21,7 +21,20 @@ const STATUS_OPTIONS = [
   { value: 'voided', label: 'Voided' },
 ];
 
+const SORT_OPTIONS = [
+  { value: 'order_placed', label: 'Date Order Placed' },
+  { value: 'due_date', label: 'Date Order Due' },
+  { value: 'order_number', label: 'Order Number' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'status', label: 'Status' },
+];
+
 const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'canceled', 'voided', 'void']);
+
+const collator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
 
 function normalizeStatus(status) {
   return String(status || '').trim().toLowerCase().replace(/\s+/g, '_');
@@ -36,15 +49,40 @@ function statusOptionLabel(status) {
   return STATUS_OPTIONS.find((option) => option.value === normalized)?.label || pullSheetStatusLabel(status) || status || 'Open';
 }
 
+function getOrderNumber(job) {
+  return job?.woocommerce_order_id || job?.manual_order_id || job?.order_number || job?.order_id || '';
+}
+
+function getOrderPlacedDate(job) {
+  return (
+    job?.order_placed_at ||
+    job?.date_order_placed ||
+    job?.order_date ||
+    job?.woocommerce_order_date ||
+    job?.woocommerce_created_at ||
+    job?.woo_order_created_at ||
+    job?.order_created_at ||
+    job?.created_at ||
+    ''
+  );
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return String(value);
+  return date.toLocaleDateString();
+}
+
 function jobSearchText(job) {
   return [
     job.id,
     job.job_name,
-    job.woocommerce_order_id,
-    job.manual_order_id,
+    getOrderNumber(job),
     job.customer_name,
     job.status,
     job.due_date,
+    getOrderPlacedDate(job),
     job.created_at,
   ]
     .filter((part) => part !== undefined && part !== null)
@@ -57,6 +95,33 @@ function sortDate(value) {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function sortText(value) {
+  return String(value || '').trim();
+}
+
+function compareJobs(a, b, sortBy, sortDirection) {
+  let result = 0;
+
+  if (sortBy === 'order_placed') {
+    result = sortDate(getOrderPlacedDate(a)) - sortDate(getOrderPlacedDate(b));
+  } else if (sortBy === 'due_date') {
+    result = sortDate(a?.due_date) - sortDate(b?.due_date);
+  } else if (sortBy === 'order_number') {
+    result = collator.compare(sortText(getOrderNumber(a)), sortText(getOrderNumber(b)));
+  } else if (sortBy === 'customer') {
+    result = collator.compare(sortText(a?.customer_name), sortText(b?.customer_name));
+  } else if (sortBy === 'status') {
+    result = collator.compare(statusOptionLabel(a?.status), statusOptionLabel(b?.status));
+  }
+
+  if (result === 0) {
+    // Stable fallback keeps the newest pull sheets higher when sort values match.
+    result = sortDate(a?.created_at) - sortDate(b?.created_at);
+  }
+
+  return sortDirection === 'asc' ? result : -result;
+}
+
 export default function PullSheetList() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
@@ -67,6 +132,8 @@ export default function PullSheetList() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('open');
+  const [sortBy, setSortBy] = useState('order_placed');
+  const [sortDirection, setSortDirection] = useState('desc');
   const [form, setForm] = useState({
     jobName: '',
     customerName: '',
@@ -101,8 +168,8 @@ export default function PullSheetList() {
         if (term && !jobSearchText(job).includes(term)) return false;
         return true;
       })
-      .sort((a, b) => sortDate(b.created_at || b.due_date) - sortDate(a.created_at || a.due_date));
-  }, [jobs, search, statusFilter]);
+      .sort((a, b) => compareJobs(a, b, sortBy, sortDirection));
+  }, [jobs, search, statusFilter, sortBy, sortDirection]);
 
   const visibleIds = useMemo(() => visibleJobs.map((job) => job.id).filter(Boolean), [visibleJobs]);
   const selectedVisibleCount = visibleIds.filter((id) => selectedIds.includes(id)).length;
@@ -267,6 +334,21 @@ export default function PullSheetList() {
               ))}
             </select>
           </label>
+          <label>
+            Sort By
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Direction
+            <select value={sortDirection} onChange={(event) => setSortDirection(event.target.value)}>
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </label>
         </div>
 
         <div className="card" style={{ marginBottom: '1rem' }}>
@@ -303,6 +385,7 @@ export default function PullSheetList() {
                 </th>
                 <th>Job</th>
                 <th>Order</th>
+                <th>Order Placed</th>
                 <th>Customer</th>
                 <th>Status</th>
                 <th>Due</th>
@@ -321,10 +404,11 @@ export default function PullSheetList() {
                     />
                   </td>
                   <td>{job.job_name}</td>
-                  <td>{job.woocommerce_order_id || job.manual_order_id || ''}</td>
+                  <td>{getOrderNumber(job)}</td>
+                  <td>{formatDate(getOrderPlacedDate(job))}</td>
                   <td>{job.customer_name || ''}</td>
                   <td>{statusOptionLabel(job.status)}</td>
-                  <td>{job.due_date || ''}</td>
+                  <td>{formatDate(job.due_date)}</td>
                   <td><Link to={`/pullsheets/${job.id}`}>Open</Link></td>
                 </tr>
               ))}
