@@ -2062,3 +2062,86 @@ body.dark .manual-order-search-results-table {
   background: #fef3c7;
   color: #92400e;
 }
+
+/* Color Pairing Tool V2 */
+.color-variation-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.2fr) minmax(320px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.color-variation-panel {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  background: rgba(248, 250, 252, 0.72);
+  padding: 1rem;
+}
+
+.color-variation-panel label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 800;
+}
+
+.color-variation-panel input {
+  width: 100%;
+}
+
+.compact-row {
+  margin: 0.75rem 0;
+}
+
+.color-variation-results {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.color-variation-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background: #fff;
+  padding: 0.75rem;
+  cursor: pointer;
+}
+
+.color-variation-row:hover,
+.color-variation-row.selected {
+  border-color: rgba(20, 184, 166, 0.7);
+  box-shadow: 0 10px 22px rgba(20, 184, 166, 0.1);
+}
+
+.color-variation-row.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.variation-main {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.variation-main small,
+.small-note {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.button-row.compact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .color-variation-layout {
+    grid-template-columns: 1fr;
+  }
+}
