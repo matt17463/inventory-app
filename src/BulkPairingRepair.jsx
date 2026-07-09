@@ -161,7 +161,7 @@ export default function BulkPairingRepair() {
   const [result, setResult] = useState(null);
   const [applyOptions, setApplyOptions] = useState({
     clearReservations: true,
-    recreateReservations: true,
+    recreateReservations: false,
     updateSourceMapping: false,
     clearFinishedProductLink: false,
     reason: '',
@@ -598,7 +598,7 @@ export default function BulkPairingRepair() {
       <section className="panel bulk-pairing-panel bulk-pairing-apply-panel">
         <div>
           <h2>4. Apply repair</h2>
-          <p>For accurate inventory, old reservations should usually be cleared and recreated for the corrected blank.</p>
+          <p>For accurate inventory, old reservations should usually be cleared. In V5, reservation recreation is optional and defaults off to prevent UUID/bigint reservation errors from blocking the pairing repair. Run the reservation retry tool after repairing if needed.</p>
         </div>
         <div className="bulk-pairing-options">
           <label>
@@ -615,7 +615,7 @@ export default function BulkPairingRepair() {
               checked={applyOptions.recreateReservations}
               onChange={(event) => setApplyOptions((prev) => ({ ...prev, recreateReservations: event.target.checked }))}
             />
-            Recreate reservations against corrected blank when possible
+            Recreate reservations against corrected blank when possible (optional)
           </label>
           <label>
             <input
