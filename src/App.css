@@ -1868,3 +1868,30 @@ body.dark .manual-order-search-results-table {
     flex: 1;
   }
 }
+
+.inventory-linked-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--sc-muted, #64748b);
+  border: 1px solid var(--sc-border, #dbe3ee);
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: var(--sc-panel-2, #f8fafc);
+}
+
+.inventory-linked-search-toggle input {
+  width: auto;
+  min-width: auto;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 860px) {
+  .inventory-linked-search-toggle {
+    justify-content: center;
+    white-space: normal;
+  }
+}

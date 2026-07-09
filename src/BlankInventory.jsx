@@ -76,6 +76,7 @@ export default function BlankInventory() {
   const [mode, setMode] = useState('blank');
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
+  const [includeLinkedWooSearch, setIncludeLinkedWooSearch] = useState(false);
   const [message, setMessage] = useState('');
   const [expandedSkuRows, setExpandedSkuRows] = useState({});
   const [loading, setLoading] = useState(false);
@@ -102,7 +103,7 @@ export default function BlankInventory() {
     try {
       const data = nextMode === 'finished'
         ? await getFinishedProducts(search)
-        : await getBlankInventory(search);
+        : await getBlankInventory(search, { includeLinkedWooSkus: includeLinkedWooSearch });
       setRows(data || []);
       setExpandedSkuRows({});
     } catch (err) {
@@ -178,6 +179,16 @@ export default function BlankInventory() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={modeCopy.placeholder}
           />
+          {mode === 'blank' && (
+            <label className="inventory-linked-search-toggle">
+              <input
+                type="checkbox"
+                checked={includeLinkedWooSearch}
+                onChange={(event) => setIncludeLinkedWooSearch(event.target.checked)}
+              />
+              Include linked Woo SKUs in search
+            </label>
+          )}
           <button type="submit" disabled={loading}>{loading ? 'Searching...' : 'Search'}</button>
         </div>
       </form>
