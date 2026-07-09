@@ -1934,3 +1934,131 @@ body.dark .manual-order-search-results-table {
   color: var(--sc-muted, #64748b);
   font-size: .9rem;
 }
+
+/* Color Pairing Tool */
+.color-pairing-page .section-heading-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.color-pairing-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.color-pairing-tabs button {
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  background: #fff;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.color-pairing-tabs button.active {
+  background: linear-gradient(135deg, #0ea5e9, #14b8a6);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(14, 165, 233, 0.18);
+}
+
+.color-pairing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.color-pairing-search-box label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 800;
+}
+
+.color-pairing-search-box input {
+  width: 100%;
+}
+
+.color-search-results {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.color-result-card,
+.selected-color-card,
+.pairing-preview-card {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.75rem;
+  text-align: left;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.color-result-card {
+  cursor: pointer;
+}
+
+.color-result-card:hover,
+.color-result-card.selected {
+  border-color: rgba(20, 184, 166, 0.65);
+  box-shadow: 0 10px 22px rgba(20, 184, 166, 0.12);
+}
+
+.color-result-card span,
+.color-result-card small,
+.selected-color-card span,
+.selected-color-card small,
+.pairing-preview-card span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.selected-color-card {
+  margin-top: 0.5rem;
+  background: #ecfeff;
+}
+
+.pairing-preview-card {
+  margin: 1rem 0;
+  background: #f8fafc;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.alias-status-active,
+.alias-status-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.alias-status-inactive,
+.alias-status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.alias-status-not_reviewed,
+.alias-status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}

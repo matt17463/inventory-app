@@ -115,7 +115,7 @@ export const navSections = [
     icon: '🧰',
     items: [
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
-      { label: 'Color Aliases', path: '/color-aliases', keywords: 'color aliases mapping woo sync' },
+      { label: 'Color Pairings', path: '/color-pairings', keywords: 'color aliases pairings mapping canonical manufacturer colors woo sync blank products' },
       { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
       { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },
       { label: 'Bulk Pairing Repair', path: '/bulk-pairing-repair', keywords: 'bulk pairing repair pull sheet order incorrect blank product job items reservations' },

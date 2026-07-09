@@ -114,6 +114,7 @@ export default function App() {
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/woo-sync" element={<WooSync />} />
           <Route path="/color-aliases" element={<ColorAliasReview />} />
+          <Route path="/color-pairings" element={<ColorAliasReview />} />
           <Route path="/mapping-repair" element={<ProductMappingRepair />} />
           <Route path="/bulk-pairing-repair" element={<BulkPairingRepair />} />
           <Route path="/exception-center" element={<ExceptionCenter />} />
