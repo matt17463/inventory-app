@@ -1895,3 +1895,42 @@ body.dark .manual-order-search-results-table {
     white-space: normal;
   }
 }
+
+
+/* Inventory Overview toggle reliability fix */
+.inventory-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--sc-text, #102033);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  user-select: none;
+}
+
+.inventory-mode-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.inventory-mode-option.active {
+  background: var(--sc-primary, #2563eb);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .18);
+}
+
+.inventory-mode-option:focus-within {
+  outline: 2px solid rgba(37, 99, 235, .35);
+  outline-offset: 2px;
+}
+
+.inventory-current-mode-note {
+  margin: 8px 0 0;
+  color: var(--sc-muted, #64748b);
+  font-size: .9rem;
+}

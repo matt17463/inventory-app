@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBlankInventory, getFinishedProducts } from './lib/inventoryApi';
 
 function qty(value) {
@@ -80,11 +80,13 @@ export default function BlankInventory() {
   const [message, setMessage] = useState('');
   const [expandedSkuRows, setExpandedSkuRows] = useState({});
   const [loading, setLoading] = useState(false);
+  const requestSeq = useRef(0);
 
   const modeCopy = useMemo(() => {
     if (mode === 'finished') {
       return {
         title: 'Finished products',
+        tableTitle: 'Finished Products',
         description: 'Search decorated or completed products by finished SKU, customer, logo, placement, blank SKU, color, size, or bin.',
         placeholder: 'Search finished SKU, customer, logo, placement, blank SKU, color, size...'
       };
@@ -92,33 +94,48 @@ export default function BlankInventory() {
 
     return {
       title: 'Blank products',
+      tableTitle: 'Blank Products',
       description: 'Search blank products directly. Linked Woo SKUs are compacted so long product lists do not take over the page.',
-      placeholder: 'Search blank SKU, product, brand, style, color, size, linked Woo SKU, or status...'
+      placeholder: 'Search blank SKU, product, brand, style, color, size, or status...'
     };
   }, [mode]);
 
-  async function load(nextMode = mode) {
+  const load = useCallback(async ({ nextMode = mode, nextSearch = search, nextIncludeLinkedWooSearch = includeLinkedWooSearch } = {}) => {
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
+
     setMessage('');
     setLoading(true);
-    try {
-      const data = nextMode === 'finished'
-        ? await getFinishedProducts(search)
-        : await getBlankInventory(search, { includeLinkedWooSkus: includeLinkedWooSearch });
-      setRows(data || []);
-      setExpandedSkuRows({});
-    } catch (err) {
-      setMessage(err.message || 'Failed to load inventory overview.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function changeMode(nextMode) {
-    setMode(nextMode);
     setRows([]);
     setExpandedSkuRows({});
-    load(nextMode);
+
+    try {
+      const data = nextMode === 'finished'
+        ? await getFinishedProducts(nextSearch)
+        : await getBlankInventory(nextSearch, { includeLinkedWooSkus: nextIncludeLinkedWooSearch });
+
+      if (requestSeq.current !== requestId) return;
+
+      setRows(data || []);
+    } catch (err) {
+      if (requestSeq.current !== requestId) return;
+      setMessage(err.message || `Failed to load ${nextMode === 'finished' ? 'finished products' : 'blank products'}.`);
+    } finally {
+      if (requestSeq.current === requestId) {
+        setLoading(false);
+      }
+    }
+  }, [mode, search, includeLinkedWooSearch]);
+
+  function changeMode(nextMode) {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    setMessage(`Switched to ${nextMode === 'finished' ? 'Finished Products' : 'Blank Products'} search.`);
   }
+
+  useEffect(() => {
+    load({ nextMode: mode });
+  }, [mode, includeLinkedWooSearch]);
 
   function rowKey(row, index) {
     return (
@@ -136,11 +153,6 @@ export default function BlankInventory() {
     setExpandedSkuRows((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  useEffect(() => {
-    load(mode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
     <main className="page inventory-overview-page">
       <div className="inventory-overview-header card">
@@ -150,28 +162,35 @@ export default function BlankInventory() {
             Choose whether the search should look at blank products or finished products.
           </p>
         </div>
-        <div className="inventory-mode-toggle" role="group" aria-label="Inventory search mode">
-          <button
-            type="button"
-            className={mode === 'blank' ? 'active' : ''}
-            onClick={() => changeMode('blank')}
-          >
+        <div className="inventory-mode-toggle" role="radiogroup" aria-label="Inventory search mode">
+          <label className={`inventory-mode-option ${mode === 'blank' ? 'active' : ''}`}>
+            <input
+              type="radio"
+              name="inventory-search-mode"
+              value="blank"
+              checked={mode === 'blank'}
+              onChange={() => changeMode('blank')}
+            />
             Blank Products
-          </button>
-          <button
-            type="button"
-            className={mode === 'finished' ? 'active' : ''}
-            onClick={() => changeMode('finished')}
-          >
+          </label>
+          <label className={`inventory-mode-option ${mode === 'finished' ? 'active' : ''}`}>
+            <input
+              type="radio"
+              name="inventory-search-mode"
+              value="finished"
+              checked={mode === 'finished'}
+              onChange={() => changeMode('finished')}
+            />
             Finished Products
-          </button>
+          </label>
         </div>
       </div>
 
-      <form onSubmit={(event) => { event.preventDefault(); load(mode); }} className="card inventory-search-card">
+      <form onSubmit={(event) => { event.preventDefault(); load({ nextMode: mode, nextSearch: search, nextIncludeLinkedWooSearch: includeLinkedWooSearch }); }} className="card inventory-search-card">
         <div className="inventory-search-copy">
           <h2>{modeCopy.title}</h2>
           <p className="muted">{modeCopy.description}</p>
+          <p className="inventory-current-mode-note">Current search mode: <strong>{modeCopy.tableTitle}</strong></p>
         </div>
         <div className="inventory-search-controls">
           <input
@@ -194,6 +213,9 @@ export default function BlankInventory() {
       </form>
 
       {message && <p className="message">{message}</p>}
+      {loading && (
+        <p className="message">Loading {mode === 'finished' ? 'finished products' : 'blank products'}...</p>
+      )}
 
       {mode === 'blank' ? (
         <section className="card inventory-table-card">
