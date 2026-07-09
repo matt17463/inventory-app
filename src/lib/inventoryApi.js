@@ -1102,6 +1102,85 @@ export async function updatePullSheetStatuses({ jobIds, status }) {
   return data || [];
 }
 
+
+function toPairingRepairTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function normalizePairingRepairOptions(options = {}) {
+  const jobItemIds = Array.isArray(options.jobItemIds)
+    ? options.jobItemIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+    : [];
+
+  const limit = Math.max(1, Math.min(Number(options.limit || 250), 2000));
+
+  return {
+    p_search: String(options.search || '').trim() || null,
+    p_woocommerce_order_id: options.woocommerceOrderId ? Number(options.woocommerceOrderId) : null,
+    p_job_id: options.jobId ? Number(options.jobId) : null,
+    p_order_sku: String(options.orderSku || '').trim() || null,
+    p_current_blank_product_id: options.currentBlankProductId || null,
+    p_new_blank_product_id: options.newBlankProductId || null,
+    p_start_at: toPairingRepairTimestamp(options.startAt),
+    p_end_at: toPairingRepairTimestamp(options.endAt),
+    p_status: String(options.status || '').trim() || null,
+    p_job_item_ids: jobItemIds.length ? jobItemIds : null,
+    p_limit: limit,
+  };
+}
+
+export async function previewBulkPairingRepair(options = {}) {
+  const payload = normalizePairingRepairOptions(options);
+
+  const { data, error } = await supabase.rpc('sc_preview_bulk_pairing_repair', payload);
+
+  if (error) {
+    if (/function .* does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Bulk pairing repair SQL has not been installed yet. Run supabase_bulk_pairing_repair.sql in Supabase first.');
+    }
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function applyBulkPairingRepair(options = {}) {
+  const payload = {
+    ...normalizePairingRepairOptions(options),
+    p_new_blank_product_id: options.newBlankProductId || null,
+    p_clear_reservations: options.clearReservations !== false,
+    p_recreate_reservations: options.recreateReservations !== false,
+    p_update_source_mapping: Boolean(options.updateSourceMapping),
+    p_clear_finished_product_link: Boolean(options.clearFinishedProductLink),
+    p_reason: String(options.reason || '').trim() || null,
+    p_applied_by: String(options.appliedBy || '').trim() || null,
+    p_dry_run: options.dryRun !== false,
+  };
+
+  if (!payload.p_new_blank_product_id) {
+    throw new Error('Choose the correct replacement blank product.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_apply_bulk_pairing_repair', payload);
+
+  if (error) {
+    if (/function .* does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Bulk pairing repair SQL has not been installed yet. Run supabase_bulk_pairing_repair.sql in Supabase first.');
+    }
+    throw error;
+  }
+
+  if (data && data.success === false && Number(data.failed || 0) > 0 && Number(data.updated || 0) === 0) {
+    const firstError = Array.isArray(data.items) ? data.items.find((item) => item.status === 'failed') : null;
+    throw new Error(firstError?.message || data.message || 'Bulk pairing repair failed.');
+  }
+
+  return data || { success: true, updated: 0, failed: 0, items: [] };
+}
+
 export async function getPullSheetItems(jobId) {
   const { data, error } = await supabase.rpc('sc_pull_sheet_items', {
     p_job_id: Number(jobId),
