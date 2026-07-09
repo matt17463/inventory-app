@@ -1619,3 +1619,75 @@ body.dark .manual-order-search-results-table {
     grid-template-columns: 1fr;
   }
 }
+
+/* Bulk Pairing Repair blank product search results */
+.bulk-blank-search-results {
+  margin-top: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  padding: 0.85rem;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.bulk-blank-search-results-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  color: #334155;
+}
+
+.bulk-blank-result-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.65rem;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.bulk-blank-result {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.2rem 0.75rem;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.75rem;
+  cursor: pointer;
+}
+
+.bulk-blank-result:hover {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.bulk-blank-result.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.bulk-blank-result strong {
+  color: #0f172a;
+}
+
+.bulk-blank-result span {
+  grid-column: 1 / 2;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.bulk-blank-result img {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+}

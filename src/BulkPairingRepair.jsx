@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from './supabaseClient';
 import {
   applyBulkPairingRepair,
   formatBlankProductLabel,
@@ -41,6 +42,80 @@ function numberValue(value) {
 function blankLabel(blank) {
   if (!blank) return '—';
   return formatBlankProductLabel(blank) || blank.sku_base || blank.name || blank.id || 'Blank product';
+}
+
+function normalizeSearchValue(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function searchTokens(term) {
+  return String(term || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function blankSearchText(blank) {
+  return [
+    blank?.sku_base,
+    blank?.barcode,
+    blank?.name,
+    blank?.brand,
+    blank?.style,
+    blank?.color,
+    blank?.size,
+    blank?.brands?.name,
+    blank?.brands?.code,
+    blank?.product_types?.name,
+    blank?.product_types?.code,
+    blank?.colors?.name,
+    blank?.colors?.code,
+    blank?.sizes?.name,
+    blank?.sizes?.code,
+    formatBlankProductLabel(blank),
+  ].filter(Boolean).join(' ');
+}
+
+function blankMatchesTokens(blank, term) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+  const raw = blankSearchText(blank).toLowerCase();
+  const normalized = normalizeSearchValue(raw);
+  return tokens.every((token) => raw.includes(token) || normalized.includes(normalizeSearchValue(token)));
+}
+
+function normalizeBlankSearchRow(row) {
+  const item = row?.item || row?.result || row?.sc_search_blank_products_for_pairing || row || {};
+  return {
+    ...item,
+    brands: item.brands || item.brand_obj || (item.brand || item.brand_code ? { name: item.brand, code: item.brand_code } : null),
+    product_types: item.product_types || item.product_type_obj || (item.style || item.product_type || item.style_code ? { name: item.style || item.product_type, code: item.style_code } : null),
+    colors: item.colors || item.color_obj || (item.color || item.color_code ? { name: item.color, code: item.color_code } : null),
+    sizes: item.sizes || item.size_obj || (item.size || item.size_code ? { name: item.size, code: item.size_code } : null),
+  };
+}
+
+async function searchBlankProductsForPairing(term, limit = 100) {
+  const cleanTerm = String(term || '').trim();
+
+  // Preferred path: server-side token search. This searches the full blank catalog instead of
+  // loading only the first page of blanks and filtering in the browser.
+  const rpc = await supabase.rpc('sc_search_blank_products_for_pairing', {
+    p_search: cleanTerm,
+    p_limit: limit,
+  });
+
+  if (!rpc.error) {
+    return (rpc.data || []).map(normalizeBlankSearchRow).filter((row) => row.id);
+  }
+
+  // Backward-compatible fallback while the SQL patch is being installed.
+  const rows = await getBlankProducts(cleanTerm);
+  return (rows || [])
+    .map(normalizeBlankSearchRow)
+    .filter((row) => row.id && blankMatchesTokens(row, cleanTerm))
+    .slice(0, limit);
 }
 
 function candidateSearchText(row) {
@@ -95,8 +170,8 @@ export default function BulkPairingRepair() {
   async function loadBlanks(term, setter) {
     setBlankLoading(true);
     try {
-      const rows = await getBlankProducts(term);
-      setter(rows.slice(0, 250));
+      const rows = await searchBlankProductsForPairing(term, 100);
+      setter(rows);
     } catch (err) {
       setError(err.message || 'Failed to search blank products.');
     } finally {
@@ -389,7 +464,7 @@ export default function BulkPairingRepair() {
             <input
               value={blankSearch}
               onChange={(event) => setBlankSearch(event.target.value)}
-              placeholder="SKU, brand, style, color, size..."
+              placeholder="Example: under armour black one size"
             />
           </label>
           <label>
@@ -402,6 +477,35 @@ export default function BulkPairingRepair() {
             </select>
           </label>
         </div>
+
+        <div className="bulk-blank-search-results">
+          <div className="bulk-blank-search-results-head">
+            <strong>Matching blank products</strong>
+            <span>{blanks.length} result{blanks.length === 1 ? '' : 's'}</span>
+          </div>
+          {blanks.length ? (
+            <div className="bulk-blank-result-list">
+              {blanks.slice(0, 25).map((blank) => {
+                const selected = String(blank.id) === String(newBlankProductId);
+                return (
+                  <button
+                    key={blank.id}
+                    type="button"
+                    className={selected ? 'bulk-blank-result selected' : 'bulk-blank-result'}
+                    onClick={() => setNewBlankProductId(blank.id)}
+                  >
+                    <strong>{blank.sku_base || blank.name || 'Blank product'}</strong>
+                    <span>{blankLabel(blank)}</span>
+                    {blank.image_url ? <img src={blank.image_url} alt="" loading="lazy" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="muted">No matching blanks yet. Try SKU, brand, style, color, or size terms.</p>
+          )}
+        </div>
+
         {newBlank ? (
           <div className="bulk-pairing-selected-blank">
             <strong>Replacement:</strong> {blankLabel(newBlank)}
