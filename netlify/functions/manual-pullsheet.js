@@ -522,6 +522,39 @@ async function reserveInventory({ jobId, jobItemId, blankProductId, quantity }) 
   if (error) throw error;
 }
 
+async function reserveMissingPullSheetItems({ orderId, jobId }) {
+  const { data, error } = await supabase.rpc('sc_reserve_missing_pullsheet_items', {
+    p_woocommerce_order_id: Number(orderId),
+    p_job_id: Number(jobId),
+    p_limit: 500,
+  });
+
+  if (error) {
+    return {
+      created: 0,
+      alreadyPresent: 0,
+      failed: 1,
+      results: [],
+      errors: [{ error: `Reservation retry RPC failed: ${error.message}` }],
+    };
+  }
+
+  const results = Array.isArray(data) ? data : [];
+  return {
+    created: results.filter((row) => row.action === 'reserved').length,
+    alreadyPresent: results.filter((row) => row.action === 'already_reserved').length,
+    failed: results.filter((row) => row.action === 'failed').length,
+    results,
+    errors: results
+      .filter((row) => row.action === 'failed')
+      .map((row) => ({
+        sku: row.order_sku || null,
+        job_item_id: row.job_item_id || null,
+        error: row.message || 'Reservation retry failed.',
+      })),
+  };
+}
+
 async function processOrder(order) {
   const orderId = Number(order.id);
   const customerName = customerNameFromOrder(order);
@@ -535,6 +568,9 @@ async function processOrder(order) {
     items_existing: 0,
     items_updated: 0,
     reservations_created: 0,
+    reservations_already_present: 0,
+    reservation_failures: 0,
+    reservation_results: [],
     items_needing_pairing: 0,
     errors: [],
   };
@@ -613,12 +649,6 @@ async function processOrder(order) {
 
       if (jobItem.created) {
         orderResult.items_created += 1;
-        try {
-          await reserveInventory({ jobId: job.id, jobItemId: jobItem.id, blankProductId: blankProduct.id, quantity: Number(lineItem.quantity || 1) });
-          orderResult.reservations_created += 1;
-        } catch (reservationError) {
-          orderResult.errors.push({ sku, job_item_id: jobItem.id, error: `Reservation failed: ${reservationError.message}` });
-        }
       } else if (jobItem.updated) {
         orderResult.items_updated += 1;
       } else {
@@ -635,8 +665,14 @@ async function processOrder(order) {
     }
   }
 
-  if (orderResult.reservations_created > 0) {
-    await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
+  const reservationSummary = await reserveMissingPullSheetItems({ orderId, jobId: job.id });
+  orderResult.reservations_created += reservationSummary.created;
+  orderResult.reservations_already_present += reservationSummary.alreadyPresent;
+  orderResult.reservation_failures += reservationSummary.failed;
+  orderResult.reservation_results = reservationSummary.results.slice(0, 100);
+
+  if (reservationSummary.errors.length > 0) {
+    orderResult.errors.push(...reservationSummary.errors);
   }
 
   return orderResult;
@@ -645,7 +681,7 @@ async function processOrder(order) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
-      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet visible-unpaired-line-items v1.4.0 active' }) };
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet reservation-retry v1.5.0 active' }) };
     }
 
     if (event.httpMethod !== 'POST') {
@@ -676,6 +712,8 @@ exports.handler = async (event) => {
     let itemsCreated = 0;
     let itemsUpdated = 0;
     let reservationsCreated = 0;
+    let reservationsAlreadyPresent = 0;
+    let reservationFailures = 0;
     let itemsNeedingPairing = 0;
     const errors = [];
 
@@ -686,6 +724,8 @@ exports.handler = async (event) => {
       itemsCreated += result.items_created;
       itemsUpdated += result.items_updated || 0;
       reservationsCreated += result.reservations_created;
+      reservationsAlreadyPresent += result.reservations_already_present || 0;
+      reservationFailures += result.reservation_failures || 0;
       itemsNeedingPairing += result.items_needing_pairing || 0;
       if (result.errors.length > 0) errors.push(...result.errors.map((error) => ({ order_id: result.order_id, ...error })));
     }
@@ -698,6 +738,8 @@ exports.handler = async (event) => {
         items_created: itemsCreated,
         items_updated: itemsUpdated,
         reservations_created: reservationsCreated,
+        reservations_already_present: reservationsAlreadyPresent,
+        reservation_failures: reservationFailures,
         items_needing_pairing: itemsNeedingPairing,
         errors,
         results,

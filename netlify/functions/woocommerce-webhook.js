@@ -441,12 +441,46 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
   return { id: data.id, created: true, updated: false };
 }
 
+
+async function reserveMissingPullSheetItems({ orderId, jobId }) {
+  const { data, error } = await supabase.rpc('sc_reserve_missing_pullsheet_items', {
+    p_woocommerce_order_id: Number(orderId),
+    p_job_id: Number(jobId),
+    p_limit: 500,
+  });
+
+  if (error) {
+    return {
+      created: 0,
+      alreadyPresent: 0,
+      failed: 1,
+      results: [],
+      errors: [{ error: `Reservation retry RPC failed: ${error.message}` }],
+    };
+  }
+
+  const results = Array.isArray(data) ? data : [];
+  return {
+    created: results.filter((row) => row.action === 'reserved').length,
+    alreadyPresent: results.filter((row) => row.action === 'already_reserved').length,
+    failed: results.filter((row) => row.action === 'failed').length,
+    results,
+    errors: results
+      .filter((row) => row.action === 'failed')
+      .map((row) => ({
+        sku: row.order_sku || null,
+        job_item_id: row.job_item_id || null,
+        error: row.message || 'Reservation retry failed.',
+      })),
+  };
+}
+
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'WooCommerce webhook catalog-pairing zero-on-hand v1.2.0 active' }),
+        body: JSON.stringify({ success: true, message: 'WooCommerce webhook reservation-retry v1.3.0 active' }),
       };
     }
 
@@ -602,13 +636,22 @@ export const handler = async (event) => {
       }
     }
 
+    const reservationSummary = await reserveMissingPullSheetItems({ orderId, jobId: job.id });
+    if (reservationSummary.errors.length > 0) {
+      errors.push(...reservationSummary.errors);
+    }
+
     return {
-      statusCode: createdItems.length || updatedItems.length ? 200 : 400,
+      statusCode: createdItems.length || updatedItems.length || reservationSummary.created || reservationSummary.alreadyPresent ? 200 : 400,
       body: JSON.stringify({
-        success: createdItems.length > 0 || updatedItems.length > 0,
+        success: createdItems.length > 0 || updatedItems.length > 0 || reservationSummary.created > 0 || reservationSummary.alreadyPresent > 0,
         job_id: job.id,
         items_created: createdItems.length,
         items_updated: updatedItems.length,
+        reservations_created: reservationSummary.created,
+        reservations_already_present: reservationSummary.alreadyPresent,
+        reservation_failures: reservationSummary.failed,
+        reservation_results: reservationSummary.results.slice(0, 100),
         errors,
       }),
     };
