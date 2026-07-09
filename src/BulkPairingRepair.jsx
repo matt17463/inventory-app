@@ -265,7 +265,7 @@ export default function BulkPairingRepair() {
         <div className="bulk-pairing-panel-head">
           <div>
             <h2>1. Find incorrectly paired lines</h2>
-            <p>Use tight filters first: order SKU, current wrong blank, date range, or a Woo order number.</p>
+            <p>Use tight filters first: order SKU/item keywords, current wrong blank, date range, or a Woo order number. Multiple words such as <code>under black</code> match all terms, even when they are separated by hyphens or other SKU text.</p>
           </div>
           <Link className="secondary" to="/pullsheets">Back to Pull Sheets</Link>
         </div>
@@ -298,11 +298,11 @@ export default function BulkPairingRepair() {
             />
           </label>
           <label>
-            Ordered SKU contains
+            Ordered SKU / item contains
             <input
               value={filters.orderSku}
               onChange={(event) => updateFilter('orderSku', event.target.value)}
-              placeholder="BADGER-230100"
+              placeholder="under black or BADGER 230100"
             />
           </label>
           <label>
