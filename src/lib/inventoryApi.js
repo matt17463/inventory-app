@@ -382,16 +382,22 @@ function normalizeCatalogInventoryRow(row) {
   };
 }
 
-function inventoryCatalogSearchParts(row) {
-  return [
+function toInventorySearchParts(values) {
+  return values.filter(Boolean).map((part) => ({
+    text: textSearchValue(part),
+    normalized: normalizeSearchValue(part),
+  }));
+}
+
+function inventoryCatalogCoreSearchParts(row) {
+  return toInventorySearchParts([
     row.product_row_id,
     row.blank_product_id,
-    row.woo_sku,
-    row.sku,
     row.sku_base,
     row.blank_sku,
-    row.woo_product_name,
+    row.blank_sku_base,
     row.blank_product_name,
+    row.product_display_name,
     row.name,
     row.brand,
     row.product_type,
@@ -399,19 +405,40 @@ function inventoryCatalogSearchParts(row) {
     row.color,
     row.size,
     row.inventory_status,
-    row.search_text,
     row.barcode,
-    row.linked_woo_skus,
     row.supplier_skus,
     row.vendor,
     row.supplier,
-  ].filter(Boolean).map((part) => ({
-    text: textSearchValue(part),
-    normalized: normalizeSearchValue(part),
-  }));
+  ]);
 }
 
-export async function getBlankInventory(search = '') {
+function inventoryCatalogLinkedWooSearchParts(row) {
+  return toInventorySearchParts([
+    row.woo_sku,
+    row.sku,
+    row.woo_product_name,
+    row.linked_woo_skus,
+    row.search_text,
+  ]);
+}
+
+function rowMatchesInventoryTokens(row, term, { includeLinkedWooSkus = false } = {}) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const searchable = includeLinkedWooSkus
+    ? inventoryCatalogCoreSearchParts(row).concat(inventoryCatalogLinkedWooSearchParts(row))
+    : inventoryCatalogCoreSearchParts(row);
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    return searchable.some((part) =>
+      part.text.includes(token) || part.normalized.includes(normalizedToken)
+    );
+  });
+}
+
+export async function getBlankInventory(search = '', options = {}) {
   let rows = [];
   let catalogError = null;
 
@@ -455,18 +482,7 @@ export async function getBlankInventory(search = '') {
   const term = String(search || '').trim();
   if (!term) return rows;
 
-  const tokens = searchTokens(term);
-  if (!tokens.length) return rows;
-
-  return rows.filter((row) => {
-    const searchable = inventoryCatalogSearchParts(row);
-    return tokens.every((token) => {
-      const normalizedToken = normalizeSearchValue(token);
-      return searchable.some((part) =>
-        part.text.includes(token) || part.normalized.includes(normalizedToken)
-      );
-    });
-  });
+  return rows.filter((row) => rowMatchesInventoryTokens(row, term, options));
 }
 
 export async function getBinContents(binId, search = '') {
