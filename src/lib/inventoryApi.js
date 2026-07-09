@@ -2665,3 +2665,74 @@ export async function syncSupplierCatalogFeed(feedId) {
   return body;
 }
 
+
+// =========================================================
+// Color Pairing / Canonical Color Mapping Tool
+// =========================================================
+
+export async function searchColorsForPairing(search = '', limit = 50) {
+  const { data, error } = await supabase.rpc('sc_search_colors_for_pairing', {
+    p_search: search || null,
+    p_limit: Number(limit || 50),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getColorPairingSuggestions({ search = '', minScore = 55, limit = 300 } = {}) {
+  const { data, error } = await supabase.rpc('sc_suggest_color_pairings', {
+    p_search: search || null,
+    p_min_score: Number(minScore || 55),
+    p_limit: Number(limit || 300),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getColorPairingRules(status = 'active') {
+  const { data, error } = await supabase.rpc('sc_get_color_pairing_rules', {
+    p_status: status || 'active',
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveColorPairingRule({
+  sourceColorId,
+  sourceColorName,
+  canonicalColorId,
+  notes,
+  reviewedBy,
+  applyExisting = true,
+}) {
+  const { data, error } = await supabase.rpc('sc_save_color_pairing_rule', {
+    p_source_color_id_text: sourceColorId ? String(sourceColorId) : null,
+    p_source_color_name: sourceColorName || null,
+    p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
+    p_notes: notes || null,
+    p_reviewed_by: reviewedBy || null,
+    p_apply_existing: Boolean(applyExisting),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function disableColorPairingRule(ruleId) {
+  const { data, error } = await supabase.rpc('sc_disable_color_pairing_rule', {
+    p_rule_id_text: ruleId ? String(ruleId) : null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function applyColorPairingRules() {
+  const { data, error } = await supabase.rpc('sc_apply_color_pairing_rules');
+
+  if (error) throw error;
+  return data || [];
+}
