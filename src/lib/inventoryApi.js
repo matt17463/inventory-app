@@ -2680,6 +2680,16 @@ export async function searchColorsForPairing(search = '', limit = 50) {
   return data || [];
 }
 
+export async function searchColorVariationsForPairing(search = '', limit = 250) {
+  const { data, error } = await supabase.rpc('sc_search_color_variations_for_pairing', {
+    p_search: search || null,
+    p_limit: Number(limit || 250),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getColorPairingSuggestions({ search = '', minScore = 55, limit = 300 } = {}) {
   const { data, error } = await supabase.rpc('sc_suggest_color_pairings', {
     p_search: search || null,
@@ -2711,6 +2721,25 @@ export async function saveColorPairingRule({
   const { data, error } = await supabase.rpc('sc_save_color_pairing_rule', {
     p_source_color_id_text: sourceColorId ? String(sourceColorId) : null,
     p_source_color_name: sourceColorName || null,
+    p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
+    p_notes: notes || null,
+    p_reviewed_by: reviewedBy || null,
+    p_apply_existing: Boolean(applyExisting),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function saveBulkColorPairingRules({
+  sourceColorIds = [],
+  canonicalColorId,
+  notes,
+  reviewedBy,
+  applyExisting = true,
+}) {
+  const { data, error } = await supabase.rpc('sc_save_color_pairing_rules_bulk', {
+    p_source_color_ids_text: (sourceColorIds || []).map((id) => String(id)),
     p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
     p_notes: notes || null,
     p_reviewed_by: reviewedBy || null,
