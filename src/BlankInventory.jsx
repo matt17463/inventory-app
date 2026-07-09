@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { getBlankInventory } from './lib/inventoryApi';
+import { useEffect, useMemo, useState } from 'react';
+import { getBlankInventory, getFinishedProducts } from './lib/inventoryApi';
 
 function qty(value) {
   const n = Number(value ?? 0);
@@ -12,75 +12,294 @@ function statusLabel(row) {
   return qty(row.quantity_on_hand ?? row.total_quantity) > 0 ? 'in stock' : 'zero on hand';
 }
 
+function splitSkuList(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap(splitSkuList);
+  }
+
+  return String(value || '')
+    .split(/[,\n;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index);
+}
+
+function compactSku(value, max = 38) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.length <= max) return text;
+  const left = Math.max(12, Math.floor(max * 0.58));
+  const right = Math.max(8, max - left - 1);
+  return `${text.slice(0, left)}…${text.slice(-right)}`;
+}
+
+function firstValue(row, keys) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function SkuChipList({ value, expanded, onToggle, emptyLabel = 'None linked' }) {
+  const skus = splitSkuList(value);
+  if (!skus.length) return <span className="inventory-muted-inline">{emptyLabel}</span>;
+
+  const visible = expanded ? skus : skus.slice(0, 2);
+  const hiddenCount = Math.max(0, skus.length - visible.length);
+
+  return (
+    <div className="inventory-sku-list">
+      <div className="inventory-sku-chips">
+        {visible.map((sku) => (
+          <span className="inventory-sku-chip" key={sku} title={sku}>
+            {compactSku(sku)}
+          </span>
+        ))}
+      </div>
+      {skus.length > 2 && (
+        <button type="button" className="inventory-inline-button" onClick={onToggle}>
+          {expanded ? 'Show fewer' : `+${hiddenCount} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function finishedStatusLabel(row) {
+  const available = qty(firstValue(row, ['available_quantity', 'quantity_available', 'total_quantity', 'quantity_on_hand']));
+  if (available > 0) return 'in stock';
+  return 'zero on hand';
+}
+
 export default function BlankInventory() {
+  const [mode, setMode] = useState('blank');
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
+  const [expandedSkuRows, setExpandedSkuRows] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const modeCopy = useMemo(() => {
+    if (mode === 'finished') {
+      return {
+        title: 'Finished products',
+        description: 'Search decorated or completed products by finished SKU, customer, logo, placement, blank SKU, color, size, or bin.',
+        placeholder: 'Search finished SKU, customer, logo, placement, blank SKU, color, size...'
+      };
+    }
+
+    return {
+      title: 'Blank products',
+      description: 'Search blank products directly. Linked Woo SKUs are compacted so long product lists do not take over the page.',
+      placeholder: 'Search blank SKU, product, brand, style, color, size, linked Woo SKU, or status...'
+    };
+  }, [mode]);
+
+  async function load(nextMode = mode) {
     setMessage('');
+    setLoading(true);
     try {
-      setRows(await getBlankInventory(search));
+      const data = nextMode === 'finished'
+        ? await getFinishedProducts(search)
+        : await getBlankInventory(search);
+      setRows(data || []);
+      setExpandedSkuRows({});
     } catch (err) {
-      setMessage(err.message || 'Failed to load blank inventory.');
+      setMessage(err.message || 'Failed to load inventory overview.');
+    } finally {
+      setLoading(false);
     }
   }
 
+  function changeMode(nextMode) {
+    setMode(nextMode);
+    setRows([]);
+    setExpandedSkuRows({});
+    load(nextMode);
+  }
+
+  function rowKey(row, index) {
+    return (
+      row.product_row_id ||
+      row.finished_product_id ||
+      row.blank_product_id ||
+      row.id ||
+      row.sku_base ||
+      row.finished_sku ||
+      index
+    );
+  }
+
+  function toggleSkuRow(key) {
+    setExpandedSkuRows((current) => ({ ...current, [key]: !current[key] }));
+  }
+
   useEffect(() => {
-    load();
+    load(mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <main className="page">
-      <h1>Blank Inventory</h1>
-      <p className="muted">
-        This list is catalog-first: products stay visible even when the on-hand quantity is zero.
-      </p>
+    <main className="page inventory-overview-page">
+      <div className="inventory-overview-header card">
+        <div>
+          <h1>Inventory Overview</h1>
+          <p className="muted">
+            Choose whether the search should look at blank products or finished products.
+          </p>
+        </div>
+        <div className="inventory-mode-toggle" role="group" aria-label="Inventory search mode">
+          <button
+            type="button"
+            className={mode === 'blank' ? 'active' : ''}
+            onClick={() => changeMode('blank')}
+          >
+            Blank Products
+          </button>
+          <button
+            type="button"
+            className={mode === 'finished' ? 'active' : ''}
+            onClick={() => changeMode('finished')}
+          >
+            Finished Products
+          </button>
+        </div>
+      </div>
 
-      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="card">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search SKU, product, brand, style, color, size, or status..."
-        />
-        <button type="submit">Search</button>
+      <form onSubmit={(event) => { event.preventDefault(); load(mode); }} className="card inventory-search-card">
+        <div className="inventory-search-copy">
+          <h2>{modeCopy.title}</h2>
+          <p className="muted">{modeCopy.description}</p>
+        </div>
+        <div className="inventory-search-controls">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={modeCopy.placeholder}
+          />
+          <button type="submit" disabled={loading}>{loading ? 'Searching...' : 'Search'}</button>
+        </div>
       </form>
 
       {message && <p className="message">{message}</p>}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Woo SKU</th>
-            <th>Blank SKU</th>
-            <th>Name</th>
-            <th>Brand</th>
-            <th>Style</th>
-            <th>Color</th>
-            <th>Size</th>
-            <th>On Hand</th>
-            <th>Available</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.product_row_id || row.blank_product_id || row.sku_base || index}>
-              <td>{row.woo_sku || row.sku || ''}</td>
-              <td>{row.blank_sku || row.sku_base || ''}</td>
-              <td>{row.name || row.blank_product_name || row.woo_product_name || ''}</td>
-              <td>{row.brand || ''}</td>
-              <td>{row.product_type || row.style || ''}</td>
-              <td>{row.color || ''}</td>
-              <td>{row.size || ''}</td>
-              <td>{qty(row.quantity_on_hand ?? row.on_hand_quantity ?? row.total_quantity)}</td>
-              <td>{qty(row.available_quantity ?? row.quantity_on_hand ?? row.on_hand_quantity ?? row.total_quantity)}</td>
-              <td>{statusLabel(row)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {mode === 'blank' ? (
+        <section className="card inventory-table-card">
+          <div className="inventory-table-heading">
+            <h2>Blank Products</h2>
+            <span className="muted">{rows.length} result(s)</span>
+          </div>
+          <div className="inventory-overview-table-wrap">
+            <table className="inventory-overview-table">
+              <thead>
+                <tr>
+                  <th>Blank SKU</th>
+                  <th>Name</th>
+                  <th>Brand</th>
+                  <th>Style</th>
+                  <th>Color</th>
+                  <th>Size</th>
+                  <th>On Hand</th>
+                  <th>Available</th>
+                  <th>Status</th>
+                  <th>Linked Woo SKUs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => {
+                  const key = rowKey(row, index);
+                  return (
+                    <tr key={key}>
+                      <td className="inventory-primary-sku" title={row.blank_sku || row.sku_base || ''}>
+                        {compactSku(row.blank_sku || row.sku_base || '')}
+                      </td>
+                      <td>{row.name || row.blank_product_name || row.woo_product_name || ''}</td>
+                      <td>{row.brand || ''}</td>
+                      <td>{row.product_type || row.style || ''}</td>
+                      <td>{row.color || ''}</td>
+                      <td>{row.size || ''}</td>
+                      <td>{qty(row.quantity_on_hand ?? row.on_hand_quantity ?? row.total_quantity)}</td>
+                      <td>{qty(row.available_quantity ?? row.quantity_on_hand ?? row.on_hand_quantity ?? row.total_quantity)}</td>
+                      <td>{statusLabel(row)}</td>
+                      <td className="inventory-linked-skus-cell">
+                        <SkuChipList
+                          value={row.woo_sku || row.linked_woo_skus || row.woo_skus || ''}
+                          expanded={Boolean(expandedSkuRows[key])}
+                          onToggle={() => toggleSkuRow(key)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!rows.length && (
+                  <tr>
+                    <td colSpan="10" className="inventory-empty-cell">
+                      No blank products matched this search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : (
+        <section className="card inventory-table-card">
+          <div className="inventory-table-heading">
+            <h2>Finished Products</h2>
+            <span className="muted">{rows.length} result(s)</span>
+          </div>
+          <div className="inventory-overview-table-wrap">
+            <table className="inventory-overview-table">
+              <thead>
+                <tr>
+                  <th>Finished SKU</th>
+                  <th>Name</th>
+                  <th>Customer</th>
+                  <th>Logo / Placement</th>
+                  <th>Blank SKU</th>
+                  <th>Color</th>
+                  <th>Size</th>
+                  <th>On Hand</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => {
+                  const key = rowKey(row, index);
+                  const logoPlacement = [firstValue(row, ['logo', 'logo_name']), row.placement]
+                    .filter(Boolean)
+                    .join(' / ');
+                  return (
+                    <tr key={key}>
+                      <td className="inventory-primary-sku" title={row.finished_sku || row.sku || ''}>
+                        {compactSku(row.finished_sku || row.sku || '')}
+                      </td>
+                      <td>{row.finished_name || row.name || ''}</td>
+                      <td>{row.customer || row.customer_name || ''}</td>
+                      <td>{logoPlacement}</td>
+                      <td title={firstValue(row, ['blank_sku_base', 'blank_sku', 'sku_base'])}>
+                        {compactSku(firstValue(row, ['blank_sku_base', 'blank_sku', 'sku_base']))}
+                      </td>
+                      <td>{row.color || row.color_code || ''}</td>
+                      <td>{row.size || row.size_code || ''}</td>
+                      <td>{qty(firstValue(row, ['total_quantity', 'quantity_on_hand', 'on_hand_quantity']))}</td>
+                      <td>{row.inventory_status || finishedStatusLabel(row)}</td>
+                    </tr>
+                  );
+                })}
+                {!rows.length && (
+                  <tr>
+                    <td colSpan="9" className="inventory-empty-cell">
+                      No finished products matched this search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
