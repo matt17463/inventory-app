@@ -1103,9 +1103,12 @@ export async function updatePullSheetStatuses({ jobIds, status }) {
 }
 
 
-// Bulk Pairing Repair V4 inventoryApi.js replacement functions
-// Replace the existing normalizePairingRepairOptions, previewBulkPairingRepair,
-// and applyBulkPairingRepair functions in src/lib/inventoryApi.js with this block.
+// Bulk Pairing Repair V5 API functions
+// Replace these existing functions in src/lib/inventoryApi.js:
+// - toPairingRepairTimestamp
+// - normalizePairingRepairOptions
+// - previewBulkPairingRepair
+// - applyBulkPairingRepair
 
 function toPairingRepairTimestamp(value) {
   if (!value) return null;
@@ -1116,22 +1119,24 @@ function toPairingRepairTimestamp(value) {
 
 function normalizePairingRepairOptions(options = {}) {
   const jobItemIds = Array.isArray(options.jobItemIds)
-    ? options.jobItemIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+    ? options.jobItemIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
     : [];
 
   const limit = Math.max(1, Math.min(Number(options.limit || 250), 2000));
 
   return {
     p_search: String(options.search || '').trim() || null,
-    p_woocommerce_order_id: options.woocommerceOrderId ? Number(options.woocommerceOrderId) : null,
-    p_job_id: options.jobId ? Number(options.jobId) : null,
+    p_woocommerce_order_id_text: options.woocommerceOrderId ? String(options.woocommerceOrderId).trim() : null,
+    p_job_id_text: options.jobId ? String(options.jobId).trim() : null,
     p_order_sku: String(options.orderSku || '').trim() || null,
-    p_current_blank_product_id_text: options.currentBlankProductId ? String(options.currentBlankProductId) : null,
-    p_new_blank_product_id_text: options.newBlankProductId ? String(options.newBlankProductId) : null,
+    p_current_blank_product_id_text: options.currentBlankProductId ? String(options.currentBlankProductId).trim() : null,
+    p_new_blank_product_id_text: options.newBlankProductId ? String(options.newBlankProductId).trim() : null,
     p_start_at: toPairingRepairTimestamp(options.startAt),
     p_end_at: toPairingRepairTimestamp(options.endAt),
     p_status: String(options.status || '').trim() || null,
-    p_job_item_ids: jobItemIds.length ? jobItemIds : null,
+    p_job_item_ids_text: jobItemIds.length ? jobItemIds : null,
     p_limit: limit,
   };
 }
@@ -1139,11 +1144,11 @@ function normalizePairingRepairOptions(options = {}) {
 export async function previewBulkPairingRepair(options = {}) {
   const payload = normalizePairingRepairOptions(options);
 
-  const { data, error } = await supabase.rpc('sc_preview_bulk_pairing_repair_v4', payload);
+  const { data, error } = await supabase.rpc('sc_preview_bulk_pairing_repair_v5_text_ids', payload);
 
   if (error) {
     if (/function .* does not exist|could not find/i.test(error.message || '')) {
-      throw new Error('Bulk pairing repair V4 SQL has not been installed yet. Run supabase_bulk_pairing_repair_v4_uuid_text_fix.sql in Supabase first.');
+      throw new Error('Bulk pairing repair V5 SQL has not been installed yet. Run supabase_bulk_pairing_repair_v5_safe_text_ids.sql in Supabase first.');
     }
     throw error;
   }
@@ -1154,9 +1159,11 @@ export async function previewBulkPairingRepair(options = {}) {
 export async function applyBulkPairingRepair(options = {}) {
   const payload = {
     ...normalizePairingRepairOptions(options),
-    p_new_blank_product_id_text: options.newBlankProductId ? String(options.newBlankProductId) : null,
+    p_new_blank_product_id_text: options.newBlankProductId ? String(options.newBlankProductId).trim() : null,
     p_clear_reservations: options.clearReservations !== false,
-    p_recreate_reservations: options.recreateReservations !== false,
+    // Default false in V5. The pairing repair should not fail because reservation recreation has a schema/type issue.
+    // Run the reservation retry tool after the pairing repair if needed.
+    p_recreate_reservations: options.recreateReservations === true,
     p_update_source_mapping: Boolean(options.updateSourceMapping),
     p_clear_finished_product_link: Boolean(options.clearFinishedProductLink),
     p_reason: String(options.reason || '').trim() || null,
@@ -1168,11 +1175,11 @@ export async function applyBulkPairingRepair(options = {}) {
     throw new Error('Choose the correct replacement blank product.');
   }
 
-  const { data, error } = await supabase.rpc('sc_apply_bulk_pairing_repair_v4', payload);
+  const { data, error } = await supabase.rpc('sc_apply_bulk_pairing_repair_v5_text_ids', payload);
 
   if (error) {
     if (/function .* does not exist|could not find/i.test(error.message || '')) {
-      throw new Error('Bulk pairing repair V4 SQL has not been installed yet. Run supabase_bulk_pairing_repair_v4_uuid_text_fix.sql in Supabase first.');
+      throw new Error('Bulk pairing repair V5 SQL has not been installed yet. Run supabase_bulk_pairing_repair_v5_safe_text_ids.sql in Supabase first.');
     }
     throw error;
   }
