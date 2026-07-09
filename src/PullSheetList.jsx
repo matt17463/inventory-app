@@ -311,7 +311,10 @@ export default function PullSheetList() {
             <h2>Existing Pull Sheets</h2>
             <p className="muted">Bulk-close old pull sheets that were already filled without changing inventory.</p>
           </div>
-          <button type="button" className="secondary-button" onClick={load}>Refresh</button>
+          <div className="button-row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Link className="secondary-button" to="/bulk-pairing-repair">Bulk Pairing Repair</Link>
+            <button type="button" className="secondary-button" onClick={load}>Refresh</button>
+          </div>
         </div>
 
         <div className="form-grid" style={{ marginBottom: '1rem' }}>

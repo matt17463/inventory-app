@@ -1478,3 +1478,144 @@ body.dark .manual-order-search-results-table {
   height: 44px;
   border-radius: 0.5rem;
 }
+
+/* Bulk Pairing Repair */
+.bulk-pairing-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.bulk-pairing-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.bulk-pairing-stats {
+  min-width: 150px;
+  padding: 1rem;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.06);
+  text-align: center;
+}
+
+.bulk-pairing-stats strong {
+  display: block;
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.bulk-pairing-stats span,
+.bulk-pairing-stats small {
+  display: block;
+  color: var(--muted, #64748b);
+}
+
+.bulk-pairing-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.bulk-pairing-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.bulk-pairing-panel-head h2 {
+  margin-bottom: 0.25rem;
+}
+
+.bulk-pairing-panel-head p {
+  margin: 0;
+  color: var(--muted, #64748b);
+}
+
+.bulk-pairing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.85rem;
+  align-items: end;
+}
+
+.bulk-pairing-grid-narrow {
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 2fr);
+}
+
+.bulk-pairing-actions,
+.bulk-pairing-actions-inline {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bulk-pairing-selected-blank {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.25);
+}
+
+.bulk-pairing-summary-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--muted, #64748b);
+}
+
+.bulk-pairing-summary-row span {
+  display: inline-flex;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.bulk-pairing-table td small {
+  display: block;
+  color: var(--muted, #64748b);
+  margin-top: 0.25rem;
+}
+
+.bulk-pairing-options {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.bulk-pairing-options label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.bulk-pairing-options .bulk-pairing-reason {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.bulk-pairing-result-box {
+  max-height: 320px;
+  overflow: auto;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+}
+
+.warning-text {
+  color: #b45309 !important;
+}
+
+@media (max-width: 760px) {
+  .bulk-pairing-hero,
+  .bulk-pairing-panel-head {
+    display: grid;
+  }
+
+  .bulk-pairing-grid-narrow {
+    grid-template-columns: 1fr;
+  }
+}
