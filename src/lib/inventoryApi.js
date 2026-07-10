@@ -332,6 +332,56 @@ export async function getBlankProducts(search = '') {
   return rows.filter((product) => productMatchesAllTokens(product, term));
 }
 
+
+export async function searchBlankInventoryForSpoilage(search = '', limit = 200) {
+  const term = String(search || '').trim();
+  const cappedLimit = Math.max(25, Math.min(Number(limit || 200), 500));
+
+  const { data, error } = await supabase.rpc('sc_search_spoilage_blank_items', {
+    p_search: term || null,
+    p_limit: cappedLimit,
+  });
+
+  if (!error && Array.isArray(data)) {
+    return data.map((row) => ({
+      ...row,
+      id: row.blank_product_id || row.id,
+      blank_product_id: row.blank_product_id || row.id,
+      sku_base: row.sku_base || row.blank_sku || row.sku || '',
+      name: row.name || row.blank_product_name || '',
+      brand: row.brand || row.brand_name || '',
+      style: row.style || row.product_type || row.product_type_name || '',
+      color: row.color || row.color_name || '',
+      size: row.size || row.size_name || row.size_code || '',
+      barcode: row.barcode || '',
+      on_hand_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0),
+      available_quantity: Number(row.available_quantity ?? row.on_hand_quantity ?? 0),
+      reserved_quantity: Number(row.reserved_quantity ?? 0),
+      inventory_status: row.inventory_status || (Number(row.on_hand_quantity || 0) > 0 ? 'in_stock' : 'zero_on_hand'),
+      brands: row.brands || (row.brand ? { name: row.brand } : undefined),
+      product_types: row.product_types || (row.style ? { name: row.style } : undefined),
+      colors: row.colors || (row.color ? { name: row.color } : undefined),
+      sizes: row.sizes || (row.size ? { name: row.size } : undefined),
+    }));
+  }
+
+  // Fallback for deployments where the SQL patch has not been installed yet.
+  // This still searches the blank catalog, but it may not be limited to in-stock rows.
+  const fallback = await getBlankProducts(term);
+  return fallback.slice(0, cappedLimit).map((row) => ({
+    ...row,
+    id: row.id || row.blank_product_id,
+    blank_product_id: row.blank_product_id || row.id,
+    brand: row.brand || row.brands?.name || row.brands?.code || '',
+    style: row.style || row.product_types?.name || row.product_types?.code || '',
+    color: row.color || row.colors?.name || row.colors?.code || '',
+    size: row.size || row.sizes?.name || row.sizes?.code || '',
+    on_hand_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0),
+    available_quantity: Number(row.available_quantity ?? row.on_hand_quantity ?? 0),
+    inventory_status: row.inventory_status || 'catalog_match',
+  }));
+}
+
 export async function findBlankProductsByScannedValue(value) {
   const term = String(value || '').trim();
   if (!term) return [];
