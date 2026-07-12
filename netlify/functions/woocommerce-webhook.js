@@ -274,6 +274,29 @@ async function findProductByParentAndSelectedAttributes(lineItem) {
   return null;
 }
 
+
+async function findNonInventoryRuleForLineItem(rawLineItem) {
+  const lineItem = enrichedLineItem(rawLineItem);
+  try {
+    const { data, error } = await supabase.rpc('sc_find_non_inventory_rule_for_line', {
+      p_sku: normalizeSku(lineItem.sku) || null,
+      p_woo_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
+      p_woo_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
+      p_product_name: clean(lineItem.name) || null,
+    });
+
+    if (error) {
+      console.warn('Non-inventory rule lookup failed:', error.message);
+      return null;
+    }
+
+    return Array.isArray(data) && data.length ? data[0] : null;
+  } catch (err) {
+    console.warn('Non-inventory rule lookup unavailable:', err.message);
+    return null;
+  }
+}
+
 async function findBlankProductForLineItem(rawLineItem) {
   const lineItem = enrichedLineItem(rawLineItem);
   const sku = normalizeSku(lineItem.sku);
@@ -393,7 +416,7 @@ function stripEmpty(payload) {
   return cleaned;
 }
 
-async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProductId, logoId, parsed, pairingSource, pairingWarning }) {
+async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProductId, logoId, parsed, pairingSource, pairingWarning, inventoryRequired = true, nonInventoryReason = null, nonInventoryRuleId = null }) {
   const lineItem = enrichedLineItem(item);
   const sku = normalizeSku(lineItem.sku);
   const lineItemId = getLineItemId(lineItem);
@@ -421,6 +444,10 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
     decoration_size: parsed?.decorationSize || null,
     pairing_source: pairingSource || null,
     pairing_warning: pairingWarning || null,
+    inventory_required: inventoryRequired !== false,
+    non_inventory_reason: nonInventoryReason || null,
+    non_inventory_rule_id: nonInventoryRuleId || null,
+    non_inventory_marked_at: inventoryRequired === false ? new Date().toISOString() : null,
     notes: pairingWarning ? `Needs review: ${lineItem.name || sku}` : lineItem.name,
   });
 
@@ -441,46 +468,12 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
   return { id: data.id, created: true, updated: false };
 }
 
-
-async function reserveMissingPullSheetItems({ orderId, jobId }) {
-  const { data, error } = await supabase.rpc('sc_reserve_missing_pullsheet_items', {
-    p_woocommerce_order_id: Number(orderId),
-    p_job_id: Number(jobId),
-    p_limit: 500,
-  });
-
-  if (error) {
-    return {
-      created: 0,
-      alreadyPresent: 0,
-      failed: 1,
-      results: [],
-      errors: [{ error: `Reservation retry RPC failed: ${error.message}` }],
-    };
-  }
-
-  const results = Array.isArray(data) ? data : [];
-  return {
-    created: results.filter((row) => row.action === 'reserved').length,
-    alreadyPresent: results.filter((row) => row.action === 'already_reserved').length,
-    failed: results.filter((row) => row.action === 'failed').length,
-    results,
-    errors: results
-      .filter((row) => row.action === 'failed')
-      .map((row) => ({
-        sku: row.order_sku || null,
-        job_item_id: row.job_item_id || null,
-        error: row.message || 'Reservation retry failed.',
-      })),
-  };
-}
-
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'WooCommerce webhook reservation-retry v1.3.0 active' }),
+        body: JSON.stringify({ success: true, message: 'WooCommerce webhook non-inventory-rules v1.3.0 active' }),
       };
     }
 
@@ -577,6 +570,29 @@ export const handler = async (event) => {
       }
 
       try {
+        const nonInventoryRule = await findNonInventoryRuleForLineItem(lineItem);
+        if (nonInventoryRule?.rule_id) {
+          const parsed = parseOrderSku(sku);
+          const reason = nonInventoryRule.reason || 'No inventory tracking required for this WooCommerce item.';
+          const jobItem = await createOrUpdateJobItem({
+            jobId: job.id,
+            item: lineItem,
+            blankProductId: null,
+            finishedProductId: null,
+            logoId: null,
+            parsed,
+            pairingSource: 'non_inventory_rule',
+            pairingWarning: reason,
+            inventoryRequired: false,
+            nonInventoryReason: reason,
+            nonInventoryRuleId: nonInventoryRule.rule_id,
+          });
+
+          if (jobItem.created) createdItems.push(jobItem.id);
+          if (jobItem.updated) updatedItems.push(jobItem.id);
+          continue;
+        }
+
         const lookup = await findBlankProductForLineItem(lineItem);
         const blankProduct = lookup.blankProduct;
         const parsed = lookup.parsed || parseOrderSku(sku);
@@ -636,22 +652,13 @@ export const handler = async (event) => {
       }
     }
 
-    const reservationSummary = await reserveMissingPullSheetItems({ orderId, jobId: job.id });
-    if (reservationSummary.errors.length > 0) {
-      errors.push(...reservationSummary.errors);
-    }
-
     return {
-      statusCode: createdItems.length || updatedItems.length || reservationSummary.created || reservationSummary.alreadyPresent ? 200 : 400,
+      statusCode: createdItems.length || updatedItems.length ? 200 : 400,
       body: JSON.stringify({
-        success: createdItems.length > 0 || updatedItems.length > 0 || reservationSummary.created > 0 || reservationSummary.alreadyPresent > 0,
+        success: createdItems.length > 0 || updatedItems.length > 0,
         job_id: job.id,
         items_created: createdItems.length,
         items_updated: updatedItems.length,
-        reservations_created: reservationSummary.created,
-        reservations_already_present: reservationSummary.alreadyPresent,
-        reservation_failures: reservationSummary.failed,
-        reservation_results: reservationSummary.results.slice(0, 100),
         errors,
       }),
     };

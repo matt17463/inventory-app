@@ -285,6 +285,29 @@ async function findProductByParentAndSelectedAttributes(lineItem) {
  * 6. Parent product mapping only as a warning/fallback
  * 7. SKU parser fallback
  */
+
+async function findNonInventoryRuleForLineItem(rawLineItem) {
+  const lineItem = enrichedLineItem(rawLineItem);
+  try {
+    const { data, error } = await supabase.rpc('sc_find_non_inventory_rule_for_line', {
+      p_sku: normalizeSku(lineItem.sku) || null,
+      p_woo_product_id: lineItem.product_id ? Number(lineItem.product_id) : null,
+      p_woo_variation_id: lineItem.variation_id ? Number(lineItem.variation_id) : null,
+      p_product_name: clean(lineItem.name) || null,
+    });
+
+    if (error) {
+      console.warn('Non-inventory rule lookup failed:', error.message);
+      return null;
+    }
+
+    return Array.isArray(data) && data.length ? data[0] : null;
+  } catch (err) {
+    console.warn('Non-inventory rule lookup unavailable:', err.message);
+    return null;
+  }
+}
+
 async function findBlankProductForLineItem(rawLineItem) {
   const lineItem = enrichedLineItem(rawLineItem);
   const sku = normalizeSku(lineItem.sku);
@@ -449,7 +472,7 @@ async function existingJobItem(jobId, lineItemId, sku) {
   return data || null;
 }
 
-async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProductId, logoId, parsed, site, placement, decorationSize, lookupSource, pairingWarning }) {
+async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProductId, logoId, parsed, site, placement, decorationSize, lookupSource, pairingWarning, inventoryRequired = true, nonInventoryReason = null, nonInventoryRuleId = null }) {
   const lineItem = enrichedLineItem(rawLineItem);
   const lineItemId = lineItem.line_item_id || lineItem.id || null;
   const sku = normalizeSku(lineItem.sku);
@@ -470,6 +493,10 @@ async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProdu
     selected_attributes: Array.isArray(lineItem.selected_attributes) ? lineItem.selected_attributes : [],
     pairing_source: lookupSource || null,
     pairing_warning: pairingWarning || null,
+    inventory_required: inventoryRequired !== false,
+    non_inventory_reason: nonInventoryReason || null,
+    non_inventory_rule_id: nonInventoryRuleId || null,
+    non_inventory_marked_at: inventoryRequired === false ? new Date().toISOString() : null,
     logo_id: logoId || null,
     site: clean(site) || null,
     placement: clean(placement) || null,
@@ -522,39 +549,6 @@ async function reserveInventory({ jobId, jobItemId, blankProductId, quantity }) 
   if (error) throw error;
 }
 
-async function reserveMissingPullSheetItems({ orderId, jobId }) {
-  const { data, error } = await supabase.rpc('sc_reserve_missing_pullsheet_items', {
-    p_woocommerce_order_id: Number(orderId),
-    p_job_id: Number(jobId),
-    p_limit: 500,
-  });
-
-  if (error) {
-    return {
-      created: 0,
-      alreadyPresent: 0,
-      failed: 1,
-      results: [],
-      errors: [{ error: `Reservation retry RPC failed: ${error.message}` }],
-    };
-  }
-
-  const results = Array.isArray(data) ? data : [];
-  return {
-    created: results.filter((row) => row.action === 'reserved').length,
-    alreadyPresent: results.filter((row) => row.action === 'already_reserved').length,
-    failed: results.filter((row) => row.action === 'failed').length,
-    results,
-    errors: results
-      .filter((row) => row.action === 'failed')
-      .map((row) => ({
-        sku: row.order_sku || null,
-        job_item_id: row.job_item_id || null,
-        error: row.message || 'Reservation retry failed.',
-      })),
-  };
-}
-
 async function processOrder(order) {
   const orderId = Number(order.id);
   const customerName = customerNameFromOrder(order);
@@ -568,9 +562,6 @@ async function processOrder(order) {
     items_existing: 0,
     items_updated: 0,
     reservations_created: 0,
-    reservations_already_present: 0,
-    reservation_failures: 0,
-    reservation_results: [],
     items_needing_pairing: 0,
     errors: [],
   };
@@ -583,6 +574,37 @@ async function processOrder(order) {
       const sku = normalizeSku(lineItem.sku);
       if (!sku) {
         orderResult.errors.push({ line_item_id: lineItem.line_item_id || lineItem.id || null, name: lineItem.name, error: 'Line item has no SKU.' });
+        continue;
+      }
+
+      const nonInventoryRule = await findNonInventoryRuleForLineItem(lineItem);
+      if (nonInventoryRule?.rule_id) {
+        const parsed = parseOrderSku(sku);
+        const site = getLineItemMeta(lineItem, ['site', 'school', 'location', 'store', 'department']) || parsed.logoName;
+        const placement = getLineItemMeta(lineItem, ['logo placement', 'placement', 'print location', 'decoration location', 'location']) || parsed.placement;
+        const decorationSize = getLineItemMeta(lineItem, ['decoration size', 'logo size', 'size']) || parsed.decorationSize;
+        const reason = nonInventoryRule.reason || 'No inventory tracking required for this WooCommerce item.';
+
+        const jobItem = await createJobItem({
+          jobId: job.id,
+          rawLineItem: lineItem,
+          blankProductId: null,
+          finishedProductId: null,
+          logoId: null,
+          parsed,
+          site,
+          placement,
+          decorationSize,
+          lookupSource: 'non_inventory_rule',
+          pairingWarning: reason,
+          inventoryRequired: false,
+          nonInventoryReason: reason,
+          nonInventoryRuleId: nonInventoryRule.rule_id,
+        });
+
+        if (jobItem.created) orderResult.items_created += 1;
+        else if (jobItem.updated) orderResult.items_updated += 1;
+        else orderResult.items_existing += 1;
         continue;
       }
 
@@ -649,6 +671,12 @@ async function processOrder(order) {
 
       if (jobItem.created) {
         orderResult.items_created += 1;
+        try {
+          await reserveInventory({ jobId: job.id, jobItemId: jobItem.id, blankProductId: blankProduct.id, quantity: Number(lineItem.quantity || 1) });
+          orderResult.reservations_created += 1;
+        } catch (reservationError) {
+          orderResult.errors.push({ sku, job_item_id: jobItem.id, error: `Reservation failed: ${reservationError.message}` });
+        }
       } else if (jobItem.updated) {
         orderResult.items_updated += 1;
       } else {
@@ -665,14 +693,8 @@ async function processOrder(order) {
     }
   }
 
-  const reservationSummary = await reserveMissingPullSheetItems({ orderId, jobId: job.id });
-  orderResult.reservations_created += reservationSummary.created;
-  orderResult.reservations_already_present += reservationSummary.alreadyPresent;
-  orderResult.reservation_failures += reservationSummary.failed;
-  orderResult.reservation_results = reservationSummary.results.slice(0, 100);
-
-  if (reservationSummary.errors.length > 0) {
-    orderResult.errors.push(...reservationSummary.errors);
+  if (orderResult.reservations_created > 0) {
+    await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
   }
 
   return orderResult;
@@ -681,7 +703,7 @@ async function processOrder(order) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
-      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet reservation-retry v1.5.0 active' }) };
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet non-inventory-rules v1.5.0 active' }) };
     }
 
     if (event.httpMethod !== 'POST') {
@@ -712,8 +734,6 @@ exports.handler = async (event) => {
     let itemsCreated = 0;
     let itemsUpdated = 0;
     let reservationsCreated = 0;
-    let reservationsAlreadyPresent = 0;
-    let reservationFailures = 0;
     let itemsNeedingPairing = 0;
     const errors = [];
 
@@ -724,8 +744,6 @@ exports.handler = async (event) => {
       itemsCreated += result.items_created;
       itemsUpdated += result.items_updated || 0;
       reservationsCreated += result.reservations_created;
-      reservationsAlreadyPresent += result.reservations_already_present || 0;
-      reservationFailures += result.reservation_failures || 0;
       itemsNeedingPairing += result.items_needing_pairing || 0;
       if (result.errors.length > 0) errors.push(...result.errors.map((error) => ({ order_id: result.order_id, ...error })));
     }
@@ -738,8 +756,6 @@ exports.handler = async (event) => {
         items_created: itemsCreated,
         items_updated: itemsUpdated,
         reservations_created: reservationsCreated,
-        reservations_already_present: reservationsAlreadyPresent,
-        reservation_failures: reservationFailures,
         items_needing_pairing: itemsNeedingPairing,
         errors,
         results,
