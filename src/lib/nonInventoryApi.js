@@ -1,4 +1,3 @@
-
 import { supabase } from '../supabaseClient';
 
 export const NON_INVENTORY_RULE_TYPES = [
@@ -11,38 +10,76 @@ export const NON_INVENTORY_RULE_TYPES = [
   { value: 'product_name_contains', label: 'Product name contains' },
 ];
 
+function buildSupabaseErrorMessage(error, fallback = 'Supabase request failed.') {
+  if (!error) return fallback;
+  const parts = [error.message, error.details, error.hint, error.code].filter(Boolean);
+  return parts.length ? parts.join(' | ') : fallback;
+}
+
+function normalizeRuleRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    id: row.id == null ? null : Number(row.id),
+    priority: row.priority == null ? 100 : Number(row.priority),
+    is_active: row.is_active !== false,
+  };
+}
+
+function normalizeRulePayload(rule = {}) {
+  const ruleType = rule.rule_type || 'exact_sku';
+  const matchValue = String(rule.match_value || '').trim();
+  const label = String(rule.label || '').trim();
+  const reason = String(rule.reason || '').trim() || 'No inventory tracking required for this WooCommerce item.';
+  const priorityValue = Number(rule.priority);
+
+  if (!matchValue) {
+    throw new Error('Enter a match value before saving the rule.');
+  }
+
+  if ((ruleType === 'woo_product_id' || ruleType === 'woo_variation_id') && !/^\d+$/.test(matchValue)) {
+    throw new Error(`${ruleType === 'woo_product_id' ? 'Woo product ID' : 'Woo variation ID'} rules require a numeric WooCommerce ID.`);
+  }
+
+  return {
+    p_rule_id_text: rule.id ? String(rule.id) : null,
+    p_rule_type: ruleType,
+    p_match_value: matchValue,
+    p_label: label || null,
+    p_reason: reason,
+    p_priority: Number.isFinite(priorityValue) ? priorityValue : 100,
+    p_is_active: rule.is_active !== false,
+  };
+}
+
 export async function listNonInventoryRules() {
-  const { data, error } = await supabase
-    .from('sc_non_inventory_product_rules')
-    .select('*')
-    .order('is_active', { ascending: false })
-    .order('priority', { ascending: true })
-    .order('id', { ascending: false });
-  if (error) throw error;
-  return data || [];
+  const { data, error } = await supabase.rpc('sc_list_non_inventory_product_rules_v2');
+  if (error) {
+    throw new Error(buildSupabaseErrorMessage(error, 'Could not load non-inventory rules. Make sure supabase_non_inventory_rules_save_fix_v2.sql has been run.'));
+  }
+  return (data || []).map(normalizeRuleRow).filter(Boolean);
 }
 
 export async function saveNonInventoryRule(rule) {
-  const { data, error } = await supabase.rpc('sc_upsert_non_inventory_product_rule', {
-    p_rule_id: rule.id || null,
-    p_rule_type: rule.rule_type || 'exact_sku',
-    p_match_value: rule.match_value || '',
-    p_label: rule.label || null,
-    p_reason: rule.reason || 'No inventory tracking required for this WooCommerce item.',
-    p_priority: Number(rule.priority || 100),
-    p_is_active: rule.is_active !== false,
-  });
-  if (error) throw error;
-  return data;
+  const payload = normalizeRulePayload(rule);
+  const { data, error } = await supabase.rpc('sc_save_non_inventory_product_rule_v2', payload);
+  if (error) {
+    throw new Error(buildSupabaseErrorMessage(error, 'Could not save non-inventory rule. Make sure supabase_non_inventory_rules_save_fix_v2.sql has been run.'));
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return normalizeRuleRow(row);
 }
 
 export async function setNonInventoryRuleActive(ruleId, isActive) {
-  const { data, error } = await supabase.rpc('sc_set_non_inventory_rule_active', {
-    p_rule_id: Number(ruleId),
+  const { data, error } = await supabase.rpc('sc_set_non_inventory_rule_active_v2', {
+    p_rule_id_text: String(ruleId),
     p_is_active: Boolean(isActive),
   });
-  if (error) throw error;
-  return data;
+  if (error) {
+    throw new Error(buildSupabaseErrorMessage(error, 'Could not update non-inventory rule.'));
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return normalizeRuleRow(row);
 }
 
 export async function findNonInventoryRuleForLine({ sku, wooProductId, wooVariationId, productName }) {
@@ -52,7 +89,7 @@ export async function findNonInventoryRuleForLine({ sku, wooProductId, wooVariat
     p_woo_variation_id: wooVariationId ? Number(wooVariationId) : null,
     p_product_name: productName || null,
   });
-  if (error) throw error;
+  if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not check non-inventory rules.'));
   return Array.isArray(data) ? data[0] || null : data || null;
 }
 
@@ -64,7 +101,7 @@ export async function markJobItemNonInventory({ jobItemId, reason, createFutureR
     p_rule_type: ruleType || 'exact_sku',
     p_rule_match_value: ruleMatchValue || null,
   });
-  if (error) throw error;
+  if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not mark pull sheet line as non-inventory.'));
   return data;
 }
 
@@ -72,7 +109,7 @@ export async function applyNonInventoryRulesToJob(jobId) {
   const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_job', {
     p_job_id: Number(jobId),
   });
-  if (error) throw error;
+  if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not apply rules to this pull sheet.'));
   return data || [];
 }
 
@@ -80,6 +117,6 @@ export async function applyNonInventoryRulesToOpenJobs(limit = 500) {
   const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_open_jobs', {
     p_limit: Number(limit || 500),
   });
-  if (error) throw error;
+  if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not apply rules to open pull sheets.'));
   return data || [];
 }
