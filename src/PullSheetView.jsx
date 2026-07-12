@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { PageHeader, HelpPanel, SectionCard, StatusBadge, ActionButton, EmptyState } from './components/UIPrimitives';
+import { applyNonInventoryRulesToJob, markJobItemNonInventory } from './lib/nonInventoryApi';
 
 function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
@@ -36,6 +37,10 @@ function isClosedLine(row) {
   return /complete|void|cancel|deduct/.test(rowStatus(row));
 }
 
+function isNonInventoryLine(row) {
+  return row.inventory_required === false || row.inventory_required === 'false' || row.pairing_status === 'non_inventory' || row.inventory_status === 'non_inventory';
+}
+
 function binDisplayName(bin) {
   const qty = value(bin.quantity_on_hand, bin.on_hand_quantity, bin.total_quantity, bin.quantity, bin.available_quantity, 0);
   return [
@@ -65,7 +70,10 @@ function normalizeCatalogPullSheetRows(rows = []) {
     blank_sku: row.blank_sku || row.blank_sku_base || row.paired_blank_sku_base,
     blank_color: row.blank_color || row.color,
     blank_size: row.blank_size || row.size,
-    pairing_status: row.pairing_status || (row.blank_product_id ? 'paired' : 'needs_blank_pairing'),
+    inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
+    non_inventory_reason: row.non_inventory_reason || '',
+    non_inventory_rule_id: row.non_inventory_rule_id || null,
+    pairing_status: row.pairing_status || (row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing')),
   }));
 }
 
@@ -95,7 +103,10 @@ function normalizeFallbackPullSheetRows(rows = []) {
       blank_sku: row.blank_sku || row.blank_sku_base || row.paired_blank_sku_base,
       blank_color: row.blank_color || row.color,
       blank_size: row.blank_size || row.size,
-      pairing_status: row.pairing_status || (row.blank_product_id ? 'paired' : 'needs_blank_pairing'),
+      inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
+    non_inventory_reason: row.non_inventory_reason || '',
+    non_inventory_rule_id: row.non_inventory_rule_id || null,
+    pairing_status: row.pairing_status || (row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing')),
     }));
 }
 
@@ -142,6 +153,10 @@ export default function PullSheetView() {
         selected_bin_id,
         notes,
         artwork_note,
+        inventory_required,
+        non_inventory_reason,
+        non_inventory_rule_id,
+        non_inventory_marked_at,
         placement,
         decoration_size,
         blank_products:blank_product_id(
@@ -179,7 +194,10 @@ export default function PullSheetView() {
         blank_style: bp.product_types?.name || bp.product_types?.code,
         blank_color: bp.colors?.name || bp.colors?.code,
         blank_size: bp.sizes?.name || bp.sizes?.code,
-        pairing_status: row.blank_product_id ? 'paired' : 'needs_blank_pairing',
+        inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
+        non_inventory_reason: row.non_inventory_reason || '',
+        non_inventory_rule_id: row.non_inventory_rule_id || null,
+        pairing_status: row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing'),
       };
     });
   }
@@ -402,6 +420,49 @@ export default function PullSheetView() {
     await load();
   }
 
+
+  async function applyNonInventoryRulesForJob() {
+    if (!resolvedJobId) return;
+    setBulkMessage('');
+    const confirmed = window.confirm('Apply active non-inventory rules to this pull sheet? Matching lines will no longer require blank pairing or reservation.');
+    if (!confirmed) return;
+    try {
+      const rows = await applyNonInventoryRulesToJob(Number(resolvedJobId));
+      setBulkMessage(`Applied non-inventory rules to ${rows.length} line${rows.length === 1 ? '' : 's'}.`);
+      await load();
+    } catch (err) {
+      setBulkMessage(err.message || 'Could not apply non-inventory rules to this pull sheet.');
+    }
+  }
+
+  async function markLineNonInventory(row, idx) {
+    const key = rowKey(row, idx);
+    const jobItemId = pickJobItemId(row);
+    if (!jobItemId) {
+      setLineMessages((messages) => ({ ...messages, [key]: 'This line is missing a job item ID.' }));
+      return;
+    }
+
+    const reason = window.prompt('Reason to show on the pull sheet:', row.non_inventory_reason || 'No inventory tracking required for this WooCommerce item.');
+    if (reason === null) return;
+
+    const createFutureRule = window.confirm('Create a rule so future orders for this SKU are automatically treated as non-inventory?');
+
+    try {
+      await markJobItemNonInventory({
+        jobItemId,
+        reason: reason || 'No inventory tracking required for this WooCommerce item.',
+        createFutureRule,
+        ruleType: 'exact_sku',
+        ruleMatchValue: value(row.ordered_sku, row.order_sku, row.sku, '') === '—' ? '' : value(row.ordered_sku, row.order_sku, row.sku, ''),
+      });
+      setLineMessages((messages) => ({ ...messages, [key]: 'Marked as non-inventory. This line no longer needs a blank or reservation.' }));
+      await load();
+    } catch (err) {
+      setLineMessages((messages) => ({ ...messages, [key]: err.message || 'Could not mark line as non-inventory.' }));
+    }
+  }
+
   async function updateJobStatus(nextStatus) {
     if (!resolvedJobId) return;
 
@@ -438,6 +499,7 @@ export default function PullSheetView() {
   const jobActions = (
     <div className="sc-button-row">
       <ActionButton tone="secondary" onClick={load}>Refresh</ActionButton>
+      <ActionButton tone="secondary" disabled={!items.length} onClick={applyNonInventoryRulesForJob}>Apply Non-Inventory Rules</ActionButton>
       <ActionButton tone="primary" disabled={completingAll || !items.length} onClick={completeAllAndDeduct}>
         {completingAll ? 'Completing all…' : 'Complete All + Deduct Blanks'}
       </ActionButton>
@@ -494,6 +556,8 @@ export default function PullSheetView() {
             ? 'This blank is linked, but no on-hand inventory is currently in bins. Keep it on the pull sheet, receive inventory when it arrives, then deduct from a bin.'
             : '';
           const isCompleting = completingLine === key;
+          const nonInventory = isNonInventoryLine(row);
+          const lineStatusLabel = nonInventory ? 'No Inventory Required' : (warning ? 'Needs Review' : (row.pairing_status || rowStatus(row) || 'Matched'));
 
           return (
             <article className="sc-pullsheet-line-card" key={key}>
@@ -502,7 +566,7 @@ export default function PullSheetView() {
                   <h2>Line {idx + 1}</h2>
                   <p>Qty: <strong>{value(row.quantity, row.qty, row.quantity_needed)}</strong></p>
                 </div>
-                <StatusBadge status={warning ? 'Needs Review' : (row.pairing_status || rowStatus(row) || 'Matched')} />
+                <StatusBadge status={lineStatusLabel} tone={nonInventory ? 'success' : undefined} />
               </header>
               <div className="sc-pairing-grid">
                 <section className="sc-pairing-panel sc-pairing-panel--ordered">
@@ -517,7 +581,7 @@ export default function PullSheetView() {
                   </dl>
                 </section>
                 <section className="sc-pairing-panel sc-pairing-panel--blank">
-                  <h3>App Paired Blank Product</h3>
+                  <h3>{nonInventory ? 'No Inventory Required' : 'App Paired Blank Product'}</h3>
                   <dl>
                     <dt>Blank</dt><dd>{value(row.blank_name, row.paired_blank_name)}</dd>
                     <dt>SKU</dt><dd>{value(row.blank_sku, row.blank_sku_base, row.paired_blank_sku_base)}</dd>
@@ -527,14 +591,20 @@ export default function PullSheetView() {
                     <dt>Size</dt><dd>{value(row.blank_size, row.paired_blank_size, row.job_item_size, row.ordered_size, row.size)}</dd>
                     <dt>On Hand</dt><dd>{value(row.on_hand_quantity, row.quantity_on_hand, row.total_quantity, 0)}</dd>
                     <dt>Available</dt><dd>{value(row.available_quantity, availableQty, 0)}</dd>
-                    <dt>Inventory Status</dt><dd>{value(row.inventory_status, onHandQty > 0 ? 'in_stock' : 'zero_on_hand')}</dd>
+                    <dt>Inventory Status</dt><dd>{value(row.inventory_status, nonInventory ? 'non_inventory' : (onHandQty > 0 ? 'in_stock' : 'zero_on_hand'))}</dd>
+                    <dt>Inventory Required</dt><dd>{nonInventory ? 'No' : 'Yes'}</dd>
+                    {nonInventory ? <><dt>Reason</dt><dd>{value(row.non_inventory_reason, row.pairing_warning, 'No inventory tracking required')}</dd></> : null}
                   </dl>
                 </section>
               </div>
               {warning ? <div className="sc-warning-callout">{warning}</div> : null}
               {zeroOnHandWarning ? <div className="sc-warning-callout">{zeroOnHandWarning}</div> : null}
 
-              {blankProductId ? (
+              {nonInventory ? (
+                <div className="sc-button-row">
+                  <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Done / No Inventory Action</ActionButton>
+                </div>
+              ) : blankProductId ? (
                 <div className="sc-button-row" style={{ alignItems: 'center' }}>
                   <label style={{ display: 'grid', gap: 4, minWidth: 260 }}>
                     <span style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>Blank Source Bin</span>
@@ -549,6 +619,7 @@ export default function PullSheetView() {
                     </select>
                   </label>
                   <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="secondary" onClick={() => markLineNonInventory(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled={isCompleting || isClosedLine(row)} onClick={() => completeAndDeduct(row, idx)}>
                     {isCompleting ? 'Completing…' : 'Complete + Deduct Blank'}
@@ -557,6 +628,7 @@ export default function PullSheetView() {
               ) : (
                 <div className="sc-button-row">
                   <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="secondary" onClick={() => markLineNonInventory(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled>Complete + Deduct Blank</ActionButton>
                 </div>

@@ -49,6 +49,7 @@ import OrderRiskDashboard from './OrderRiskDashboard';
 import DailyCommandCenter from './DailyCommandCenter';
 import ProductMappingRepair from './ProductMappingRepair';
 import BulkPairingRepair from './BulkPairingRepair';
+import NonInventoryRules from './NonInventoryRules';
 import ExceptionCenter from './ExceptionCenter';
 import CustomerPortalAdmin from './CustomerPortalAdmin';
 import CustomerPortal from './CustomerPortal';
@@ -117,6 +118,7 @@ export default function App() {
           <Route path="/color-pairings" element={<ColorAliasReview />} />
           <Route path="/mapping-repair" element={<ProductMappingRepair />} />
           <Route path="/bulk-pairing-repair" element={<BulkPairingRepair />} />
+          <Route path="/non-inventory-rules" element={<NonInventoryRules />} />
           <Route path="/exception-center" element={<ExceptionCenter />} />
           <Route path="/customer-portal-admin" element={<CustomerPortalAdmin />} />
           <Route path="/customer-portal" element={<CustomerPortal />} />

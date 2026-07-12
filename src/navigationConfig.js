@@ -119,6 +119,7 @@ export const navSections = [
       { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
       { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },
       { label: 'Bulk Pairing Repair', path: '/bulk-pairing-repair', keywords: 'bulk pairing repair pull sheet order incorrect blank product job items reservations' },
+      { label: 'Non-Inventory Rules', path: '/non-inventory-rules', keywords: 'non inventory product rules fees rush artwork no blank pull sheet close' },
       { label: 'Product Data Health', path: '/product-data-health', keywords: 'product data health missing attributes cost barcode supplier reports' },
       { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
