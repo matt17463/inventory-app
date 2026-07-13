@@ -47,6 +47,51 @@ function getVariationId(item) {
   return getNumeric(item?.variation_id || item?.woocommerce_variation_id || item?.variationId);
 }
 
+
+function customerNameFromOrder(order) {
+  return clean(`${order?.billing?.first_name || ''} ${order?.billing?.last_name || ''}`) || clean(order?.billing?.company) || null;
+}
+
+function orderPaymentStatus(order) {
+  if (order?.date_paid || order?.date_paid_gmt || order?.transaction_id) return 'paid';
+  if (order?.status === 'pending') return 'pending';
+  return null;
+}
+
+async function syncOrderStatusBoard(order, jobId = null) {
+  const orderId = Number(order?.id || 0);
+  if (!orderId) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('sc_sync_woocommerce_order_status', {
+      p_woocommerce_order_id: orderId,
+      p_woo_status: clean(order?.status) || null,
+      p_woo_payment_status: orderPaymentStatus(order),
+      p_woo_order_number: clean(order?.number) || String(orderId),
+      p_customer_name: customerNameFromOrder(order),
+      p_order_total: Number(order?.total || 0) || null,
+      p_woo_date_created: order?.date_created_gmt ? `${order.date_created_gmt}Z` : (order?.date_created || null),
+      p_woo_date_modified: order?.date_modified_gmt ? `${order.date_modified_gmt}Z` : (order?.date_modified || null),
+      p_payload: order || {},
+    });
+
+    if (error) {
+      console.warn('Production status board Woo sync failed:', error.message);
+      return null;
+    }
+
+    if (jobId) {
+      const { error: recalcError } = await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(jobId) });
+      if (recalcError) console.warn('Production status board recalculation failed:', recalcError.message);
+    }
+
+    return data;
+  } catch (err) {
+    console.warn('Production status board sync unavailable:', err.message);
+    return null;
+  }
+}
+
 function getLineItemMeta(lineItem, possibleKeys) {
   const meta = Array.isArray(lineItem.meta_data) ? lineItem.meta_data : [];
 
@@ -534,6 +579,8 @@ export const handler = async (event) => {
       order.billing?.company ||
       'Unknown Customer';
 
+    await syncOrderStatusBoard(order);
+
     const customerId = await findOrCreateCustomer(customerName);
 
     const { data: job, error: jobError } = await supabase
@@ -543,7 +590,15 @@ export const handler = async (event) => {
           woocommerce_order_id: orderId,
           job_name: `Order #${order.number || orderId}`,
           customer_name: customerName,
-          status: 'queued',
+          status: ['cancelled', 'cancelled', 'refunded', 'failed'].includes(String(order.status || '').toLowerCase()) ? 'cancelled' : 'queued',
+          woo_status: clean(order.status) || null,
+          woo_payment_status: orderPaymentStatus(order),
+          woo_order_number: clean(order.number) || String(orderId),
+          woo_order_total: Number(order.total || 0) || null,
+          woo_date_created: order.date_created_gmt ? `${order.date_created_gmt}Z` : (order.date_created || null),
+          woo_date_modified: order.date_modified_gmt ? `${order.date_modified_gmt}Z` : (order.date_modified || null),
+          last_woo_sync_at: new Date().toISOString(),
+          woo_payload: order || {},
           notes: order.customer_note || null,
           due_date: new Date().toISOString().slice(0, 10),
         },
@@ -555,6 +610,8 @@ export const handler = async (event) => {
     if (jobError) {
       return { statusCode: 500, body: JSON.stringify({ error: 'Failed to create job', details: jobError.message }) };
     }
+
+    await syncOrderStatusBoard(order, job.id);
 
     const createdItems = [];
     const updatedItems = [];
@@ -652,6 +709,8 @@ export const handler = async (event) => {
       }
     }
 
+    await syncOrderStatusBoard(order, job.id);
+
     return {
       statusCode: createdItems.length || updatedItems.length ? 200 : 400,
       body: JSON.stringify({
@@ -659,6 +718,7 @@ export const handler = async (event) => {
         job_id: job.id,
         items_created: createdItems.length,
         items_updated: updatedItems.length,
+        production_status_synced: true,
         errors,
       }),
     };

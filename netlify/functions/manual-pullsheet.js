@@ -697,6 +697,12 @@ async function processOrder(order) {
     await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
   }
 
+  try {
+    await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(job.id) });
+  } catch (err) {
+    console.warn('Production status board recalculation failed:', err.message);
+  }
+
   return orderResult;
 }
 
