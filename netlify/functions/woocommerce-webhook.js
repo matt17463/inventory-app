@@ -48,6 +48,75 @@ function getVariationId(item) {
 }
 
 
+function normalizeDueDate(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.slice(0, 10);
+}
+
+function getOrderMetaValue(order, keys) {
+  const meta = Array.isArray(order?.meta_data) ? order.meta_data : [];
+  const wanted = keys.map(normalizeMetaKey);
+
+  for (const item of meta) {
+    if (!item) continue;
+    const key = normalizeMetaKey(item.key);
+    if (wanted.includes(key) && item.value !== undefined && item.value !== null && String(item.value).trim() !== '') {
+      return String(item.value).trim();
+    }
+  }
+
+  return null;
+}
+
+function getOrderDueDate(order) {
+  return normalizeDueDate(
+    order?.due_date ||
+      order?.production_due_date ||
+      order?.pullsheet_due_date ||
+      order?.sc_pullsheet_due_date ||
+      getOrderMetaValue(order, [
+        '_sc_pullsheet_due_date',
+        'sc_pullsheet_due_date',
+        'production_due_date',
+        'due_date',
+      ])
+  );
+}
+
+async function setJobDueDateFromOrder(order, jobId = null) {
+  const dueDate = getOrderDueDate(order);
+  if (!dueDate) return null;
+
+  try {
+    const params = jobId
+      ? {
+          p_job_id: Number(jobId),
+          p_due_date: dueDate,
+          p_source: 'woocommerce_order_meta',
+          p_reason: 'Due date received from WooCommerce order meta',
+          p_changed_by: 'woocommerce_webhook',
+        }
+      : {
+          p_woocommerce_order_id: Number(order.id),
+          p_due_date: dueDate,
+          p_source: 'woocommerce_order_meta',
+          p_reason: 'Due date received from WooCommerce order meta',
+          p_changed_by: 'woocommerce_webhook',
+        };
+
+    const rpcName = jobId ? 'sc_set_job_due_date' : 'sc_set_job_due_date_by_woo_order';
+    const { error } = await supabase.rpc(rpcName, params);
+    if (error) console.warn('Due date sync failed:', error.message);
+  } catch (err) {
+    console.warn('Due date sync unavailable:', err.message);
+  }
+
+  return dueDate;
+}
+
+
 function customerNameFromOrder(order) {
   return clean(`${order?.billing?.first_name || ''} ${order?.billing?.last_name || ''}`) || clean(order?.billing?.company) || null;
 }
@@ -518,7 +587,7 @@ export const handler = async (event) => {
     if (event.httpMethod === 'GET') {
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'WooCommerce webhook non-inventory-rules v1.3.0 active' }),
+        body: JSON.stringify({ success: true, message: 'WooCommerce webhook due-dates v1.4.0 active' }),
       };
     }
 
@@ -600,7 +669,6 @@ export const handler = async (event) => {
           last_woo_sync_at: new Date().toISOString(),
           woo_payload: order || {},
           notes: order.customer_note || null,
-          due_date: new Date().toISOString().slice(0, 10),
         },
         { onConflict: 'woocommerce_order_id' }
       )
@@ -610,6 +678,8 @@ export const handler = async (event) => {
     if (jobError) {
       return { statusCode: 500, body: JSON.stringify({ error: 'Failed to create job', details: jobError.message }) };
     }
+
+    await setJobDueDateFromOrder(order, job.id);
 
     await syncOrderStatusBoard(order, job.id);
 

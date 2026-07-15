@@ -38,6 +38,75 @@ function getNumeric(value) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+
+function normalizeDueDate(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.slice(0, 10);
+}
+
+function getOrderMetaValue(order, keys) {
+  const meta = Array.isArray(order?.meta_data) ? order.meta_data : [];
+  const wanted = keys.map(normalizeMetaKey);
+
+  for (const item of meta) {
+    if (!item) continue;
+    const key = normalizeMetaKey(item.key);
+    if (wanted.includes(key) && item.value !== undefined && item.value !== null && String(item.value).trim() !== '') {
+      return String(item.value).trim();
+    }
+  }
+
+  return null;
+}
+
+function getOrderDueDate(order) {
+  return normalizeDueDate(
+    order?.due_date ||
+      order?.production_due_date ||
+      order?.pullsheet_due_date ||
+      order?.sc_pullsheet_due_date ||
+      getOrderMetaValue(order, [
+        '_sc_pullsheet_due_date',
+        'sc_pullsheet_due_date',
+        'production_due_date',
+        'due_date',
+      ])
+  );
+}
+
+async function setJobDueDateFromOrder(order, jobId = null) {
+  const dueDate = getOrderDueDate(order);
+  if (!dueDate) return null;
+
+  try {
+    const params = jobId
+      ? {
+          p_job_id: Number(jobId),
+          p_due_date: dueDate,
+          p_source: order?.due_date_source || order?.source || 'manual_pullsheet_payload',
+          p_reason: 'Due date received during pull sheet generation',
+          p_changed_by: order?.due_date_changed_by || order?.changed_by || 'manual_pullsheet',
+        }
+      : {
+          p_woocommerce_order_id: Number(order.id || order.order_id || order.woocommerce_order_id),
+          p_due_date: dueDate,
+          p_source: order?.due_date_source || order?.source || 'manual_pullsheet_payload',
+          p_reason: 'Due date received during pull sheet generation',
+          p_changed_by: order?.due_date_changed_by || order?.changed_by || 'manual_pullsheet',
+        };
+
+    const rpcName = jobId ? 'sc_set_job_due_date' : 'sc_set_job_due_date_by_woo_order';
+    const { error } = await supabase.rpc(rpcName, params);
+    if (error) console.warn('Due date sync failed:', error.message);
+  } catch (err) {
+    console.warn('Due date sync unavailable:', err.message);
+  }
+
+  return dueDate;
+}
+
 function getLineItemMeta(lineItem, possibleKeys) {
   const meta = Array.isArray(lineItem.meta_data) ? lineItem.meta_data : [];
 
@@ -448,7 +517,6 @@ async function upsertJob(order, customerName) {
     customer_name: customerName,
     status: 'queued',
     notes: clean(order.customer_note) || null,
-    due_date: new Date().toISOString().slice(0, 10),
   };
 
   const { data, error } = await supabase
@@ -554,6 +622,7 @@ async function processOrder(order) {
   const customerName = customerNameFromOrder(order);
   const customerId = await findOrCreateCustomer(customerName);
   const job = await upsertJob(order, customerName);
+  await setJobDueDateFromOrder(order, job.id);
 
   const orderResult = {
     order_id: orderId,
@@ -709,7 +778,7 @@ async function processOrder(order) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
-      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet non-inventory-rules v1.5.0 active' }) };
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet due-dates v1.6.0 active' }) };
     }
 
     if (event.httpMethod !== 'POST') {
@@ -729,7 +798,27 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const orders = Array.isArray(body.orders) ? body.orders : [];
+    let orders = Array.isArray(body.orders) ? body.orders : [];
+
+    if (!orders.length && body.order) {
+      orders = [body.order];
+    }
+
+    if (!orders.length && (body.order_id || body.woocommerce_order_id)) {
+      orders = [
+        {
+          id: Number(body.order_id || body.woocommerce_order_id),
+          order_id: Number(body.order_id || body.woocommerce_order_id),
+          number: body.order_number || body.order_id || body.woocommerce_order_id,
+          due_date: body.due_date || body.production_due_date || null,
+          source: body.source || 'manual_pullsheet_payload',
+          line_items: Array.isArray(body.line_items) ? body.line_items : [],
+          billing: body.billing || {},
+          shipping: body.shipping || {},
+          customer_note: body.customer_note || null,
+        },
+      ];
+    }
 
     if (orders.length === 0) {
       return { statusCode: 400, body: JSON.stringify({ error: 'No orders supplied' }) };
