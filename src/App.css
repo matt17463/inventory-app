@@ -2318,47 +2318,537 @@ body.dark .manual-order-search-results-table {
   }
 }
 
+/* Shop TV / Touch Mode V2 */
+.shop-touch-kiosk-active .sc-desktop-sidebar,
+.shop-touch-kiosk-active .sc-mobile-drawer,
+.shop-touch-kiosk-active .sc-drawer-backdrop,
+.shop-touch-kiosk-active .sc-topbar {
+  display: none !important;
+}
 
-/* Pull Sheet Due Date Editor */
+.shop-touch-kiosk-active .sc-main-shell,
+.shop-touch-kiosk-active .sc-page-shell {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  max-width: none !important;
+}
+
+.shop-touch-page {
+  min-height: 100vh;
+  padding: clamp(16px, 2vw, 28px);
+  background:
+    radial-gradient(circle at 15% 12%, rgba(28, 184, 218, 0.20), transparent 28%),
+    radial-gradient(circle at 92% 8%, rgba(38, 191, 137, 0.16), transparent 28%),
+    linear-gradient(135deg, rgba(245, 250, 255, 0.98), rgba(246, 246, 240, 0.92));
+  color: #102033;
+}
+
+.shop-touch-page.kiosk-mode {
+  border-radius: 0;
+  overflow-x: hidden;
+}
+
+.shop-touch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: clamp(18px, 2vw, 26px);
+  border: 1px solid rgba(15, 52, 96, 0.10);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 45px rgba(15, 52, 96, 0.10);
+}
+
+.shop-touch-brand-block {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.shop-touch-brand-block img {
+  width: clamp(80px, 8vw, 120px);
+  height: clamp(80px, 8vw, 120px);
+  object-fit: contain;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(12, 32, 58, 0.10);
+}
+
+.shop-touch-eyebrow {
+  margin: 0 0 4px;
+  color: #0596c7;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.shop-touch-header h1 {
+  margin: 0;
+  font-size: clamp(2.3rem, 5vw, 5.1rem);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+  color: #0f1f34;
+}
+
+.shop-touch-header p {
+  margin: 10px 0 0;
+  max-width: 850px;
+  font-size: clamp(1rem, 1.25vw, 1.35rem);
+  color: #5c6b82;
+}
+
+.shop-touch-header-actions,
+.shop-touch-job-actions,
+.shop-touch-station-tabs,
+.shop-touch-search-form,
+.shop-touch-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.shop-touch-toggle,
+.shop-touch-search-form button,
+.shop-touch-action-button,
+.shop-touch-quick-actions a {
+  min-height: 54px;
+  border: 0;
+  border-radius: 18px;
+  padding: 0 20px;
+  background: #ffffff;
+  color: #102033;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 10px 25px rgba(16, 32, 51, 0.10);
+  cursor: pointer;
+}
+
+.shop-touch-toggle.primary,
+.shop-touch-search-form button,
+.shop-touch-action-button.primary {
+  background: linear-gradient(135deg, #05a9db, #18c4a1);
+  color: #fff;
+}
+
+.shop-touch-toggle:disabled,
+.shop-touch-search-form button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.shop-touch-status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.shop-touch-status-strip > div,
+.shop-touch-search-panel,
+.shop-touch-panel,
+.shop-touch-lane,
+.shop-touch-task-card,
+.shop-touch-job-card {
+  border: 1px solid rgba(15, 52, 96, 0.10);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 14px 32px rgba(15, 52, 96, 0.08);
+}
+
+.shop-touch-status-strip > div {
+  padding: 14px 18px;
+}
+
+.shop-touch-status-strip span,
+.shop-touch-job-meta,
+.shop-touch-task-card span,
+.shop-touch-task-card small {
+  color: #5c6b82;
+}
+
+.shop-touch-status-strip strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.25rem;
+}
+
+.shop-touch-stale-warning {
+  grid-column: 1 / -1;
+  border-color: rgba(215, 76, 76, 0.24) !important;
+  background: #fff5f5 !important;
+}
+
+.shop-touch-search-panel {
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.shop-touch-search-form {
+  margin-bottom: 14px;
+}
+
+.shop-touch-search-form label {
+  flex: 1 1 420px;
+  display: grid;
+  gap: 7px;
+  font-weight: 900;
+}
+
+.shop-touch-search-form input {
+  min-height: 62px;
+  border: 1px solid rgba(15, 52, 96, 0.14);
+  border-radius: 18px;
+  padding: 0 18px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.shop-touch-search-form button.secondary {
+  background: #eff7fb;
+  color: #0f1f34;
+}
+
+.shop-touch-station-tabs button {
+  min-height: 48px;
+  border: 1px solid rgba(15, 52, 96, 0.10);
+  border-radius: 999px;
+  padding: 0 18px;
+  background: #fff;
+  color: #27364c;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.shop-touch-station-tabs button.active {
+  background: #102033;
+  color: #fff;
+}
+
+.shop-touch-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.shop-touch-metric {
+  position: relative;
+  overflow: hidden;
+  min-height: 118px;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 35px rgba(15, 52, 96, 0.10);
+}
+
+.shop-touch-metric::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: #19a7d8;
+}
+
+.shop-touch-metric span {
+  display: block;
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-weight: 1000;
+  line-height: 0.92;
+  color: #102033;
+}
+
+.shop-touch-metric strong {
+  display: block;
+  margin-top: 10px;
+  color: #5c6b82;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shop-touch-metric.danger::before,
+.tone-danger .shop-touch-lane header::before,
+.shop-touch-chip.tone-danger { background: #df4e4e; }
+.shop-touch-metric.urgent::before,
+.shop-touch-chip.tone-urgent { background: #ff9f1c; }
+.shop-touch-metric.warning::before,
+.tone-warning .shop-touch-lane header::before,
+.shop-touch-chip.tone-warning { background: #f6b73c; }
+.shop-touch-metric.success::before,
+.tone-success .shop-touch-lane header::before,
+.shop-touch-chip.tone-success { background: #20b782; }
+.shop-touch-metric.info::before,
+.tone-info .shop-touch-lane header::before { background: #1ba7d8; }
+.shop-touch-metric.muted::before,
+.shop-touch-chip.tone-muted { background: #8792a2; }
+
+.shop-touch-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.shop-touch-quick-actions a {
+  min-height: 86px;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.shop-touch-quick-actions span {
+  font-size: 1.5rem;
+}
+
+.shop-touch-board-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.shop-touch-lane {
+  overflow: hidden;
+}
+
+.shop-touch-lane header,
+.shop-touch-panel header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 12px;
+}
+
+.shop-touch-lane header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: #1ba7d8;
+}
+
+.shop-touch-lane h2,
+.shop-touch-panel h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.shop-touch-lane header span,
+.shop-touch-panel header span {
+  min-width: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eff5fb;
+  font-weight: 1000;
+}
+
+.shop-touch-lane-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 16px;
+}
+
+.shop-touch-job-card {
+  padding: 16px;
+  box-shadow: 0 8px 20px rgba(15, 52, 96, 0.07);
+}
+
+.shop-touch-job-topline,
+.shop-touch-next-action,
+.shop-touch-watch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shop-touch-job-topline strong {
+  font-size: 1.45rem;
+}
+
+.shop-touch-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 1000;
+}
+
+.shop-touch-job-card h3 {
+  margin: 12px 0 8px;
+  font-size: 1.15rem;
+  line-height: 1.16;
+}
+
+.shop-touch-job-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.shop-touch-job-alert {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff6e1;
+  color: #7a4f00;
+  font-weight: 800;
+}
+
+.shop-touch-next-action {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 52, 96, 0.10);
+}
+
+.shop-touch-next-action span {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.shop-touch-job-actions {
+  margin-top: 12px;
+}
+
+.shop-touch-action-button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 14px;
+}
+
+.shop-touch-empty {
+  margin: 0;
+  padding: 18px;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.shop-touch-bottom-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.shop-touch-panel {
+  padding-bottom: 14px;
+}
+
+.shop-touch-task-card,
+.shop-touch-watch-item {
+  margin: 0 14px 10px;
+  padding: 14px;
+}
+
+.shop-touch-task-card {
+  display: grid;
+  gap: 4px;
+}
+
+.shop-touch-watch-item strong {
+  font-size: 2rem;
+}
+
+.shop-touch-watch-item span {
+  color: #5c6b82;
+  font-weight: 800;
+}
+
+.shop-touch-page.tv-mode .shop-touch-search-panel,
+.shop-touch-page.tv-mode .shop-touch-bottom-grid {
+  display: none;
+}
+
+.shop-touch-page.tv-mode .shop-touch-board-grid {
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
+}
+
+.shop-touch-page.tv-mode .shop-touch-job-actions {
+  display: none;
+}
+
+.shop-touch-page.tv-mode .shop-touch-job-card {
+  min-height: 170px;
+}
+
+@media (max-width: 1400px) {
+  .shop-touch-metric-grid,
+  .shop-touch-quick-actions {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+
+  .shop-touch-board-grid {
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 850px) {
+  .shop-touch-header,
+  .shop-touch-brand-block,
+  .shop-touch-status-strip,
+  .shop-touch-bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .shop-touch-metric-grid,
+  .shop-touch-quick-actions,
+  .shop-touch-board-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Pull Sheet Due Dates helper page */
 .pullsheet-due-date-editor .due-date-toolbar {
   display: grid;
   gap: 16px;
 }
-
 .pullsheet-due-date-editor .field-row {
   display: flex;
   align-items: end;
   gap: 10px;
   flex-wrap: wrap;
 }
-
 .pullsheet-due-date-editor label {
   display: grid;
   gap: 6px;
   font-weight: 600;
 }
-
 .pullsheet-due-date-editor input[type='search'],
 .pullsheet-due-date-editor input[type='text'],
 .pullsheet-due-date-editor input[type='date'] {
   min-height: 38px;
   padding: 8px 10px;
 }
-
 .bulk-due-date-box {
   border: 1px solid #d8dde6;
   border-radius: 10px;
   padding: 12px;
   background: #fafafa;
 }
-
 .inline-date-editor {
   display: flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
-
 .due-date-chip {
   display: inline-flex;
   padding: 4px 8px;
@@ -2367,24 +2857,9 @@ body.dark .manual-order-search-results-table {
   font-weight: 700;
   background: #e8edf5;
 }
-
-.due-date-chip.overdue {
-  background: #ffe1e1;
-}
-
-.due-date-chip.due_today {
-  background: #fff2c2;
-}
-
+.due-date-chip.overdue { background: #ffe1e1; }
+.due-date-chip.due_today { background: #fff2c2; }
 .due-date-chip.due_tomorrow,
-.due-date-chip.due_this_week {
-  background: #e6f4ff;
-}
-
-.due-date-chip.future {
-  background: #e7f7e7;
-}
-
-tr.is-overdue {
-  background: #fff8f8;
-}
+.due-date-chip.due_this_week { background: #e6f4ff; }
+.due-date-chip.future { background: #e7f7e7; }
+tr.is-overdue { background: #fff8f8; }

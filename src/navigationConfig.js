@@ -4,6 +4,7 @@ export const quickActions = [
   { label: 'Scan', path: '/scan', icon: '📷' },
   { label: 'Receive', path: '/add-item', icon: '📦' },
   { label: 'Pull Sheets', path: '/pullsheets', icon: '📋' },
+  { label: 'Shop Touch', path: '/shop-tv?mode=touch', icon: '🖥️' },
   { label: 'Manual', path: '/manual-orders', icon: '🧾' },
   { label: 'POs', path: '/purchase-orders', icon: '🛒' },
 ];
@@ -17,7 +18,7 @@ export const navSections = [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
       { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },
-      { label: 'Shop TV Mode', path: '/shop-tv', keywords: 'production display wall tv floor' },
+      { label: 'Shop TV / Touch Mode', path: '/shop-tv', keywords: 'production display wall tv touch floor kiosk station dashboard due date blockers' },
     ],
   },
   {
@@ -46,8 +47,8 @@ export const navSections = [
     icon: '🏭',
     items: [
       { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
+      { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates schedule production deadline pull sheets' },
       { label: 'Production Board', path: '/production-board', keywords: 'kanban status ready produce qc ship' },
-      { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates order deadline production schedule pull sheets bulk edit' },
       { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
       { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
       { label: 'Create Finished Product', path: '/finished/create', keywords: 'make finished from blank decorated product' },

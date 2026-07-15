@@ -37,6 +37,7 @@ import FinishedMatchSuggestions from './FinishedMatchSuggestions';
 import ProductionBoard from './ProductionBoard';
 import ArtworkRequests from './ArtworkRequests';
 import ShopTvMode from './ShopTvMode';
+import PullSheetDueDateEditor from './PullSheetDueDateEditor';
 import VendorPriceComparison from './VendorPriceComparison';
 import CapacityPlanning from './CapacityPlanning';
 import ProductionCalendar from './ProductionCalendar';
@@ -65,7 +66,6 @@ import './App.css';
 import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
-import PullSheetDueDateEditor from './PullSheetDueDateEditor';
 
 export default function App() {
   return (
@@ -97,6 +97,8 @@ export default function App() {
           <Route path="/job-costing" element={<JobCosting />} />
           <Route path="/artwork-requests" element={<ArtworkRequests />} />
           <Route path="/shop-tv" element={<ShopTvMode />} />
+          <Route path="/shop-touch" element={<ShopTvMode />} />
+          <Route path="/pullsheet-due-dates" element={<PullSheetDueDateEditor />} />
           <Route path="/vendor-prices" element={<VendorPriceComparison />} />
           <Route path="/capacity-planning" element={<CapacityPlanning />} />
           <Route path="/production-calendar" element={<ProductionCalendar />} />
@@ -106,7 +108,6 @@ export default function App() {
           <Route path="/spoilage" element={<SpoilageTracking />} />
           <Route path="/finished-suggestions" element={<FinishedMatchSuggestions />} />
           <Route path="/production-board" element={<ProductionBoard />} />
-          <Route path="/pullsheet-due-dates" element={<PullSheetDueDateEditor />} />
           <Route path="/qc-checklist" element={<QcChecklist />} />
           <Route path="/employee-tasks" element={<EmployeeTasks />} />
           <Route path="/order-risk" element={<OrderRiskDashboard />} />
