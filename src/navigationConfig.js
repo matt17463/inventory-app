@@ -47,6 +47,7 @@ export const navSections = [
     items: [
       { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
       { label: 'Production Board', path: '/production-board', keywords: 'kanban status ready produce qc ship' },
+      { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates order deadline production schedule pull sheets bulk edit' },
       { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
       { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
       { label: 'Create Finished Product', path: '/finished/create', keywords: 'make finished from blank decorated product' },

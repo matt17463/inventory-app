@@ -65,6 +65,7 @@ import './App.css';
 import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
+import PullSheetDueDateEditor from './PullSheetDueDateEditor';
 
 export default function App() {
   return (
@@ -105,6 +106,7 @@ export default function App() {
           <Route path="/spoilage" element={<SpoilageTracking />} />
           <Route path="/finished-suggestions" element={<FinishedMatchSuggestions />} />
           <Route path="/production-board" element={<ProductionBoard />} />
+          <Route path="/pullsheet-due-dates" element={<PullSheetDueDateEditor />} />
           <Route path="/qc-checklist" element={<QcChecklist />} />
           <Route path="/employee-tasks" element={<EmployeeTasks />} />
           <Route path="/order-risk" element={<OrderRiskDashboard />} />
