@@ -13,6 +13,17 @@ const STATIONS = [
   { key: 'admin', label: 'Admin' },
 ];
 
+const DISPLAY_DENSITIES = [
+  { key: 'compact', label: '17" Compact', shortLabel: 'Compact', helper: 'Best for 17" 1080p touchscreens' },
+  { key: 'standard', label: 'Standard Touch', shortLabel: 'Standard', helper: 'Best for 22"–27" shop touchscreens' },
+  { key: 'wall', label: 'Wall / TV', shortLabel: 'Wall', helper: 'Best for large monitors viewed from a distance' },
+];
+
+function normalizeDensity(value, fallback = 'standard') {
+  const key = String(value || '').toLowerCase();
+  return DISPLAY_DENSITIES.some((item) => item.key === key) ? key : fallback;
+}
+
 const QUICK_ACTIONS = [
   { label: 'Open Pull Sheets', path: '/pullsheets', icon: '📋' },
   { label: 'Production Board', path: '/production-board', icon: '🏭' },
@@ -176,6 +187,9 @@ export default function ShopTvMode() {
   const [station, setStation] = useState(searchParams.get('station') || 'all');
   const [touchMode, setTouchMode] = useState(searchParams.get('mode') !== 'tv');
   const [kiosk, setKiosk] = useState(searchParams.get('kiosk') === '1');
+  const [displayDensity, setDisplayDensity] = useState(() =>
+    normalizeDensity(searchParams.get('density'), searchParams.get('mode') === 'tv' ? 'wall' : 'standard')
+  );
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(REFRESH_SECONDS);
@@ -210,8 +224,9 @@ export default function ShopTvMode() {
     if (search) params.set('search', search);
     params.set('mode', touchMode ? 'touch' : 'tv');
     if (kiosk) params.set('kiosk', '1');
+    params.set('density', displayDensity);
     setSearchParams(params, { replace: true });
-  }, [station, search, touchMode, kiosk, setSearchParams]);
+  }, [station, search, touchMode, kiosk, displayDensity, setSearchParams]);
 
   useEffect(() => {
     document.body.classList.toggle('shop-touch-kiosk-active', kiosk);
@@ -299,6 +314,18 @@ export default function ShopTvMode() {
     navigate(`/production-board?search=${encodeURIComponent(value)}`);
   }
 
+  const jobsPerLane = touchMode
+    ? displayDensity === 'compact'
+      ? 8
+      : displayDensity === 'wall'
+        ? 10
+        : 12
+    : displayDensity === 'compact'
+      ? 5
+      : 6;
+
+  const activeDensity = DISPLAY_DENSITIES.find((item) => item.key === displayDensity) || DISPLAY_DENSITIES[1];
+
   const priorityGroups = [
     { key: 'overdue', label: 'Overdue', jobs: groupedJobs.overdue, tone: 'danger' },
     { key: 'due_today', label: 'Due Today', jobs: groupedJobs.due_today, tone: 'urgent' },
@@ -309,7 +336,7 @@ export default function ShopTvMode() {
   ];
 
   return (
-    <main className={`shop-touch-page ${touchMode ? 'touch-mode' : 'tv-mode'} ${kiosk ? 'kiosk-mode' : ''}`}>
+    <main className={`shop-touch-page ${touchMode ? 'touch-mode' : 'tv-mode'} ${kiosk ? 'kiosk-mode' : ''} density-${displayDensity}`}>
       <section className="shop-touch-header">
         <div className="shop-touch-brand-block">
           <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" />
@@ -324,6 +351,22 @@ export default function ShopTvMode() {
           <button type="button" className="shop-touch-toggle" onClick={() => setTouchMode((value) => !value)}>
             {touchMode ? 'Touch Mode' : 'TV Mode'}
           </button>
+          <div className="shop-touch-density-control" aria-label="Display size">
+            <span>Display</span>
+            <div>
+              {DISPLAY_DENSITIES.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={displayDensity === item.key ? 'active' : ''}
+                  onClick={() => setDisplayDensity(item.key)}
+                  title={item.helper}
+                >
+                  {item.shortLabel}
+                </button>
+              ))}
+            </div>
+          </div>
           {kiosk ? (
             <button type="button" className="shop-touch-toggle" onClick={exitFullScreen}>Exit Kiosk</button>
           ) : (
@@ -347,6 +390,10 @@ export default function ShopTvMode() {
         <div>
           <span>Data source</span>
           <strong>Production Board Sync</strong>
+        </div>
+        <div>
+          <span>Display size</span>
+          <strong>{activeDensity.label}</strong>
         </div>
         {message ? <div className="shop-touch-stale-warning"><strong>Connection issue</strong><span>{message}</span></div> : null}
       </section>
@@ -409,7 +456,7 @@ export default function ShopTvMode() {
             </header>
             <div className="shop-touch-lane-body">
               {group.jobs.length ? (
-                group.jobs.slice(0, touchMode ? 12 : 6).map((job) => <JobCard key={`${group.key}-${job.job_id || job.woocommerce_order_id}`} job={job} />)
+                group.jobs.slice(0, jobsPerLane).map((job) => <JobCard key={`${group.key}-${job.job_id || job.woocommerce_order_id}`} job={job} />)
               ) : (
                 <p className="shop-touch-empty">Nothing here.</p>
               )}
