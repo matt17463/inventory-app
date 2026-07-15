@@ -1,6 +1,6 @@
 // src/lib/dueDateApi.js
 
-import { supabase } from './supabaseClient';
+import { supabase } from '../supabaseClient';
 
 function normalizeDateInput(value) {
   if (!value) return null;
@@ -10,11 +10,15 @@ function normalizeDateInput(value) {
   return trimmed.slice(0, 10);
 }
 
-function requireNoSupabaseError(response, fallbackMessage) {
+function unwrapSupabaseResponse(response, fallbackMessage) {
   if (response.error) {
-    const details = response.error.message || response.error.details || response.error.hint;
+    const details = [response.error.message, response.error.details, response.error.hint]
+      .filter(Boolean)
+      .join(' — ');
+
     throw new Error(details || fallbackMessage);
   }
+
   return response.data;
 }
 
@@ -24,7 +28,7 @@ export async function listPullSheetDueDates({ search = '', limit = 100 } = {}) {
     p_limit: limit,
   });
 
-  return requireNoSupabaseError(response, 'Unable to load pull sheet due dates') || [];
+  return unwrapSupabaseResponse(response, 'Unable to load pull sheet due dates') || [];
 }
 
 export async function setJobDueDate({
@@ -46,10 +50,12 @@ export async function setJobDueDate({
     p_changed_by: changedBy,
   });
 
-  const data = requireNoSupabaseError(response, 'Unable to update due date');
+  const data = unwrapSupabaseResponse(response, 'Unable to update due date');
+
   if (data && data.success === false) {
     throw new Error(data.message || 'Unable to update due date');
   }
+
   return data;
 }
 
@@ -72,10 +78,12 @@ export async function setJobDueDateByWooOrder({
     p_changed_by: changedBy,
   });
 
-  const data = requireNoSupabaseError(response, 'Unable to update due date');
+  const data = unwrapSupabaseResponse(response, 'Unable to update due date');
+
   if (data && data.success === false) {
     throw new Error(data.message || 'Unable to update due date');
   }
+
   return data;
 }
 
@@ -87,6 +95,7 @@ export async function bulkSetJobDueDates({
   changedBy = 'inventory_app',
 }) {
   const ids = Array.isArray(jobIds) ? jobIds.map(Number).filter(Boolean) : [];
+
   if (!ids.length) {
     throw new Error('Select at least one pull sheet');
   }
@@ -99,10 +108,12 @@ export async function bulkSetJobDueDates({
     p_changed_by: changedBy,
   });
 
-  const data = requireNoSupabaseError(response, 'Unable to bulk update due dates');
+  const data = unwrapSupabaseResponse(response, 'Unable to bulk update due dates');
+
   if (data && data.success === false && Number(data.updated || 0) === 0) {
     throw new Error(data.message || 'No due dates were updated');
   }
+
   return data;
 }
 
@@ -129,9 +140,25 @@ export async function bulkSetDueDatesByWooOrders({
     p_changed_by: changedBy,
   });
 
-  const data = requireNoSupabaseError(response, 'Unable to bulk update WooCommerce order due dates');
+  const data = unwrapSupabaseResponse(response, 'Unable to bulk update WooCommerce order due dates');
+
   if (data && data.success === false && Number(data.updated || 0) === 0) {
     throw new Error(data.message || 'No due dates were updated');
   }
+
+  return data;
+}
+
+export async function rebuildPullSheetDueDates({ limit = 5000 } = {}) {
+  const response = await supabase.rpc('sc_rebuild_pullsheet_due_date_status_board', {
+    p_limit: limit,
+  });
+
+  const data = unwrapSupabaseResponse(response, 'Unable to rebuild pull sheet due dates');
+
+  if (data && data.success === false) {
+    throw new Error(data.message || 'Unable to rebuild pull sheet due dates');
+  }
+
   return data;
 }
