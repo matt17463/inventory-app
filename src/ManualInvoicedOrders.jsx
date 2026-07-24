@@ -16,6 +16,7 @@ import {
   setManualInvoiceLineReceivedQuantity,
   previewVoidManualInvoiceOrder,
   voidManualInvoiceOrder,
+  syncManualInvoiceGeneratedPullsheet,
 } from './lib/manualOrdersApi';
 
 const blankLine = () => ({
@@ -505,6 +506,7 @@ export default function ManualInvoicedOrders() {
   const [receiptSummary, setReceiptSummary] = useState({});
   const [receiptSummaryBusy, setReceiptSummaryBusy] = useState(false);
   const [voidingOrderId, setVoidingOrderId] = useState(null);
+  const [syncingOrderId, setSyncingOrderId] = useState(null);
 
   async function loadOrders() {
     const rows = await getManualInvoiceOrders();
@@ -696,10 +698,21 @@ export default function ManualInvoicedOrders() {
     setSaving(true);
     try {
       if (editingOrderId) {
+        const shouldSyncPullsheet = Boolean(generateJob && editingGeneratedJobId);
         const result = await updateManualInvoiceOrder(editingOrderId, order, items, {
-          regenerateJob: Boolean(generateJob && editingGeneratedJobId),
+          regenerateJob: shouldSyncPullsheet,
+          syncGeneratedPullsheet: shouldSyncPullsheet,
+          cancelRemovedLines: true,
+          recreateReservations: true,
         });
-        setMessage(`Manual invoice order #${editingOrderId} updated.${result?.job_result?.job_id ? ` Job refreshed: #${result.job_result.job_id}.` : ''}`);
+        const syncResult = result?.job_sync_result || result?.job_result;
+        const warningCount = Array.isArray(syncResult?.warnings) ? syncResult.warnings.length : 0;
+        setMessage(
+          `Manual invoice order #${editingOrderId} updated.` +
+          (syncResult?.generated_job_id
+            ? ` Pull sheet #${syncResult.generated_job_id} synced: ${Number(syncResult.updated_items || 0)} updated, ${Number(syncResult.created_items || 0)} added, ${Number(syncResult.cancelled_items || 0)} removed/cancelled.${warningCount ? ` ${warningCount} warning(s) need review.` : ''}`
+            : '')
+        );
       } else {
         const result = await createManualInvoiceOrder(order, items, generateJob);
         setMessage(`Manual invoice order saved. Manual order ID: ${result.manual_order_id}${result.generated?.job_id ? `, Job ID: ${result.generated.job_id}` : ''}.`);
@@ -1087,6 +1100,33 @@ export default function ManualInvoicedOrders() {
     return status === 'voided' || status === 'cancelled' || status === 'canceled';
   }
 
+  async function syncExistingPullsheet(row) {
+    setError('');
+    setMessage('');
+
+    if (!row?.id || !row?.generated_job_id || isVoidedManualOrder(row)) return;
+
+    setSyncingOrderId(row.id);
+
+    try {
+      const result = await syncManualInvoiceGeneratedPullsheet(row.id, {
+        cancelRemovedLines: true,
+        recreateReservations: true,
+      });
+      const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0;
+      setMessage(
+        `Manual invoice order #${row.id} synced to pull sheet #${result?.generated_job_id || row.generated_job_id}. ` +
+        `${Number(result?.updated_items || 0)} updated, ${Number(result?.created_items || 0)} added, ${Number(result?.cancelled_items || 0)} removed/cancelled.` +
+        (warningCount ? ` ${warningCount} warning(s) need review.` : '')
+      );
+      await loadOrders();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setSyncingOrderId(null);
+    }
+  }
+
   async function voidExisting(row) {
     setError('');
     setMessage('');
@@ -1248,7 +1288,7 @@ export default function ManualInvoicedOrders() {
       {editingOrderId && (
         <div className="sc-alert sc-alert-warning manual-edit-banner">
           <strong>Editing previous manual invoice order #{editingOrderId}.</strong>
-          <span> Saving will update the existing order and replace its line items with the current form lines.</span>
+          <span> Saving will update the existing order and, when “Refresh generated job after update” is checked, sync the corrections to the linked pull sheet.</span>
           <button type="button" className="sc-btn" onClick={resetForm}>Cancel Edit</button>
         </div>
       )}
@@ -1479,6 +1519,17 @@ export default function ManualInvoicedOrders() {
                         <button className="sc-btn" type="button" onClick={() => editExisting(row)} disabled={rowVoided}>Edit Order</button>
                         <button className="sc-btn" type="button" onClick={() => receiveExisting(row)} disabled={rowVoided}>Receive Blanks</button>
                         {!row.generated_job_id && !rowVoided && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
+                        {row.generated_job_id && !rowVoided && (
+                          <button
+                            className="sc-btn"
+                            type="button"
+                            onClick={() => syncExistingPullsheet(row)}
+                            disabled={syncingOrderId === row.id}
+                            title="Sync the saved manual invoice lines to the existing pull sheet/job."
+                          >
+                            {syncingOrderId === row.id ? 'Syncing...' : 'Sync Pull Sheet'}
+                          </button>
+                        )}
                         {!rowVoided && (
                           <button
                             className="sc-btn sc-btn-danger"
