@@ -14,6 +14,8 @@ import {
   receiveManualInvoiceOrderBlanks,
   getManualInvoiceBlankReceiptSummary,
   setManualInvoiceLineReceivedQuantity,
+  previewVoidManualInvoiceOrder,
+  voidManualInvoiceOrder,
 } from './lib/manualOrdersApi';
 
 const blankLine = () => ({
@@ -502,6 +504,7 @@ export default function ManualInvoicedOrders() {
   const [hideProcessedReceiveLines, setHideProcessedReceiveLines] = useState(false);
   const [receiptSummary, setReceiptSummary] = useState({});
   const [receiptSummaryBusy, setReceiptSummaryBusy] = useState(false);
+  const [voidingOrderId, setVoidingOrderId] = useState(null);
 
   async function loadOrders() {
     const rows = await getManualInvoiceOrders();
@@ -1079,6 +1082,72 @@ export default function ManualInvoicedOrders() {
     }
   }
 
+  function isVoidedManualOrder(row) {
+    const status = String(row?.status || '').toLowerCase();
+    return status === 'voided' || status === 'cancelled' || status === 'canceled';
+  }
+
+  async function voidExisting(row) {
+    setError('');
+    setMessage('');
+
+    if (!row?.id || isVoidedManualOrder(row)) return;
+
+    setVoidingOrderId(row.id);
+
+    try {
+      const preview = await previewVoidManualInvoiceOrder(row.id);
+
+      if (preview?.success === false) {
+        throw new Error(preview.message || 'Manual invoice order could not be checked before voiding.');
+      }
+
+      if (Number(preview?.received_quantity || 0) !== 0) {
+        throw new Error(
+          `Manual invoice order #${row.id} has received blank inventory (${Number(preview.received_quantity || 0)} item${Number(preview.received_quantity || 0) === 1 ? '' : 's'}). Reverse the receiving first by setting received quantities back to 0, then void the order.`
+        );
+      }
+
+      const reason = window.prompt(
+        `Void manual invoice order #${row.id}?\n\nThis will cancel its generated job/items and release reservations.\n\nEnter the reason for voiding this manual order:`
+      );
+
+      if (reason === null) return;
+
+      const trimmedReason = String(reason || '').trim();
+      if (!trimmedReason) {
+        throw new Error('A reason is required to void a manual invoice order.');
+      }
+
+      const confirmed = window.confirm(
+        `Confirm void manual invoice order #${row.id}?\n\nThis cannot be used if blanks have already been received. The order will remain in history with status voided.`
+      );
+
+      if (!confirmed) return;
+
+      const result = await voidManualInvoiceOrder({
+        manualOrderId: row.id,
+        reason: trimmedReason,
+        voidedBy: 'inventory_app',
+        cancelGeneratedJob: true,
+        releaseReservations: true,
+      });
+
+      if (editingOrderId === row.id) {
+        resetForm();
+      }
+
+      setMessage(
+        `Manual invoice order #${row.id} voided.${result?.generated_job_id ? ` Job #${result.generated_job_id} was cancelled.` : ''}${Number(result?.reservations_released || 0) ? ` Released reservations: ${result.reservations_released}.` : ''}`
+      );
+      await loadOrders();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setVoidingOrderId(null);
+    }
+  }
+
   return (
     <div className="sc-page-stack manual-invoice-page">
       <style>{`
@@ -1156,6 +1225,14 @@ export default function ManualInvoicedOrders() {
         }
         .manual-receive-qty-field input {
           max-width: 140px;
+        }
+        .manual-order-voided-row {
+          opacity: 0.68;
+          background: rgba(148, 163, 184, 0.10);
+        }
+        .manual-order-voided-row .sc-status-pill {
+          background: #e5e7eb;
+          color: #374151;
         }
       `}</style>
       <div className="sc-page-header-card sc-page-header-blue">
@@ -1384,26 +1461,40 @@ export default function ManualInvoicedOrders() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.id}</td>
-                  <td>{row.invoice_number || `MANUAL-${row.id}`}</td>
-                  <td>{row.customer_name}<br /><small>{row.organization}</small></td>
-                  <td><span className="sc-status-pill">{row.status}</span></td>
-                  <td>{row.total_units}</td>
-                  <td>{money(row.calculated_total || row.total_payment_amount)}</td>
-                  <td><input type="checkbox" checked={Boolean(row.invoice_sent)} onChange={() => togglePayment(row, 'invoice_sent')} /></td>
-                  <td><input type="checkbox" checked={Boolean(row.payment_received)} onChange={() => togglePayment(row, 'payment_received')} /></td>
-                  <td>{row.generated_job_id ? `#${row.generated_job_id}` : 'Not generated'}</td>
-                  <td>
-                    <div className="manual-order-row-actions">
-                      <button className="sc-btn" type="button" onClick={() => editExisting(row)}>Edit Order</button>
-                      <button className="sc-btn" type="button" onClick={() => receiveExisting(row)}>Receive Blanks</button>
-                      {!row.generated_job_id && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {orders.map((row) => {
+                const rowVoided = isVoidedManualOrder(row);
+                return (
+                  <tr key={row.id} className={rowVoided ? 'manual-order-voided-row' : ''}>
+                    <td>{row.id}</td>
+                    <td>{row.invoice_number || `MANUAL-${row.id}`}</td>
+                    <td>{row.customer_name}<br /><small>{row.organization}</small></td>
+                    <td><span className="sc-status-pill">{row.status}</span></td>
+                    <td>{row.total_units}</td>
+                    <td>{money(row.calculated_total || row.total_payment_amount)}</td>
+                    <td><input type="checkbox" checked={Boolean(row.invoice_sent)} disabled={rowVoided} onChange={() => togglePayment(row, 'invoice_sent')} /></td>
+                    <td><input type="checkbox" checked={Boolean(row.payment_received)} disabled={rowVoided} onChange={() => togglePayment(row, 'payment_received')} /></td>
+                    <td>{row.generated_job_id ? `#${row.generated_job_id}` : 'Not generated'}</td>
+                    <td>
+                      <div className="manual-order-row-actions">
+                        <button className="sc-btn" type="button" onClick={() => editExisting(row)} disabled={rowVoided}>Edit Order</button>
+                        <button className="sc-btn" type="button" onClick={() => receiveExisting(row)} disabled={rowVoided}>Receive Blanks</button>
+                        {!row.generated_job_id && !rowVoided && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
+                        {!rowVoided && (
+                          <button
+                            className="sc-btn sc-btn-danger"
+                            type="button"
+                            onClick={() => voidExisting(row)}
+                            disabled={voidingOrderId === row.id}
+                            title="Void this manual invoice order. Orders with received blanks must be reversed first."
+                          >
+                            {voidingOrderId === row.id ? 'Voiding...' : 'Void Order'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {!orders.length && <tr><td colSpan="10">No manual invoice orders yet.</td></tr>}
             </tbody>
           </table>
