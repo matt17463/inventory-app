@@ -456,3 +456,43 @@ export async function setManualInvoiceLineReceivedQuantity({
   if (data?.success === false) throw new Error(data.message || 'Manual invoice received quantity update failed.');
   return data;
 }
+
+
+export async function previewVoidManualInvoiceOrder(manualOrderId) {
+  const { data, error } = await supabase.rpc('sc_preview_void_manual_invoice_order', {
+    p_manual_order_id: Number(manualOrderId),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function voidManualInvoiceOrder({
+  manualOrderId,
+  reason = '',
+  voidedBy = 'inventory_app',
+  cancelGeneratedJob = true,
+  releaseReservations = true,
+} = {}) {
+  if (!manualOrderId) {
+    throw new Error('Missing manual invoice order ID.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_void_manual_invoice_order', {
+    p_manual_order_id: Number(manualOrderId),
+    p_reason: clean(reason),
+    p_voided_by: clean(voidedBy || 'inventory_app'),
+    p_cancel_generated_job: Boolean(cancelGeneratedJob),
+    p_release_reservations: Boolean(releaseReservations),
+  });
+
+  if (error) throw error;
+  if (data?.success === false) {
+    const received = Number(data.received_quantity || 0);
+    const suffix = data.code === 'RECEIVED_INVENTORY_EXISTS'
+      ? ` Received quantity currently logged: ${received}. Set received quantities back to 0 before voiding.`
+      : '';
+    throw new Error(`${data.message || 'Manual invoice order could not be voided.'}${suffix}`);
+  }
+  return data;
+}
