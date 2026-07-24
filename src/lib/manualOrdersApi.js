@@ -161,6 +161,22 @@ export async function updateManualInvoicePaymentStatus(manualOrderId, invoiceSen
   return data;
 }
 
+export async function syncManualInvoiceGeneratedPullsheet(manualOrderId, options = {}) {
+  const { data, error } = await supabase.rpc('sc_sync_manual_invoice_order_to_generated_job', {
+    p_manual_order_id: Number(manualOrderId),
+    p_cancel_removed_lines: options.cancelRemovedLines !== false,
+    p_recreate_reservations: options.recreateReservations !== false,
+  });
+
+  if (error) throw error;
+
+  if (data && data.success === false) {
+    throw new Error(data.message || 'Manual invoice pull sheet sync failed.');
+  }
+
+  return data;
+}
+
 export async function updateManualInvoiceOrder(manualOrderId, order, items, options = {}) {
   const header = {
     order_source: 'manual_invoice',
@@ -207,11 +223,29 @@ export async function updateManualInvoiceOrder(manualOrderId, order, items, opti
     p_manual_order_id: manualOrderId,
     p_order: header,
     p_items: safeItems,
-    p_regenerate_job: Boolean(options.regenerateJob),
+    // Keep the original update function focused on saving the manual invoice.
+    // The linked pull sheet/job is refreshed by sc_sync_manual_invoice_order_to_generated_job below.
+    p_regenerate_job: false,
   });
 
   if (error) throw error;
-  return data;
+
+  const shouldSyncPullsheet = options.syncGeneratedPullsheet !== false && (Boolean(options.regenerateJob) || Boolean(options.syncPullsheet));
+
+  if (!shouldSyncPullsheet) {
+    return data;
+  }
+
+  const syncResult = await syncManualInvoiceGeneratedPullsheet(manualOrderId, {
+    cancelRemovedLines: options.cancelRemovedLines !== false,
+    recreateReservations: options.recreateReservations !== false,
+  });
+
+  return {
+    ...(data || {}),
+    job_sync_result: syncResult,
+    job_result: syncResult,
+  };
 }
 
 export async function createMissingBlankProductForManualInvoice(line = {}) {
