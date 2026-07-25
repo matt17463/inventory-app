@@ -54,6 +54,11 @@ import NonInventoryRules from './NonInventoryRules';
 import ExceptionCenter from './ExceptionCenter';
 import CustomerPortalAdmin from './CustomerPortalAdmin';
 import CustomerPortal from './CustomerPortal';
+import CustomerPortalPreview from './CustomerPortalPreview';
+import ArtworkPluginBridge from './ArtworkPluginBridge';
+import CreateProduct from './CreateProduct';
+import TestingMode from './TestingMode';
+import ThemeSettings from './ThemeSettings';
 import ApprovalAutomation from './ApprovalAutomation';
 import AuditTrail from './AuditTrail';
 import QuoteToOrder from './QuoteToOrder';
@@ -74,6 +79,14 @@ export default function App() {
       <AppShell>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/inventory" element={<BlankInventory />} />
+          <Route path="/edit-blank-items" element={<EditBlankItems />} />
+          <Route path="/pull-sheets" element={<PullSheetList />} />
+          <Route path="/customer-portal-preview" element={<CustomerPortalPreview />} />
+          <Route path="/artwork-bridge" element={<ArtworkPluginBridge />} />
+          <Route path="/create-product" element={<CreateProduct />} />
+          <Route path="/testing-mode" element={<TestingMode />} />
+          <Route path="/theme-settings" element={<ThemeSettings />} />
           <Route path="/inventory/blanks" element={<BlankInventory />} />
           <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
           <Route path="/inventory/import" element={<InventoryImport />} />
