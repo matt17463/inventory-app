@@ -1,9 +1,7 @@
-import crypto from 'node:crypto';
+import { cleanText, rawRequestBody, timingSafeEqualText, wooSignatureForBody } from './cryptoSecurity.js';
 import { createClient } from '@supabase/supabase-js';
 
-function clean(value) {
-  return String(value ?? '').trim();
-}
+const clean = cleanText;
 
 export function getHeader(event, name) {
   const wanted = String(name || '').toLowerCase();
@@ -15,12 +13,6 @@ export function getBearerToken(event) {
   const authorization = getHeader(event, 'authorization');
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   return match ? clean(match[1]) : '';
-}
-
-export function timingSafeEqualText(left, right) {
-  const a = Buffer.from(clean(left));
-  const b = Buffer.from(clean(right));
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export function resolveConfiguredSecret(names) {
@@ -65,13 +57,6 @@ export function validateSharedSecret(event, {
   return { ok: true, secretName: configured.name };
 }
 
-export function rawRequestBody(event) {
-  if (event?.isBase64Encoded && event?.body) {
-    return Buffer.from(event.body, 'base64').toString('utf8');
-  }
-  return event?.rawBody || event?.body || '';
-}
-
 export function validateWooCommerceSignature(event, secretNames = ['WC_WEBHOOK_SECRET']) {
   const configured = resolveConfiguredSecret(secretNames);
   if (!configured.value) {
@@ -94,10 +79,7 @@ export function validateWooCommerceSignature(event, secretNames = ['WC_WEBHOOK_S
   }
 
   const rawBody = rawRequestBody(event);
-  const expected = crypto
-    .createHmac('sha256', configured.value)
-    .update(rawBody, 'utf8')
-    .digest('base64');
+  const expected = wooSignatureForBody(rawBody, configured.value);
 
   if (!timingSafeEqualText(signature, expected)) {
     return {
@@ -227,3 +209,5 @@ export function jsonResponse(statusCode, payload, event = null, additionalHeader
     body: JSON.stringify(payload),
   };
 }
+
+export { rawRequestBody, timingSafeEqualText, wooSignatureForBody };

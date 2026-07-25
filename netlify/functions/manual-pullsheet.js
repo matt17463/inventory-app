@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { validateSharedSecret } from './_shared/security.js';
+import { getHeader, validateSharedSecret } from './_shared/security.js';
+import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -511,34 +512,59 @@ async function findOrCreateFinishedProduct({ blankProductId, customerId, logoId,
 
 async function upsertJob(order, customerName) {
   const orderId = Number(order.id);
+  const { data: existing, error: lookupError } = await supabase
+    .from('jobs')
+    .select('id, status')
+    .eq('woocommerce_order_id', orderId)
+    .order('id', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
 
-  const payload = {
-    woocommerce_order_id: orderId,
-    job_name: `Order #${order.number || orderId}`,
-    customer_name: customerName,
-    status: 'queued',
-    notes: clean(order.customer_note) || null,
-  };
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .update({
+        job_name: `Order #${order.number || orderId}`,
+        customer_name: customerName,
+        notes: clean(order.customer_note) || null,
+      })
+      .eq('id', existing.id)
+      .select('id, status')
+      .single();
+    if (error) throw error;
+    return { ...data, created: false };
+  }
 
   const { data, error } = await supabase
     .from('jobs')
-    .upsert(payload, { onConflict: 'woocommerce_order_id' })
-    .select('id')
+    .insert({
+      woocommerce_order_id: orderId,
+      job_name: `Order #${order.number || orderId}`,
+      customer_name: customerName,
+      status: 'queued',
+      notes: clean(order.customer_note) || null,
+    })
+    .select('id, status')
     .single();
-
   if (error) throw error;
-  return data;
+  return { ...data, created: true };
 }
 
 async function existingJobItem(jobId, lineItemId, sku) {
-  let query = supabase.from('job_items').select('id').eq('job_id', jobId);
+  let query = supabase
+    .from('job_items')
+    .select('id')
+    .eq('job_id', jobId)
+    .order('id', { ascending: true })
+    .limit(1);
 
   if (lineItemId) query = query.eq('woocommerce_line_item_id', Number(lineItemId));
   else query = query.eq('order_sku', normalizeSku(sku));
 
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await query;
   if (error) throw error;
-  return data || null;
+  return Array.isArray(data) && data.length ? data[0] : null;
 }
 
 async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProductId, logoId, parsed, site, placement, decorationSize, lookupSource, pairingWarning, inventoryRequired = true, nonInventoryReason = null, nonInventoryRuleId = null }) {
@@ -608,18 +634,13 @@ async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProdu
   return { id: data.id, created: true };
 }
 
-async function reserveInventory({ jobId, jobItemId, blankProductId, quantity }) {
-  const { error } = await supabase.rpc('reserve_inventory', {
-    p_job_id: Number(jobId),
-    p_job_item_id: Number(jobItemId),
-    p_blank_product_id: blankProductId,
-    p_quantity: Number(quantity),
-  });
-  if (error) throw error;
-}
-
-async function processOrder(order) {
+async function processOrder(order, context = {}) {
   const orderId = Number(order.id);
+  const runId = await startPullsheetRun(supabase, {
+    source: context.source || 'manual_pullsheet',
+    orderId,
+    requestId: context.requestId || null,
+  });
   const customerName = customerNameFromOrder(order);
   const customerId = await findOrCreateCustomer(customerName);
   const job = await upsertJob(order, customerName);
@@ -628,10 +649,13 @@ async function processOrder(order) {
   const orderResult = {
     order_id: orderId,
     job_id: job.id,
+    job_created: Boolean(job.created),
     items_created: 0,
     items_existing: 0,
     items_updated: 0,
     reservations_created: 0,
+    reservations_existing: 0,
+    reservations_failed: 0,
     items_needing_pairing: 0,
     errors: [],
   };
@@ -739,18 +763,28 @@ async function processOrder(order) {
         pairingWarning: lookup.warning,
       });
 
-      if (jobItem.created) {
-        orderResult.items_created += 1;
-        try {
-          await reserveInventory({ jobId: job.id, jobItemId: jobItem.id, blankProductId: blankProduct.id, quantity: Number(lineItem.quantity || 1) });
-          orderResult.reservations_created += 1;
-        } catch (reservationError) {
-          orderResult.errors.push({ sku, job_item_id: jobItem.id, error: `Reservation failed: ${reservationError.message}` });
-        }
-      } else if (jobItem.updated) {
-        orderResult.items_updated += 1;
-      } else {
-        orderResult.items_existing += 1;
+      if (jobItem.created) orderResult.items_created += 1;
+      else if (jobItem.updated) orderResult.items_updated += 1;
+      else orderResult.items_existing += 1;
+
+      try {
+        const reservation = await ensureJobItemReservation(supabase, {
+          jobId: job.id,
+          jobItemId: jobItem.id,
+          blankProductId: blankProduct.id,
+          quantity: Number(lineItem.quantity || 1),
+        });
+        if (reservation?.action === 'created') orderResult.reservations_created += 1;
+        else orderResult.reservations_existing += 1;
+      } catch (reservationError) {
+        orderResult.reservations_failed += 1;
+        orderResult.errors.push({
+          sku,
+          job_item_id: jobItem.id,
+          code: reservationError.code || 'reservation_failed',
+          error: `Reservation failed: ${reservationError.message}`,
+          details: reservationError.details || null,
+        });
       }
     } catch (err) {
       orderResult.errors.push({
@@ -763,7 +797,7 @@ async function processOrder(order) {
     }
   }
 
-  if (orderResult.reservations_created > 0) {
+  if (orderResult.reservations_created + orderResult.reservations_existing > 0 && orderResult.reservations_failed === 0) {
     await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
   }
 
@@ -772,6 +806,20 @@ async function processOrder(order) {
   } catch (err) {
     console.warn('Production status board recalculation failed:', err.message);
   }
+
+  await finishPullsheetRun(supabase, runId, {
+    job_id: Number(job.id),
+    outcome: orderResult.errors.length ? 'completed_with_warnings' : 'completed',
+    jobs_created: orderResult.job_created ? 1 : 0,
+    items_created: orderResult.items_created,
+    items_updated: orderResult.items_updated,
+    items_existing: orderResult.items_existing,
+    reservations_created: orderResult.reservations_created,
+    reservations_existing: orderResult.reservations_existing,
+    reservations_failed: orderResult.reservations_failed,
+    items_needing_pairing: orderResult.items_needing_pairing,
+    metadata: { error_count: orderResult.errors.length },
+  });
 
   return orderResult;
 }
@@ -834,16 +882,25 @@ export const handler = async (event) => {
     let itemsCreated = 0;
     let itemsUpdated = 0;
     let reservationsCreated = 0;
+    let reservationsExisting = 0;
+    let reservationsFailed = 0;
+    let itemsExisting = 0;
     let itemsNeedingPairing = 0;
     const errors = [];
 
     for (const order of orders) {
-      const result = await processOrder(order);
+      const result = await processOrder(order, {
+        source: body.source || 'manual_pullsheet',
+        requestId: getHeader(event, 'x-nf-request-id') || getHeader(event, 'x-request-id') || null,
+      });
       results.push(result);
-      jobsCreated += 1;
+      jobsCreated += result.job_created ? 1 : 0;
       itemsCreated += result.items_created;
       itemsUpdated += result.items_updated || 0;
+      itemsExisting += result.items_existing || 0;
       reservationsCreated += result.reservations_created;
+      reservationsExisting += result.reservations_existing || 0;
+      reservationsFailed += result.reservations_failed || 0;
       itemsNeedingPairing += result.items_needing_pairing || 0;
       if (result.errors.length > 0) errors.push(...result.errors.map((error) => ({ order_id: result.order_id, ...error })));
     }
@@ -851,11 +908,14 @@ export const handler = async (event) => {
     return {
       statusCode: errors.length && itemsCreated === 0 && itemsUpdated === 0 ? 400 : 200,
       body: JSON.stringify({
-        success: itemsCreated > 0 || itemsUpdated > 0 || reservationsCreated > 0 || itemsNeedingPairing > 0,
+        success: results.length > 0 && reservationsFailed === 0,
         jobs_created: jobsCreated,
         items_created: itemsCreated,
         items_updated: itemsUpdated,
+        items_existing: itemsExisting,
         reservations_created: reservationsCreated,
+        reservations_existing: reservationsExisting,
+        reservations_failed: reservationsFailed,
         items_needing_pairing: itemsNeedingPairing,
         errors,
         results,

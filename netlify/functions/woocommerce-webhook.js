@@ -3,7 +3,8 @@ export const config = {
 };
 
 import { createClient } from '@supabase/supabase-js';
-import { validateWooCommerceSignature } from './_shared/security.js';
+import { getHeader, validateWooCommerceSignature } from './_shared/security.js';
+import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -512,14 +513,19 @@ async function findBlankProductForLineItem(rawLineItem) {
 }
 
 async function existingJobItem(jobId, lineItemId, sku) {
-  let query = supabase.from('job_items').select('id').eq('job_id', jobId);
+  let query = supabase
+    .from('job_items')
+    .select('id')
+    .eq('job_id', jobId)
+    .order('id', { ascending: true })
+    .limit(1);
 
   if (lineItemId) query = query.eq('woocommerce_line_item_id', Number(lineItemId));
   else query = query.eq('order_sku', normalizeSku(sku));
 
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await query;
   if (error) throw error;
-  return data || null;
+  return Array.isArray(data) && data.length ? data[0] : null;
 }
 
 function stripEmpty(payload) {
@@ -582,6 +588,58 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
   return { id: data.id, created: true, updated: false };
 }
 
+async function upsertWooJobWithoutResettingProduction(order, customerName) {
+  const orderId = Number(order.id);
+  const cancelled = ['cancelled', 'refunded', 'failed'].includes(String(order.status || '').toLowerCase());
+  const common = {
+    job_name: `Order #${order.number || orderId}`,
+    customer_name: customerName,
+    woo_status: clean(order.status) || null,
+    woo_payment_status: orderPaymentStatus(order),
+    woo_order_number: clean(order.number) || String(orderId),
+    woo_order_total: Number(order.total || 0) || null,
+    woo_date_created: order.date_created_gmt ? `${order.date_created_gmt}Z` : (order.date_created || null),
+    woo_date_modified: order.date_modified_gmt ? `${order.date_modified_gmt}Z` : (order.date_modified || null),
+    last_woo_sync_at: new Date().toISOString(),
+    woo_payload: order || {},
+    notes: order.customer_note || null,
+  };
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('jobs')
+    .select('id, status')
+    .eq('woocommerce_order_id', orderId)
+    .order('id', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  if (existing?.id) {
+    const update = { ...common };
+    if (cancelled) update.status = 'cancelled';
+    const { data, error } = await supabase
+      .from('jobs')
+      .update(update)
+      .eq('id', existing.id)
+      .select('id, status')
+      .single();
+    if (error) throw error;
+    return { ...data, created: false };
+  }
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .insert({
+      woocommerce_order_id: orderId,
+      status: cancelled ? 'cancelled' : 'queued',
+      ...common,
+    })
+    .select('id, status')
+    .single();
+  if (error) throw error;
+  return { ...data, created: true };
+}
+
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'GET') {
@@ -634,6 +692,12 @@ export const handler = async (event) => {
     }
 
     const orderId = Number(order.id);
+    const runId = await startPullsheetRun(supabase, {
+      source: 'woocommerce_webhook',
+      orderId,
+      requestId: getHeader(event, 'x-nf-request-id') || getHeader(event, 'x-request-id') || null,
+      metadata: { webhook_topic: getHeader(event, 'x-wc-webhook-topic') || null },
+    });
     const customerName =
       `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() ||
       order.billing?.company ||
@@ -643,32 +707,7 @@ export const handler = async (event) => {
 
     const customerId = await findOrCreateCustomer(customerName);
 
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .upsert(
-        {
-          woocommerce_order_id: orderId,
-          job_name: `Order #${order.number || orderId}`,
-          customer_name: customerName,
-          status: ['cancelled', 'cancelled', 'refunded', 'failed'].includes(String(order.status || '').toLowerCase()) ? 'cancelled' : 'queued',
-          woo_status: clean(order.status) || null,
-          woo_payment_status: orderPaymentStatus(order),
-          woo_order_number: clean(order.number) || String(orderId),
-          woo_order_total: Number(order.total || 0) || null,
-          woo_date_created: order.date_created_gmt ? `${order.date_created_gmt}Z` : (order.date_created || null),
-          woo_date_modified: order.date_modified_gmt ? `${order.date_modified_gmt}Z` : (order.date_modified || null),
-          last_woo_sync_at: new Date().toISOString(),
-          woo_payload: order || {},
-          notes: order.customer_note || null,
-        },
-        { onConflict: 'woocommerce_order_id' }
-      )
-      .select('id')
-      .single();
-
-    if (jobError) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to create job', details: jobError.message }) };
-    }
+    const job = await upsertWooJobWithoutResettingProduction(order, customerName);
 
     await setJobDueDateFromOrder(order, job.id);
 
@@ -676,6 +715,11 @@ export const handler = async (event) => {
 
     const createdItems = [];
     const updatedItems = [];
+    const existingItems = [];
+    let reservationsCreated = 0;
+    let reservationsExisting = 0;
+    let reservationsFailed = 0;
+    let itemsNeedingPairing = 0;
     const errors = [];
 
     for (const rawItem of order.line_items || []) {
@@ -707,7 +751,8 @@ export const handler = async (event) => {
           });
 
           if (jobItem.created) createdItems.push(jobItem.id);
-          if (jobItem.updated) updatedItems.push(jobItem.id);
+          else if (jobItem.updated) updatedItems.push(jobItem.id);
+          else existingItems.push(jobItem.id);
           continue;
         }
 
@@ -747,9 +792,33 @@ export const handler = async (event) => {
         });
 
         if (jobItem.created) createdItems.push(jobItem.id);
-        if (jobItem.updated) updatedItems.push(jobItem.id);
+        else if (jobItem.updated) updatedItems.push(jobItem.id);
+        else existingItems.push(jobItem.id);
+
+        if (blankProduct?.id) {
+          try {
+            const reservation = await ensureJobItemReservation(supabase, {
+              jobId: job.id,
+              jobItemId: jobItem.id,
+              blankProductId: blankProduct.id,
+              quantity: Number(lineItem.quantity || 1),
+            });
+            if (reservation?.action === 'created') reservationsCreated += 1;
+            else reservationsExisting += 1;
+          } catch (reservationError) {
+            reservationsFailed += 1;
+            errors.push({
+              sku,
+              job_item_id: jobItem.id,
+              code: reservationError.code || 'reservation_failed',
+              error: `Reservation failed: ${reservationError.message}`,
+              details: reservationError.details || null,
+            });
+          }
+        }
 
         if (!blankProduct?.id) {
+          itemsNeedingPairing += 1;
           errors.push({
             sku,
             job_item_id: jobItem.id,
@@ -770,15 +839,38 @@ export const handler = async (event) => {
       }
     }
 
+    if (reservationsCreated + reservationsExisting > 0 && reservationsFailed === 0 && !String(job.status || '').toLowerCase().includes('cancel')) {
+      await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
+    }
+
     await syncOrderStatusBoard(order, job.id);
+    await finishPullsheetRun(supabase, runId, {
+      job_id: Number(job.id),
+      outcome: errors.length ? 'completed_with_warnings' : 'completed',
+      jobs_created: job.created ? 1 : 0,
+      items_created: createdItems.length,
+      items_updated: updatedItems.length,
+      items_existing: existingItems.length,
+      reservations_created: reservationsCreated,
+      reservations_existing: reservationsExisting,
+      reservations_failed: reservationsFailed,
+      items_needing_pairing: itemsNeedingPairing,
+      metadata: { error_count: errors.length },
+    });
 
     return {
-      statusCode: createdItems.length || updatedItems.length ? 200 : 400,
+      statusCode: reservationsFailed > 0 ? 207 : 200,
       body: JSON.stringify({
-        success: createdItems.length > 0 || updatedItems.length > 0,
+        success: reservationsFailed === 0,
         job_id: job.id,
+        job_created: Boolean(job.created),
         items_created: createdItems.length,
         items_updated: updatedItems.length,
+        items_existing: existingItems.length,
+        reservations_created: reservationsCreated,
+        reservations_existing: reservationsExisting,
+        reservations_failed: reservationsFailed,
+        items_needing_pairing: itemsNeedingPairing,
         production_status_synced: true,
         errors,
       }),

@@ -1,34 +1,12 @@
-
+import crypto from 'node:crypto';
 import zlib from 'node:zlib';
-import { authorizeEmployee } from './_shared/security.js';
+import { authorizeEmployee, createServiceClient, jsonResponse } from './_shared/security.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY;
-
-const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 25);
-const MAX_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_CHUNK_SIZE || 100);
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Content-Type": "application/json",
-};
-
-function json(statusCode, body) {
-  return {
-    statusCode,
-    headers: CORS_HEADERS,
-    body: JSON.stringify(body),
-  };
-}
-
-function requireConfig() {
-  if (!SUPABASE_URL) throw new Error("Missing SUPABASE_URL or VITE_SUPABASE_URL.");
-  if (!SUPABASE_KEY) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
-}
+const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 50);
+const MAX_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_CHUNK_SIZE || 250);
+const DOWNLOAD_TIMEOUT_MS = Number(process.env.SUPPLIER_CATALOG_DOWNLOAD_TIMEOUT_MS || 30000);
+const MAX_SOURCE_BYTES = Number(process.env.SUPPLIER_CATALOG_MAX_SOURCE_BYTES || 100 * 1024 * 1024);
+const CACHE_BUCKET = 'supplier-sync-cache';
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -271,52 +249,6 @@ function extractCsvTextFromZipBuffer(zipBuffer) {
   };
 }
 
-async function downloadSupplierText(feed) {
-  const response = await fetch(feed.feed_url, {
-    redirect: "follow",
-    headers: safeHeaderMap(feed),
-  });
-
-  if (!response.ok) {
-    if (response.status === 403) {
-      throw new Error(
-        "Supplier file download failed: HTTP 403. The supplier server is refusing Netlify/server access. Try adding required Referer/User-Agent/Auth headers to supplier_catalog_feeds.http_headers, use a direct public CSV/ZIP URL, or ask the supplier for an API/static feed URL."
-      );
-    }
-
-    throw new Error(`Supplier file download failed: HTTP ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  if (!buffer.length) throw new Error("Supplier file downloaded but appears to be empty.");
-
-  if (isZipBuffer(buffer)) {
-    const extracted = extractCsvTextFromZipBuffer(buffer);
-    return {
-      text: extracted.text,
-      sourceLabel: `${feed.feed_url} :: ${extracted.fileName}`,
-      sourceKind: "zip",
-    };
-  }
-
-  if (isGzipBuffer(buffer)) {
-    const extracted = zlib.gunzipSync(buffer);
-    return {
-      text: decodeBufferText(extracted),
-      sourceLabel: feed.feed_url,
-      sourceKind: "gzip",
-    };
-  }
-
-  return {
-    text: decodeBufferText(buffer),
-    sourceLabel: feed.feed_url,
-    sourceKind: "csv",
-  };
-}
-
 function readCsvChunkFromText(csvText, offset, chunkSize) {
   const records = splitCsvRecords(csvText).records;
   if (!records.length) return { rows: [], total_scanned: 0, usable_seen: 0, has_more_hint: false };
@@ -351,184 +283,379 @@ function readCsvChunkFromText(csvText, offset, chunkSize) {
   };
 }
 
-async function supabaseFetch(path, options = {}) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
-    ...options,
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: options.prefer || "return=representation",
-      ...(options.headers || {}),
-    },
-  });
 
-  const text = await response.text();
-  let body = null;
 
+function safeSourceUrl(value) {
+  const parsed = new URL(clean(value));
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Supplier feed URL must use HTTP or HTTPS.');
+  }
+  if (['localhost', '127.0.0.1', '::1'].includes(parsed.hostname.toLowerCase())) {
+    throw new Error('Local supplier feed URLs are not allowed.');
+  }
+  const sanitized = new URL(parsed.toString());
+  sanitized.username = '';
+  sanitized.password = '';
+  sanitized.search = '';
+  sanitized.hash = '';
+  return { downloadUrl: parsed.toString(), auditUrl: sanitized.toString() };
+}
+
+async function readResponseBuffer(response, maxBytes) {
+  const declared = Number(response.headers.get('content-length') || 0);
+  if (declared > maxBytes) {
+    throw new Error(`Supplier source is ${declared} bytes, above the ${maxBytes} byte safety limit.`);
+  }
+
+  if (!response.body?.getReader) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > maxBytes) throw new Error(`Supplier source exceeded the ${maxBytes} byte safety limit.`);
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel('source too large').catch(() => {});
+      throw new Error(`Supplier source exceeded the ${maxBytes} byte safety limit.`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total);
+}
+
+async function downloadSupplierBuffer(feed) {
+  const { downloadUrl, auditUrl } = safeSourceUrl(feed.feed_url);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
   try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = text;
+    const response = await fetch(downloadUrl, {
+      redirect: 'follow',
+      headers: safeHeaderMap(feed),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Supplier file download failed with HTTP 403. Verify the configured feed URL and required request headers.');
+      }
+      throw new Error(`Supplier file download failed: HTTP ${response.status}`);
+    }
+    const buffer = await readResponseBuffer(response, MAX_SOURCE_BYTES);
+    if (!buffer.length) throw new Error('Supplier file downloaded but appears to be empty.');
+    return {
+      buffer,
+      auditUrl,
+      etag: clean(response.headers.get('etag')) || null,
+      lastModified: clean(response.headers.get('last-modified')) || null,
+      contentType: clean(response.headers.get('content-type')) || null,
+      sha256: crypto.createHash('sha256').update(buffer).digest('hex'),
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error(`Supplier file download timed out after ${DOWNLOAD_TIMEOUT_MS} ms.`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-
-  if (!response.ok) {
-    const message = typeof body === "string"
-      ? body
-      : body?.message || body?.hint || body?.details || `Supabase request failed: ${response.status}`;
-    throw new Error(message);
-  }
-
-  return body;
 }
 
-async function updateFeed(feedId, values) {
-  return supabaseFetch(`/supplier_catalog_feeds?id=eq.${encodeURIComponent(feedId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      ...values,
-      updated_at: new Date().toISOString(),
-    }),
+function supplierTextFromBuffer(buffer, sourceLabel) {
+  if (isZipBuffer(buffer)) {
+    const extracted = extractCsvTextFromZipBuffer(buffer);
+    return { text: extracted.text, sourceLabel: `${sourceLabel} :: ${extracted.fileName}`, sourceKind: 'zip' };
+  }
+  if (isGzipBuffer(buffer)) {
+    return { text: decodeBufferText(zlib.gunzipSync(buffer)), sourceLabel, sourceKind: 'gzip' };
+  }
+  return { text: decodeBufferText(buffer), sourceLabel, sourceKind: 'csv' };
+}
+
+async function getFeed(supabase, feedId) {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .select('*')
+    .eq('id', feedId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function updateFeed(supabase, feedId, values) {
+  const { error } = await supabase
+    .from('supplier_catalog_feeds')
+    .update({ ...values, updated_at: new Date().toISOString() })
+    .eq('id', feedId);
+  if (error) throw error;
+}
+
+async function getRun(supabase, runId) {
+  const { data, error } = await supabase
+    .from('sc_supplier_catalog_sync_runs')
+    .select('*')
+    .eq('id', Number(runId))
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function findRunningRun(supabase, feedId) {
+  const { data, error } = await supabase
+    .from('sc_supplier_catalog_sync_runs')
+    .select('*')
+    .eq('feed_id_text', String(feedId))
+    .eq('status', 'running')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function updateRun(supabase, runId, values) {
+  const { data, error } = await supabase
+    .from('sc_supplier_catalog_sync_runs')
+    .update({ ...values, updated_at: new Date().toISOString() })
+    .eq('id', Number(runId))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function createRun(supabase, feed, userId) {
+  const existing = await findRunningRun(supabase, feed.id);
+  if (existing) return existing;
+
+  const { data, error } = await supabase
+    .from('sc_supplier_catalog_sync_runs')
+    .insert({
+      feed_id_text: String(feed.id),
+      initiated_by: userId || null,
+      status: 'running',
+      source_url: safeSourceUrl(feed.feed_url).auditUrl,
+      metadata: { feed_name: feed.feed_name || null, supplier_name: feed.supplier_name || null },
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function cacheSource(supabase, run, feed) {
+  const downloaded = await downloadSupplierBuffer(feed);
+  const objectPath = `${String(feed.id).replace(/[^a-zA-Z0-9_-]/g, '_')}/${run.id}/source.bin`;
+  const { error: uploadError } = await supabase.storage
+    .from(CACHE_BUCKET)
+    .upload(objectPath, downloaded.buffer, {
+      contentType: downloaded.contentType || 'application/octet-stream',
+      upsert: true,
+      cacheControl: '0',
+    });
+  if (uploadError) throw new Error(`Unable to cache supplier source: ${uploadError.message}`);
+
+  const source = supplierTextFromBuffer(downloaded.buffer, downloaded.auditUrl);
+  const updated = await updateRun(supabase, run.id, {
+    cache_bucket: CACHE_BUCKET,
+    cache_object_path: objectPath,
+    source_url: downloaded.auditUrl,
+    source_label: source.sourceLabel,
+    source_kind: source.sourceKind,
+    source_etag: downloaded.etag,
+    source_last_modified: downloaded.lastModified,
+    source_sha256: downloaded.sha256,
+    source_bytes: downloaded.buffer.length,
   });
+  return { run: updated, buffer: downloaded.buffer, source };
 }
 
-async function getFeed(feedId) {
-  const feeds = await supabaseFetch(`/supplier_catalog_feeds?id=eq.${encodeURIComponent(feedId)}&limit=1`);
-  return Array.isArray(feeds) ? feeds[0] : null;
+async function loadCachedSource(supabase, run) {
+  if (!run.cache_object_path) throw new Error('Supplier sync run has no cached source. Start a new run.');
+  const { data, error } = await supabase.storage.from(run.cache_bucket || CACHE_BUCKET).download(run.cache_object_path);
+  if (error) throw new Error(`Unable to read cached supplier source: ${error.message}`);
+  const buffer = Buffer.from(await data.arrayBuffer());
+  if (!buffer.length) throw new Error('Cached supplier source is empty.');
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  if (run.source_sha256 && sha256 !== run.source_sha256) throw new Error('Cached supplier source checksum does not match the recorded run.');
+  return { buffer, source: supplierTextFromBuffer(buffer, run.source_label || run.source_url || 'supplier source') };
+}
+
+async function removeCachedSource(supabase, run) {
+  if (!run?.cache_object_path) return;
+  const { error } = await supabase.storage.from(run.cache_bucket || CACHE_BUCKET).remove([run.cache_object_path]);
+  if (error) console.warn('Supplier cache cleanup failed:', error.message);
 }
 
 export const handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: CORS_HEADERS, body: "" };
-  if (event.httpMethod !== "POST") return json(405, { success: false, message: "Use POST." });
+  if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
+  if (event.httpMethod === 'GET') {
+    return jsonResponse(200, { success: true, message: 'supplier-catalog-feed-sync resumable cache v2 active' }, event);
+  }
+  if (event.httpMethod !== 'POST') return jsonResponse(405, { success: false, message: 'Use POST.' }, event);
 
   const authorization = await authorizeEmployee(event, {
     functionName: 'supplier-catalog-feed-sync',
     allowedRoles: ['admin', 'manager'],
   });
-  if (!authorization.ok) {
-    return json(authorization.statusCode, { success: false, message: authorization.message });
-  }
+  if (!authorization.ok) return jsonResponse(authorization.statusCode, { success: false, message: authorization.message }, event);
 
-  let feedId = null;
-
+  const supabase = createServiceClient();
+  let run = null;
+  let feed = null;
   try {
-    requireConfig();
-
-    const payload = JSON.parse(event.body || "{}");
-    feedId = payload.feed_id;
-    const offset = Math.max(0, Number(payload.offset || 0));
+    const payload = JSON.parse(event.body || '{}');
+    const feedId = payload.feed_id;
+    const requestedOffset = Math.max(0, Number(payload.offset || 0));
     const requestedChunkSize = Number(payload.chunk_size || DEFAULT_CHUNK_SIZE);
     const chunkSize = Math.min(Math.max(requestedChunkSize, 5), MAX_CHUNK_SIZE);
+    if (!feedId) return jsonResponse(400, { success: false, message: 'Missing feed_id.' }, event);
 
-    if (!feedId) return json(400, { success: false, message: "Missing feed_id." });
+    feed = await getFeed(supabase, feedId);
+    if (!feed) return jsonResponse(404, { success: false, message: 'Supplier catalog feed not found.' }, event);
+    if (!feed.is_active) return jsonResponse(400, { success: false, message: 'Supplier catalog feed is inactive.' }, event);
 
-    const feed = await getFeed(feedId);
-
-    if (!feed) return json(404, { success: false, message: "Supplier catalog feed not found." });
-    if (!feed.is_active) return json(400, { success: false, message: "Supplier catalog feed is inactive." });
-
-    await updateFeed(feedId, {
-      last_sync_status: "running",
-      last_sync_message: `Downloading supplier source and reading chunk starting at usable row ${offset + 1}...`,
-    });
-
-    const downloaded = await downloadSupplierText(feed);
-
-    if (!downloaded.text || downloaded.text.trim().length < 10) {
-      throw new Error("Supplier source downloaded but did not contain usable CSV text.");
+    run = payload.run_id ? await getRun(supabase, payload.run_id) : await createRun(supabase, feed, authorization.user.id);
+    if (!run) throw new Error('Supplier sync run was not found.');
+    if (String(run.feed_id_text) !== String(feed.id)) throw new Error('Supplier sync run does not belong to the requested feed.');
+    if (run.status !== 'running') {
+      return jsonResponse(409, { success: false, message: `Supplier sync run is ${run.status}. Start a new run.`, run_id: run.id }, event);
     }
 
-    const chunk = readCsvChunkFromText(downloaded.text, offset, chunkSize);
+    const offset = Math.max(requestedOffset, Number(run.last_offset || 0));
+    await updateFeed(supabase, feed.id, {
+      last_sync_status: 'running',
+      last_sync_message: run.cache_object_path
+        ? `Reading cached supplier source at usable row ${offset + 1}...`
+        : 'Downloading and caching supplier source...',
+      ...(offset === 0 ? { last_catalog_rows_inserted: 0, last_blank_products_updated: 0, last_row_count: 0 } : {}),
+    });
+
+    let cached;
+    if (run.cache_object_path) cached = await loadCachedSource(supabase, run);
+    else {
+      const created = await cacheSource(supabase, run, feed);
+      run = created.run;
+      cached = { buffer: created.buffer, source: created.source };
+    }
+
+    if (!cached.source.text || cached.source.text.trim().length < 10) throw new Error('Supplier source did not contain usable CSV text.');
+    const chunk = readCsvChunkFromText(cached.source.text, offset, chunkSize);
 
     if (!chunk.rows.length) {
-      await updateFeed(feedId, {
+      run = await updateRun(supabase, run.id, {
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        last_offset: offset,
+      });
+      await updateFeed(supabase, feed.id, {
         last_sync_at: new Date().toISOString(),
-        last_sync_status: "success",
-        last_sync_message: `Sync complete. No more supplier rows after offset ${offset}.`,
+        last_sync_status: 'success',
+        last_sync_message: `Supplier catalog sync complete at usable row ${offset}.`,
         last_row_count: offset,
       });
-
-      return json(200, {
+      await removeCachedSource(supabase, run);
+      return jsonResponse(200, {
         success: true,
         complete: true,
-        feed_id: feedId,
+        run_id: run.id,
+        feed_id: feed.id,
         offset,
         next_offset: offset,
         imported_this_call: 0,
         has_more: false,
-        source_kind: downloaded.sourceKind,
-        message: "Supplier catalog sync complete.",
-      });
+        source_kind: run.source_kind,
+        message: 'Supplier catalog sync complete.',
+      }, event);
     }
 
-    await updateFeed(feedId, {
-      last_sync_status: "running",
-      last_sync_message: `Importing ${chunk.rows.length} row(s) from ${downloaded.sourceKind.toUpperCase()} source...`,
+    const { data: result, error: importError } = await supabase.rpc('import_supplier_catalog_rows', {
+      p_supplier_name: feed.supplier_name,
+      p_source_file_name: feed.source_file_name || feed.feed_name || run.source_label || feed.feed_url,
+      p_rows: chunk.rows,
+      p_update_blank_products: Boolean(feed.update_blank_products),
+      p_create_missing_lookups: Boolean(feed.create_missing_lookups),
     });
-
-    const result = await supabaseFetch(`/rpc/import_supplier_catalog_rows`, {
-      method: "POST",
-      body: JSON.stringify({
-        p_supplier_name: feed.supplier_name,
-        p_source_file_name: feed.source_file_name || feed.feed_name || downloaded.sourceLabel || feed.feed_url,
-        p_rows: chunk.rows,
-        p_update_blank_products: Boolean(feed.update_blank_products),
-        p_create_missing_lookups: Boolean(feed.create_missing_lookups),
-      }),
-    });
+    if (importError) throw importError;
 
     const nextOffset = offset + chunk.rows.length;
     const hasMore = chunk.has_more_hint && chunk.rows.length === chunkSize;
+    const inserted = Number(result?.catalog_rows_inserted || 0);
+    const updated = Number(result?.catalog_rows_updated || 0);
+    const blanksUpdated = Number(result?.blank_products_updated || 0);
 
-    await updateFeed(feedId, {
-      last_sync_at: hasMore ? feed.last_sync_at : new Date().toISOString(),
-      last_sync_status: hasMore ? "running" : "success",
-      last_sync_message: hasMore
-        ? `Imported through usable row ${nextOffset} from ${downloaded.sourceKind.toUpperCase()} source. Continue sync...`
-        : `Supplier catalog sync complete. Imported through usable row ${nextOffset}.`,
-      last_row_count: nextOffset,
-      last_catalog_rows_inserted: Number(feed.last_catalog_rows_inserted || 0) + Number(result?.catalog_rows_inserted || 0),
-      last_blank_products_updated: Number(feed.last_blank_products_updated || 0) + Number(result?.blank_products_updated || 0),
+    run = await updateRun(supabase, run.id, {
+      status: hasMore ? 'running' : 'completed',
+      completed_at: hasMore ? null : new Date().toISOString(),
+      rows_processed: Number(run.rows_processed || 0) + chunk.rows.length,
+      rows_inserted: Number(run.rows_inserted || 0) + inserted,
+      rows_updated: Number(run.rows_updated || 0) + updated,
+      blank_products_updated: Number(run.blank_products_updated || 0) + blanksUpdated,
+      last_offset: nextOffset,
     });
 
-    return json(200, {
+    await updateFeed(supabase, feed.id, {
+      last_sync_at: hasMore ? feed.last_sync_at : new Date().toISOString(),
+      last_sync_status: hasMore ? 'running' : 'success',
+      last_sync_message: hasMore
+        ? `Imported through usable row ${nextOffset} from cached ${run.source_kind || 'supplier'} source.`
+        : `Supplier catalog sync complete through usable row ${nextOffset}.`,
+      last_row_count: nextOffset,
+      last_catalog_rows_inserted: Number(run.rows_inserted || 0),
+      last_blank_products_updated: Number(run.blank_products_updated || 0),
+    });
+
+    if (!hasMore) await removeCachedSource(supabase, run);
+
+    return jsonResponse(200, {
       success: true,
       complete: !hasMore,
-      feed_id: feedId,
+      run_id: run.id,
+      feed_id: feed.id,
       offset,
       chunk_size: chunkSize,
       imported_this_call: chunk.rows.length,
       next_offset: nextOffset,
       has_more: hasMore,
-      scanned_this_call: chunk.total_scanned,
-      source_kind: downloaded.sourceKind,
+      source_kind: run.source_kind,
+      source_downloaded_once: true,
       import_result: result,
+      run_totals: {
+        rows_processed: run.rows_processed,
+        rows_inserted: run.rows_inserted,
+        rows_updated: run.rows_updated,
+        blank_products_updated: run.blank_products_updated,
+      },
       message: hasMore
         ? `Imported ${nextOffset} usable supplier row(s).`
         : `Supplier catalog sync complete. Imported through ${nextOffset} usable supplier row(s).`,
-    });
+    }, event);
   } catch (error) {
-    if (feedId) {
+    console.error('supplier-catalog-feed-sync error:', error);
+    if (run?.id) {
       try {
-        await updateFeed(feedId, {
-          last_sync_at: new Date().toISOString(),
-          last_sync_status: "failed",
-          last_sync_message: error.message || "Supplier catalog sync failed.",
+        run = await updateRun(supabase, run.id, {
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: clean(error.message).slice(0, 4000),
         });
-      } catch {
-        // Do not mask original error.
-      }
+      } catch { /* retain original error */ }
     }
-
-    return json(500, {
+    if (feed?.id) {
+      try {
+        await updateFeed(supabase, feed.id, {
+          last_sync_at: new Date().toISOString(),
+          last_sync_status: 'failed',
+          last_sync_message: clean(error.message).slice(0, 2000),
+        });
+      } catch { /* retain original error */ }
+    }
+    return jsonResponse(500, {
       success: false,
-      message: error.message || "Supplier catalog feed sync failed.",
-      troubleshooting: [
-        "HTTP 403 means the supplier refused the download request.",
-        "Try adding Referer, Authorization, Cookie, or a supplier-required User-Agent in supplier_catalog_feeds.http_headers.",
-        "Ask the supplier for a direct public CSV/ZIP feed URL or API key.",
-        "If the file only downloads after browser login, server-side syncing will need an authenticated supplier API/feed.",
-      ],
-    });
+      run_id: run?.id || null,
+      message: error.message || 'Supplier catalog feed sync failed.',
+    }, event);
   }
 };
