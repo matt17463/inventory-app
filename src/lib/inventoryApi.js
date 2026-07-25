@@ -2322,7 +2322,7 @@ export async function getFinishedMatchSuggestions(search = '') {
   return data || [];
 }
 
-export async function useFinishedInventoryForJobItem({ jobItemId, finishedProductId, quantity, notes }) {
+export async function applyFinishedInventoryToJobItem({ jobItemId, finishedProductId, quantity, notes }) {
   const { data, error } = await supabase.rpc('phase2_use_finished_inventory_for_job_item', {
     p_job_item_id: jobItemId,
     p_finished_product_id: finishedProductId,
