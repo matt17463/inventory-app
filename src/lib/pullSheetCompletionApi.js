@@ -1,5 +1,5 @@
 
-import { supabase } from "./supabaseClient";
+import { supabase } from "../supabaseClient";
 
 function unwrapRpcResult(data, error) {
   if (error) {
