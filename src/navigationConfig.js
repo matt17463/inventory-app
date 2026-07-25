@@ -126,6 +126,7 @@ export const navSections = [
       { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
+      { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },
     ],
   },

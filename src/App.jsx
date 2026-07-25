@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AddItemToBin from './AddItemToBin';
 import AuditMode from './AuditMode';
 import BinContents from './BinContents';
@@ -56,7 +56,6 @@ import CustomerPortalAdmin from './CustomerPortalAdmin';
 import CustomerPortal from './CustomerPortal';
 import CustomerPortalPreview from './CustomerPortalPreview';
 import ArtworkPluginBridge from './ArtworkPluginBridge';
-import CreateProduct from './CreateProduct';
 import TestingMode from './TestingMode';
 import ThemeSettings from './ThemeSettings';
 import ApprovalAutomation from './ApprovalAutomation';
@@ -71,6 +70,8 @@ import './App.css';
 import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
+import DeploymentHealth from './DeploymentHealth';
+import NotFound from './NotFound';
 
 function EmployeeRoutes() {
   return (
@@ -81,7 +82,7 @@ function EmployeeRoutes() {
       <Route path="/pull-sheets" element={<PullSheetList />} />
       <Route path="/customer-portal-preview" element={<CustomerPortalPreview />} />
       <Route path="/artwork-bridge" element={<ArtworkPluginBridge />} />
-      <Route path="/create-product" element={<CreateProduct />} />
+      <Route path="/create-product" element={<Navigate replace to="/inventory/edit-blanks" />} />
       <Route path="/testing-mode" element={<TestingMode />} />
       <Route path="/theme-settings" element={<ThemeSettings />} />
       <Route path="/inventory/blanks" element={<BlankInventory />} />
@@ -148,7 +149,8 @@ function EmployeeRoutes() {
       <Route path="/return-finished" element={<ReturnFinishedInventory />} />
       <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
       <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
-      <Route path="*" element={<Home />} />
+      <Route path="/deployment-health" element={<DeploymentHealth />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
