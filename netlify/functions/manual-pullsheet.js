@@ -1,4 +1,5 @@
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
+import { validateSharedSecret } from './_shared/security.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -775,8 +776,12 @@ async function processOrder(order) {
   return orderResult;
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   try {
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 204, body: '' };
+    }
+
     if (event.httpMethod === 'GET') {
       return { statusCode: 200, body: JSON.stringify({ success: true, message: 'manual-pullsheet due-dates v1.6.0 active' }) };
     }
@@ -789,12 +794,12 @@ exports.handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }) };
     }
 
-    const headers = Object.fromEntries(Object.entries(event.headers || {}).map(([key, value]) => [key.toLowerCase(), String(value || '').trim()]));
-    const secret = String(process.env.MANUAL_PULLSHEET_SECRET || process.env.WC_WEBHOOK_SECRET || '').trim();
-    const providedSecret = headers['x-manual-pullsheet-secret'] || headers['x-webhook-secret'] || '';
-
-    if (secret && providedSecret !== secret) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Invalid manual pullsheet secret' }) };
+    const authorization = validateSharedSecret(event, {
+      envNames: ['MANUAL_PULLSHEET_SECRET', 'SC_PULLSHEET_SECRET', 'WC_WEBHOOK_SECRET'],
+      headerNames: ['x-manual-pullsheet-secret', 'x-webhook-secret'],
+    });
+    if (!authorization.ok) {
+      return { statusCode: authorization.statusCode, body: JSON.stringify({ error: authorization.message, code: authorization.code }) };
     }
 
     const body = JSON.parse(event.body || '{}');

@@ -1,11 +1,7 @@
+import { validateSharedSecret } from './_shared/security.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-const EXPECTED_SECRET =
-  process.env.SC_PULLSHEET_SECRET ||
-  process.env.MANUAL_PULLSHEET_SECRET ||
-  process.env.WC_WEBHOOK_SECRET ||
-  process.env.PULLSHEET_SECRET;
 
 function json(statusCode, payload) {
   return {
@@ -100,7 +96,7 @@ async function callSupabaseRpc(functionName, body) {
   return data;
 }
 
-exports.handler = async function handler(event) {
+export const handler = async function handler(event) {
   if (event.httpMethod === 'OPTIONS') {
     return json(200, { ok: true });
   }
@@ -116,15 +112,16 @@ exports.handler = async function handler(event) {
     });
   }
 
-  const providedSecret =
-    getHeader(event.headers, 'x-manual-pullsheet-secret') ||
-    getHeader(event.headers, 'x-webhook-secret') ||
-    getHeader(event.headers, 'authorization')?.replace(/^Bearer\s+/i, '');
-
-  if (EXPECTED_SECRET && providedSecret !== EXPECTED_SECRET) {
-    return json(401, {
+  const authorization = validateSharedSecret(event, {
+    envNames: ['SC_PULLSHEET_SECRET', 'MANUAL_PULLSHEET_SECRET', 'WC_WEBHOOK_SECRET', 'PULLSHEET_SECRET'],
+    headerNames: ['x-manual-pullsheet-secret', 'x-webhook-secret'],
+    allowBearer: true,
+  });
+  if (!authorization.ok) {
+    return json(authorization.statusCode, {
       success: false,
-      message: 'Invalid pull sheet secret.',
+      message: authorization.message,
+      code: authorization.code,
     });
   }
 

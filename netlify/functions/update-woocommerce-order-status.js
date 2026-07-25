@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
+import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
 function clean(value) {
@@ -33,9 +35,7 @@ function getWooAuthHeader() {
 function normalizeWooStatus(value) {
   const status = clean(value).toLowerCase().replace(/_/g, '-');
   const allowed = new Set(['pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed']);
-  if (!allowed.has(status)) {
-    throw new Error(`Unsupported WooCommerce status: ${value}`);
-  }
+  if (!allowed.has(status)) throw new Error(`Unsupported WooCommerce status: ${value}`);
   return status;
 }
 
@@ -58,10 +58,7 @@ async function syncSupabaseOrderStatus({ order, orderId, jobId = null }) {
     });
 
     if (error) throw error;
-
-    if (jobId) {
-      await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(jobId) });
-    }
+    if (jobId) await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(jobId) });
   } catch (err) {
     console.warn('Supabase order status sync failed:', err.message);
   }
@@ -69,19 +66,24 @@ async function syncSupabaseOrderStatus({ order, orderId, jobId = null }) {
 
 export const handler = async (event) => {
   try {
+    if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
     if (event.httpMethod === 'GET') {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'update-woocommerce-order-status active' }),
-      };
+      return jsonResponse(200, { success: true, message: 'update-woocommerce-order-status active; POST requires employee authentication' }, event);
+    }
+    if (event.httpMethod !== 'POST') {
+      return jsonResponse(405, { success: false, error: 'Method not allowed' }, event);
     }
 
-    if (event.httpMethod !== 'POST') {
-      return { statusCode: 405, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
+    const authorization = await authorizeEmployee(event, {
+      functionName: 'update-woocommerce-order-status',
+      allowedRoles: ['admin', 'manager'],
+    });
+    if (!authorization.ok) {
+      return jsonResponse(authorization.statusCode, { success: false, error: authorization.message }, event);
     }
 
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ success: false, error: 'Missing Supabase environment variables.' }) };
+      return jsonResponse(500, { success: false, error: 'Missing Supabase environment variables.' }, event);
     }
 
     const body = JSON.parse(event.body || '{}');
@@ -89,50 +91,36 @@ export const handler = async (event) => {
     const jobId = body.jobId || body.job_id || null;
     const status = normalizeWooStatus(body.status || 'completed');
 
-    if (!orderId) {
-      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'orderId is required.' }) };
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return jsonResponse(400, { success: false, error: 'A valid orderId is required.' }, event);
     }
 
-    const siteUrl = getWooSiteUrl();
-    const endpoint = `${siteUrl}/wp-json/wc/v3/orders/${orderId}`;
-
+    const endpoint = `${getWooSiteUrl()}/wp-json/wc/v3/orders/${orderId}`;
     const response = await fetch(endpoint, {
       method: 'PUT',
-      headers: {
-        Authorization: getWooAuthHeader(),
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: getWooAuthHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
 
     const payload = await response.json().catch(() => ({}));
-
     if (!response.ok) {
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({
-          success: false,
-          error: 'WooCommerce order status update failed.',
-          details: payload?.message || response.statusText,
-          payload,
-        }),
-      };
+      return jsonResponse(response.status, {
+        success: false,
+        error: 'WooCommerce order status update failed.',
+        details: payload?.message || response.statusText,
+      }, event);
     }
 
     await syncSupabaseOrderStatus({ order: payload, orderId, jobId });
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        order_id: orderId,
-        job_id: jobId,
-        woo_status: payload?.status || status,
-        order: payload,
-      }),
-    };
+    return jsonResponse(200, {
+      success: true,
+      order_id: orderId,
+      job_id: jobId,
+      woo_status: payload?.status || status,
+      order: payload,
+    }, event);
   } catch (err) {
     console.error('update-woocommerce-order-status error:', err);
-    return { statusCode: 500, body: JSON.stringify({ success: false, error: 'Server error', details: err.message }) };
+    return jsonResponse(500, { success: false, error: 'Server error', details: err.message }, event);
   }
 };

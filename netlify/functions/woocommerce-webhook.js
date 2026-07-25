@@ -3,7 +3,7 @@ export const config = {
 };
 
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+import { validateWooCommerceSignature } from './_shared/security.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -599,38 +599,29 @@ export const handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: 'Missing Supabase env vars' }) };
     }
 
-    let rawBody = event.rawBody || event.body || '';
-
-    if (event.isBase64Encoded && event.body) {
-      rawBody = Buffer.from(event.body, 'base64').toString('utf8');
+    const signatureValidation = validateWooCommerceSignature(event, ['WC_WEBHOOK_SECRET']);
+    if (!signatureValidation.ok) {
+      return {
+        statusCode: signatureValidation.statusCode,
+        body: JSON.stringify({ error: signatureValidation.message, code: signatureValidation.code }),
+      };
     }
 
+    const rawBody = signatureValidation.rawBody;
     const headers = Object.fromEntries(
       Object.entries(event.headers || {}).map(([key, value]) => [key.toLowerCase(), value])
     );
-
     const contentType = headers['content-type'] || '';
+
+    if (!rawBody) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'WooCommerce webhook body is empty' }) };
+    }
 
     if (contentType.includes('application/x-www-form-urlencoded') && rawBody.length <= 50) {
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'WooCommerce setup ping accepted' }),
+        body: JSON.stringify({ success: true, message: 'Signed WooCommerce setup ping accepted' }),
       };
-    }
-
-    if (!rawBody) {
-      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'No body sent' }) };
-    }
-
-    const secret = process.env.WC_WEBHOOK_SECRET || '';
-    const signature = headers['x-wc-webhook-signature'];
-
-    if (secret && signature) {
-      const expected = crypto.createHmac('sha256', secret.trim()).update(rawBody, 'utf8').digest('base64');
-
-      if (signature.trim() !== expected) {
-        return { statusCode: 401, body: JSON.stringify({ error: 'Invalid WooCommerce signature' }) };
-      }
     }
 
     const order = JSON.parse(rawBody);

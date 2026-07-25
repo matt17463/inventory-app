@@ -1,10 +1,11 @@
 
-const zlib = require("zlib");
+import zlib from 'node:zlib';
+import { authorizeEmployee } from './_shared/security.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY;
 
 const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 25);
 const MAX_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_CHUNK_SIZE || 100);
@@ -26,7 +27,7 @@ function json(statusCode, body) {
 
 function requireConfig() {
   if (!SUPABASE_URL) throw new Error("Missing SUPABASE_URL or VITE_SUPABASE_URL.");
-  if (!SUPABASE_KEY) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY.");
+  if (!SUPABASE_KEY) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
 }
 
 function clean(value) {
@@ -396,9 +397,17 @@ async function getFeed(feedId) {
   return Array.isArray(feeds) ? feeds[0] : null;
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: CORS_HEADERS, body: "" };
   if (event.httpMethod !== "POST") return json(405, { success: false, message: "Use POST." });
+
+  const authorization = await authorizeEmployee(event, {
+    functionName: 'supplier-catalog-feed-sync',
+    allowedRoles: ['admin', 'manager'],
+  });
+  if (!authorization.ok) {
+    return json(authorization.statusCode, { success: false, message: authorization.message });
+  }
 
   let feedId = null;
 
