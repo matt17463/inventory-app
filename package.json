@@ -1,13 +1,25 @@
 {
   "name": "create-product-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.6.14",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "schema:contract": "python3 scripts/build_database_contract.py && python3 scripts/generate_step2_sql.py",
+    "schema:baseline": "bash scripts/step2_capture_production_baseline.sh",
+    "schema:status": "bash scripts/step2_migration_status.sh",
+    "schema:dry-run": "bash scripts/step2_db_push_dry_run.sh",
+    "schema:types": "bash scripts/step2_generate_types.sh",
+    "security:test": "node scripts/validate_steps3_5.mjs",
+    "test:static": "node --test scripts/tests/static-contract.test.mjs",
+    "test:security": "node --test scripts/tests/security-helpers.test.mjs",
+    "test": "npm run test:static && npm run test:security",
+    "functions:esm": "node scripts/validate_netlify_esm.mjs",
+    "validate:steps6-14": "node scripts/validate_steps6_14.mjs",
+    "check": "npm run functions:esm && npm run test && npm run lint && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
