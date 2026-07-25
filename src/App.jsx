@@ -72,89 +72,103 @@ import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
 
+function EmployeeRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/inventory" element={<BlankInventory />} />
+      <Route path="/edit-blank-items" element={<EditBlankItems />} />
+      <Route path="/pull-sheets" element={<PullSheetList />} />
+      <Route path="/customer-portal-preview" element={<CustomerPortalPreview />} />
+      <Route path="/artwork-bridge" element={<ArtworkPluginBridge />} />
+      <Route path="/create-product" element={<CreateProduct />} />
+      <Route path="/testing-mode" element={<TestingMode />} />
+      <Route path="/theme-settings" element={<ThemeSettings />} />
+      <Route path="/inventory/blanks" element={<BlankInventory />} />
+      <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
+      <Route path="/inventory/import" element={<InventoryImport />} />
+      <Route path="/inventory/samples" element={<SampleInventory />} />
+      <Route path="/bins" element={<BinsDashboard />} />
+      <Route path="/bin/:binId" element={<BinContents />} />
+      <Route path="/add-item" element={<AddItemToBin />} />
+      <Route path="/scan" element={<ScanInventory />} />
+      <Route path="/transfer" element={<TransferInventory />} />
+      <Route path="/audit" element={<AuditMode />} />
+      <Route path="/reservations" element={<Reservations />} />
+      <Route path="/valuation" element={<InventoryValuation />} />
+      <Route path="/low-stock" element={<LowStock />} />
+      <Route path="/purchasing" element={<Purchasing />} />
+      <Route path="/purchase-orders" element={<PurchaseOrders />} />
+      <Route path="/purchase-orders/new" element={<PurchaseOrderGenerator />} />
+      <Route path="/purchase-orders/:poId/receive" element={<ReceivePurchaseOrder />} />
+      <Route path="/waiting-on" element={<WaitingOn />} />
+      <Route path="/campaign-forecast" element={<CampaignForecast />} />
+      <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
+      <Route path="/job-costing" element={<JobCosting />} />
+      <Route path="/artwork-requests" element={<ArtworkRequests />} />
+      <Route path="/shop-tv" element={<ShopTvMode />} />
+      <Route path="/shop-touch" element={<ShopTvMode />} />
+      <Route path="/pullsheet-due-dates" element={<PullSheetDueDateEditor />} />
+      <Route path="/vendor-prices" element={<VendorPriceComparison />} />
+      <Route path="/capacity-planning" element={<CapacityPlanning />} />
+      <Route path="/production-calendar" element={<ProductionCalendar />} />
+      <Route path="/production-estimator" element={<ProductionEstimator />} />
+      <Route path="/pricing-rules" element={<PricingRules />} />
+      <Route path="/quote-builder" element={<QuoteBuilder />} />
+      <Route path="/spoilage" element={<SpoilageTracking />} />
+      <Route path="/finished-suggestions" element={<FinishedMatchSuggestions />} />
+      <Route path="/production-board" element={<ProductionBoard />} />
+      <Route path="/qc-checklist" element={<QcChecklist />} />
+      <Route path="/employee-tasks" element={<EmployeeTasks />} />
+      <Route path="/order-risk" element={<OrderRiskDashboard />} />
+      <Route path="/command-center" element={<DailyCommandCenter />} />
+      <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
+      <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
+      <Route path="/labels" element={<BarcodeLabelGenerator />} />
+      <Route path="/activity" element={<ActivityPage />} />
+      <Route path="/woo-sync" element={<WooSync />} />
+      <Route path="/color-aliases" element={<ColorAliasReview />} />
+      <Route path="/color-pairings" element={<ColorAliasReview />} />
+      <Route path="/mapping-repair" element={<ProductMappingRepair />} />
+      <Route path="/bulk-pairing-repair" element={<BulkPairingRepair />} />
+      <Route path="/non-inventory-rules" element={<NonInventoryRules />} />
+      <Route path="/exception-center" element={<ExceptionCenter />} />
+      <Route path="/customer-portal-admin" element={<CustomerPortalAdmin />} />
+      <Route path="/approval-automation" element={<ApprovalAutomation />} />
+      <Route path="/audit-trail" element={<AuditTrail />} />
+      <Route path="/quote-to-order" element={<QuoteToOrder />} />
+      <Route path="/manual-orders" element={<ManualInvoicedOrders />} />
+      <Route path="/product-data-health" element={<ProductDataHealth />} />
+      <Route path="/inventory-audit" element={<InventoryAudit />} />
+      <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />
+      <Route path="/nfc-writer" element={<NfcWriter />} />
+      <Route path="/test-tag" element={<TestTag />} />
+      <Route path="/pullsheets" element={<PullSheetList />} />
+      <Route path="/pullsheets/:jobId" element={<PullSheetView />} />
+      <Route path="/return-finished" element={<ReturnFinishedInventory />} />
+      <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
+      <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
+      <Route path="*" element={<Home />} />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthGate>
-      <AppShell>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/inventory" element={<BlankInventory />} />
-          <Route path="/edit-blank-items" element={<EditBlankItems />} />
-          <Route path="/pull-sheets" element={<PullSheetList />} />
-          <Route path="/customer-portal-preview" element={<CustomerPortalPreview />} />
-          <Route path="/artwork-bridge" element={<ArtworkPluginBridge />} />
-          <Route path="/create-product" element={<CreateProduct />} />
-          <Route path="/testing-mode" element={<TestingMode />} />
-          <Route path="/theme-settings" element={<ThemeSettings />} />
-          <Route path="/inventory/blanks" element={<BlankInventory />} />
-          <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
-          <Route path="/inventory/import" element={<InventoryImport />} />
-          <Route path="/inventory/samples" element={<SampleInventory />} />
-          <Route path="/bins" element={<BinsDashboard />} />
-          <Route path="/bin/:binId" element={<BinContents />} />
-          <Route path="/add-item" element={<AddItemToBin />} />
-          <Route path="/scan" element={<ScanInventory />} />
-          <Route path="/transfer" element={<TransferInventory />} />
-          <Route path="/audit" element={<AuditMode />} />
-          <Route path="/reservations" element={<Reservations />} />
-          <Route path="/valuation" element={<InventoryValuation />} />
-          <Route path="/low-stock" element={<LowStock />} />
-          <Route path="/purchasing" element={<Purchasing />} />
-          <Route path="/purchase-orders" element={<PurchaseOrders />} />
-          <Route path="/purchase-orders/new" element={<PurchaseOrderGenerator />} />
-          <Route path="/purchase-orders/:poId/receive" element={<ReceivePurchaseOrder />} />
-          <Route path="/waiting-on" element={<WaitingOn />} />
-          <Route path="/campaign-forecast" element={<CampaignForecast />} />
-          <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
-          <Route path="/job-costing" element={<JobCosting />} />
-          <Route path="/artwork-requests" element={<ArtworkRequests />} />
-          <Route path="/shop-tv" element={<ShopTvMode />} />
-          <Route path="/shop-touch" element={<ShopTvMode />} />
-          <Route path="/pullsheet-due-dates" element={<PullSheetDueDateEditor />} />
-          <Route path="/vendor-prices" element={<VendorPriceComparison />} />
-          <Route path="/capacity-planning" element={<CapacityPlanning />} />
-          <Route path="/production-calendar" element={<ProductionCalendar />} />
-          <Route path="/production-estimator" element={<ProductionEstimator />} />
-          <Route path="/pricing-rules" element={<PricingRules />} />
-          <Route path="/quote-builder" element={<QuoteBuilder />} />
-          <Route path="/spoilage" element={<SpoilageTracking />} />
-          <Route path="/finished-suggestions" element={<FinishedMatchSuggestions />} />
-          <Route path="/production-board" element={<ProductionBoard />} />
-          <Route path="/qc-checklist" element={<QcChecklist />} />
-          <Route path="/employee-tasks" element={<EmployeeTasks />} />
-          <Route path="/order-risk" element={<OrderRiskDashboard />} />
-          <Route path="/command-center" element={<DailyCommandCenter />} />
-          <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
-          <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
-          <Route path="/labels" element={<BarcodeLabelGenerator />} />
-          <Route path="/activity" element={<ActivityPage />} />
-          <Route path="/woo-sync" element={<WooSync />} />
-          <Route path="/color-aliases" element={<ColorAliasReview />} />
-          <Route path="/color-pairings" element={<ColorAliasReview />} />
-          <Route path="/mapping-repair" element={<ProductMappingRepair />} />
-          <Route path="/bulk-pairing-repair" element={<BulkPairingRepair />} />
-          <Route path="/non-inventory-rules" element={<NonInventoryRules />} />
-          <Route path="/exception-center" element={<ExceptionCenter />} />
-          <Route path="/customer-portal-admin" element={<CustomerPortalAdmin />} />
-          <Route path="/customer-portal" element={<CustomerPortal />} />
-          <Route path="/approval-automation" element={<ApprovalAutomation />} />
-          <Route path="/audit-trail" element={<AuditTrail />} />
-          <Route path="/quote-to-order" element={<QuoteToOrder />} />
-          <Route path="/manual-orders" element={<ManualInvoicedOrders />} />
-          <Route path="/product-data-health" element={<ProductDataHealth />} />
-          <Route path="/inventory-audit" element={<InventoryAudit />} />
-          <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />
-          <Route path="/nfc-writer" element={<NfcWriter />} />
-          <Route path="/test-tag" element={<TestTag />} />
-          <Route path="/pullsheets" element={<PullSheetList />} />
-          <Route path="/pullsheets/:jobId" element={<PullSheetView />} />
-          <Route path="/return-finished" element={<ReturnFinishedInventory />} />
-                  <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
-                  <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
-        </Routes>
-      </AppShell>
-      </AuthGate>
+      <Routes>
+        <Route path="/customer-portal" element={<CustomerPortal />} />
+        <Route
+          path="*"
+          element={(
+            <AuthGate>
+              <AppShell>
+                <EmployeeRoutes />
+              </AppShell>
+            </AuthGate>
+          )}
+        />
+      </Routes>
     </BrowserRouter>
   );
 }

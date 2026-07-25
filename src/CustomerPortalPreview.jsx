@@ -11,8 +11,23 @@ export default function CustomerPortalPreview() {
     setMessage('');
     if (token.trim()) {
       setPreviewMode(false);
-      const { data, error } = await supabase.rpc('sc_customer_portal_preview_samples');
-      if (error) setMessage(error.message); else setRecords(data ? [data].flat() : []);
+      const { data, error } = await supabase.rpc('sc_customer_portal_data_v2', { p_token: token.trim() });
+      if (error) {
+        setMessage(error.message);
+        setRecords([]);
+      } else if (data?.ok) {
+        setRecords([{
+          id: data.customer?.id,
+          customer_name: data.customer?.customer_name,
+          organization: data.customer?.organization,
+          status: data.events?.[0]?.status || 'open',
+          order_reference: data.events?.[0]?.title || 'Customer portal',
+          due_date: data.events?.find((event) => event.due_date)?.due_date || null,
+        }]);
+      } else {
+        setMessage(data?.message || 'Portal token is invalid, expired, or inactive.');
+        setRecords([]);
+      }
       return;
     }
     setPreviewMode(true);

@@ -99,7 +99,7 @@ export const navSections = [
     icon: '👥',
     items: [
       { label: 'Customer Portal Admin', path: '/customer-portal-admin', keywords: 'customer portal token status order artwork portal links' },
-      { label: 'Customer Portal Preview', path: '/customer-portal', keywords: 'public customer portal preview token' },
+      { label: 'Customer Portal Preview', path: '/customer-portal-preview', keywords: 'public customer portal preview token' },
     ],
   },
   {
