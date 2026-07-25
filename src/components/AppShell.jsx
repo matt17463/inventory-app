@@ -24,7 +24,6 @@ const fallbackNav = [
     { label: 'Add Item to Bin', path: '/add-item' },
     { label: 'Edit Blank Items', path: '/inventory/edit-blanks' },
     { label: 'Bins', path: '/bins' },
-    { label: 'Bin Contents', path: '/bin-contents' },
     { label: 'Inventory Audit', path: '/inventory-audit' },
     { label: 'Product Data Health', path: '/product-data-health' },
   ]},
