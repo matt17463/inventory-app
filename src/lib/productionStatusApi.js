@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 
 function unwrapRpcRows(data) {
   if (!data) return [];
@@ -69,7 +70,7 @@ export async function updateProductionBoardStatus({ jobId, status, note = '' }) 
 }
 
 export async function updateWooCommerceOrderStatus({ orderId, status, jobId = null, note = '' }) {
-  const response = await fetch('/.netlify/functions/update-woocommerce-order-status', {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/update-woocommerce-order-status', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orderId, status, jobId, note }),

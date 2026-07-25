@@ -136,7 +136,7 @@ export async function createCustomerPortalToken(input) {
 }
 
 export async function getCustomerPortalData(token) {
-  const { data, error } = await supabase.rpc('phase6_customer_portal_data', { p_token: token });
+  const { data, error } = await supabase.rpc('sc_customer_portal_data_v2', { p_token: token });
   if (error) throw error;
   return data;
 }

@@ -1,3 +1,4 @@
+import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 
 export async function syncSupplierCatalogFeedIncremental(feedId, options = {}) {
   const chunkSize = Number(options.chunkSize || 25);
@@ -6,7 +7,7 @@ export async function syncSupplierCatalogFeedIncremental(feedId, options = {}) {
   while (!complete) {
     safetyCounter += 1;
     if (safetyCounter > 5000) throw new Error('Supplier catalog sync stopped after too many chunks.');
-    const response = await fetch('/.netlify/functions/supplier-catalog-feed-sync', {
+    const response = await authenticatedFunctionFetch('/.netlify/functions/supplier-catalog-feed-sync', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feed_id: feedId, offset, chunk_size: chunkSize }),
     });
     const body = await response.json().catch(() => null);

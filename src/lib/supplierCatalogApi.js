@@ -1,3 +1,4 @@
+import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 
 import { supabase } from '../supabaseClient';
 
@@ -128,7 +129,7 @@ export async function deleteSupplierCatalogFeed(feedId) {
   if (error) throw error; return true;
 }
 export async function syncSupplierCatalogFeed(feedId) {
-  const response = await fetch('/.netlify/functions/supplier-catalog-feed-sync', {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/supplier-catalog-feed-sync', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feed_id: feedId }),
   });
   const body = await response.json().catch(() => null);

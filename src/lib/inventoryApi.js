@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 
 function normalizeSearchValue(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -2698,7 +2699,7 @@ export async function deleteSupplierCatalogFeed(feedId) {
 }
 
 export async function syncSupplierCatalogFeed(feedId) {
-  const response = await fetch('/.netlify/functions/supplier-catalog-feed-sync', {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/supplier-catalog-feed-sync', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
