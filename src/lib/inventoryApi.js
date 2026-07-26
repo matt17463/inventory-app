@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
+import { getPendingStockBins } from './pullSheetBinAssignmentApi';
 
 function normalizeSearchValue(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -1519,18 +1520,311 @@ function attachPurchasingDemandSources(rows, sourceMap) {
   });
 }
 
+
+function purchasingJobItemIsOpen(row) {
+  const status = String(row?.status || '').trim().toLowerCase();
+  return !/complete|completed|deduct|cancel|cancelled|void/.test(status);
+}
+
+function purchasingInventoryRequired(row) {
+  return row?.inventory_required !== false && row?.inventory_required !== 'false';
+}
+
+function normalizePendingStockCatalogRow(row) {
+  const onHand = Number(
+    row?.quantity_on_hand
+    ?? row?.on_hand_quantity
+    ?? row?.total_quantity
+    ?? row?.quantity
+    ?? 0
+  );
+  const reserved = Number(row?.reserved_quantity ?? 0);
+  const threshold = Number(row?.low_stock_threshold ?? 0);
+  const unitCost = Number(row?.unit_cost ?? 0);
+
+  return {
+    ...row,
+    blank_product_id: row?.blank_product_id || row?.id || null,
+    sku_base: row?.sku_base || row?.blank_sku || row?.sku || '',
+    name: row?.name || row?.blank_product_name || row?.product_display_name || '',
+    brand: row?.brand || row?.brands?.name || row?.brands?.code || '',
+    product_type:
+      row?.product_type
+      || row?.style
+      || row?.product_types?.name
+      || row?.product_types?.code
+      || '',
+    color: row?.color || row?.colors?.name || row?.colors?.code || '',
+    size: row?.size || row?.sizes?.name || row?.sizes?.code || '',
+    quantity_on_hand: Number.isFinite(onHand) ? onHand : 0,
+    reserved_quantity: Number.isFinite(reserved) ? reserved : 0,
+    available_quantity: Number(row?.available_quantity ?? (onHand - reserved)),
+    low_stock_threshold: Number.isFinite(threshold) ? threshold : 0,
+    unit_cost: Number.isFinite(unitCost) ? unitCost : 0,
+  };
+}
+
+async function getPendingStockPurchasingContext() {
+  let pendingBins = [];
+
+  try {
+    pendingBins = await getPendingStockBins();
+  } catch (error) {
+    console.warn('Pending Stock bin lookup failed:', error.message || error);
+    return {
+      demandMap: new Map(),
+      catalogMap: new Map(),
+    };
+  }
+
+  const pendingBinIds = pendingBins
+    .map((bin) => bin?.bin_id ?? bin?.id)
+    .filter((value) => value !== null && value !== undefined);
+
+  if (!pendingBinIds.length) {
+    return {
+      demandMap: new Map(),
+      catalogMap: new Map(),
+    };
+  }
+
+  const { data: jobItems, error: jobItemsError } = await supabase
+    .from('job_items')
+    .select(
+      'id, job_id, quantity, status, blank_product_id, selected_bin_id, inventory_required, sku, name, item_name, order_sku'
+    )
+    .in('selected_bin_id', pendingBinIds)
+    .not('blank_product_id', 'is', null)
+    .gt('quantity', 0);
+
+  if (jobItemsError) throw jobItemsError;
+
+  const activeItems = (jobItems || []).filter(
+    (row) => purchasingJobItemIsOpen(row) && purchasingInventoryRequired(row)
+  );
+
+  const jobIds = [...new Set(activeItems.map((row) => row.job_id).filter(Boolean))];
+  const closedJobIds = new Set();
+
+  if (jobIds.length) {
+    const { data: jobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('id, status')
+      .in('id', jobIds);
+
+    if (jobsError) throw jobsError;
+
+    (jobs || []).forEach((job) => {
+      if (!purchasingJobItemIsOpen(job)) {
+        closedJobIds.add(String(job.id));
+      }
+    });
+  }
+
+  const demandMap = new Map();
+
+  activeItems
+    .filter((row) => !closedJobIds.has(String(row.job_id || '')))
+    .forEach((row) => {
+      const key = String(row.blank_product_id || '');
+      if (!key) return;
+
+      const quantity = Math.max(0, Number(row.quantity || 0));
+      const current = demandMap.get(key) || {
+        blank_product_id: row.blank_product_id,
+        pending_stock_quantity: 0,
+        pending_stock_sources: [],
+      };
+
+      current.pending_stock_quantity += quantity;
+      current.pending_stock_sources.push({
+        job_id: row.job_id || null,
+        job_item_id: row.id || null,
+        quantity,
+        order_sku: row.order_sku || row.sku || '',
+        item_name: row.item_name || row.name || '',
+        pairing_warning: 'Pending Stock — this line has no available physical-bin inventory.',
+        pending_stock: true,
+      });
+
+      demandMap.set(key, current);
+    });
+
+  const blankProductIds = [...demandMap.values()].map((row) => row.blank_product_id);
+  const catalogMap = new Map();
+
+  if (blankProductIds.length) {
+    const overview = await supabase
+      .from('app_blank_inventory_overview_v2')
+      .select('*')
+      .in('blank_product_id', blankProductIds);
+
+    if (!overview.error) {
+      (overview.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+
+    const missingIds = blankProductIds.filter(
+      (id) => !catalogMap.has(String(id))
+    );
+
+    if (missingIds.length) {
+      const fallback = await supabase
+        .from('blank_products')
+        .select(`
+          id,
+          sku_base,
+          name,
+          unit_cost,
+          low_stock_threshold,
+          brands:brand_id(name, code),
+          product_types:product_type_id(name, code),
+          colors:color_id(name, code),
+          sizes:size_id(name, code)
+        `)
+        .in('id', missingIds);
+
+      if (fallback.error) throw fallback.error;
+
+      (fallback.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+  }
+
+  return { demandMap, catalogMap };
+}
+
+function mergeDemandSourceLists(existingSources, pendingSources) {
+  const merged = [];
+  const seen = new Set();
+
+  [...(existingSources || []), ...(pendingSources || [])].forEach((source) => {
+    const key = source?.job_item_id
+      ? `job-item:${source.job_item_id}`
+      : JSON.stringify([
+        source?.job_id || '',
+        source?.quantity || 0,
+        source?.order_sku || '',
+        source?.item_name || '',
+      ]);
+
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(source);
+  });
+
+  return merged;
+}
+
+function mergePendingStockPurchasingRows(rows, context, mode) {
+  const sourceRows = rows || [];
+  const demandMap = context?.demandMap || new Map();
+  const catalogMap = context?.catalogMap || new Map();
+  const rowsById = new Map(
+    sourceRows.map((row) => [String(row?.blank_product_id || ''), { ...row }])
+  );
+
+  demandMap.forEach((pending, key) => {
+    const existing = rowsById.get(key) || null;
+    const catalog = catalogMap.get(key) || {};
+    const base = {
+      ...catalog,
+      ...(existing || {}),
+    };
+
+    const onHand = Number(base.quantity_on_hand ?? 0);
+    const baseReserved = Number(base.reserved_quantity ?? 0);
+    const threshold = Number(base.low_stock_threshold ?? 0);
+    const unitCost = Number(base.unit_cost ?? 0);
+    const pendingQuantity = Number(pending.pending_stock_quantity || 0);
+
+    // Pending Stock lines have no usable physical-bin reservation, so their
+    // required quantity must be added to purchasing demand.
+    const effectiveReserved = baseReserved + pendingQuantity;
+    const available = onHand - effectiveReserved;
+    const shortageQuantity = Math.max(0, effectiveReserved - onHand);
+    const recommendedQuantity = Math.max(
+      0,
+      effectiveReserved + threshold - onHand
+    );
+
+    const existingSources = Array.isArray(base.demand_sources)
+      ? base.demand_sources
+      : [];
+    const demandSources = mergeDemandSourceLists(
+      existingSources,
+      pending.pending_stock_sources
+    );
+
+    const orderQuantity = mode === 'shortages'
+      ? Math.max(Number(base.need_to_order || 0), shortageQuantity)
+      : Math.max(
+          Number(base.recommended_order_quantity || 0),
+          recommendedQuantity
+        );
+
+    rowsById.set(key, {
+      ...base,
+      blank_product_id: pending.blank_product_id,
+      pending_stock_quantity: pendingQuantity,
+      quantity_on_hand: onHand,
+      reserved_quantity: effectiveReserved,
+      available_quantity: available,
+      need_to_order:
+        mode === 'shortages'
+          ? orderQuantity
+          : Number(base.need_to_order || shortageQuantity),
+      recommended_order_quantity:
+        mode === 'recommended'
+          ? orderQuantity
+          : Number(base.recommended_order_quantity || recommendedQuantity),
+      estimated_order_value: orderQuantity * unitCost,
+      demand_source_count: demandSources.length,
+      demand_total_quantity: demandSources.reduce(
+        (sum, source) => sum + Number(source?.quantity || source?.reserved_quantity || 0),
+        0
+      ),
+      demand_sources: demandSources,
+      purchasing_status: 'pending_stock',
+    });
+  });
+
+  return [...rowsById.values()]
+    .filter((row) => (
+      mode === 'shortages'
+        ? Number(row.need_to_order || 0) > 0
+        : Number(row.recommended_order_quantity || 0) > 0
+    ))
+    .sort((a, b) => (
+      mode === 'shortages'
+        ? Number(b.need_to_order || 0) - Number(a.need_to_order || 0)
+        : Number(b.recommended_order_quantity || 0) - Number(a.recommended_order_quantity || 0)
+    ));
+}
+
 export async function getPurchasingShortages(search = '') {
-  const [rowsRes, sourceMap] = await Promise.all([
+  const [rowsRes, sourceMap, pendingContext] = await Promise.all([
     supabase
       .from('purchasing_shortages')
       .select('*')
       .order('need_to_order', { ascending: false }),
     getPurchasingDemandSourceMap(),
+    getPendingStockPurchasingContext(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
 
-  const rows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
+  const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
+  const rows = mergePendingStockPurchasingRows(
+    sourcedRows,
+    pendingContext,
+    'shortages'
+  );
+
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
@@ -1551,17 +1845,24 @@ export async function getPurchasingLowStock(search = '') {
 }
 
 export async function getPurchasingRecommendedOrders(search = '') {
-  const [rowsRes, sourceMap] = await Promise.all([
+  const [rowsRes, sourceMap, pendingContext] = await Promise.all([
     supabase
       .from('purchasing_recommended_orders')
       .select('*')
       .order('recommended_order_quantity', { ascending: false }),
     getPurchasingDemandSourceMap(),
+    getPendingStockPurchasingContext(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
 
-  const rows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
+  const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
+  const rows = mergePendingStockPurchasingRows(
+    sourcedRows,
+    pendingContext,
+    'recommended'
+  );
+
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 

@@ -69,6 +69,21 @@ function normalizeText(value) {
   return String(value || '').trim();
 }
 
+function outOfStockAssignmentNote(result) {
+  const assignment = result?.out_of_stock_assignment;
+  const count = Number(assignment?.assigned_count || 0);
+  const already = Number(assignment?.already_pending_stock_count || 0);
+  const total = count + already;
+
+  if (assignment?.success === false) {
+    return assignment?.error ? ` Out-of-stock bin assignment needs review: ${assignment.error}` : '';
+  }
+
+  if (total <= 0) return '';
+
+  return ` ${total} out-of-stock line${total === 1 ? '' : 's'} assigned to Pending Stock.`;
+}
+
 function normalizeForCompare(value) {
   return normalizeText(value).toUpperCase().replace(/[^A-Z0-9]+/g, '');
 }
@@ -710,12 +725,12 @@ export default function ManualInvoicedOrders() {
         setMessage(
           `Manual invoice order #${editingOrderId} updated.` +
           (syncResult?.generated_job_id
-            ? ` Pull sheet #${syncResult.generated_job_id} synced: ${Number(syncResult.updated_items || 0)} updated, ${Number(syncResult.created_items || 0)} added, ${Number(syncResult.cancelled_items || 0)} removed/cancelled.${warningCount ? ` ${warningCount} warning(s) need review.` : ''}`
+            ? ` Pull sheet #${syncResult.generated_job_id} synced: ${Number(syncResult.updated_items || 0)} updated, ${Number(syncResult.created_items || 0)} added, ${Number(syncResult.cancelled_items || 0)} removed/cancelled.${warningCount ? ` ${warningCount} warning(s) need review.` : ''}${outOfStockAssignmentNote(syncResult)}`
             : '')
         );
       } else {
         const result = await createManualInvoiceOrder(order, items, generateJob);
-        setMessage(`Manual invoice order saved. Manual order ID: ${result.manual_order_id}${result.generated?.job_id ? `, Job ID: ${result.generated.job_id}` : ''}.`);
+        setMessage(`Manual invoice order saved. Manual order ID: ${result.manual_order_id}${result.generated?.job_id ? `, Job ID: ${result.generated.job_id}` : ''}.${outOfStockAssignmentNote(result)}`);
       }
 
       resetForm();
@@ -1077,7 +1092,7 @@ export default function ManualInvoicedOrders() {
     setMessage('');
     try {
       const result = await generateManualInvoiceJob(orderId);
-      setMessage(`Generated job #${result.job_id || result.generated_job_id || 'new'} for manual invoice order #${orderId}.`);
+      setMessage(`Generated job #${result.job_id || result.generated_job_id || 'new'} for manual invoice order #${orderId}.${outOfStockAssignmentNote(result)}`);
       await loadOrders();
     } catch (err) {
       setError(err.message || String(err));
@@ -1117,7 +1132,8 @@ export default function ManualInvoicedOrders() {
       setMessage(
         `Manual invoice order #${row.id} synced to pull sheet #${result?.generated_job_id || row.generated_job_id}. ` +
         `${Number(result?.updated_items || 0)} updated, ${Number(result?.created_items || 0)} added, ${Number(result?.cancelled_items || 0)} removed/cancelled.` +
-        (warningCount ? ` ${warningCount} warning(s) need review.` : '')
+        (warningCount ? ` ${warningCount} warning(s) need review.` : '') +
+        outOfStockAssignmentNote(result)
       );
       await loadOrders();
     } catch (err) {

@@ -3,6 +3,11 @@ import { useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { PageHeader, HelpPanel, SectionCard, StatusBadge, ActionButton, EmptyState } from './components/UIPrimitives';
 import { applyNonInventoryRulesToJob, markJobItemNonInventory } from './lib/nonInventoryApi';
+import {
+  assignOutOfStockJobItemsToPendingStock,
+  getPendingStockBin,
+  isPendingStockBin,
+} from './lib/pullSheetBinAssignmentApi';
 
 function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
@@ -122,6 +127,7 @@ export default function PullSheetView() {
   const [blankResults, setBlankResults] = useState([]);
   const [sourceBinsByLine, setSourceBinsByLine] = useState({});
   const [selectedBinByLine, setSelectedBinByLine] = useState({});
+  const [outOfStockByLine, setOutOfStockByLine] = useState({});
   const [lineMessages, setLineMessages] = useState({});
   const [completingLine, setCompletingLine] = useState('');
   const [completingAll, setCompletingAll] = useState(false);
@@ -209,6 +215,10 @@ export default function PullSheetView() {
     setLineMessages({});
 
     try {
+      // Persist the system bin assignment before displaying the pull sheet.
+      // Failure is non-fatal because the screen still provides a visible fallback.
+      await assignOutOfStockJobItemsToPendingStock(resolvedJobId);
+
       const { data: jobData, error: jobError } = await supabase.from('jobs').select('*').eq('id', resolvedJobId).maybeSingle();
       if (jobError) throw jobError;
       setJob(jobData || null);
@@ -248,14 +258,25 @@ export default function PullSheetView() {
     async function loadSourceBins() {
       const nextBins = {};
       const nextSelected = {};
+      const nextOutOfStock = {};
+      let pendingStockBin = null;
+
+      try {
+        pendingStockBin = await getPendingStockBin();
+      } catch (unassignedError) {
+        if (active) {
+          setBulkMessage(unassignedError.message || 'The Pending Stock bin could not be loaded.');
+        }
+      }
 
       for (let idx = 0; idx < items.length; idx += 1) {
         const row = items[idx];
         const key = rowKey(row, idx);
         const blankProductId = pickBlankProductId(row);
 
-        if (!blankProductId) {
+        if (!blankProductId || isNonInventoryLine(row)) {
           nextBins[key] = [];
+          nextOutOfStock[key] = false;
           continue;
         }
 
@@ -270,26 +291,70 @@ export default function PullSheetView() {
 
         if (error) {
           nextBins[key] = [];
+          nextOutOfStock[key] = false;
           setLineMessages((messages) => ({
             ...messages,
             [key]: `Could not load source bins: ${error.message}`,
           }));
-        } else {
-          const bins = data || [];
+          continue;
+        }
+
+        const bins = data || [];
+
+        if (bins.length) {
           nextBins[key] = bins;
-          if (bins.length === 1) nextSelected[key] = String(bins[0].bin_id);
+          nextOutOfStock[key] = false;
+
+          const persistedBinId = String(row.selected_bin_id || '');
+          const persistedStillValid = bins.some(
+            (bin) => String(bin.bin_id) === persistedBinId
+          );
+
+          if (persistedStillValid) nextSelected[key] = persistedBinId;
+          else if (bins.length === 1) nextSelected[key] = String(bins[0].bin_id);
+          continue;
+        }
+
+        nextOutOfStock[key] = true;
+
+        if (pendingStockBin) {
+          nextBins[key] = [pendingStockBin];
+          nextSelected[key] = String(pendingStockBin.bin_id);
+        } else {
+          nextBins[key] = [];
+          setLineMessages((messages) => ({
+            ...messages,
+            [key]: 'This item is out of stock, but the Pending Stock bin could not be found.',
+          }));
         }
       }
 
       if (!active) return;
+
       setSourceBinsByLine(nextBins);
-      setSelectedBinByLine((current) => ({ ...nextSelected, ...current }));
+      setOutOfStockByLine(nextOutOfStock);
+      setSelectedBinByLine((current) => {
+        const resolved = {};
+
+        Object.entries(nextBins).forEach(([key, bins]) => {
+          const currentValue = String(current[key] || '');
+          const currentStillValid = bins.some(
+            (bin) => String(bin.bin_id) === currentValue
+          );
+
+          if (currentStillValid) resolved[key] = currentValue;
+          else if (nextSelected[key]) resolved[key] = nextSelected[key];
+        });
+
+        return resolved;
+      });
     }
 
     if (items.length) loadSourceBins();
     else {
       setSourceBinsByLine({});
       setSelectedBinByLine({});
+      setOutOfStockByLine({});
     }
 
     return () => { active = false; };
@@ -350,6 +415,14 @@ export default function PullSheetView() {
       return;
     }
 
+    if (outOfStockByLine[key]) {
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: 'This item is out of stock and assigned to Pending Stock. Receive the blank into inventory, refresh the pull sheet, and then complete the line.',
+      }));
+      return;
+    }
+
     if (!selectedBinId) {
       setLineMessages((messages) => ({ ...messages, [key]: 'Choose the blank source bin before completing this line.' }));
       return;
@@ -387,13 +460,24 @@ export default function PullSheetView() {
       return;
     }
 
-    const missingBins = eligible.filter((entry) => !selectedBinByLine[entry.key]);
+    const outOfStockEntries = eligible.filter((entry) => outOfStockByLine[entry.key]);
+    const inStockEntries = eligible.filter((entry) => !outOfStockByLine[entry.key]);
+
+    if (!inStockEntries.length) {
+      setBulkMessage(`${outOfStockEntries.length} open paired line item${outOfStockEntries.length === 1 ? ' is' : 's are'} out of stock and assigned to Pending Stock. Receive inventory before completing and deducting.`);
+      return;
+    }
+
+    const missingBins = inStockEntries.filter((entry) => !selectedBinByLine[entry.key]);
     if (missingBins.length) {
       setBulkMessage(`Choose a source bin for line${missingBins.length === 1 ? '' : 's'} ${missingBins.map((entry) => entry.idx + 1).join(', ')} before completing all.`);
       return;
     }
 
-    const confirmed = window.confirm(`Complete and deduct blanks for ${eligible.length} line item${eligible.length === 1 ? '' : 's'}? This will reduce inventory.`);
+    const skippedText = outOfStockEntries.length
+      ? ` ${outOfStockEntries.length} out-of-stock line item${outOfStockEntries.length === 1 ? '' : 's'} will remain assigned to Pending Stock.`
+      : '';
+    const confirmed = window.confirm(`Complete and deduct blanks for ${inStockEntries.length} in-stock line item${inStockEntries.length === 1 ? '' : 's'}? This will reduce inventory.${skippedText}`);
     if (!confirmed) return;
 
     setCompletingAll(true);
@@ -401,7 +485,7 @@ export default function PullSheetView() {
     const successes = [];
     const failures = [];
 
-    for (const entry of eligible) {
+    for (const entry of inStockEntries) {
       const { error } = await supabase.rpc('complete_job_item', {
         p_job_item_id: Number(entry.jobItemId),
         p_bin_id: toRpcBinId(selectedBinByLine[entry.key]),
@@ -413,9 +497,13 @@ export default function PullSheetView() {
     }
 
     setCompletingAll(false);
+    const unassignedSummary = outOfStockEntries.length
+      ? ` ${outOfStockEntries.length} out-of-stock line item${outOfStockEntries.length === 1 ? ' remains' : 's remain'} assigned to Pending Stock.`
+      : '';
+
     setBulkMessage(failures.length
-      ? `Completed ${successes.length}; ${failures.length} failed. ${failures.join(' ')}`
-      : `Completed and deducted blanks for ${successes.length} line item${successes.length === 1 ? '' : 's'}.`);
+      ? `Completed ${successes.length}; ${failures.length} failed. ${failures.join(' ')}${unassignedSummary}`
+      : `Completed and deducted blanks for ${successes.length} line item${successes.length === 1 ? '' : 's'}.${unassignedSummary}`);
 
     await load();
   }
@@ -552,12 +640,18 @@ export default function PullSheetView() {
           const lineMessage = lineMessages[key] || '';
           const onHandQty = Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? 0);
           const availableQty = Number(row.available_quantity ?? onHandQty);
-          const zeroOnHandWarning = blankProductId && sourceBins.length === 0 && onHandQty <= 0
-            ? 'This blank is linked, but no on-hand inventory is currently in bins. Keep it on the pull sheet, receive inventory when it arrives, then deduct from a bin.'
+          const outOfStock = Boolean(outOfStockByLine[key]);
+          const assignedToPendingStock = outOfStock && sourceBins.some(
+            (bin) => isPendingStockBin(bin) && String(bin.bin_id) === String(selectedBinId)
+          );
+          const zeroOnHandWarning = blankProductId && outOfStock
+            ? 'Out of stock — automatically assigned to Pending Stock. Receive the blank into inventory and refresh this pull sheet before completing and deducting.'
             : '';
           const isCompleting = completingLine === key;
           const nonInventory = isNonInventoryLine(row);
-          const lineStatusLabel = nonInventory ? 'No Inventory Required' : (warning ? 'Needs Review' : (row.pairing_status || rowStatus(row) || 'Matched'));
+          const lineStatusLabel = nonInventory
+            ? 'No Inventory Required'
+            : (outOfStock ? 'Out of Stock — Pending Stock' : (warning ? 'Needs Review' : (row.pairing_status || rowStatus(row) || 'Matched')));
 
           return (
             <article className="sc-pullsheet-line-card" key={key}>
@@ -607,12 +701,13 @@ export default function PullSheetView() {
               ) : blankProductId ? (
                 <div className="sc-button-row" style={{ alignItems: 'center' }}>
                   <label style={{ display: 'grid', gap: 4, minWidth: 260 }}>
-                    <span style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>Blank Source Bin</span>
+                    <span style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>{outOfStock ? 'Assigned Bin' : 'Blank Source Bin'}</span>
                     <select
                       value={selectedBinId}
+                      disabled={assignedToPendingStock}
                       onChange={(event) => setSelectedBinByLine((current) => ({ ...current, [key]: event.target.value }))}
                     >
-                      <option value="">Choose bin…</option>
+                      {!outOfStock ? <option value="">Choose bin…</option> : null}
                       {sourceBins.map((bin) => (
                         <option key={bin.bin_id} value={bin.bin_id}>{binDisplayName(bin)}</option>
                       ))}
@@ -621,8 +716,8 @@ export default function PullSheetView() {
                   <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markLineNonInventory(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
-                  <ActionButton tone="primary" disabled={isCompleting || isClosedLine(row)} onClick={() => completeAndDeduct(row, idx)}>
-                    {isCompleting ? 'Completing…' : 'Complete + Deduct Blank'}
+                  <ActionButton tone="primary" disabled={isCompleting || isClosedLine(row) || outOfStock} onClick={() => completeAndDeduct(row, idx)}>
+                    {isCompleting ? 'Completing…' : (outOfStock ? 'Awaiting Stock' : 'Complete + Deduct Blank')}
                   </ActionButton>
                 </div>
               ) : (

@@ -48,6 +48,35 @@ function getEstimatedValue(row) {
   return Number(row.estimated_order_value || 0);
 }
 
+function buildSupplierSummaryFromRecommended(rows) {
+  const grouped = new Map();
+
+  (rows || []).forEach((row) => {
+    const brand = row?.brand || 'Unspecified';
+    const productType = row?.product_type || 'Unspecified';
+    const key = `${brand}::${productType}`;
+    const current = grouped.get(key) || {
+      brand,
+      product_type: productType,
+      line_count: 0,
+      total_recommended_order_quantity: 0,
+      estimated_order_value: 0,
+    };
+
+    current.line_count += 1;
+    current.total_recommended_order_quantity += Number(
+      row?.recommended_order_quantity || 0
+    );
+    current.estimated_order_value += Number(row?.estimated_order_value || 0);
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()].sort((a, b) => (
+    String(a.brand).localeCompare(String(b.brand))
+    || String(a.product_type).localeCompare(String(b.product_type))
+  ));
+}
+
 
 function demandSources(row) {
   return Array.isArray(row?.demand_sources) ? row.demand_sources : [];
@@ -145,7 +174,8 @@ export default function Purchasing() {
       setShortages(shortageRows);
       setLowStock(lowStockRows);
       setRecommendedOrders(recommendedRows);
-      setSummary(summaryRows);
+      const correctedSummary = buildSupplierSummaryFromRecommended(recommendedRows);
+      setSummary(correctedSummary.length ? correctedSummary : summaryRows);
     } catch (err) {
       setMessage(err.message || 'Failed to load purchasing reports. Run the purchasing SQL migration first.');
     } finally {
@@ -227,9 +257,9 @@ export default function Purchasing() {
   };
 
   const helpMap = {
-    shortages: 'Shows items where reserved inventory is greater than on-hand inventory. These are immediate production shortages.',
+    shortages: 'Shows items where reserved inventory is greater than on-hand inventory, including pull-sheet lines assigned to Pending Stock. These are immediate production shortages.',
     lowStock: 'Shows items where on-hand inventory is at or below your low-stock threshold.',
-    recommended: 'Uses Reserved + Threshold - On Hand. This is the best buying list because it covers current commitments plus safety stock.',
+    recommended: 'Uses Reserved + Pending Stock + Threshold - On Hand. This is the best buying list because it covers current commitments, unavailable pull-sheet items, and safety stock.',
   };
 
   return (
@@ -320,7 +350,12 @@ export default function Purchasing() {
                   return (
                     <tr key={rowKey} className={Number(row.available_quantity) < 0 ? 'shortage-row' : ''}>
                       <td><strong>{row.sku_base}</strong></td>
-                      <td>{row.name}</td>
+                      <td>
+                        {row.name}
+                        {Number(row.pending_stock_quantity || 0) > 0 && (
+                          <><br /><small className="warning-text">Pending Stock: {number(row.pending_stock_quantity)}</small></>
+                        )}
+                      </td>
                       <td>{row.brand}</td>
                       <td>{row.product_type}</td>
                       <td>{row.color}</td>
