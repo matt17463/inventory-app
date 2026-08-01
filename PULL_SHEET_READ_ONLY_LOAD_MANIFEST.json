@@ -1,0 +1,13 @@
+{
+  "version": "0.6.24",
+  "replaces": "0.6.23",
+  "database_changes_required": false,
+  "purpose": "Make pull-sheet viewing read-only and stop access-triggered growth",
+  "changed_files": [
+    "src/PullSheetView.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json"
+  ]
+}

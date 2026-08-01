@@ -1,0 +1,56 @@
+{
+  "release": "0.6.15",
+  "generated_from": "inventory-app-main(13).zip plus all final Steps 1-14, ESLint, and Deployment Health corrections",
+  "file_count": 252,
+  "file_types": {
+    ".css": 8,
+    ".csv": 4,
+    ".example": 1,
+    ".html": 2,
+    ".js": 37,
+    ".json": 6,
+    ".jsx": 89,
+    ".md": 23,
+    ".mjs": 5,
+    ".png": 3,
+    ".py": 2,
+    ".sh": 4,
+    ".sql": 40,
+    ".svg": 4,
+    ".tmp": 1,
+    ".toml": 1,
+    ".txt": 18,
+    ".yml": 1,
+    "[no extension]": 3
+  },
+  "critical_features": {
+    "deployment_health": [
+      "src/DeploymentHealth.jsx",
+      "src/App.jsx",
+      "src/navigationConfig.js",
+      "netlify/functions/deployment-health.js",
+      "supabase/migrations/202607251301_step14_deployment_health.sql"
+    ],
+    "security": [
+      "netlify/functions/_shared/security.js",
+      "netlify/functions/_shared/cryptoSecurity.js",
+      "netlify/functions/woocommerce-webhook.js"
+    ],
+    "pullsheet_idempotency": [
+      "netlify/functions/_shared/pullsheetReservations.js",
+      "supabase/migrations/202607250701_step8_pullsheet_idempotency_support.sql",
+      "supabase/optional/202607250702_optional_pullsheet_unique_index.sql"
+    ],
+    "validation": [
+      "eslint.config.js",
+      "scripts/validate_netlify_esm.mjs",
+      "scripts/validate_steps3_5.mjs",
+      "scripts/validate_steps6_14.mjs",
+      "scripts/tests/static-contract.test.mjs",
+      "scripts/tests/security-helpers.test.mjs"
+    ]
+  },
+  "secrets_included": false,
+  "requires_netlify_environment_variables": true,
+  "database_note": "The user-provided final audit reported all required Steps 1-14 objects installed. Do not replay all production migrations without a new audit."
+}

@@ -1,0 +1,80 @@
+schema_name,relation_name,required,usage_scopes,operations,source_files
+public,app_blank_inventory_overview_v2,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,app_synced_inventory_catalog_v1,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,bin_blank_inventory_contents,True,frontend_bundle,select,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,bins,True,frontend_bundle,insert | select | update,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,blank_inventory_by_product,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,blank_inventory_movements,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,blank_products,True,frontend_bundle | netlify_function | relationship_inferred,insert | select | select_related | update | upsert,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products_search,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,brands,True,frontend_bundle | relationship_inferred,select | select_related,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,color_alias_approvals,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,color_alias_review_candidates,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,colors,True,frontend_bundle | relationship_inferred,select | select_related,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,customers,True,frontend_bundle | netlify_function,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,finished_inventory_by_product,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,finished_products,True,netlify_function,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,inventory_activity_feed,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,inventory_dashboard_metrics,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,inventory_reservations_view,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,inventory_valuation_by_product,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,job_items,True,frontend_bundle | netlify_function,delete | insert | select | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,True,frontend_bundle | netlify_function,insert | select | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,logos,True,frontend_bundle | netlify_function,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,low_stock_blank_inventory,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,phase1_purchase_order_items_detail,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,phase1_purchase_orders_with_totals,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,phase5_artwork_requests,True,frontend_bundle,insert | select | update,src/lib/inventoryApi.js
+public,phase5_employees,True,frontend_bundle,insert | select | update,src/lib/inventoryApi.js
+public,phase5_pricing_rules,True,frontend_bundle,insert | select | update,src/QuoteBuilder.jsx | src/lib/inventoryApi.js
+public,phase5_production_time_rules,True,frontend_bundle,delete | insert | select | update,src/ProductionEstimator.jsx | src/lib/inventoryApi.js
+public,phase5_quotes_with_totals,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,phase5_tasks,True,frontend_bundle,insert | select | update,src/lib/inventoryApi.js
+public,phase5_tasks_detail,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,product_sku_mappings,True,netlify_function,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,product_types,True,frontend_bundle | relationship_inferred,select | select_related,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,production_capacity_windows,True,frontend_bundle,delete | insert | select | update,src/lib/productionSchedulingApi.js
+public,production_capacity_windows_with_usage,True,frontend_bundle,select,src/lib/productionSchedulingApi.js
+public,production_employees,True,frontend_bundle,insert | select | update,src/lib/productionSchedulingApi.js
+public,production_schedulable_jobs,True,frontend_bundle,select,src/lib/productionSchedulingApi.js
+public,production_time_rules,True,frontend_bundle,insert | select | update,src/lib/productionSchedulingApi.js
+public,production_window_assignment_details,True,frontend_bundle,select,src/lib/productionSchedulingApi.js
+public,production_window_assignments,True,frontend_bundle,delete | select | update,src/lib/productionSchedulingApi.js
+public,products,True,netlify_function,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,purchasing_demand_sources_v1,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,purchasing_recommended_orders,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,purchasing_shortages,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,purchasing_supplier_order_summary,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,sample_inventory_view,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,sample_product_types,True,frontend_bundle,select | upsert,src/SampleInventory.jsx
+public,sample_products,True,frontend_bundle,delete | insert | select | update,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products_with_bins,True,frontend_bundle,select,src/BinsDashboard.jsx | src/SampleInventory.jsx
+public,sc_activity_undo_log,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,sc_app_user_roles,True,netlify_function,select,netlify/functions/_shared/security.js
+public,sc_approval_production_handoffs,True,frontend_bundle,insert | select,src/lib/phase6Api.js
+public,sc_artwork_handoff_log_app,True,frontend_bundle,select,src/lib/artworkBridgeApi.js
+public,sc_artwork_system_handoffs,True,frontend_bundle,select,src/lib/artworkSystemApi.js
+public,sc_artwork_system_reorders,True,frontend_bundle,select,src/lib/artworkSystemApi.js
+public,sc_artwork_system_requests,True,frontend_bundle,select,src/lib/artworkSystemApi.js
+public,sc_audit_log,True,frontend_bundle,select,src/lib/phase6Api.js
+public,sc_customer_portal_events,True,frontend_bundle,insert | select,src/lib/phase6Api.js
+public,sc_customer_portal_tokens,True,frontend_bundle,insert | select,src/lib/phase6Api.js
+public,sc_function_security_audit,True,netlify_function,insert,netlify/functions/_shared/security.js
+public,sc_inventory_audit_counts,True,frontend_bundle,insert | select,src/lib/phase6Api.js
+public,sc_inventory_audit_sessions,True,frontend_bundle,insert | select | update,src/lib/phase6Api.js
+public,sc_manual_invoice_order_items_detail,True,frontend_bundle,select,src/lib/manualOrdersApi.js
+public,sc_manual_invoice_order_totals,True,frontend_bundle,select,src/lib/manualOrdersApi.js
+public,sc_pricing_rules,True,frontend_bundle,delete | insert | select | update,src/PricingRules.jsx | src/QuoteBuilder.jsx
+public,sc_product_data_health_notes,True,frontend_bundle,select | upsert,src/lib/phase6Api.js
+public,sc_production_photos,True,frontend_bundle,insert | select,src/lib/phase6Api.js
+public,sc_pullsheet_sync_runs,True,netlify_function,insert | select | update,netlify/functions/_shared/pullsheetReservations.js
+public,sc_quote_order_handoffs,True,frontend_bundle,insert | select,src/lib/phase6Api.js
+public,sc_supplier_catalog_sync_runs,True,netlify_function,insert | select | update,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_woocommerce_status_change_audit,True,netlify_function,insert,netlify/functions/update-woocommerce-order-status.js
+public,sizes,True,frontend_bundle | relationship_inferred,select | select_related,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,supplier_catalog_feeds,True,frontend_bundle | netlify_function,delete | insert | select | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_quote_reference,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,supplier_catalog_review,True,frontend_bundle,select,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,warehouse_inventory_audit_report,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,woo_blank_match_diagnostics,True,frontend_bundle,select,src/lib/inventoryApi.js
+public,woo_sync_queue,True,frontend_bundle,insert | select,src/lib/inventoryApi.js

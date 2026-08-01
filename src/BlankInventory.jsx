@@ -33,6 +33,14 @@ function compactSku(value, max = 38) {
   return `${text.slice(0, left)}…${text.slice(-right)}`;
 }
 
+
+function compactDescription(value, max = 110) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
 function firstValue(row, keys) {
   for (const key of keys) {
     const value = row?.[key];
@@ -76,7 +84,6 @@ export default function BlankInventory() {
   const [mode, setMode] = useState('blank');
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
-  const [includeLinkedWooSearch, setIncludeLinkedWooSearch] = useState(false);
   const [message, setMessage] = useState('');
   const [expandedSkuRows, setExpandedSkuRows] = useState({});
   const [loading, setLoading] = useState(false);
@@ -87,20 +94,20 @@ export default function BlankInventory() {
       return {
         title: 'Finished products',
         tableTitle: 'Finished Products',
-        description: 'Search decorated or completed products by finished SKU, customer, logo, placement, blank SKU, color, size, or bin.',
-        placeholder: 'Search finished SKU, customer, logo, placement, blank SKU, color, size...'
+        description: 'Search decorated or completed products by any SKU, name, description, customer, logo, placement, blank, color, size, or bin.',
+        placeholder: 'Search any SKU, name, description, customer, logo, placement...'
       };
     }
 
     return {
       title: 'Blank products',
       tableTitle: 'Blank Products',
-      description: 'Search blank products directly. Linked Woo SKUs are compacted so long product lists do not take over the page.',
-      placeholder: 'Search blank SKU, product, brand, style, color, size, or status...'
+      description: 'Search every blank SKU, linked Woo SKU, product name, description, brand, style, color, size, barcode, or status.',
+      placeholder: 'Search any SKU, name, description, brand, style, color, size...'
     };
   }, [mode]);
 
-  const load = useCallback(async ({ nextMode = mode, nextSearch = search, nextIncludeLinkedWooSearch = includeLinkedWooSearch } = {}) => {
+  const load = useCallback(async ({ nextMode = mode, nextSearch = search } = {}) => {
     const requestId = requestSeq.current + 1;
     requestSeq.current = requestId;
 
@@ -112,7 +119,7 @@ export default function BlankInventory() {
     try {
       const data = nextMode === 'finished'
         ? await getFinishedProducts(nextSearch)
-        : await getBlankInventory(nextSearch, { includeLinkedWooSkus: nextIncludeLinkedWooSearch });
+        : await getBlankInventory(nextSearch);
 
       if (requestSeq.current !== requestId) return;
 
@@ -125,7 +132,7 @@ export default function BlankInventory() {
         setLoading(false);
       }
     }
-  }, [mode, search, includeLinkedWooSearch]);
+  }, [mode, search]);
 
   function changeMode(nextMode) {
     if (nextMode === mode) return;
@@ -134,8 +141,8 @@ export default function BlankInventory() {
   }
 
   useEffect(() => {
-    load({ nextMode: mode });
-  }, [mode, includeLinkedWooSearch]);
+    load({ nextMode: mode, nextSearch: '' });
+  }, [mode]);
 
   function rowKey(row, index) {
     return (
@@ -186,7 +193,7 @@ export default function BlankInventory() {
         </div>
       </div>
 
-      <form onSubmit={(event) => { event.preventDefault(); load({ nextMode: mode, nextSearch: search, nextIncludeLinkedWooSearch: includeLinkedWooSearch }); }} className="card inventory-search-card">
+      <form onSubmit={(event) => { event.preventDefault(); load({ nextMode: mode, nextSearch: search }); }} className="card inventory-search-card">
         <div className="inventory-search-copy">
           <h2>{modeCopy.title}</h2>
           <p className="muted">{modeCopy.description}</p>
@@ -198,16 +205,6 @@ export default function BlankInventory() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={modeCopy.placeholder}
           />
-          {mode === 'blank' && (
-            <label className="inventory-linked-search-toggle">
-              <input
-                type="checkbox"
-                checked={includeLinkedWooSearch}
-                onChange={(event) => setIncludeLinkedWooSearch(event.target.checked)}
-              />
-              Include linked Woo SKUs in search
-            </label>
-          )}
           <button type="submit" disabled={loading}>{loading ? 'Searching...' : 'Search'}</button>
         </div>
       </form>
@@ -229,6 +226,7 @@ export default function BlankInventory() {
                 <tr>
                   <th>Blank SKU</th>
                   <th>Name</th>
+                  <th>Description</th>
                   <th>Brand</th>
                   <th>Style</th>
                   <th>Color</th>
@@ -248,6 +246,9 @@ export default function BlankInventory() {
                         {compactSku(row.blank_sku || row.sku_base || '')}
                       </td>
                       <td>{row.name || row.blank_product_name || row.woo_product_name || ''}</td>
+                      <td className="inventory-description-cell" title={row.description || row.search_description || ''}>
+                        {compactDescription(row.description || row.search_description || '')}
+                      </td>
                       <td>{row.brand || ''}</td>
                       <td>{row.product_type || row.style || ''}</td>
                       <td>{row.color || ''}</td>
@@ -267,7 +268,7 @@ export default function BlankInventory() {
                 })}
                 {!rows.length && (
                   <tr>
-                    <td colSpan="10" className="inventory-empty-cell">
+                    <td colSpan="11" className="inventory-empty-cell">
                       No blank products matched this search.
                     </td>
                   </tr>
@@ -288,6 +289,7 @@ export default function BlankInventory() {
                 <tr>
                   <th>Finished SKU</th>
                   <th>Name</th>
+                  <th>Description</th>
                   <th>Customer</th>
                   <th>Logo / Placement</th>
                   <th>Blank SKU</th>
@@ -309,6 +311,9 @@ export default function BlankInventory() {
                         {compactSku(row.finished_sku || row.sku || '')}
                       </td>
                       <td>{row.finished_name || row.name || ''}</td>
+                      <td className="inventory-description-cell" title={row.description || row.search_description || ''}>
+                        {compactDescription(row.description || row.search_description || '')}
+                      </td>
                       <td>{row.customer || row.customer_name || ''}</td>
                       <td>{logoPlacement}</td>
                       <td title={firstValue(row, ['blank_sku_base', 'blank_sku', 'sku_base'])}>
@@ -323,7 +328,7 @@ export default function BlankInventory() {
                 })}
                 {!rows.length && (
                   <tr>
-                    <td colSpan="9" className="inventory-empty-cell">
+                    <td colSpan="10" className="inventory-empty-cell">
                       No finished products matched this search.
                     </td>
                   </tr>

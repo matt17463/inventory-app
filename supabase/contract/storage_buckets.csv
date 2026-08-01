@@ -1,0 +1,3 @@
+bucket_name,required,usage_scopes,operations,source_files
+production-photo-proof,True,frontend_bundle,getPublicUrl | upload,src/lib/phase6Api.js
+sample-product-images,True,frontend_bundle,getPublicUrl | remove | upload,src/SampleInventory.jsx

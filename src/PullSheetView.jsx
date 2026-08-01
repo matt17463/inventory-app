@@ -2,12 +2,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { PageHeader, HelpPanel, SectionCard, StatusBadge, ActionButton, EmptyState } from './components/UIPrimitives';
-import { applyNonInventoryRulesToJob, markJobItemNonInventory } from './lib/nonInventoryApi';
 import {
-  assignOutOfStockJobItemsToPendingStock,
+  applyNonInventoryRulesToJob,
+  markJobItemNonInventory,
+  setJobItemPurchasingReportInclusion,
+} from './lib/nonInventoryApi';
+import {
   getPendingStockBin,
   isPendingStockBin,
+  saveJobItemSelectedBin,
 } from './lib/pullSheetBinAssignmentApi';
+import {
+  completePullSheetItemDeductBlankSafe,
+} from './lib/pullSheetCompletionApi';
 
 function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
@@ -46,6 +53,11 @@ function isNonInventoryLine(row) {
   return row.inventory_required === false || row.inventory_required === 'false' || row.pairing_status === 'non_inventory' || row.inventory_status === 'non_inventory';
 }
 
+function isIncludedOnPurchasingReport(row) {
+  return row.include_on_purchasing_report !== false
+    && row.include_on_purchasing_report !== 'false';
+}
+
 function binDisplayName(bin) {
   const qty = value(bin.quantity_on_hand, bin.on_hand_quantity, bin.total_quantity, bin.quantity, bin.available_quantity, 0);
   return [
@@ -76,6 +88,9 @@ function normalizeCatalogPullSheetRows(rows = []) {
     blank_color: row.blank_color || row.color,
     blank_size: row.blank_size || row.size,
     inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
+    include_on_purchasing_report: row.include_on_purchasing_report !== undefined
+      ? row.include_on_purchasing_report
+      : true,
     non_inventory_reason: row.non_inventory_reason || '',
     non_inventory_rule_id: row.non_inventory_rule_id || null,
     pairing_status: row.pairing_status || (row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing')),
@@ -109,6 +124,9 @@ function normalizeFallbackPullSheetRows(rows = []) {
       blank_color: row.blank_color || row.color,
       blank_size: row.blank_size || row.size,
       inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
+    include_on_purchasing_report: row.include_on_purchasing_report !== undefined
+      ? row.include_on_purchasing_report
+      : true,
     non_inventory_reason: row.non_inventory_reason || '',
     non_inventory_rule_id: row.non_inventory_rule_id || null,
     pairing_status: row.pairing_status || (row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing')),
@@ -133,13 +151,10 @@ export default function PullSheetView() {
   const [completingAll, setCompletingAll] = useState(false);
   const [jobStatusBusy, setJobStatusBusy] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
+  const [nonInventoryDialog, setNonInventoryDialog] = useState(null);
+  const [nonInventorySaving, setNonInventorySaving] = useState(false);
 
-  async function fetchFallbackItems() {
-    const fallback = await supabase.rpc('sc_pull_sheet_items', { p_job_id: Number(resolvedJobId) });
-    if (!fallback.error && Array.isArray(fallback.data) && fallback.data.length) {
-      return normalizeFallbackPullSheetRows(fallback.data);
-    }
-
+  async function fetchJobItemsDirect() {
     const direct = await supabase
       .from('job_items')
       .select(`
@@ -160,6 +175,7 @@ export default function PullSheetView() {
         notes,
         artwork_note,
         inventory_required,
+        include_on_purchasing_report,
         non_inventory_reason,
         non_inventory_rule_id,
         non_inventory_marked_at,
@@ -178,20 +194,31 @@ export default function PullSheetView() {
       .eq('job_id', Number(resolvedJobId))
       .order('id', { ascending: true });
 
-    if (direct.error) {
-      throw fallback.error || direct.error;
-    }
+    if (direct.error) throw direct.error;
 
-    return (direct.data || []).map((row, index) => {
+    const activeRows = (direct.data || []).filter((row) => (
+      !/(cancel|void|deleted)/i.test(String(row.status || ''))
+    ));
+
+    return activeRows.map((row, index) => {
       const bp = row.blank_products || {};
+
       return {
         ...row,
         job_item_id: row.id,
         line_number: index + 1,
-        ordered_product_name: row.item_name || row.name || row.order_sku || bp.name || bp.sku_base,
+        ordered_product_name:
+          row.item_name
+          || row.name
+          || row.order_sku
+          || bp.name
+          || bp.sku_base,
         ordered_sku: row.order_sku || row.sku || bp.sku_base,
         ordered_brand: row.brand || bp.brands?.name || bp.brands?.code,
-        ordered_style: row.product_type || bp.product_types?.name || bp.product_types?.code,
+        ordered_style:
+          row.product_type
+          || bp.product_types?.name
+          || bp.product_types?.code,
         ordered_color: row.color || bp.colors?.name || bp.colors?.code,
         ordered_size: row.size || bp.sizes?.name || bp.sizes?.code,
         blank_name: bp.name,
@@ -200,10 +227,24 @@ export default function PullSheetView() {
         blank_style: bp.product_types?.name || bp.product_types?.code,
         blank_color: bp.colors?.name || bp.colors?.code,
         blank_size: bp.sizes?.name || bp.sizes?.code,
-        inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
+        inventory_required:
+          row.inventory_required !== undefined
+            ? row.inventory_required
+            : true,
+        include_on_purchasing_report:
+          row.include_on_purchasing_report !== undefined
+            ? row.include_on_purchasing_report
+            : true,
         non_inventory_reason: row.non_inventory_reason || '',
         non_inventory_rule_id: row.non_inventory_rule_id || null,
-        pairing_status: row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing'),
+        pairing_status:
+          row.inventory_required === false
+            ? 'non_inventory'
+            : (
+                row.blank_product_id
+                  ? 'paired'
+                  : 'needs_blank_pairing'
+              ),
       };
     });
   }
@@ -215,32 +256,26 @@ export default function PullSheetView() {
     setLineMessages({});
 
     try {
-      // Persist the system bin assignment before displaying the pull sheet.
-      // Failure is non-fatal because the screen still provides a visible fallback.
-      await assignOutOfStockJobItemsToPendingStock(resolvedJobId);
+      // Viewing a pull sheet must be read-only. Do not call assignment,
+      // synchronization, pairing, or catalog RPCs from the load path.
+      const [jobResult, directRows] = await Promise.all([
+        supabase
+          .from('jobs')
+          .select('*')
+          .eq('id', Number(resolvedJobId))
+          .maybeSingle(),
+        fetchJobItemsDirect(),
+      ]);
 
-      const { data: jobData, error: jobError } = await supabase.from('jobs').select('*').eq('id', resolvedJobId).maybeSingle();
-      if (jobError) throw jobError;
-      setJob(jobData || null);
+      if (jobResult.error) throw jobResult.error;
 
-      const catalog = await supabase.rpc('sc_pull_sheet_items_catalog_v1', { p_job_id: Number(resolvedJobId) });
-      if (!catalog.error && Array.isArray(catalog.data) && catalog.data.length) {
-        setItems(normalizeCatalogPullSheetRows(catalog.data));
-      } else {
-        const primary = await supabase.rpc('sc_pull_sheet_ordered_blank_pairings', { p_job_id: Number(resolvedJobId) });
-        const primaryRows = !primary.error && Array.isArray(primary.data) ? primary.data : [];
-        const fallbackRows = await fetchFallbackItems();
+      setJob(jobResult.data || null);
+      setItems(directRows);
 
-        // Some older pairing RPCs can accidentally omit zero-on-hand lines.
-        // Prefer/merge the direct job_items fallback whenever it has more complete coverage.
-        const mergedRows = fallbackRows.length > primaryRows.length
-          ? mergePullSheetRows(primaryRows, fallbackRows)
-          : primaryRows;
-
-        setItems(mergedRows.length ? mergedRows : fallbackRows);
-        if (!mergedRows.length && !fallbackRows.length && (catalog.error || primary.error)) {
-          setError(catalog.error?.message || primary.error?.message || 'No line items were returned by the pull sheet pairing function.');
-        }
+      if (!directRows.length) {
+        setError(
+          'This pull sheet exists, but it currently has no saved job-item lines.'
+        );
       }
     } catch (err) {
       setError(err.message || 'Failed to load pull sheet.');
@@ -299,7 +334,9 @@ export default function PullSheetView() {
           continue;
         }
 
-        const bins = data || [];
+        // Pending Stock is virtual and must never be offered as a physical
+        // source bin. A separately named Unassigned bin remains valid.
+        const bins = (data || []).filter((bin) => !isPendingStockBin(bin));
 
         if (bins.length) {
           nextBins[key] = bins;
@@ -310,8 +347,29 @@ export default function PullSheetView() {
             (bin) => String(bin.bin_id) === persistedBinId
           );
 
-          if (persistedStillValid) nextSelected[key] = persistedBinId;
-          else if (bins.length === 1) nextSelected[key] = String(bins[0].bin_id);
+          if (persistedStillValid) {
+            nextSelected[key] = persistedBinId;
+          } else if (bins.length === 1) {
+            // Preselect the only physical bin for convenience, but do not save
+            // anything merely because the pull sheet was opened.
+            nextSelected[key] = String(bins[0].bin_id);
+            setLineMessages((messages) => ({
+              ...messages,
+              [key]:
+                'One physical source bin is available. Change the selection '
+                + 'to save it, or complete the line using this bin.',
+            }));
+          } else if (
+            pendingStockBin
+            && persistedBinId === String(pendingStockBin.bin_id)
+          ) {
+            setLineMessages((messages) => ({
+              ...messages,
+              [key]:
+                'Physical inventory is now available. Choose the correct '
+                + 'source bin to replace the Pending Stock assignment.',
+            }));
+          }
           continue;
         }
 
@@ -405,6 +463,48 @@ export default function PullSheetView() {
     await load();
   }
 
+  async function changeSelectedBin(row, idx, nextBinId) {
+    const key = rowKey(row, idx);
+    const previousBinId = selectedBinByLine[key] || '';
+
+    setSelectedBinByLine((current) => ({
+      ...current,
+      [key]: nextBinId,
+    }));
+    setLineMessages((messages) => ({
+      ...messages,
+      [key]: 'Saving source bin…',
+    }));
+
+    try {
+      await saveJobItemSelectedBin({
+        jobItemId: pickJobItemId(row),
+        binId: nextBinId || null,
+      });
+
+      setItems((currentItems) => currentItems.map((item, itemIndex) => (
+        rowKey(item, itemIndex) === key
+          ? { ...item, selected_bin_id: nextBinId || null }
+          : item
+      )));
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: nextBinId
+          ? 'Source bin saved. Purchasing now uses this physical-bin assignment.'
+          : 'Source bin cleared.',
+      }));
+    } catch (saveError) {
+      setSelectedBinByLine((current) => ({
+        ...current,
+        [key]: previousBinId,
+      }));
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: saveError.message || 'The source bin could not be saved.',
+      }));
+    }
+  }
+
   async function completeAndDeduct(row, idx) {
     const key = rowKey(row, idx);
     const jobItemId = pickJobItemId(row);
@@ -431,19 +531,29 @@ export default function PullSheetView() {
     setCompletingLine(key);
     setLineMessages((messages) => ({ ...messages, [key]: '' }));
 
-    const { error } = await supabase.rpc('complete_job_item', {
-      p_job_item_id: Number(jobItemId),
-      p_bin_id: toRpcBinId(selectedBinId),
-      p_notes: 'Completed and deducted blank from pull sheet screen.',
+    const result = await completePullSheetItemDeductBlankSafe({
+      jobItemId,
+      blankProductId: pickBlankProductId(row),
+      binId: toRpcBinId(selectedBinId),
+      quantity: Number(row.quantity || row.qty || row.quantity_needed || 1),
+      notes: 'Completed and deducted blank from pull sheet screen.',
     });
 
-    if (error) {
-      setLineMessages((messages) => ({ ...messages, [key]: error.message || 'Could not complete and deduct blank.' }));
+    if (!result?.success) {
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: result?.message || 'Could not complete and deduct blank.',
+      }));
       setCompletingLine('');
       return;
     }
 
-    setLineMessages((messages) => ({ ...messages, [key]: 'Completed and blank inventory deducted.' }));
+    setLineMessages((messages) => ({
+      ...messages,
+      [key]: result?.already_completed
+        ? 'Completion is already recorded. No additional inventory was deducted.'
+        : 'Completed and blank inventory deducted.',
+    }));
     setCompletingLine('');
     await load();
   }
@@ -486,14 +596,26 @@ export default function PullSheetView() {
     const failures = [];
 
     for (const entry of inStockEntries) {
-      const { error } = await supabase.rpc('complete_job_item', {
-        p_job_item_id: Number(entry.jobItemId),
-        p_bin_id: toRpcBinId(selectedBinByLine[entry.key]),
-        p_notes: 'Bulk completed and deducted blank from pull sheet screen.',
+      const result = await completePullSheetItemDeductBlankSafe({
+        jobItemId: entry.jobItemId,
+        blankProductId: entry.blankProductId,
+        binId: toRpcBinId(selectedBinByLine[entry.key]),
+        quantity: Number(
+          entry.row.quantity
+          || entry.row.qty
+          || entry.row.quantity_needed
+          || 1
+        ),
+        notes: 'Bulk completed and deducted blank from pull sheet screen.',
       });
 
-      if (error) failures.push(`Line ${entry.idx + 1}: ${error.message || 'failed'}`);
-      else successes.push(entry.idx + 1);
+      if (!result?.success) {
+        failures.push(
+          `Line ${entry.idx + 1}: ${result?.message || 'failed'}`
+        );
+      } else {
+        successes.push(entry.idx + 1);
+      }
     }
 
     setCompletingAll(false);
@@ -523,31 +645,123 @@ export default function PullSheetView() {
     }
   }
 
-  async function markLineNonInventory(row, idx) {
+  function openNonInventoryDialog(row, idx) {
     const key = rowKey(row, idx);
     const jobItemId = pickJobItemId(row);
+
     if (!jobItemId) {
-      setLineMessages((messages) => ({ ...messages, [key]: 'This line is missing a job item ID.' }));
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: 'This line is missing a job item ID.',
+      }));
       return;
     }
 
-    const reason = window.prompt('Reason to show on the pull sheet:', row.non_inventory_reason || 'No inventory tracking required for this WooCommerce item.');
-    if (reason === null) return;
+    const orderedSku = value(row.ordered_sku, row.order_sku, row.sku, '');
 
-    const createFutureRule = window.confirm('Create a rule so future orders for this SKU are automatically treated as non-inventory?');
+    setNonInventoryDialog({
+      row,
+      idx,
+      key,
+      jobItemId,
+      reason:
+        row.non_inventory_reason
+        || 'No inventory tracking required for this WooCommerce item.',
+      createFutureRule: false,
+      includeOnPurchasingReport: isIncludedOnPurchasingReport(row),
+      ruleMatchValue: orderedSku === '—' ? '' : orderedSku,
+    });
+  }
+
+  async function saveNonInventoryDialog(event) {
+    event.preventDefault();
+    if (!nonInventoryDialog) return;
+
+    const {
+      jobItemId,
+      key,
+      reason,
+      createFutureRule,
+      includeOnPurchasingReport,
+      ruleMatchValue,
+    } = nonInventoryDialog;
+
+    setNonInventorySaving(true);
 
     try {
       await markJobItemNonInventory({
         jobItemId,
-        reason: reason || 'No inventory tracking required for this WooCommerce item.',
+        reason:
+          String(reason || '').trim()
+          || 'No inventory tracking required for this WooCommerce item.',
         createFutureRule,
         ruleType: 'exact_sku',
-        ruleMatchValue: value(row.ordered_sku, row.order_sku, row.sku, '') === '—' ? '' : value(row.ordered_sku, row.order_sku, row.sku, ''),
+        ruleMatchValue,
+        includeOnPurchasingReport,
       });
-      setLineMessages((messages) => ({ ...messages, [key]: 'Marked as non-inventory. This line no longer needs a blank or reservation.' }));
+
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: includeOnPurchasingReport
+          ? 'Marked non-inventory and included on the Purchasing Report.'
+          : 'Marked non-inventory and excluded from the Purchasing Report.',
+      }));
+      setNonInventoryDialog(null);
       await load();
     } catch (err) {
-      setLineMessages((messages) => ({ ...messages, [key]: err.message || 'Could not mark line as non-inventory.' }));
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: err.message || 'Could not mark the line as non-inventory.',
+      }));
+    } finally {
+      setNonInventorySaving(false);
+    }
+  }
+
+  async function changePurchasingReportInclusion(row, idx, include) {
+    const key = rowKey(row, idx);
+    const jobItemId = pickJobItemId(row);
+
+    if (!jobItemId) {
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: 'This line is missing a job item ID.',
+      }));
+      return;
+    }
+
+    setItems((currentItems) => currentItems.map((item, itemIndex) => (
+      rowKey(item, itemIndex) === key
+        ? { ...item, include_on_purchasing_report: include }
+        : item
+    )));
+    setLineMessages((messages) => ({
+      ...messages,
+      [key]: 'Saving purchasing-report setting…',
+    }));
+
+    try {
+      await setJobItemPurchasingReportInclusion({
+        jobItemId,
+        includeOnPurchasingReport: include,
+      });
+
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: include
+          ? 'Included on the Purchasing Report.'
+          : 'Excluded from the Purchasing Report.',
+      }));
+    } catch (err) {
+      setItems((currentItems) => currentItems.map((item, itemIndex) => (
+        rowKey(item, itemIndex) === key
+          ? { ...item, include_on_purchasing_report: !include }
+          : item
+      )));
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: err.message || 'Could not update the purchasing-report setting.',
+      }));
     }
   }
 
@@ -649,6 +863,7 @@ export default function PullSheetView() {
             : '';
           const isCompleting = completingLine === key;
           const nonInventory = isNonInventoryLine(row);
+          const includedOnPurchasingReport = isIncludedOnPurchasingReport(row);
           const lineStatusLabel = nonInventory
             ? 'No Inventory Required'
             : (outOfStock ? 'Out of Stock — Pending Stock' : (warning ? 'Needs Review' : (row.pairing_status || rowStatus(row) || 'Matched')));
@@ -687,7 +902,14 @@ export default function PullSheetView() {
                     <dt>Available</dt><dd>{value(row.available_quantity, availableQty, 0)}</dd>
                     <dt>Inventory Status</dt><dd>{value(row.inventory_status, nonInventory ? 'non_inventory' : (onHandQty > 0 ? 'in_stock' : 'zero_on_hand'))}</dd>
                     <dt>Inventory Required</dt><dd>{nonInventory ? 'No' : 'Yes'}</dd>
-                    {nonInventory ? <><dt>Reason</dt><dd>{value(row.non_inventory_reason, row.pairing_warning, 'No inventory tracking required')}</dd></> : null}
+                    {nonInventory ? (
+                      <>
+                        <dt>Purchasing Report</dt>
+                        <dd>{includedOnPurchasingReport ? 'Included' : 'Excluded'}</dd>
+                        <dt>Reason</dt>
+                        <dd>{value(row.non_inventory_reason, row.pairing_warning, 'No inventory tracking required')}</dd>
+                      </>
+                    ) : null}
                   </dl>
                 </section>
               </div>
@@ -695,8 +917,33 @@ export default function PullSheetView() {
               {zeroOnHandWarning ? <div className="sc-warning-callout">{zeroOnHandWarning}</div> : null}
 
               {nonInventory ? (
-                <div className="sc-button-row">
-                  <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Done / No Inventory Action</ActionButton>
+                <div className="sc-non-inventory-line-controls">
+                  <label className="sc-purchasing-report-toggle">
+                    <input
+                      type="checkbox"
+                      checked={includedOnPurchasingReport}
+                      onChange={(event) => changePurchasingReportInclusion(
+                        row,
+                        idx,
+                        event.target.checked
+                      )}
+                    />
+                    <span>
+                      <strong>Include on Purchasing Report</strong>
+                      <small>
+                        Turn this off for fees, services, customer-supplied items,
+                        or anything that does not need to be ordered.
+                      </small>
+                    </span>
+                  </label>
+                  <div className="sc-button-row">
+                    <ActionButton tone="secondary" onClick={() => openNonInventoryDialog(row, idx)}>
+                      Edit Non-Inventory Settings
+                    </ActionButton>
+                    <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>
+                      Mark Done / No Inventory Action
+                    </ActionButton>
+                  </div>
                 </div>
               ) : blankProductId ? (
                 <div className="sc-button-row" style={{ alignItems: 'center' }}>
@@ -705,7 +952,7 @@ export default function PullSheetView() {
                     <select
                       value={selectedBinId}
                       disabled={assignedToPendingStock}
-                      onChange={(event) => setSelectedBinByLine((current) => ({ ...current, [key]: event.target.value }))}
+                      onChange={(event) => changeSelectedBin(row, idx, event.target.value)}
                     >
                       {!outOfStock ? <option value="">Choose bin…</option> : null}
                       {sourceBins.map((bin) => (
@@ -714,7 +961,7 @@ export default function PullSheetView() {
                     </select>
                   </label>
                   <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
-                  <ActionButton tone="secondary" onClick={() => markLineNonInventory(row, idx)}>Mark Non-Inventory</ActionButton>
+                  <ActionButton tone="secondary" onClick={() => openNonInventoryDialog(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled={isCompleting || isClosedLine(row) || outOfStock} onClick={() => completeAndDeduct(row, idx)}>
                     {isCompleting ? 'Completing…' : (outOfStock ? 'Awaiting Stock' : 'Complete + Deduct Blank')}
@@ -723,7 +970,7 @@ export default function PullSheetView() {
               ) : (
                 <div className="sc-button-row">
                   <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
-                  <ActionButton tone="secondary" onClick={() => markLineNonInventory(row, idx)}>Mark Non-Inventory</ActionButton>
+                  <ActionButton tone="secondary" onClick={() => openNonInventoryDialog(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled>Complete + Deduct Blank</ActionButton>
                 </div>
@@ -734,6 +981,81 @@ export default function PullSheetView() {
           );
         })}
       </div>
+
+      {nonInventoryDialog ? (
+        <div className="sc-modal-backdrop">
+          <form className="sc-modal-card sc-non-inventory-modal" onSubmit={saveNonInventoryDialog}>
+            <h2>Non-Inventory Line Settings</h2>
+            <p>
+              This line will stay on the pull sheet but will not reserve or deduct
+              blank inventory. Choose separately whether it should create
+              purchasing demand.
+            </p>
+
+            <label>
+              <span>Reason shown on pull sheet</span>
+              <textarea
+                rows={3}
+                value={nonInventoryDialog.reason}
+                onChange={(event) => setNonInventoryDialog((current) => ({
+                  ...current,
+                  reason: event.target.value,
+                }))}
+              />
+            </label>
+
+            <label className="sc-purchasing-report-toggle sc-purchasing-report-toggle--modal">
+              <input
+                type="checkbox"
+                checked={nonInventoryDialog.includeOnPurchasingReport}
+                onChange={(event) => setNonInventoryDialog((current) => ({
+                  ...current,
+                  includeOnPurchasingReport: event.target.checked,
+                }))}
+              />
+              <span>
+                <strong>Include this item on the Purchasing Report</strong>
+                <small>
+                  Checked: the linked blank remains a purchasing need. Unchecked:
+                  this pull-sheet line is removed from purchasing demand.
+                </small>
+              </span>
+            </label>
+
+            <label className="sc-purchasing-report-toggle sc-purchasing-report-toggle--modal">
+              <input
+                type="checkbox"
+                checked={nonInventoryDialog.createFutureRule}
+                onChange={(event) => setNonInventoryDialog((current) => ({
+                  ...current,
+                  createFutureRule: event.target.checked,
+                }))}
+              />
+              <span>
+                <strong>Create a rule for future orders with this SKU</strong>
+                <small>
+                  The future rule will remember both the non-inventory setting and
+                  the purchasing-report choice.
+                </small>
+              </span>
+            </label>
+
+            <div className="sc-button-row">
+              <ActionButton type="submit" tone="primary" disabled={nonInventorySaving}>
+                {nonInventorySaving ? 'Saving…' : 'Save Non-Inventory Settings'}
+              </ActionButton>
+              <ActionButton
+                type="button"
+                tone="secondary"
+                disabled={nonInventorySaving}
+                onClick={() => setNonInventoryDialog(null)}
+              >
+                Cancel
+              </ActionButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       {overrideRow ? (
         <div className="sc-modal-backdrop">

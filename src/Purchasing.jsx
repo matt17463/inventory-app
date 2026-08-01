@@ -259,7 +259,7 @@ export default function Purchasing() {
   const helpMap = {
     shortages: 'Shows items where reserved inventory is greater than on-hand inventory, including pull-sheet lines assigned to Pending Stock. These are immediate production shortages.',
     lowStock: 'Shows items where on-hand inventory is at or below your low-stock threshold.',
-    recommended: 'Uses Reserved + Pending Stock + Threshold - On Hand. This is the best buying list because it covers current commitments, unavailable pull-sheet items, and safety stock.',
+    recommended: 'Uses Reserved + Pending Stock + Threshold - On Hand. The Create Purchase Order screen uses this same list and separately shows quantities already covered by open purchase orders.',
   };
 
   return (
@@ -274,6 +274,7 @@ export default function Purchasing() {
           </p>
         </div>
         <div className="purchasing-actions">
+          <Link className="primary-action" to="/purchase-orders/new">Create Purchase Order</Link>
           <button type="button" onClick={exportActiveRows} disabled={tab !== 'summary' && !activeRows.length}>
             Export CSV
           </button>
@@ -353,7 +354,10 @@ export default function Purchasing() {
                       <td>
                         {row.name}
                         {Number(row.pending_stock_quantity || 0) > 0 && (
-                          <><br /><small className="warning-text">Pending Stock: {number(row.pending_stock_quantity)}</small></>
+                          <><br /><small className="warning-text">Unreserved Pending Stock: {number(row.pending_stock_quantity)}</small></>
+                        )}
+                        {Number(row.non_inventory_purchase_quantity || 0) > 0 && (
+                          <><br /><small className="warning-text">Non-Inventory Purchasing: {number(row.non_inventory_purchase_quantity)}</small></>
                         )}
                       </td>
                       <td>{row.brand}</td>

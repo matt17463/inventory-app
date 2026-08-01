@@ -1,0 +1,33 @@
+{
+  "package": "Skilled Crafting Inventory App Steps 6-14 Safe Release",
+  "application_version": "0.6.14",
+  "base_requirement": "Completed Steps 1-5 release",
+  "generated_date": "2026-07-25",
+  "required_migrations": [
+    "202607250501_step6_woocommerce_status_audit.sql",
+    "202607250601_step7_supplier_sync_runs_and_cache.sql",
+    "202607250701_step8_pullsheet_idempotency_support.sql",
+    "202607251301_step14_deployment_health.sql"
+  ],
+  "optional_migrations": [
+    "202607250702_optional_pullsheet_unique_index.sql"
+  ],
+  "safety": {
+    "drops_operational_objects": false,
+    "updates_existing_business_rows": false,
+    "deletes_existing_business_rows": false,
+    "automatic_data_migration": false
+  },
+  "validation": {
+    "netlify_esm_files": 12,
+    "jsx_tsx_files_parsed": 89,
+    "static_and_security_tests": 8,
+    "relative_imports_resolved": true,
+    "javascript_syntax_checked": true,
+    "live_supabase_execution": false,
+    "vite_build_executed": false,
+    "vite_build_note": "Package-registry access stalled during npm ci in the generation environment."
+  },
+  "release_revision": "v2-preflight-fix",
+  "preflight_sql_editor_compatible": true
+}

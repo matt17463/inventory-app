@@ -24,6 +24,7 @@ const fallbackNav = [
     { label: 'Add Item to Bin', path: '/add-item' },
     { label: 'Edit Blank Items', path: '/inventory/edit-blanks' },
     { label: 'Bins', path: '/bins' },
+    { label: 'Bins', path: '/bins' },
     { label: 'Inventory Audit', path: '/inventory-audit' },
     { label: 'Product Data Health', path: '/product-data-health' },
   ]},
@@ -134,6 +135,10 @@ export default function AppShell({ children }) {
                 </div>
               )}
             </div>
+            <Link className="sc-theme-settings-link" to="/theme-settings" aria-label="Open visual theme settings">
+              <span aria-hidden="true">🎨</span>
+              <span>Themes</span>
+            </Link>
             <DarkModeToggle />
           </div>
         </header>

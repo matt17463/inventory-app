@@ -3153,3 +3153,69 @@ tr.is-overdue { background: #fff8f8; }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ---------------------------------------------------------
+   Non-inventory purchasing-report controls — v0.6.23
+--------------------------------------------------------- */
+
+.sc-non-inventory-line-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.sc-purchasing-report-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  background: var(--sc-panel-muted, var(--sc-panel));
+  cursor: pointer;
+}
+
+.sc-purchasing-report-toggle input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.sc-purchasing-report-toggle span {
+  display: grid;
+  gap: 4px;
+}
+
+.sc-purchasing-report-toggle small {
+  color: var(--sc-muted);
+  line-height: 1.4;
+}
+
+.sc-purchasing-report-toggle--modal {
+  margin: 4px 0;
+}
+
+.sc-non-inventory-modal {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.sc-non-inventory-modal > label:not(.sc-purchasing-report-toggle) {
+  display: grid;
+  gap: 6px;
+}
+
+.sc-non-inventory-modal textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+
+/* Inventory Overview 0.6.27 universal product search */
+.inventory-description-cell {
+  min-width: 220px;
+  max-width: 360px;
+  white-space: normal;
+  line-height: 1.35;
+}

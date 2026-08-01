@@ -1,0 +1,250 @@
+schema_name,relation_name,column_name,required,evidence_types,source_files
+public,app_blank_inventory_overview_v2,blank_product_name,True,order,src/lib/inventoryApi.js
+public,app_synced_inventory_catalog_v1,name,True,order,src/lib/inventoryApi.js
+public,bin_blank_inventory_contents,bin_code,True,order,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,bin_blank_inventory_contents,bin_id,True,filter,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,bin_blank_inventory_contents,blank_product_id,True,filter,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,bin_blank_inventory_contents,quantity_on_hand,True,filter,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,bin_blank_inventory_contents,sku_base,True,order,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,bins,bin_code,True,order | select,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,bins,created_at,True,select,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,bins,display_order,True,order | select | update,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,bins,id,True,filter | select,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,bins,label,True,select,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,bins,location,True,select,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,bins,nfc_url,True,select,src/AddItemToBin.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js | src/lib/manualOrdersApi.js
+public,blank_inventory_by_product,name,True,order,src/lib/inventoryApi.js
+public,blank_inventory_movements,bin_id,True,filter | select,src/lib/inventoryApi.js
+public,blank_inventory_movements,blank_product_id,True,relationship | select,src/lib/inventoryApi.js
+public,blank_inventory_movements,created_at,True,order,src/lib/inventoryApi.js
+public,blank_inventory_movements,quantity_change,True,select,src/lib/inventoryApi.js
+public,blank_products,barcode,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,brand_id,True,filter | relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,color_id,True,filter | relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,id,True,filter | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,image_url,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,low_stock_threshold,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,name,True,order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,product_type_id,True,filter | relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,size_id,True,filter | relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,sku_base,True,filter | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products,unit_cost,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/AddItemToBin.jsx | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,blank_products_search,brand,True,order,src/lib/inventoryApi.js
+public,blank_products_search,color,True,order,src/lib/inventoryApi.js
+public,blank_products_search,size,True,order,src/lib/inventoryApi.js
+public,blank_products_search,style,True,order,src/lib/inventoryApi.js
+public,brands,code,True,select,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,brands,id,True,select,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,brands,name,True,order | select,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,color_alias_approvals,created_at,True,order,src/lib/inventoryApi.js
+public,color_alias_approvals,updated_at,True,order,src/lib/inventoryApi.js
+public,color_alias_review_candidates,affected_woo_products,True,order,src/lib/inventoryApi.js
+public,color_alias_review_candidates,brand,True,order,src/lib/inventoryApi.js
+public,color_alias_review_candidates,possible_blank_color,True,order,src/lib/inventoryApi.js
+public,color_alias_review_candidates,style,True,order,src/lib/inventoryApi.js
+public,color_alias_review_candidates,woo_color,True,order,src/lib/inventoryApi.js
+public,colors,code,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,colors,id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,colors,name,True,order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,customers,code,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,customers,customer_key,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,customers,id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,customers,name,True,filter | insert | order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,finished_inventory_by_product,blank_product_id,True,filter,src/lib/inventoryApi.js
+public,finished_inventory_by_product,finished_sku,True,order,src/lib/inventoryApi.js
+public,finished_inventory_by_product,total_quantity,True,filter,src/lib/inventoryApi.js
+public,finished_products,finished_sku,True,filter,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,finished_products,id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,inventory_activity_feed,created_at,True,order,src/lib/inventoryApi.js
+public,inventory_reservations_view,created_at,True,order,src/lib/inventoryApi.js
+public,inventory_reservations_view,status,True,filter,src/lib/inventoryApi.js
+public,inventory_valuation_by_product,inventory_value,True,order,src/lib/inventoryApi.js
+public,job_items,artwork_note,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,blank_product_id,True,insert | relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,brand,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,color,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,decoration_size,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,id,True,filter | order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,inventory_required,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,item_name,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,job_id,True,filter | insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,logo,True,insert,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,name,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,non_inventory_marked_at,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,non_inventory_reason,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,non_inventory_rule_id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,notes,True,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,order_sku,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,placement,True,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,product_type,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,quantity,True,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,selected_bin_id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,size,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,sku,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,job_items,status,True,insert | select | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,customer_name,True,insert | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,due_date,True,insert,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,id,True,filter | order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,job_name,True,insert | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,notes,True,insert | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,status,True,insert | select | update,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,jobs,woocommerce_order_id,True,filter | insert,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,logos,code,True,insert | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,logos,id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,logos,name,True,filter | insert | order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/CreateFinishedFromBlank.jsx
+public,low_stock_blank_inventory,available_quantity,True,order,src/lib/inventoryApi.js
+public,low_stock_blank_inventory,reorder_quantity,True,order,src/lib/inventoryApi.js
+public,phase1_purchase_order_items_detail,purchase_order_id,True,filter,src/lib/inventoryApi.js
+public,phase1_purchase_order_items_detail,sku_base,True,order,src/lib/inventoryApi.js
+public,phase1_purchase_orders_with_totals,created_at,True,order,src/lib/inventoryApi.js
+public,phase1_purchase_orders_with_totals,id,True,filter,src/lib/inventoryApi.js
+public,phase1_purchase_orders_with_totals,purchase_order_id,True,filter,src/lib/inventoryApi.js
+public,phase1_purchase_orders_with_totals,sku_base,True,order,src/lib/inventoryApi.js
+public,phase5_artwork_requests,created_at,True,order,src/lib/inventoryApi.js
+public,phase5_artwork_requests,id,True,filter,src/lib/inventoryApi.js
+public,phase5_employees,id,True,filter,src/lib/inventoryApi.js
+public,phase5_employees,name,True,order,src/lib/inventoryApi.js
+public,phase5_pricing_rules,id,True,filter,src/QuoteBuilder.jsx | src/lib/inventoryApi.js
+public,phase5_pricing_rules,rule_name,True,order,src/QuoteBuilder.jsx | src/lib/inventoryApi.js
+public,phase5_production_time_rules,id,True,filter,src/ProductionEstimator.jsx | src/lib/inventoryApi.js
+public,phase5_production_time_rules,rule_name,True,order,src/ProductionEstimator.jsx | src/lib/inventoryApi.js
+public,phase5_quotes_with_totals,created_at,True,order,src/lib/inventoryApi.js
+public,phase5_tasks,id,True,filter,src/lib/inventoryApi.js
+public,phase5_tasks_detail,created_at,True,order,src/lib/inventoryApi.js
+public,phase5_tasks_detail,due_at,True,order,src/lib/inventoryApi.js
+public,product_sku_mappings,blank_product_id,True,relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,product_types,code,True,select,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,product_types,id,True,select,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,product_types,name,True,order | select,netlify/functions/manual-pullsheet.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,production_capacity_windows,id,True,filter,src/lib/productionSchedulingApi.js
+public,production_capacity_windows_with_usage,start_time,True,order,src/lib/productionSchedulingApi.js
+public,production_capacity_windows_with_usage,window_date,True,order,src/lib/productionSchedulingApi.js
+public,production_employees,display_name,True,order,src/lib/productionSchedulingApi.js
+public,production_employees,id,True,filter,src/lib/productionSchedulingApi.js
+public,production_schedulable_jobs,due_date_text,True,order,src/lib/productionSchedulingApi.js
+public,production_time_rules,id,True,filter,src/lib/productionSchedulingApi.js
+public,production_time_rules,rule_name,True,order,src/lib/productionSchedulingApi.js
+public,production_window_assignment_details,start_time,True,order,src/lib/productionSchedulingApi.js
+public,production_window_assignment_details,window_date,True,order,src/lib/productionSchedulingApi.js
+public,production_window_assignments,id,True,filter,src/lib/productionSchedulingApi.js
+public,products,blank_product_id,True,relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,brand_id,True,relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,color_id,True,relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,name,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,product_type_id,True,relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,size_id,True,relationship | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,sku,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,woocommerce_product_id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,products,woocommerce_variation_id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js
+public,purchasing_recommended_orders,recommended_order_quantity,True,order,src/lib/inventoryApi.js
+public,purchasing_shortages,need_to_order,True,order,src/lib/inventoryApi.js
+public,purchasing_supplier_order_summary,brand,True,order,src/lib/inventoryApi.js
+public,purchasing_supplier_order_summary,product_type,True,order,src/lib/inventoryApi.js
+public,sample_inventory_view,created_at,True,order,src/lib/inventoryApi.js
+public,sample_product_types,name,True,order | select | upsert,src/SampleInventory.jsx
+public,sample_products,bin_id,True,filter | select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,brand,True,order | select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,color,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,created_at,True,order | select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,customer,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,id,True,filter | select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,image_path,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,image_url,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,notes,True,select | update,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,price,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,product_type,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,quantity,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,size,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,style,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,updated_at,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products,vendor,True,select,src/BinsDashboard.jsx | src/SampleInventory.jsx | src/lib/inventoryApi.js
+public,sample_products_with_bins,bin_id,True,filter,src/BinsDashboard.jsx | src/SampleInventory.jsx
+public,sample_products_with_bins,brand,True,order,src/BinsDashboard.jsx | src/SampleInventory.jsx
+public,sample_products_with_bins,created_at,True,order,src/BinsDashboard.jsx | src/SampleInventory.jsx
+public,sc_activity_undo_log,activity_id,True,filter | select,src/lib/inventoryApi.js
+public,sc_activity_undo_log,reason,True,select,src/lib/inventoryApi.js
+public,sc_activity_undo_log,reversal_movement_id,True,select,src/lib/inventoryApi.js
+public,sc_activity_undo_log,source_id,True,select,src/lib/inventoryApi.js
+public,sc_activity_undo_log,source_table,True,select,src/lib/inventoryApi.js
+public,sc_activity_undo_log,undone_at,True,select,src/lib/inventoryApi.js
+public,sc_app_user_roles,is_active,True,select,netlify/functions/_shared/security.js
+public,sc_app_user_roles,role,True,select,netlify/functions/_shared/security.js
+public,sc_app_user_roles,user_id,True,filter,netlify/functions/_shared/security.js
+public,sc_approval_production_handoffs,created_at,True,order,src/lib/phase6Api.js
+public,sc_artwork_handoff_log_app,created_at,True,order,src/lib/artworkBridgeApi.js
+public,sc_artwork_system_handoffs,received_at,True,order,src/lib/artworkSystemApi.js
+public,sc_artwork_system_reorders,received_at,True,order,src/lib/artworkSystemApi.js
+public,sc_artwork_system_requests,received_at,True,order,src/lib/artworkSystemApi.js
+public,sc_audit_log,created_at,True,order,src/lib/phase6Api.js
+public,sc_customer_portal_events,created_at,True,order,src/lib/phase6Api.js
+public,sc_customer_portal_tokens,created_at,True,order,src/lib/phase6Api.js
+public,sc_function_security_audit,action,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,app_role,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,function_name,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,metadata,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,outcome,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,request_id,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,request_origin,True,insert,netlify/functions/_shared/security.js
+public,sc_function_security_audit,user_id,True,insert,netlify/functions/_shared/security.js
+public,sc_inventory_audit_counts,created_at,True,order,src/lib/phase6Api.js
+public,sc_inventory_audit_counts,session_id,True,filter,src/lib/phase6Api.js
+public,sc_inventory_audit_sessions,completed_by,True,update,src/lib/phase6Api.js
+public,sc_inventory_audit_sessions,created_at,True,order,src/lib/phase6Api.js
+public,sc_inventory_audit_sessions,id,True,filter,src/lib/phase6Api.js
+public,sc_inventory_audit_sessions,status,True,update,src/lib/phase6Api.js
+public,sc_inventory_audit_sessions,updated_at,True,update,src/lib/phase6Api.js
+public,sc_manual_invoice_order_items_detail,line_number,True,order,src/lib/manualOrdersApi.js
+public,sc_manual_invoice_order_items_detail,manual_order_id,True,filter,src/lib/manualOrdersApi.js
+public,sc_manual_invoice_order_totals,created_at,True,order,src/lib/manualOrdersApi.js
+public,sc_pricing_rules,id,True,filter,src/PricingRules.jsx | src/QuoteBuilder.jsx
+public,sc_pricing_rules,updated_at,True,order,src/PricingRules.jsx | src/QuoteBuilder.jsx
+public,sc_production_photos,created_at,True,order,src/lib/phase6Api.js
+public,sc_pullsheet_sync_runs,completed_at,True,update,netlify/functions/_shared/pullsheetReservations.js
+public,sc_pullsheet_sync_runs,id,True,filter | select,netlify/functions/_shared/pullsheetReservations.js
+public,sc_pullsheet_sync_runs,metadata,True,insert,netlify/functions/_shared/pullsheetReservations.js
+public,sc_pullsheet_sync_runs,request_id,True,insert,netlify/functions/_shared/pullsheetReservations.js
+public,sc_pullsheet_sync_runs,source,True,insert,netlify/functions/_shared/pullsheetReservations.js
+public,sc_pullsheet_sync_runs,woocommerce_order_id,True,insert,netlify/functions/_shared/pullsheetReservations.js
+public,sc_quote_order_handoffs,created_at,True,order,src/lib/phase6Api.js
+public,sc_supplier_catalog_sync_runs,feed_id_text,True,filter | insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,feed_name,True,insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,id,True,filter,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,initiated_by,True,insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,metadata,True,insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,source_url,True,insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,started_at,True,order,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,status,True,filter | insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,supplier_name,True,insert,netlify/functions/supplier-catalog-feed-sync.js
+public,sc_supplier_catalog_sync_runs,updated_at,True,update,netlify/functions/supplier-catalog-feed-sync.js
+public,sizes,code,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,sizes,id,True,select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,sizes,name,True,order | select,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/EditBlankItems.jsx | src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,supplier_catalog_feeds,create_missing_lookups,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,created_at,True,order,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,feed_name,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,feed_url,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,id,True,filter,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,is_active,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,source_file_name,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,supplier_name,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,update_blank_products,True,insert | update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_feeds,updated_at,True,update,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_quote_reference,supplier_name,True,order,src/lib/inventoryApi.js
+public,supplier_catalog_review,brand,True,order,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_review,created_at,True,order,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_review,style,True,order,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,supplier_catalog_review,supplier_name,True,order,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,warehouse_inventory_audit_report,bin_code,True,order,src/lib/inventoryApi.js
+public,warehouse_inventory_audit_report,bin_sort,True,order,src/lib/inventoryApi.js
+public,warehouse_inventory_audit_report,brand,True,order,src/lib/inventoryApi.js
+public,warehouse_inventory_audit_report,color,True,order,src/lib/inventoryApi.js
+public,warehouse_inventory_audit_report,size,True,order,src/lib/inventoryApi.js
+public,warehouse_inventory_audit_report,style,True,order,src/lib/inventoryApi.js
+public,woo_blank_match_diagnostics,match_diagnostic,True,select,src/lib/inventoryApi.js
+public,woo_sync_queue,action,True,insert,src/lib/inventoryApi.js
+public,woo_sync_queue,created_at,True,order,src/lib/inventoryApi.js
+public,woo_sync_queue,entity_id,True,insert,src/lib/inventoryApi.js
+public,woo_sync_queue,entity_type,True,insert,src/lib/inventoryApi.js
+public,woo_sync_queue,payload,True,insert,src/lib/inventoryApi.js
+public,woo_sync_queue,status,True,insert,src/lib/inventoryApi.js

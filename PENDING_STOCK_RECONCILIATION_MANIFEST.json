@@ -1,0 +1,16 @@
+{
+  "version": "0.6.20",
+  "replaces": "0.6.19",
+  "database_changes_required": false,
+  "changed_files": [
+    "src/lib/pullSheetBinAssignmentApi.js",
+    "src/PullSheetView.jsx",
+    "src/lib/inventoryApi.js",
+    "src/Purchasing.jsx",
+    "src/PurchaseOrderGenerator.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json"
+  ]
+}

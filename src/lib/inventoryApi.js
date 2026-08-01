@@ -18,6 +18,127 @@ function searchTokens(term) {
     .filter(Boolean);
 }
 
+
+const INVENTORY_SEARCHABLE_KEY = /(?:sku|name|description|desc|title|content|excerpt|brand|style|product[_-]?type|color|size|barcode|upc|supplier|vendor|status|note|attribute|variation|customer|logo|placement|bin|search)/i;
+
+function collectInventorySearchValues(value, output = [], depth = 0, parentKey = '') {
+  if (value === null || value === undefined || depth > 6) return output;
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectInventorySearchValues(item, output, depth + 1, parentKey));
+    return output;
+  }
+
+  if (typeof value === 'object') {
+    Object.entries(value).forEach(([key, child]) => {
+      collectInventorySearchValues(child, output, depth + 1, key);
+    });
+    return output;
+  }
+
+  if (INVENTORY_SEARCHABLE_KEY.test(parentKey)) {
+    const text = String(value).trim();
+    if (text) output.push(text);
+  }
+
+  return output;
+}
+
+function inventoryRecordMatchesAllTokens(records, term) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const values = (Array.isArray(records) ? records : [records])
+    .flatMap((record) => collectInventorySearchValues(record));
+  const text = textSearchValue(values.join(' '));
+  const normalized = normalizeSearchValue(values.join(' '));
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    return text.includes(token) || normalized.includes(normalizedToken);
+  });
+}
+
+function cleanInventoryDescription(value) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function inventoryDescriptionFromRecords(records) {
+  const descriptionKeys = [
+    'description',
+    'short_description',
+    'product_description',
+    'blank_description',
+    'woo_description',
+    'woo_short_description',
+    'post_content',
+    'post_excerpt',
+    'content',
+    'excerpt',
+  ];
+
+  for (const record of Array.isArray(records) ? records : [records]) {
+    if (!record || typeof record !== 'object') continue;
+    for (const key of descriptionKeys) {
+      const description = cleanInventoryDescription(record[key]);
+      if (description) return description;
+    }
+  }
+
+  return '';
+}
+
+async function fetchAllRelationRows(
+  relation,
+  {
+    select = '*',
+    orderColumn = null,
+    ascending = true,
+    pageSize = 1000,
+    maxRows = 50000,
+  } = {},
+) {
+  const rows = [];
+  const safePageSize = Math.max(100, Math.min(Number(pageSize || 1000), 1000));
+  const safeMaxRows = Math.max(safePageSize, Number(maxRows || 50000));
+
+  for (let offset = 0; offset < safeMaxRows; offset += safePageSize) {
+    let query = supabase.from(relation).select(select);
+    if (orderColumn) query = query.order(orderColumn, { ascending });
+
+    const { data, error } = await query.range(
+      offset,
+      Math.min(offset + safePageSize - 1, safeMaxRows - 1),
+    );
+
+    if (error) throw error;
+
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < safePageSize) break;
+  }
+
+  return rows;
+}
+
+async function fetchRelationRowsForSearch(relation, options = {}) {
+  try {
+    return await fetchAllRelationRows(relation, options);
+  } catch {
+    // Older databases may not expose every supplemental catalog relation to
+    // authenticated users. The inventory overview remains usable with its
+    // app-facing view even when supplemental description metadata is absent.
+    return [];
+  }
+}
+
 function productMatchesAllTokens(product, term) {
   const tokens = searchTokens(term);
   if (!tokens.length) return true;
@@ -430,6 +551,8 @@ function normalizeCatalogInventoryRow(row) {
     reserved_quantity: Number.isFinite(reserved) ? reserved : 0,
     available_quantity: Number.isFinite(available) ? available : 0,
     inventory_status: row.inventory_status || (onHand > 0 ? 'in_stock' : 'zero_on_hand'),
+    description: inventoryDescriptionFromRecords([row]),
+    search_description: inventoryDescriptionFromRecords([row]),
     search_text: row.search_text || '',
   };
 }
@@ -451,6 +574,10 @@ function inventoryCatalogCoreSearchParts(row) {
     row.blank_product_name,
     row.product_display_name,
     row.name,
+    row.description,
+    row.search_description,
+    row.short_description,
+    row.product_description,
     row.brand,
     row.product_type,
     row.style,
@@ -474,67 +601,109 @@ function inventoryCatalogLinkedWooSearchParts(row) {
   ]);
 }
 
-function rowMatchesInventoryTokens(row, term, { includeLinkedWooSkus = false } = {}) {
+function rowMatchesInventoryTokens(row, term) {
   const tokens = searchTokens(term);
   if (!tokens.length) return true;
 
-  const searchable = includeLinkedWooSkus
-    ? inventoryCatalogCoreSearchParts(row).concat(inventoryCatalogLinkedWooSearchParts(row))
-    : inventoryCatalogCoreSearchParts(row);
+  const searchable = inventoryCatalogCoreSearchParts(row)
+    .concat(inventoryCatalogLinkedWooSearchParts(row));
+  const supplementalRecords = row._inventory_search_metadata || [];
 
   return tokens.every((token) => {
     const normalizedToken = normalizeSearchValue(token);
-    return searchable.some((part) =>
+    const explicitMatch = searchable.some((part) =>
       part.text.includes(token) || part.normalized.includes(normalizedToken)
     );
+
+    return explicitMatch || inventoryRecordMatchesAllTokens(supplementalRecords, token);
   });
 }
 
 export async function getBlankInventory(search = '', options = {}) {
+  void options;
+
   let rows = [];
   let catalogError = null;
 
-  const preferred = await supabase
-    .from('app_blank_inventory_overview_v2')
-    .select('*')
-    .order('blank_product_name', { ascending: true })
-    .limit(30000);
+  try {
+    const preferredRows = await fetchAllRelationRows(
+      'app_blank_inventory_overview_v2',
+      { orderColumn: 'blank_product_name', maxRows: 50000 },
+    );
+    rows = preferredRows.map(normalizeCatalogInventoryRow);
+  } catch (error) {
+    catalogError = error;
 
-  if (!preferred.error) {
-    rows = (preferred.data || []).map(normalizeCatalogInventoryRow);
-  } else {
-    catalogError = preferred.error;
+    try {
+      const catalogRows = await fetchAllRelationRows(
+        'app_synced_inventory_catalog_v1',
+        { orderColumn: 'name', maxRows: 50000 },
+      );
+      rows = catalogRows.map(normalizeCatalogInventoryRow);
+    } catch (catalogFallbackError) {
+      catalogError = catalogError || catalogFallbackError;
 
-    const catalog = await supabase
-      .from('app_synced_inventory_catalog_v1')
-      .select('*')
-      .order('name', { ascending: true })
-      .limit(20000);
-
-    if (!catalog.error) {
-      rows = (catalog.data || []).map(normalizeCatalogInventoryRow);
-    } else {
-      catalogError = catalogError || catalog.error;
-
-      // Backward-compatible fallback so the app still loads before the SQL patch is installed.
-      const legacy = await supabase
-        .from('blank_inventory_by_product')
-        .select('*')
-        .order('name', { ascending: true })
-        .limit(10000);
-
-      if (legacy.error) {
-        throw catalogError || legacy.error;
+      try {
+        const legacyRows = await fetchAllRelationRows(
+          'blank_inventory_by_product',
+          { orderColumn: 'name', maxRows: 50000 },
+        );
+        rows = legacyRows.map(normalizeCatalogInventoryRow);
+      } catch (legacyError) {
+        throw catalogError || legacyError;
       }
-
-      rows = (legacy.data || []).map(normalizeCatalogInventoryRow);
     }
   }
 
   const term = String(search || '').trim();
   if (!term) return rows;
 
-  return rows.filter((row) => rowMatchesInventoryTokens(row, term, options));
+  const [blankMetadataRows, wooProductRows] = await Promise.all([
+    fetchRelationRowsForSearch('blank_products', { maxRows: 50000 }),
+    fetchRelationRowsForSearch('products', { maxRows: 50000 }),
+  ]);
+
+  const metadataByBlankProductId = new Map();
+
+  const addMetadata = (blankProductId, record) => {
+    const key = String(blankProductId || '').trim();
+    if (!key || !record) return;
+    const current = metadataByBlankProductId.get(key) || [];
+    current.push(record);
+    metadataByBlankProductId.set(key, current);
+  };
+
+  blankMetadataRows.forEach((record) => addMetadata(record.id, record));
+  wooProductRows.forEach((record) => addMetadata(record.blank_product_id, record));
+
+  return rows
+    .map((row) => {
+      const candidateIds = [
+        row.blank_product_id,
+        row.product_row_id,
+        row.id,
+      ]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+
+      const metadata = candidateIds.flatMap(
+        (candidateId) => metadataByBlankProductId.get(candidateId) || [],
+      );
+      const description = inventoryDescriptionFromRecords([row, ...metadata]);
+
+      return {
+        ...row,
+        description: row.description || description,
+        search_description: description,
+        _inventory_search_metadata: metadata,
+      };
+    })
+    .filter((row) => rowMatchesInventoryTokens(row, term))
+    .sort((a, b) => {
+      const aText = [a.blank_sku, a.sku_base, a.name].filter(Boolean).join(' ');
+      const bText = [b.blank_sku, b.sku_base, b.name].filter(Boolean).join(' ');
+      return aText.localeCompare(bText);
+    });
 }
 
 export async function getBinContents(binId, search = '') {
@@ -1030,6 +1199,10 @@ function finishedProductSearchText(product) {
     product?.sku,
     product?.finished_name,
     product?.name,
+    product?.description,
+    product?.short_description,
+    product?.product_description,
+    product?.search_description,
     product?.customer,
     product?.customer_name,
     product?.logo,
@@ -1080,20 +1253,42 @@ export function formatFinishedProductLabel(product) {
 }
 
 export async function getFinishedProducts(search = '') {
-  // Query the finished inventory compatibility view and filter locally with token search.
-  // This lets searches like "Bremerton navy left chest" or "Bella Canvas customer" work
-  // across SKU, customer, logo, placement, blank, brand, color, size, and bin columns.
-  const { data, error } = await supabase
-    .from('finished_inventory_by_product')
-    .select('*')
-    .order('finished_sku', { ascending: true })
-    .limit(1000);
+  const rows = await fetchAllRelationRows(
+    'finished_inventory_by_product',
+    { orderColumn: 'finished_sku', maxRows: 50000 },
+  );
 
-  if (error) throw error;
+  const term = String(search || '').trim();
+  if (!term) return rows;
 
-  const rows = data || [];
+  const finishedMetadataRows = await fetchRelationRowsForSearch(
+    'finished_products',
+    { maxRows: 50000 },
+  );
+  const metadataById = new Map();
+
+  finishedMetadataRows.forEach((record) => {
+    const id = String(record.id || record.finished_product_id || '').trim();
+    if (id) metadataById.set(id, record);
+  });
+
   return rows
-    .filter((row) => rowMatchesAllTokens(row, search, finishedProductSearchText))
+    .map((row) => {
+      const id = String(row.finished_product_id || row.id || '').trim();
+      const metadata = id ? metadataById.get(id) : null;
+      const description = inventoryDescriptionFromRecords([row, metadata]);
+
+      return {
+        ...row,
+        description: row.description || description,
+        search_description: description,
+        _inventory_search_metadata: metadata ? [metadata] : [],
+      };
+    })
+    .filter((row) => (
+      rowMatchesAllTokens(row, term, finishedProductSearchText)
+      || inventoryRecordMatchesAllTokens(row._inventory_search_metadata, term)
+    ))
     .sort((a, b) => finishedProductSearchText(a).localeCompare(finishedProductSearchText(b)));
 }
 
@@ -1530,6 +1725,11 @@ function purchasingInventoryRequired(row) {
   return row?.inventory_required !== false && row?.inventory_required !== 'false';
 }
 
+function purchasingReportIncluded(row) {
+  return row?.include_on_purchasing_report !== false
+    && row?.include_on_purchasing_report !== 'false';
+}
+
 function normalizePendingStockCatalogRow(row) {
   const onHand = Number(
     row?.quantity_on_hand
@@ -1591,7 +1791,7 @@ async function getPendingStockPurchasingContext() {
   const { data: jobItems, error: jobItemsError } = await supabase
     .from('job_items')
     .select(
-      'id, job_id, quantity, status, blank_product_id, selected_bin_id, inventory_required, sku, name, item_name, order_sku'
+      'id, job_id, quantity, status, blank_product_id, selected_bin_id, inventory_required, include_on_purchasing_report, sku, name, item_name, order_sku'
     )
     .in('selected_bin_id', pendingBinIds)
     .not('blank_product_id', 'is', null)
@@ -1600,7 +1800,11 @@ async function getPendingStockPurchasingContext() {
   if (jobItemsError) throw jobItemsError;
 
   const activeItems = (jobItems || []).filter(
-    (row) => purchasingJobItemIsOpen(row) && purchasingInventoryRequired(row)
+    (row) => (
+      purchasingJobItemIsOpen(row)
+      && purchasingInventoryRequired(row)
+      && purchasingReportIncluded(row)
+    )
   );
 
   const jobIds = [...new Set(activeItems.map((row) => row.job_id).filter(Boolean))];
@@ -1698,6 +1902,142 @@ async function getPendingStockPurchasingContext() {
   return { demandMap, catalogMap };
 }
 
+
+async function getNonInventoryPurchasingContext() {
+  const { data: jobItems, error: jobItemsError } = await supabase
+    .from('job_items')
+    .select(
+      'id, job_id, quantity, status, blank_product_id, inventory_required, include_on_purchasing_report, sku, name, item_name, order_sku'
+    )
+    .eq('inventory_required', false)
+    .not('blank_product_id', 'is', null)
+    .gt('quantity', 0);
+
+  if (jobItemsError) throw jobItemsError;
+
+  const openLineItems = (jobItems || []).filter(purchasingJobItemIsOpen);
+  const jobIds = [...new Set(openLineItems.map((row) => row.job_id).filter(Boolean))];
+  const closedJobIds = new Set();
+
+  if (jobIds.length) {
+    const { data: jobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('id, status')
+      .in('id', jobIds);
+
+    if (jobsError) throw jobsError;
+
+    (jobs || []).forEach((job) => {
+      if (!purchasingJobItemIsOpen(job)) {
+        closedJobIds.add(String(job.id));
+      }
+    });
+  }
+
+  const activeItems = openLineItems.filter(
+    (row) => !closedJobIds.has(String(row.job_id || ''))
+  );
+  const demandMap = new Map();
+  const excludedJobItemIds = new Set();
+
+  activeItems.forEach((row) => {
+    if (!purchasingReportIncluded(row)) {
+      excludedJobItemIds.add(String(row.id));
+      return;
+    }
+
+    const key = String(row.blank_product_id || '');
+    if (!key) return;
+
+    const quantity = Math.max(0, Number(row.quantity || 0));
+    const current = demandMap.get(key) || {
+      blank_product_id: row.blank_product_id,
+      non_inventory_purchase_quantity: 0,
+      non_inventory_purchase_sources: [],
+    };
+
+    current.non_inventory_purchase_quantity += quantity;
+    current.non_inventory_purchase_sources.push({
+      job_id: row.job_id || null,
+      job_item_id: row.id || null,
+      quantity,
+      order_sku: row.order_sku || row.sku || '',
+      item_name: row.item_name || row.name || '',
+      pairing_warning: 'Non-inventory line — included on Purchasing Report.',
+      non_inventory_purchase: true,
+    });
+
+    demandMap.set(key, current);
+  });
+
+  const blankProductIds = [...demandMap.values()].map(
+    (row) => row.blank_product_id
+  );
+  const catalogMap = new Map();
+
+  if (blankProductIds.length) {
+    const overview = await supabase
+      .from('app_blank_inventory_overview_v2')
+      .select('*')
+      .in('blank_product_id', blankProductIds);
+
+    if (!overview.error) {
+      (overview.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+
+    const missingIds = blankProductIds.filter(
+      (id) => !catalogMap.has(String(id))
+    );
+
+    if (missingIds.length) {
+      const fallback = await supabase
+        .from('blank_products')
+        .select(`
+          id,
+          sku_base,
+          name,
+          unit_cost,
+          low_stock_threshold,
+          brands:brand_id(name, code),
+          product_types:product_type_id(name, code),
+          colors:color_id(name, code),
+          sizes:size_id(name, code)
+        `)
+        .in('id', missingIds);
+
+      if (fallback.error) throw fallback.error;
+
+      (fallback.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+  }
+
+  return {
+    demandMap,
+    excludedJobItemIds,
+    catalogMap,
+  };
+}
+
+function purchasingSourceQuantity(source) {
+  return Math.max(
+    0,
+    Number(source?.quantity ?? source?.reserved_quantity ?? 0)
+  );
+}
+
+function sourceIsExcluded(source, excludedJobItemIds) {
+  const jobItemId = source?.job_item_id;
+  return jobItemId !== null
+    && jobItemId !== undefined
+    && excludedJobItemIds.has(String(jobItemId));
+}
+
 function mergeDemandSourceLists(existingSources, pendingSources) {
   const merged = [];
   const seen = new Set();
@@ -1720,31 +2060,108 @@ function mergeDemandSourceLists(existingSources, pendingSources) {
   return merged;
 }
 
-function mergePendingStockPurchasingRows(rows, context, mode) {
+function mergePurchasingLineOverrides(
+  rows,
+  pendingContext,
+  nonInventoryContext,
+  mode,
+  sourceMap = new Map()
+) {
   const sourceRows = rows || [];
-  const demandMap = context?.demandMap || new Map();
-  const catalogMap = context?.catalogMap || new Map();
+  const pendingDemandMap = pendingContext?.demandMap || new Map();
+  const nonInventoryDemandMap = nonInventoryContext?.demandMap || new Map();
+  const excludedJobItemIds =
+    nonInventoryContext?.excludedJobItemIds || new Set();
+  const pendingCatalogMap = pendingContext?.catalogMap || new Map();
+  const nonInventoryCatalogMap =
+    nonInventoryContext?.catalogMap || new Map();
+
   const rowsById = new Map(
-    sourceRows.map((row) => [String(row?.blank_product_id || ''), { ...row }])
+    sourceRows.map((row) => [
+      String(row?.blank_product_id || ''),
+      { ...row },
+    ])
   );
 
-  demandMap.forEach((pending, key) => {
+  const allKeys = new Set([
+    ...rowsById.keys(),
+    ...pendingDemandMap.keys(),
+    ...nonInventoryDemandMap.keys(),
+  ]);
+
+  allKeys.forEach((key) => {
+    if (!key) return;
+
     const existing = rowsById.get(key) || null;
-    const catalog = catalogMap.get(key) || {};
+    const pending = pendingDemandMap.get(key) || null;
+    const nonInventory = nonInventoryDemandMap.get(key) || null;
+    const catalog =
+      pendingCatalogMap.get(key)
+      || nonInventoryCatalogMap.get(key)
+      || {};
+
     const base = {
       ...catalog,
       ...(existing || {}),
     };
 
+    const sourceRecord = sourceMap.get(key) || {};
+    const sourceRecordSources = Array.isArray(sourceRecord.demand_sources)
+      ? sourceRecord.demand_sources
+      : [];
+    const includedSourceRecordSources = sourceRecordSources.filter(
+      (source) => !sourceIsExcluded(source, excludedJobItemIds)
+    );
+    const excludedSourceQuantity = sourceRecordSources
+      .filter((source) => sourceIsExcluded(source, excludedJobItemIds))
+      .reduce(
+        (sum, source) => sum + purchasingSourceQuantity(source),
+        0
+      );
+
+    const representedJobItemIds = new Set(
+      includedSourceRecordSources
+        .map((source) => source?.job_item_id)
+        .filter((value) => value !== null && value !== undefined)
+        .map(String)
+    );
+
+    const additionalPendingSources = (
+      pending?.pending_stock_sources || []
+    ).filter((source) => (
+      !source?.job_item_id
+      || !representedJobItemIds.has(String(source.job_item_id))
+    ));
+    const additionalPendingQuantity = additionalPendingSources.reduce(
+      (sum, source) => sum + purchasingSourceQuantity(source),
+      0
+    );
+
+    const additionalNonInventorySources = (
+      nonInventory?.non_inventory_purchase_sources || []
+    ).filter((source) => (
+      !source?.job_item_id
+      || !representedJobItemIds.has(String(source.job_item_id))
+    ));
+    const additionalNonInventoryQuantity =
+      additionalNonInventorySources.reduce(
+        (sum, source) => sum + purchasingSourceQuantity(source),
+        0
+      );
+
+    const rawReserved = Number(base.reserved_quantity ?? 0);
+    const adjustedBaseReserved = Math.max(
+      0,
+      rawReserved - excludedSourceQuantity
+    );
+    const effectiveReserved =
+      adjustedBaseReserved
+      + additionalPendingQuantity
+      + additionalNonInventoryQuantity;
+
     const onHand = Number(base.quantity_on_hand ?? 0);
-    const baseReserved = Number(base.reserved_quantity ?? 0);
     const threshold = Number(base.low_stock_threshold ?? 0);
     const unitCost = Number(base.unit_cost ?? 0);
-    const pendingQuantity = Number(pending.pending_stock_quantity || 0);
-
-    // Pending Stock lines have no usable physical-bin reservation, so their
-    // required quantity must be added to purchasing demand.
-    const effectiveReserved = baseReserved + pendingQuantity;
     const available = onHand - effectiveReserved;
     const shortageQuantity = Math.max(0, effectiveReserved - onHand);
     const recommendedQuantity = Math.max(
@@ -1753,43 +2170,87 @@ function mergePendingStockPurchasingRows(rows, context, mode) {
     );
 
     const existingSources = Array.isArray(base.demand_sources)
-      ? base.demand_sources
+      ? base.demand_sources.filter(
+          (source) => !sourceIsExcluded(source, excludedJobItemIds)
+        )
       : [];
     const demandSources = mergeDemandSourceLists(
-      existingSources,
-      pending.pending_stock_sources
+      mergeDemandSourceLists(
+        mergeDemandSourceLists(
+          existingSources,
+          includedSourceRecordSources
+        ),
+        additionalPendingSources
+      ),
+      additionalNonInventorySources
     );
 
-    const orderQuantity = mode === 'shortages'
-      ? Math.max(Number(base.need_to_order || 0), shortageQuantity)
-      : Math.max(
-          Number(base.recommended_order_quantity || 0),
-          recommendedQuantity
+    const hasLineOverride =
+      Boolean(pending)
+      || Boolean(nonInventory)
+      || excludedSourceQuantity > 0;
+    const orderQuantity = hasLineOverride
+      ? (
+          mode === 'shortages'
+            ? shortageQuantity
+            : recommendedQuantity
+        )
+      : (
+          mode === 'shortages'
+            ? Number(base.need_to_order || 0)
+            : Number(base.recommended_order_quantity || 0)
         );
 
     rowsById.set(key, {
       ...base,
-      blank_product_id: pending.blank_product_id,
-      pending_stock_quantity: pendingQuantity,
+      blank_product_id:
+        pending?.blank_product_id
+        || nonInventory?.blank_product_id
+        || base.blank_product_id,
+      pending_stock_requested_quantity: Number(
+        pending?.pending_stock_quantity || 0
+      ),
+      pending_stock_quantity: additionalPendingQuantity,
+      non_inventory_purchase_requested_quantity: Number(
+        nonInventory?.non_inventory_purchase_quantity || 0
+      ),
+      non_inventory_purchase_quantity:
+        additionalNonInventoryQuantity,
+      excluded_non_inventory_quantity: excludedSourceQuantity,
       quantity_on_hand: onHand,
       reserved_quantity: effectiveReserved,
       available_quantity: available,
       need_to_order:
         mode === 'shortages'
           ? orderQuantity
-          : Number(base.need_to_order || shortageQuantity),
+          : (
+              hasLineOverride
+                ? shortageQuantity
+                : Number(base.need_to_order || 0)
+            ),
       recommended_order_quantity:
         mode === 'recommended'
           ? orderQuantity
-          : Number(base.recommended_order_quantity || recommendedQuantity),
+          : (
+              hasLineOverride
+                ? recommendedQuantity
+                : Number(base.recommended_order_quantity || 0)
+            ),
       estimated_order_value: orderQuantity * unitCost,
       demand_source_count: demandSources.length,
       demand_total_quantity: demandSources.reduce(
-        (sum, source) => sum + Number(source?.quantity || source?.reserved_quantity || 0),
+        (sum, source) => sum + purchasingSourceQuantity(source),
         0
       ),
       demand_sources: demandSources,
-      purchasing_status: 'pending_stock',
+      purchasing_status:
+        additionalNonInventoryQuantity > 0
+          ? 'non_inventory_purchase'
+          : (
+              additionalPendingQuantity > 0
+                ? 'pending_stock'
+                : (base.purchasing_status || 'inventory_demand')
+            ),
     });
   });
 
@@ -1802,27 +2263,36 @@ function mergePendingStockPurchasingRows(rows, context, mode) {
     .sort((a, b) => (
       mode === 'shortages'
         ? Number(b.need_to_order || 0) - Number(a.need_to_order || 0)
-        : Number(b.recommended_order_quantity || 0) - Number(a.recommended_order_quantity || 0)
+        : Number(b.recommended_order_quantity || 0)
+          - Number(a.recommended_order_quantity || 0)
     ));
 }
 
 export async function getPurchasingShortages(search = '') {
-  const [rowsRes, sourceMap, pendingContext] = await Promise.all([
+  const [
+    rowsRes,
+    sourceMap,
+    pendingContext,
+    nonInventoryContext,
+  ] = await Promise.all([
     supabase
       .from('purchasing_shortages')
       .select('*')
       .order('need_to_order', { ascending: false }),
     getPurchasingDemandSourceMap(),
     getPendingStockPurchasingContext(),
+    getNonInventoryPurchasingContext(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
 
   const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
-  const rows = mergePendingStockPurchasingRows(
+  const rows = mergePurchasingLineOverrides(
     sourcedRows,
     pendingContext,
-    'shortages'
+    nonInventoryContext,
+    'shortages',
+    sourceMap
   );
 
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
@@ -1845,22 +2315,30 @@ export async function getPurchasingLowStock(search = '') {
 }
 
 export async function getPurchasingRecommendedOrders(search = '') {
-  const [rowsRes, sourceMap, pendingContext] = await Promise.all([
+  const [
+    rowsRes,
+    sourceMap,
+    pendingContext,
+    nonInventoryContext,
+  ] = await Promise.all([
     supabase
       .from('purchasing_recommended_orders')
       .select('*')
       .order('recommended_order_quantity', { ascending: false }),
     getPurchasingDemandSourceMap(),
     getPendingStockPurchasingContext(),
+    getNonInventoryPurchasingContext(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
 
   const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
-  const rows = mergePendingStockPurchasingRows(
+  const rows = mergePurchasingLineOverrides(
     sourcedRows,
     pendingContext,
-    'recommended'
+    nonInventoryContext,
+    'recommended',
+    sourceMap
   );
 
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
@@ -2459,13 +2937,152 @@ export async function createOrReceiveFinishedProduct({
 // Phase 1 Purchasing: Purchase Orders + Waiting On dashboard
 // =========================================================
 
-export async function getPurchaseOrderRecommendations(search = '') {
-  const { data, error } = await supabase.rpc('phase1_get_purchase_recommendations', {
-    p_search: String(search || '').trim() || null,
-  });
+function purchaseOrderOpenQuantity(row) {
+  const explicit = Number(row?.quantity_open);
+  if (Number.isFinite(explicit)) return Math.max(explicit, 0);
+
+  const ordered = Number(row?.quantity_ordered || 0);
+  const received = Number(row?.quantity_received || 0);
+  return Math.max(ordered - received, 0);
+}
+
+function purchaseOrderExpectedTimestamp(value) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+async function getOpenPurchaseOrderCoverageMap() {
+  const purchaseOrders = await getPurchaseOrders('open');
+  const purchaseOrderIds = (purchaseOrders || [])
+    .map((row) => row?.id || row?.purchase_order_id)
+    .filter((value) => value !== null && value !== undefined);
+
+  if (!purchaseOrderIds.length) return new Map();
+
+  const { data: items, error } = await supabase
+    .from('phase1_purchase_order_items_detail')
+    .select('*')
+    .in('purchase_order_id', purchaseOrderIds);
 
   if (error) throw error;
-  return data || [];
+
+  const poById = new Map(
+    (purchaseOrders || []).map((row) => [
+      String(row?.id || row?.purchase_order_id || ''),
+      row,
+    ])
+  );
+  const coverage = new Map();
+
+  (items || []).forEach((item) => {
+    const blankProductId = item?.blank_product_id;
+    const openQuantity = purchaseOrderOpenQuantity(item);
+
+    if (!blankProductId || openQuantity <= 0) return;
+
+    const key = String(blankProductId);
+    const po = poById.get(String(item?.purchase_order_id || '')) || {};
+    const detail = {
+      purchase_order_id: item?.purchase_order_id || po?.id || po?.purchase_order_id || null,
+      po_number: item?.po_number || po?.po_number || '',
+      supplier_name: item?.supplier_name || po?.supplier_name || '',
+      expected_at: item?.expected_at || po?.expected_at || null,
+      quantity_open: openQuantity,
+    };
+
+    const current = coverage.get(key) || {
+      blank_product_id: blankProductId,
+      open_po_quantity: 0,
+      purchase_orders: [],
+      next_purchase_order_id: null,
+      next_po_number: '',
+      next_expected_at: null,
+    };
+
+    current.open_po_quantity += openQuantity;
+    current.purchase_orders.push(detail);
+
+    const currentExpected = purchaseOrderExpectedTimestamp(current.next_expected_at);
+    const candidateExpected = purchaseOrderExpectedTimestamp(detail.expected_at);
+
+    if (
+      !current.next_purchase_order_id
+      || candidateExpected < currentExpected
+    ) {
+      current.next_purchase_order_id = detail.purchase_order_id;
+      current.next_po_number = detail.po_number;
+      current.next_expected_at = detail.expected_at;
+    }
+
+    coverage.set(key, current);
+  });
+
+  return coverage;
+}
+
+function normalizePurchaseOrderRecommendation(row, coverageMap) {
+  const key = String(row?.blank_product_id || '');
+  const coverage = coverageMap.get(key) || {
+    open_po_quantity: 0,
+    purchase_orders: [],
+    next_purchase_order_id: null,
+    next_po_number: '',
+    next_expected_at: null,
+  };
+
+  const reportRecommendedQuantity = Math.max(
+    Number(row?.recommended_order_quantity || 0),
+    0
+  );
+  const openPoQuantity = Math.max(
+    Number(coverage.open_po_quantity || 0),
+    0
+  );
+  const quantityToOrder = Math.max(
+    reportRecommendedQuantity - openPoQuantity,
+    0
+  );
+
+  return {
+    ...row,
+    supplier_name:
+      row?.supplier_name
+      || row?.supplier
+      || row?.vendor
+      || '',
+    report_recommended_order_quantity: reportRecommendedQuantity,
+    open_po_quantity: openPoQuantity,
+    quantity_to_order: quantityToOrder,
+    // Existing UI and PO creation code use this field.
+    recommended_order_quantity: quantityToOrder,
+    purchase_order_status:
+      quantityToOrder > 0 ? 'needs_po' : 'covered_by_open_po',
+    open_purchase_orders: coverage.purchase_orders || [],
+    next_purchase_order_id: coverage.next_purchase_order_id,
+    next_po_number: coverage.next_po_number,
+    next_expected_at: coverage.next_expected_at,
+  };
+}
+
+export async function getPurchaseOrderRecommendations(search = '') {
+  const [reportRows, coverageMap] = await Promise.all([
+    getPurchasingRecommendedOrders(search),
+    getOpenPurchaseOrderCoverageMap(),
+  ]);
+
+  return (reportRows || [])
+    .map((row) => normalizePurchaseOrderRecommendation(row, coverageMap))
+    .sort((a, b) => {
+      const aNeedsPo = Number(a.quantity_to_order || 0) > 0 ? 1 : 0;
+      const bNeedsPo = Number(b.quantity_to_order || 0) > 0 ? 1 : 0;
+
+      return (
+        bNeedsPo - aNeedsPo
+        || Number(b.quantity_to_order || 0) - Number(a.quantity_to_order || 0)
+        || String(a.sku_base || '').localeCompare(String(b.sku_base || ''))
+      );
+    });
 }
 
 export async function createPurchaseOrderFromItems({ supplierName, expectedAt, notes, items }) {
@@ -2535,13 +3152,81 @@ export async function receivePurchaseOrderItem({ poItemId, quantity, binId, note
   return data;
 }
 
-export async function getWaitingOnItems(search = '') {
-  const { data, error } = await supabase.rpc('phase1_get_waiting_on_items', {
-    p_search: String(search || '').trim() || null,
-  });
+function purchasingDemandLabel(row) {
+  const sources = Array.isArray(row?.demand_sources)
+    ? row.demand_sources
+    : [];
 
-  if (error) throw error;
-  return data || [];
+  const orderLabels = sources
+    .map((source) => (
+      source?.order_number
+      || source?.woocommerce_order_id
+      || source?.order_id
+      || null
+    ))
+    .filter(Boolean)
+    .map((value) => `Order #${value}`);
+
+  const pullSheetLabels = sources
+    .map((source) => source?.job_id || source?.pullsheet_number || null)
+    .filter(Boolean)
+    .map((value) => `Pull Sheet #${value}`);
+
+  return [...new Set([...orderLabels, ...pullSheetLabels])].join(', ')
+    || row?.demand_order_numbers
+    || row?.demand_pullsheet_numbers
+    || 'Pending Stock';
+}
+
+function purchasingDemandCustomers(row) {
+  const sources = Array.isArray(row?.demand_sources)
+    ? row.demand_sources
+    : [];
+
+  return [...new Set(
+    sources
+      .map((source) => source?.customer_name)
+      .filter(Boolean)
+  )].join(', ');
+}
+
+export async function getWaitingOnItems(search = '') {
+  const [shortageRows, coverageMap] = await Promise.all([
+    getPurchasingShortages(search),
+    getOpenPurchaseOrderCoverageMap(),
+  ]);
+
+  return (shortageRows || [])
+    .map((row) => {
+      const key = String(row?.blank_product_id || '');
+      const coverage = coverageMap.get(key) || {};
+      const shortQuantity = Math.max(
+        Number(row?.need_to_order || 0),
+        0
+      );
+      const openPoQuantity = Math.max(
+        Number(coverage?.open_po_quantity || 0),
+        0
+      );
+
+      return {
+        ...row,
+        order_ref: purchasingDemandLabel(row),
+        customer_name: purchasingDemandCustomers(row),
+        short_quantity: shortQuantity,
+        open_po_quantity: openPoQuantity,
+        uncovered_quantity: Math.max(shortQuantity - openPoQuantity, 0),
+        next_purchase_order_id: coverage?.next_purchase_order_id || null,
+        next_po_number: coverage?.next_po_number || '',
+        next_expected_at: coverage?.next_expected_at || null,
+        open_purchase_orders: coverage?.purchase_orders || [],
+      };
+    })
+    .sort((a, b) => (
+      Number(b.uncovered_quantity || 0) - Number(a.uncovered_quantity || 0)
+      || Number(b.short_quantity || 0) - Number(a.short_quantity || 0)
+      || String(a.sku_base || '').localeCompare(String(b.sku_base || ''))
+    ));
 }
 
 // =====================================================

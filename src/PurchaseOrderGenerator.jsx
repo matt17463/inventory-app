@@ -10,6 +10,26 @@ function number(value) {
   return Number(value || 0).toLocaleString();
 }
 
+function reportNeed(row) {
+  return Number(
+    row?.report_recommended_order_quantity
+    ?? row?.recommended_order_quantity
+    ?? 0
+  );
+}
+
+function openPoCoverage(row) {
+  return Number(row?.open_po_quantity || 0);
+}
+
+function stillToOrder(row) {
+  return Number(
+    row?.quantity_to_order
+    ?? row?.recommended_order_quantity
+    ?? 0
+  );
+}
+
 export default function PurchaseOrderGenerator() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
@@ -30,10 +50,10 @@ export default function PurchaseOrderGenerator() {
       setRows(data);
       const next = {};
       data.forEach((row) => {
-        if (Number(row.recommended_order_quantity || 0) > 0) {
+        if (stillToOrder(row) > 0) {
           next[row.blank_product_id] = {
             checked: false,
-            quantity: Number(row.recommended_order_quantity || 0),
+            quantity: stillToOrder(row),
             unit_cost: Number(row.unit_cost || 0),
             supplier_sku: row.supplier_sku || '',
           };
@@ -82,11 +102,11 @@ export default function PurchaseOrderGenerator() {
   function selectAllVisible() {
     const next = { ...selected };
     rows.forEach((row) => {
-      if (Number(row.recommended_order_quantity || 0) > 0) {
+      if (stillToOrder(row) > 0) {
         next[row.blank_product_id] = {
           ...(next[row.blank_product_id] || {}),
           checked: true,
-          quantity: next[row.blank_product_id]?.quantity || Number(row.recommended_order_quantity || 0),
+          quantity: next[row.blank_product_id]?.quantity || stillToOrder(row),
           unit_cost: next[row.blank_product_id]?.unit_cost ?? Number(row.unit_cost || 0),
           supplier_sku: next[row.blank_product_id]?.supplier_sku ?? row.supplier_sku ?? '',
         };
@@ -133,7 +153,7 @@ export default function PurchaseOrderGenerator() {
         <div>
           <p className="eyebrow">Purchasing Phase 1</p>
           <h1>Create Purchase Order</h1>
-          <p>Select recommended blank items, group them under one supplier, and create a purchase order that can be received later.</p>
+          <p>Uses the same recommendations as the Purchasing Report, then subtracts quantities already covered by open purchase orders.</p>
         </div>
         <Link className="secondary-button" to="/purchase-orders">View Purchase Orders</Link>
       </section>
@@ -167,31 +187,71 @@ export default function PurchaseOrderGenerator() {
       </section>
 
       <section className="card elevated-card table-card">
-        <h2>Recommended Items</h2>
-        <p className="helper-text">Recommendation uses Reserved + Low-Stock Threshold - On Hand.</p>
+        <h2>Purchasing Report Items</h2>
+        <p className="helper-text">
+          Every Recommended Orders item is shown here. Still To Order equals Purchasing Report Need minus quantities already on open purchase orders.
+        </p>
         {loading ? <p>Loading recommendations...</p> : (
           <div className="responsive-table">
             <table className="data-table phase1-table">
               <thead>
                 <tr>
-                  <th>Select</th><th>SKU</th><th>Item</th><th>Supplier</th><th>On Hand</th><th>Reserved</th><th>Available</th><th>Threshold</th><th>Recommended</th><th>Order Qty</th><th>Unit Cost</th><th>Supplier SKU</th>
+                  <th>Select</th><th>SKU</th><th>Item</th><th>Supplier</th><th>On Hand</th><th>Reserved</th><th>Available</th><th>Threshold</th><th>Report Need</th><th>On Open PO</th><th>Still To Order</th><th>Status</th><th>Order Qty</th><th>Unit Cost</th><th>Supplier SKU</th>
                 </tr>
               </thead>
               <tbody>
-                {!rows.length ? <tr><td colSpan="12">No recommended purchase items found.</td></tr> : rows.map((row) => {
+                {!rows.length ? <tr><td colSpan="15">No purchasing report items found.</td></tr> : rows.map((row) => {
                   const state = selected[row.blank_product_id] || {};
+                  const remaining = stillToOrder(row);
+                  const covered = remaining <= 0;
+
                   return (
-                    <tr key={row.blank_product_id} className={Number(row.available_quantity) < 0 ? 'shortage-row' : ''}>
-                      <td><input type="checkbox" checked={!!state.checked} onChange={(event) => updateSelected(row.blank_product_id, { checked: event.target.checked })} /></td>
+                    <tr key={row.blank_product_id} className={covered ? 'covered-row' : 'shortage-row'}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={!!state.checked}
+                          disabled={covered}
+                          onChange={(event) => updateSelected(row.blank_product_id, { checked: event.target.checked })}
+                        />
+                      </td>
                       <td><strong>{row.sku_base}</strong></td>
-                      <td>{[row.brand, row.product_type, row.color, row.size].filter(Boolean).join(' / ')}</td>
-                      <td>{row.supplier_name || 'Unassigned'}</td>
+                      <td>
+                        {[row.brand, row.product_type, row.color, row.size].filter(Boolean).join(' / ')}
+                        {Number(row.pending_stock_quantity || 0) > 0 && (
+                          <><br /><small className="warning-text">Unreserved Pending Stock: {number(row.pending_stock_quantity)}</small></>
+                        )}
+                        {Number(row.non_inventory_purchase_quantity || 0) > 0 && (
+                          <><br /><small className="warning-text">Non-Inventory Purchasing: {number(row.non_inventory_purchase_quantity)}</small></>
+                        )}
+                      </td>
+                      <td>{row.supplier_name || 'Not assigned'}</td>
                       <td>{number(row.quantity_on_hand)}</td>
                       <td>{number(row.reserved_quantity)}</td>
                       <td>{number(row.available_quantity)}</td>
                       <td>{number(row.low_stock_threshold)}</td>
-                      <td><strong>{number(row.recommended_order_quantity)}</strong></td>
-                      <td><input type="number" min="0" step="1" value={state.quantity ?? row.recommended_order_quantity ?? 0} onChange={(event) => updateSelected(row.blank_product_id, { quantity: event.target.value })} /></td>
+                      <td><strong>{number(reportNeed(row))}</strong></td>
+                      <td>{number(openPoCoverage(row))}</td>
+                      <td><strong>{number(remaining)}</strong></td>
+                      <td>
+                        {covered
+                          ? (
+                            row.next_purchase_order_id
+                              ? <Link to={`/purchase-orders/${row.next_purchase_order_id}/receive`}>Covered by {row.next_po_number || 'Open PO'}</Link>
+                              : 'Covered by Open PO'
+                          )
+                          : 'Needs PO'}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          disabled={covered}
+                          value={state.quantity ?? remaining}
+                          onChange={(event) => updateSelected(row.blank_product_id, { quantity: event.target.value })}
+                        />
+                      </td>
                       <td><input type="number" min="0" step="0.01" value={state.unit_cost ?? row.unit_cost ?? 0} onChange={(event) => updateSelected(row.blank_product_id, { unit_cost: event.target.value })} /></td>
                       <td><input value={state.supplier_sku ?? row.supplier_sku ?? ''} onChange={(event) => updateSelected(row.blank_product_id, { supplier_sku: event.target.value })} /></td>
                     </tr>

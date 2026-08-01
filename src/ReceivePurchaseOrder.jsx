@@ -6,6 +6,7 @@ import {
   receivePurchaseOrderItem,
   money,
 } from './lib/inventoryApi';
+import { isPendingStockBin } from './lib/pullSheetBinAssignmentApi';
 
 function number(value) {
   return Number(value || 0).toLocaleString();
@@ -31,7 +32,7 @@ export default function ReceivePurchaseOrder() {
       ]);
       setPo(detail.po);
       setItems(detail.items);
-      setBins(binRows);
+      setBins((binRows || []).filter((bin) => !isPendingStockBin(bin)));
       const next = {};
       detail.items.forEach((item) => {
         next[item.id] = {

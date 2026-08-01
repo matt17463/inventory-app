@@ -23,6 +23,7 @@ function normalizeRuleRow(row) {
     id: row.id == null ? null : Number(row.id),
     priority: row.priority == null ? 100 : Number(row.priority),
     is_active: row.is_active !== false,
+    include_on_purchasing_report: row.include_on_purchasing_report !== false,
   };
 }
 
@@ -49,22 +50,26 @@ function normalizeRulePayload(rule = {}) {
     p_reason: reason,
     p_priority: Number.isFinite(priorityValue) ? priorityValue : 100,
     p_is_active: rule.is_active !== false,
+    p_include_on_purchasing_report: rule.include_on_purchasing_report !== false,
   };
 }
 
 export async function listNonInventoryRules() {
-  const { data, error } = await supabase.rpc('sc_list_non_inventory_product_rules_v2');
+  const { data, error } = await supabase.rpc('sc_list_non_inventory_product_rules_v3');
   if (error) {
-    throw new Error(buildSupabaseErrorMessage(error, 'Could not load non-inventory rules. Make sure supabase_non_inventory_rules_save_fix_v2.sql has been run.'));
+    throw new Error(buildSupabaseErrorMessage(error, 'Could not load non-inventory rules. Run 07_NON_INVENTORY_PURCHASING_TOGGLE.sql in Supabase.'));
   }
   return (data || []).map(normalizeRuleRow).filter(Boolean);
 }
 
 export async function saveNonInventoryRule(rule) {
   const payload = normalizeRulePayload(rule);
-  const { data, error } = await supabase.rpc('sc_save_non_inventory_product_rule_v2', payload);
+  const { data, error } = await supabase.rpc('sc_save_non_inventory_product_rule_v3', payload);
   if (error) {
-    throw new Error(buildSupabaseErrorMessage(error, 'Could not save non-inventory rule. Make sure supabase_non_inventory_rules_save_fix_v2.sql has been run.'));
+    throw new Error(buildSupabaseErrorMessage(
+      error,
+      'Could not save the non-inventory rule. Run 07_NON_INVENTORY_PURCHASING_TOGGLE.sql in Supabase.'
+    ));
   }
   const row = Array.isArray(data) ? data[0] : data;
   return normalizeRuleRow(row);
@@ -93,20 +98,56 @@ export async function findNonInventoryRuleForLine({ sku, wooProductId, wooVariat
   return Array.isArray(data) ? data[0] || null : data || null;
 }
 
-export async function markJobItemNonInventory({ jobItemId, reason, createFutureRule, ruleType, ruleMatchValue }) {
-  const { data, error } = await supabase.rpc('sc_mark_job_item_non_inventory', {
+export async function markJobItemNonInventory({
+  jobItemId,
+  reason,
+  createFutureRule,
+  ruleType,
+  ruleMatchValue,
+  includeOnPurchasingReport = true,
+}) {
+  const { data, error } = await supabase.rpc('sc_mark_job_item_non_inventory_v2', {
     p_job_item_id: Number(jobItemId),
     p_reason: reason || 'No inventory tracking required for this WooCommerce item.',
     p_create_future_rule: Boolean(createFutureRule),
     p_rule_type: ruleType || 'exact_sku',
     p_rule_match_value: ruleMatchValue || null,
+    p_include_on_purchasing_report: includeOnPurchasingReport !== false,
   });
-  if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not mark pull sheet line as non-inventory.'));
+  if (error) {
+    throw new Error(buildSupabaseErrorMessage(
+      error,
+      'Could not mark the pull sheet line as non-inventory. Run 07_NON_INVENTORY_PURCHASING_TOGGLE.sql in Supabase.'
+    ));
+  }
+  return data;
+}
+
+export async function setJobItemPurchasingReportInclusion({
+  jobItemId,
+  includeOnPurchasingReport,
+}) {
+  const { data, error } = await supabase
+    .from('job_items')
+    .update({
+      include_on_purchasing_report: includeOnPurchasingReport !== false,
+    })
+    .eq('id', Number(jobItemId))
+    .select('id, include_on_purchasing_report')
+    .single();
+
+  if (error) {
+    throw new Error(buildSupabaseErrorMessage(
+      error,
+      'Could not update purchasing-report inclusion. Run 07_NON_INVENTORY_PURCHASING_TOGGLE.sql in Supabase.'
+    ));
+  }
+
   return data;
 }
 
 export async function applyNonInventoryRulesToJob(jobId) {
-  const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_job', {
+  const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_job_v2', {
     p_job_id: Number(jobId),
   });
   if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not apply rules to this pull sheet.'));
@@ -114,7 +155,7 @@ export async function applyNonInventoryRulesToJob(jobId) {
 }
 
 export async function applyNonInventoryRulesToOpenJobs(limit = 500) {
-  const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_open_jobs', {
+  const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_open_jobs_v2', {
     p_limit: Number(limit || 500),
   });
   if (error) throw new Error(buildSupabaseErrorMessage(error, 'Could not apply rules to open pull sheets.'));

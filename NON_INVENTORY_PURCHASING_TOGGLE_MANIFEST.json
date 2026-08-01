@@ -1,0 +1,21 @@
+{
+  "version": "0.6.23",
+  "replaces": "0.6.22",
+  "database_changes_required": true,
+  "database_script": "deployment/sql/07_NON_INVENTORY_PURCHASING_TOGGLE.sql",
+  "changed_files": [
+    "src/lib/nonInventoryApi.js",
+    "src/PullSheetView.jsx",
+    "src/NonInventoryRules.jsx",
+    "src/lib/inventoryApi.js",
+    "src/Purchasing.jsx",
+    "src/PurchaseOrderGenerator.jsx",
+    "src/App.css",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json",
+    "deployment/sql/07_NON_INVENTORY_PURCHASING_TOGGLE.sql",
+    "supabase/migrations/202607260101_non_inventory_purchasing_toggle.sql"
+  ]
+}

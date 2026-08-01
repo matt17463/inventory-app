@@ -1,0 +1,32 @@
+{
+  "name": "Skilled Crafting Inventory Step 1 Safe Consolidation",
+  "generated": "2026-07-25",
+  "required_sql": [
+    "supabase/verification/000_step1_preflight_read_only.sql",
+    "supabase/migrations/202607250001_inventory_model_registry.sql",
+    "supabase/migrations/202607250002_sample_products_canonical_support.sql",
+    "supabase/verification/900_step1_post_install_verification.sql"
+  ],
+  "optional_sql": [
+    "supabase/optional/202607250003_optional_sample_image_bucket.sql",
+    "supabase/optional/202607250004_optional_legacy_write_monitor.sql"
+  ],
+  "replaced_app_files": [
+    "src/CreateProduct.jsx",
+    "src/AssignBin.jsx",
+    "src/BinPage.jsx",
+    "src/SelectProduct.jsx"
+  ],
+  "new_app_files": [
+    "src/components/LegacyInventoryCompatibilityNotice.jsx",
+    "src/inventoryModel.js"
+  ],
+  "safety": {
+    "drops_tables": false,
+    "renames_tables": false,
+    "moves_existing_rows": false,
+    "deletes_existing_rows": false,
+    "blocks_legacy_writes": false
+  },
+  "limited_rollback": "supabase/rollback/202607250001_limited_registry_rollback.sql"
+}

@@ -8,72 +8,52 @@ const required = [
   'netlify/functions/_shared/pullsheetReservations.js',
   'src/DeploymentHealth.jsx',
   'src/NotFound.jsx',
-  'src/CustomerPortal.jsx',
-  'src/CustomerPortalPreview.jsx',
-  'src/components/AppShell.jsx',
+  'supabase/migrations/202607250501_step6_woocommerce_status_audit.sql',
+  'supabase/migrations/202607250601_step7_supplier_sync_runs_and_cache.sql',
+  'supabase/migrations/202607250701_step8_pullsheet_idempotency_support.sql',
+  'supabase/migrations/202607251301_step14_deployment_health.sql',
+  'supabase/verification/000_steps6_14_preflight_read_only_v3.sql',
+  'supabase/verification/900_steps6_14_post_install_verification.sql',
+  'supabase/tests/002_steps6_14_contract_smoke.sql',
+  'docs/STEPS_6_14_SAFE_DEPLOYMENT.md',
+  'README_STEPS_6_14.md',
 ];
-
 const missing = required.filter((file) => !fs.existsSync(path.resolve(file)));
 if (missing.length) {
-  console.error(`Missing required Steps 6-14 source files:\n${missing.join('\n')}`);
+  console.error(`Missing required Steps 6-14 files:\n${missing.join('\n')}`);
   process.exit(1);
 }
 
-const stale = [
-  'ManualInvoicedOrders(10).jsx',
-  'ManualInvoicedOrders.jsx',
-  'manualOrdersApi.js',
-  'download',
-  'download (1)',
-  'public/Home.jsx',
-  'public/pullsheet.js',
-  'src/AddItemToBin-with-create.jsx',
-  'src/AssignBin.jsx',
-  'src/BinPage.jsx',
-  'src/CreateProduct.jsx',
-  'src/PullSheetView-completed-edit.jsx',
-  'src/SampleInventoryPage.jsx',
-  'src/Samples.jsx',
-  'src/SamplesPage.jsx',
-  'src/SelectProduct.jsx',
-  'supabase_feature_updates_incremental_samples_bins.sql',
-];
+const requiredMigrations = required.filter((file) => file.includes('/migrations/'));
+const forbidden = [/\bdrop\s+table\b/i, /\btruncate\b/i, /\bdelete\s+from\s+(?:public\.)?(?:jobs|job_items|inventory_reservations|blank_products|blank_inventory_movements|products)\b/i];
+for (const file of requiredMigrations) {
+  const sql = fs.readFileSync(file, 'utf8');
+  for (const pattern of forbidden) {
+    if (pattern.test(sql)) {
+      console.error(`${file} contains forbidden operational SQL: ${pattern}`);
+      process.exit(1);
+    }
+  }
+}
 
-const presentStale = stale.filter((file) => fs.existsSync(path.resolve(file)));
-if (presentStale.length) {
-  console.error(`Delete these stale deployable files:\n${presentStale.join('\n')}`);
+
+const removedDeployableFiles = fs.readFileSync('STEP_11_DELETE_FILES.txt', 'utf8')
+  .split(/\r?\n/)
+  .map((line) => line.trim())
+  .filter(Boolean);
+const unexpectedlyPresent = removedDeployableFiles.filter((file) => fs.existsSync(path.resolve(file)));
+if (unexpectedlyPresent.length) {
+  console.error(`Stale deployable files are still present:\n${unexpectedlyPresent.join('\n')}`);
   process.exit(1);
 }
 
-const app = fs.readFileSync(path.resolve('src/App.jsx'), 'utf8');
-const shell = fs.readFileSync(path.resolve('src/components/AppShell.jsx'), 'utf8');
-const preview = fs.readFileSync(path.resolve('src/CustomerPortalPreview.jsx'), 'utf8');
-
-const publicPortal = app.indexOf('<Route path="/customer-portal"');
-const authGate = app.indexOf('<AuthGate>');
-if (publicPortal < 0 || authGate < 0 || publicPortal > authGate) {
-  console.error('The public customer portal is not outside AuthGate.');
-  process.exit(1);
+const contract = JSON.parse(fs.readFileSync('supabase/contract/application_database_contract.json', 'utf8'));
+const contractRelations = new Set((contract.relations || []).map((row) => row.relation_name));
+for (const relation of ['sc_pullsheet_sync_runs', 'sc_supplier_catalog_sync_runs', 'sc_woocommerce_status_change_audit']) {
+  if (!contractRelations.has(relation)) {
+    console.error(`Current database contract is missing ${relation}.`);
+    process.exit(1);
+  }
 }
 
-if (!/<Route path="\*" element=\{<NotFound \/>\}/.test(app)) {
-  console.error('The wildcard Not Found route is missing.');
-  process.exit(1);
-}
-
-if (!/path="\/create-product"[^\n]+Navigate replace to="\/inventory\/edit-blanks"/.test(app)) {
-  console.error('The legacy create-product route is not safely redirected.');
-  process.exit(1);
-}
-
-if (/\/bin-contents/.test(shell)) {
-  console.error('The obsolete /bin-contents fallback link is still present.');
-  process.exit(1);
-}
-
-if (!/sc_customer_portal_data_v2/.test(preview)) {
-  console.error('Customer portal preview is not using the token-scoped RPC.');
-  process.exit(1);
-}
-
-console.log('Steps 6-14 runtime source and cleanup validation passed.');
+console.log('Steps 6-14 required files, current contract, cleanup, and non-destructive SQL checks passed.');

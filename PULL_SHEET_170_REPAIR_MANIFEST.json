@@ -1,0 +1,14 @@
+{
+  "version": "0.6.25",
+  "replaces": "0.6.24",
+  "database_changes_required": true,
+  "database_script": "deployment/sql/12_PULL_SHEET_170_SAFE_DUPLICATE_REPAIR.sql",
+  "changed_files": [
+    "src/PullSheetView.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json",
+    "deployment/sql/12_PULL_SHEET_170_SAFE_DUPLICATE_REPAIR.sql"
+  ]
+}

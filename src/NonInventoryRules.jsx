@@ -18,6 +18,7 @@ const emptyRule = {
   reason: defaultReason,
   priority: 100,
   is_active: true,
+  include_on_purchasing_report: true,
 };
 
 function formatDate(value) {
@@ -95,6 +96,7 @@ export default function NonInventoryRules() {
         rule.label,
         rule.reason,
         rule.is_active ? 'active' : 'inactive',
+        rule.include_on_purchasing_report ? 'purchasing included' : 'purchasing excluded',
       ].join(' ').toLowerCase();
       return tokens.every((token) => haystack.includes(token));
     });
@@ -135,7 +137,7 @@ export default function NonInventoryRules() {
   }
 
   async function applyRules() {
-    const confirmed = window.confirm('Apply active non-inventory rules to open pull sheets? This will remove reservations for matching lines and mark them as non-inventory.');
+    const confirmed = window.confirm('Apply active non-inventory rules to open pull sheets? Matching lines will become non-inventory and each rule will apply its purchasing-report setting.');
     if (!confirmed) return;
     setApplyBusy(true);
     setMessage('');
@@ -158,6 +160,7 @@ export default function NonInventoryRules() {
       reason: rule.reason || defaultReason,
       priority: rule.priority || 100,
       is_active: rule.is_active !== false,
+      include_on_purchasing_report: rule.include_on_purchasing_report !== false,
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -172,7 +175,7 @@ export default function NonInventoryRules() {
       <PageHeader
         eyebrow="TOOLS & ADMIN"
         title="Non-Inventory Product Rules"
-        description="Mark WooCommerce items that should appear on pull sheets but should not require a blank product, reservation, or inventory deduction."
+        description="Mark WooCommerce items as non-inventory while separately deciding whether matching lines should remain on the Purchasing Report."
         actions={(
           <div className="sc-button-row">
             <ActionButton tone="secondary" onClick={() => load()}>Refresh</ActionButton>
@@ -236,6 +239,24 @@ export default function NonInventoryRules() {
             />
           </label>
 
+          <label className="sc-checkbox-line sc-form-wide">
+            <input
+              type="checkbox"
+              checked={form.include_on_purchasing_report}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                include_on_purchasing_report: event.target.checked,
+              }))}
+            />
+            <span>
+              <strong>Include matching lines on the Purchasing Report</strong><br />
+              <small className="sc-muted">
+                Turn this off for fees, services, customer-supplied products, and
+                other lines that do not need to be ordered.
+              </small>
+            </span>
+          </label>
+
           <label className="sc-checkbox-line">
             <input
               type="checkbox"
@@ -274,6 +295,7 @@ export default function NonInventoryRules() {
                   <th>Match</th>
                   <th>Label / Reason</th>
                   <th>Priority</th>
+                  <th>Purchasing</th>
                   <th>Updated</th>
                   <th>Actions</th>
                 </tr>
@@ -289,6 +311,12 @@ export default function NonInventoryRules() {
                       <span className="sc-muted">{rule.reason || 'No inventory tracking required'}</span>
                     </td>
                     <td>{rule.priority}</td>
+                    <td>
+                      <StatusBadge
+                        status={rule.include_on_purchasing_report ? 'Included' : 'Excluded'}
+                        tone={rule.include_on_purchasing_report ? 'info' : 'default'}
+                      />
+                    </td>
                     <td>{formatDate(rule.updated_at || rule.created_at)}</td>
                     <td>
                       <div className="sc-button-row">
