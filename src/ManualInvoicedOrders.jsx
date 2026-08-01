@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   createManualInvoiceOrder,
   generateManualInvoiceJob,
@@ -18,6 +18,7 @@ import {
   voidManualInvoiceOrder,
   syncManualInvoiceGeneratedPullsheet,
 } from './lib/manualOrdersApi';
+import { TableInlineEditorRow } from './components/UIPrimitives';
 
 const blankLine = () => ({
   manual_order_item_id: '',
@@ -765,7 +766,6 @@ export default function ManualInvoicedOrders() {
     setReceiveQuantities({});
     setReceiptSummary({});
     setReceiveMessage('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function mapExistingItem(item) {
@@ -821,8 +821,7 @@ export default function ManualInvoicedOrders() {
         notes: row.notes || '',
       });
       setItems((detailItems || []).length ? detailItems.map(mapExistingItem) : [blankLine()]);
-      setMessage(`Editing manual invoice order #${row.id}. Make changes above, then click Update Manual Invoice Order.`);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setMessage(`Editing manual invoice order #${row.id}. The editor is open directly beneath the selected order.`);
     } catch (err) {
       setError(err.message || String(err));
     }
@@ -1204,103 +1203,8 @@ export default function ManualInvoicedOrders() {
     }
   }
 
-  return (
-    <div className="sc-page-stack manual-invoice-page">
-      <style>{`
-        .manual-edit-banner {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-        .manual-order-row-actions,
-        .manual-missing-blank-alert {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          align-items: center;
-        }
-
-        .manual-missing-blank-alert span {
-          flex: 1 1 280px;
-        }
-
-        .manual-size-run-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 12px;
-          align-items: end;
-        }
-        .manual-size-run-preview {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 10px;
-        }
-        .manual-size-run-pill {
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          border-radius: 999px;
-          padding: 6px 10px;
-          background: rgba(14, 165, 233, 0.08);
-          font-weight: 800;
-        }
-        .manual-size-run-pill.warning {
-          background: rgba(245, 158, 11, 0.14);
-        }
-        .manual-size-run-actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          align-items: center;
-          margin-top: 12px;
-        }
-        .manual-receive-line-list {
-          display: grid;
-          gap: 10px;
-          margin-top: 14px;
-        }
-        .manual-receive-line-card {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
-          border-radius: 16px;
-          padding: 12px;
-          background: rgba(255, 255, 255, 0.72);
-        }
-        .manual-receive-line-card small {
-          display: block;
-          margin-top: 4px;
-          color: #64748b;
-          font-weight: 700;
-        }
-        .manual-receive-qty-field {
-          min-width: 150px;
-          margin: 0;
-        }
-        .manual-receive-qty-field input {
-          max-width: 140px;
-        }
-        .manual-order-voided-row {
-          opacity: 0.68;
-          background: rgba(148, 163, 184, 0.10);
-        }
-        .manual-order-voided-row .sc-status-pill {
-          background: #e5e7eb;
-          color: #374151;
-        }
-      `}</style>
-      <div className="sc-page-header-card sc-page-header-blue">
-        <div>
-          <div className="sc-kicker">Management</div>
-          <h1>Manual Invoiced Orders</h1>
-          <p>Create production-ready orders for QuickBooks/manual invoices that bypass WooCommerce. Lines can use blank inventory or finished inventory.</p>
-        </div>
-      </div>
-
-      {message && <div className="sc-alert sc-alert-success">{message}</div>}
-      {error && <div className="sc-alert sc-alert-error">{error}</div>}
+  const manualOrderForm = (
+    <div className={editingOrderId ? 'manual-order-inline-form' : 'manual-order-create-form'}>
       {editingOrderId && (
         <div className="sc-alert sc-alert-warning manual-edit-banner">
           <strong>Editing previous manual invoice order #{editingOrderId}.</strong>
@@ -1506,6 +1410,108 @@ export default function ManualInvoicedOrders() {
           </div>
         </section>
       </form>
+    </div>
+  );
+
+  return (
+    <div className="sc-page-stack manual-invoice-page">
+      <style>{`
+        .manual-edit-banner {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .manual-order-row-actions,
+        .manual-missing-blank-alert {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .manual-missing-blank-alert span {
+          flex: 1 1 280px;
+        }
+
+        .manual-size-run-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 12px;
+          align-items: end;
+        }
+        .manual-size-run-preview {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .manual-size-run-pill {
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          border-radius: 999px;
+          padding: 6px 10px;
+          background: rgba(14, 165, 233, 0.08);
+          font-weight: 800;
+        }
+        .manual-size-run-pill.warning {
+          background: rgba(245, 158, 11, 0.14);
+        }
+        .manual-size-run-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          align-items: center;
+          margin-top: 12px;
+        }
+        .manual-receive-line-list {
+          display: grid;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .manual-receive-line-card {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          border-radius: 16px;
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.72);
+        }
+        .manual-receive-line-card small {
+          display: block;
+          margin-top: 4px;
+          color: #64748b;
+          font-weight: 700;
+        }
+        .manual-receive-qty-field {
+          min-width: 150px;
+          margin: 0;
+        }
+        .manual-receive-qty-field input {
+          max-width: 140px;
+        }
+        .manual-order-voided-row {
+          opacity: 0.68;
+          background: rgba(148, 163, 184, 0.10);
+        }
+        .manual-order-voided-row .sc-status-pill {
+          background: #e5e7eb;
+          color: #374151;
+        }
+      `}</style>
+      <div className="sc-page-header-card sc-page-header-blue">
+        <div>
+          <div className="sc-kicker">Management</div>
+          <h1>Manual Invoiced Orders</h1>
+          <p>Create production-ready orders for QuickBooks/manual invoices that bypass WooCommerce. Lines can use blank inventory or finished inventory.</p>
+        </div>
+      </div>
+
+      {message && <div className="sc-alert sc-alert-success">{message}</div>}
+      {error && <div className="sc-alert sc-alert-error">{error}</div>}
+      {!editingOrderId ? manualOrderForm : null}
+
 
       <section className="sc-panel">
         <div className="sc-panel-header"><div><h2>Recent Manual Invoiced Orders</h2><p>Track manual invoice orders, payment status, and generated production jobs.</p></div></div>
@@ -1520,7 +1526,8 @@ export default function ManualInvoicedOrders() {
               {orders.map((row) => {
                 const rowVoided = isVoidedManualOrder(row);
                 return (
-                  <tr key={row.id} className={rowVoided ? 'manual-order-voided-row' : ''}>
+                  <Fragment key={row.id}>
+                    <tr className={`${rowVoided ? 'manual-order-voided-row' : ''} ${editingOrderId === row.id ? 'sc-row-being-edited' : ''}`.trim()}>
                     <td>{row.id}</td>
                     <td>{row.invoice_number || `MANUAL-${row.id}`}</td>
                     <td>{row.customer_name}<br /><small>{row.organization}</small></td>
@@ -1559,7 +1566,17 @@ export default function ManualInvoicedOrders() {
                         )}
                       </div>
                     </td>
-                  </tr>
+                    </tr>
+                    {editingOrderId === row.id ? (
+                      <TableInlineEditorRow
+                        colSpan={10}
+                        title={`Edit manual invoice order #${row.id}`}
+                        description="This single-order editor stays with the selected order. Save or cancel here without returning to the top of the page."
+                      >
+                        {manualOrderForm}
+                      </TableInlineEditorRow>
+                    ) : null}
+                  </Fragment>
                 );
               })}
               {!orders.length && <tr><td colSpan="10">No manual invoice orders yet.</td></tr>}
@@ -1570,3 +1587,4 @@ export default function ManualInvoicedOrders() {
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Fragment, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { bulkUpdateBlankProducts } from './inventoryApi';
+import { TableInlineEditorRow } from './components/UIPrimitives';
 
 const empty = { sku_base: '', name: '', barcode: '', brand_id: '', product_type_id: '', color_id: '', size_id: '', unit_cost: '', low_stock_threshold: '', image_url: '' };
 
@@ -86,7 +87,6 @@ export default function EditBlankItems() {
     setSelected(row);
     setForm({ ...empty, ...row });
     setMessage('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function save() {
@@ -200,6 +200,26 @@ export default function EditBlankItems() {
     </label>
   );
 
+  const singleItemEditor = selected ? (
+    <div className="sc-form-grid sc-form-grid--compact">
+      <label className="sc-field"><span>SKU Base</span><input autoFocus value={form.sku_base || ''} onChange={(e) => setForm({ ...form, sku_base: e.target.value })} /></label>
+      <label className="sc-field"><span>Name</span><input value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+      <label className="sc-field"><span>Barcode / UPC</span><input value={form.barcode || ''} onChange={(e) => setForm({ ...form, barcode: e.target.value })} /></label>
+      {select('brand_id', 'Brand')}
+      {select('product_type_id', 'Style / Product Type')}
+      {select('color_id', 'Color')}
+      {select('size_id', 'Size')}
+      <label className="sc-field"><span>Unit Cost</span><input type="number" step="0.01" value={form.unit_cost || ''} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></label>
+      <label className="sc-field"><span>Low Stock Threshold</span><input type="number" value={form.low_stock_threshold || ''} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} /></label>
+      <label className="sc-field sc-field-wide"><span>Image URL</span><input value={form.image_url || ''} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></label>
+      {form.image_url && <div className="sc-field"><span>Image Preview</span><img className="sc-thumb" src={form.image_url} alt="Blank product preview" /></div>}
+      <div className="sc-form-actions sc-form-wide sc-inline-editor__actions">
+        <button className="sc-btn sc-btn-primary" onClick={save} disabled={loading}>Save Blank Item</button>
+        <button className="sc-btn" onClick={() => { setSelected(null); setForm(empty); }}>Cancel</button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="sc-page-stack">
       <div className="sc-page-header-card">
@@ -209,81 +229,70 @@ export default function EditBlankItems() {
       {message && <div className="sc-alert">{message}</div>}
 
       <section className="sc-panel">
-        <div className="sc-panel-header"><div><h3>{selected ? 'Edit Selected Blank Product' : 'Select a Blank Product'}</h3><p>Required matching fields are Brand, Style, Color, and Size.</p></div></div>
-        {selected ? (
-          <div className="sc-form-grid">
-            <label className="sc-field"><span>SKU Base</span><input value={form.sku_base || ''} onChange={(e) => setForm({ ...form, sku_base: e.target.value })} /></label>
-            <label className="sc-field"><span>Name</span><input value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-            <label className="sc-field"><span>Barcode / UPC</span><input value={form.barcode || ''} onChange={(e) => setForm({ ...form, barcode: e.target.value })} /></label>
-            {select('brand_id', 'Brand')}
-            {select('product_type_id', 'Style / Product Type')}
-            {select('color_id', 'Color')}
-            {select('size_id', 'Size')}
-            <label className="sc-field"><span>Unit Cost</span><input type="number" step="0.01" value={form.unit_cost || ''} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></label>
-            <label className="sc-field"><span>Low Stock Threshold</span><input type="number" value={form.low_stock_threshold || ''} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} /></label>
-            <label className="sc-field sc-field-wide"><span>Image URL</span><input value={form.image_url || ''} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></label>
-            {form.image_url && <div className="sc-field"><span>Image Preview</span><img className="sc-thumb" src={form.image_url} alt="Blank product preview" /></div>}
-            <div className="sc-form-actions"><button className="sc-btn sc-btn-primary" onClick={save} disabled={loading}>Save Blank Item</button><button className="sc-btn" onClick={() => { setSelected(null); setForm(empty); }}>Cancel</button></div>
-          </div>
-        ) : <p className="sc-muted">Search below and choose an item to edit, or select multiple rows for bulk changes.</p>}
+        <div className="sc-toolbar">
+          <input className="sc-search-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU, name, barcode, brand, style, color, or size..." onKeyDown={(e) => { if (e.key === 'Enter') loadRows(); }} />
+          <button className="sc-btn sc-btn-primary" onClick={loadRows} disabled={loading}>{loading ? 'Searching...' : 'Search'}</button>
+          <span className="sc-toolbar__hint">Choose Edit for one item. Check multiple rows for bulk changes below the list.</span>
+        </div>
+        <div className="sc-responsive-table-wrap">
+          <table className="sc-table">
+            <thead><tr><th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible blank products" /></th><th>Image</th><th>SKU</th><th>Name</th><th>Brand</th><th>Style</th><th>Color</th><th>Size</th><th>Cost</th><th>Low Stock</th><th></th></tr></thead>
+            <tbody>
+              {visibleRows.map((row) => {
+                const id = normalizeRowId(row.id);
+                return (
+                  <Fragment key={row.id}>
+                    <tr className={selected?.id === row.id ? 'sc-row-being-edited' : ''}>
+                      <td><input type="checkbox" checked={selectedSet.has(id)} onChange={() => toggleRow(row)} aria-label={`Select ${row.sku_base || row.name || 'blank product'}`} /></td>
+                      <td>{row.image_url ? <img className="sc-thumb sc-thumb-small" src={row.image_url} alt="" /> : <span className="sc-muted">No image</span>}</td>
+                      <td>{row.sku_base || '—'}</td>
+                      <td>{row.name || '—'}</td>
+                      <td>{row.brand || row.brands?.name || '—'}</td>
+                      <td>{row.product_type || row.product_types?.name || '—'}</td>
+                      <td>{row.color || row.colors?.name || '—'}</td>
+                      <td>{row.size || row.sizes?.name || '—'}</td>
+                      <td>{formatCost(row.unit_cost)}</td>
+                      <td>{row.low_stock_threshold ?? '—'}</td>
+                      <td><button className="sc-btn sc-btn-small" onClick={() => startEdit(row)}>{selected?.id === row.id ? 'Editing' : 'Edit'}</button></td>
+                    </tr>
+                    {selected?.id === row.id ? (
+                      <TableInlineEditorRow
+                        colSpan={11}
+                        title={`Edit ${row.sku_base || row.name || 'blank product'}`}
+                        description="This editor belongs only to the selected row. Required matching fields are Brand, Style, Color, and Size."
+                      >
+                        {singleItemEditor}
+                      </TableInlineEditorRow>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+              {!visibleRows.length && <tr><td colSpan="11" className="sc-empty-cell">No blank products found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section className="sc-panel">
+      <section className="sc-panel sc-bulk-editor-section">
         <div className="sc-panel-header">
           <div>
             <h3>Bulk Edit Selected Blank Items</h3>
-            <p>Use this for shared low-stock thresholds or applying the same product image to several size/color variants.</p>
+            <p>This bottom section applies only to the rows checked in the list above.</p>
           </div>
           <div className="sc-kpi-pill">{selectedIds.length} selected</div>
         </div>
 
-        <div className="sc-form-grid">
+        <div className="sc-form-grid sc-form-grid--compact">
           <label className="sc-field sc-checkbox-field">
-            <span>
-              <input
-                type="checkbox"
-                checked={bulkForm.updateLowStockThreshold}
-                onChange={(e) => setBulkForm({ ...bulkForm, updateLowStockThreshold: e.target.checked })}
-              />
-              Update low-stock threshold
-            </span>
-            <input
-              type="number"
-              min="0"
-              value={bulkForm.lowStockThreshold}
-              disabled={!bulkForm.updateLowStockThreshold}
-              placeholder="Leave blank to clear threshold"
-              onChange={(e) => setBulkForm({ ...bulkForm, lowStockThreshold: e.target.value })}
-            />
+            <span><input type="checkbox" checked={bulkForm.updateLowStockThreshold} onChange={(e) => setBulkForm({ ...bulkForm, updateLowStockThreshold: e.target.checked })} />Update low-stock threshold</span>
+            <input type="number" min="0" value={bulkForm.lowStockThreshold} disabled={!bulkForm.updateLowStockThreshold} placeholder="Leave blank to clear threshold" onChange={(e) => setBulkForm({ ...bulkForm, lowStockThreshold: e.target.value })} />
           </label>
-
           <label className="sc-field sc-field-wide sc-checkbox-field">
-            <span>
-              <input
-                type="checkbox"
-                checked={bulkForm.updateImageUrl}
-                onChange={(e) => setBulkForm({ ...bulkForm, updateImageUrl: e.target.checked })}
-              />
-              Update product image URL
-            </span>
-            <input
-              value={bulkForm.imageUrl}
-              disabled={!bulkForm.updateImageUrl || bulkForm.clearImageUrl}
-              placeholder="https://..."
-              onChange={(e) => setBulkForm({ ...bulkForm, imageUrl: e.target.value })}
-            />
+            <span><input type="checkbox" checked={bulkForm.updateImageUrl} onChange={(e) => setBulkForm({ ...bulkForm, updateImageUrl: e.target.checked })} />Update product image URL</span>
+            <input value={bulkForm.imageUrl} disabled={!bulkForm.updateImageUrl || bulkForm.clearImageUrl} placeholder="https://..." onChange={(e) => setBulkForm({ ...bulkForm, imageUrl: e.target.value })} />
           </label>
-
           <label className="sc-field sc-checkbox-field">
-            <span>
-              <input
-                type="checkbox"
-                checked={bulkForm.clearImageUrl}
-                disabled={!bulkForm.updateImageUrl}
-                onChange={(e) => setBulkForm({ ...bulkForm, clearImageUrl: e.target.checked })}
-              />
-              Clear existing image URL
-            </span>
+            <span><input type="checkbox" checked={bulkForm.clearImageUrl} disabled={!bulkForm.updateImageUrl} onChange={(e) => setBulkForm({ ...bulkForm, clearImageUrl: e.target.checked })} />Clear existing image URL</span>
             {bulkForm.updateImageUrl && bulkForm.imageUrl && !bulkForm.clearImageUrl ? <img className="sc-thumb" src={bulkForm.imageUrl} alt="Bulk image preview" /> : <div className="sc-muted">Optional image preview appears here.</div>}
           </label>
         </div>
@@ -293,45 +302,7 @@ export default function EditBlankItems() {
           <button className="sc-btn" onClick={clearSelection} disabled={!selectedIds.length || bulkLoading}>Clear Selection</button>
           <button className="sc-btn sc-btn-primary" onClick={applyBulkEdit} disabled={!selectedIds.length || bulkLoading}>{bulkLoading ? 'Applying...' : 'Apply Bulk Edit'}</button>
         </div>
-
-        {selectedRows.length > 0 && (
-          <p className="sc-muted">
-            Selected preview: {selectedRows.slice(0, 4).map((row) => row.sku_base || row.name).join(', ')}{selectedRows.length > 4 ? `, +${selectedRows.length - 4} more` : ''}
-          </p>
-        )}
-      </section>
-
-      <section className="sc-panel">
-        <div className="sc-toolbar">
-          <input className="sc-search-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU, name, barcode, brand, style, color, or size..." onKeyDown={(e) => { if (e.key === 'Enter') loadRows(); }} />
-          <button className="sc-btn sc-btn-primary" onClick={loadRows} disabled={loading}>{loading ? 'Searching...' : 'Search'}</button>
-        </div>
-        <div className="sc-responsive-table-wrap">
-          <table className="sc-table">
-            <thead><tr><th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible blank products" /></th><th>Image</th><th>SKU</th><th>Name</th><th>Brand</th><th>Style</th><th>Color</th><th>Size</th><th>Cost</th><th>Low Stock</th><th></th></tr></thead>
-            <tbody>
-              {visibleRows.map((row) => {
-                const id = normalizeRowId(row.id);
-                return (
-                  <tr key={row.id}>
-                    <td><input type="checkbox" checked={selectedSet.has(id)} onChange={() => toggleRow(row)} aria-label={`Select ${row.sku_base || row.name || 'blank product'}`} /></td>
-                    <td>{row.image_url ? <img className="sc-thumb sc-thumb-small" src={row.image_url} alt="" /> : <span className="sc-muted">No image</span>}</td>
-                    <td>{row.sku_base || '—'}</td>
-                    <td>{row.name || '—'}</td>
-                    <td>{row.brand || row.brands?.name || '—'}</td>
-                    <td>{row.product_type || row.product_types?.name || '—'}</td>
-                    <td>{row.color || row.colors?.name || '—'}</td>
-                    <td>{row.size || row.sizes?.name || '—'}</td>
-                    <td>{formatCost(row.unit_cost)}</td>
-                    <td>{row.low_stock_threshold ?? '—'}</td>
-                    <td><button className="sc-btn sc-btn-small" onClick={() => startEdit(row)}>Edit</button></td>
-                  </tr>
-                );
-              })}
-              {!visibleRows.length && <tr><td colSpan="11" className="sc-empty-cell">No blank products found.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        {selectedRows.length > 0 ? <p className="sc-muted">Selected: {selectedRows.slice(0, 4).map((row) => row.sku_base || row.name).join(', ')}{selectedRows.length > 4 ? `, +${selectedRows.length - 4} more` : ''}</p> : null}
       </section>
     </div>
   );

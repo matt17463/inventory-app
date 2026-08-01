@@ -322,3 +322,41 @@ test('inventory overview searches every product SKU, name, and description', () 
     /includeLinkedWooSkus\s*\?\s*inventoryCatalogCoreSearchParts/
   );
 });
+
+
+test('single-item editors stay with selected rows and bulk editors follow their tables', () => {
+  const files = {
+    manualOrders: fs.readFileSync(path.join(root, 'src/ManualInvoicedOrders.jsx'), 'utf8'),
+    blankItems: fs.readFileSync(path.join(root, 'src/EditBlankItems.jsx'), 'utf8'),
+    pricing: fs.readFileSync(path.join(root, 'src/PricingRules.jsx'), 'utf8'),
+    nonInventory: fs.readFileSync(path.join(root, 'src/NonInventoryRules.jsx'), 'utf8'),
+    jobCosting: fs.readFileSync(path.join(root, 'src/JobCosting.jsx'), 'utf8'),
+    dueDates: fs.readFileSync(path.join(root, 'src/PullSheetDueDateEditor.jsx'), 'utf8'),
+    estimator: fs.readFileSync(path.join(root, 'src/ProductionEstimator.jsx'), 'utf8'),
+    primitives: fs.readFileSync(path.join(root, 'src/components/UIPrimitives.jsx'), 'utf8'),
+    css: fs.readFileSync(path.join(root, 'src/App.css'), 'utf8'),
+  };
+
+  Object.values(files).forEach((source) => {
+    assert.doesNotMatch(source, /window\.scrollTo/);
+  });
+
+  assert.match(files.primitives, /function TableInlineEditorRow/);
+  assert.match(files.css, /\.sc-inline-editor-row/);
+  assert.match(files.css, /\.sc-row-being-edited/);
+  assert.match(files.manualOrders, /manualOrderForm/);
+  assert.match(files.manualOrders, /Edit manual invoice order/);
+  assert.match(files.blankItems, /TableInlineEditorRow/);
+  assert.match(files.pricing, /TableInlineEditorRow/);
+  assert.match(files.nonInventory, /TableInlineEditorRow/);
+  assert.match(files.jobCosting, /TableInlineEditorRow/);
+
+  assert.ok(
+    files.blankItems.indexOf('sc-bulk-editor-section') > files.blankItems.indexOf('</table>'),
+    'Blank-item bulk editor must follow the item table.'
+  );
+  assert.ok(
+    files.dueDates.indexOf('sc-bulk-editor-section') > files.dueDates.indexOf('</table>'),
+    'Due-date bulk editor must follow the pull-sheet table.'
+  );
+});

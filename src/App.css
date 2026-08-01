@@ -3219,3 +3219,251 @@ tr.is-overdue { background: #fff8f8; }
   white-space: normal;
   line-height: 1.35;
 }
+
+/* ---------------------------------------------------------
+   Workflow proximity + compact page density — v0.6.28
+   Single-record editors stay with their selected row.
+   Bulk controls remain after the collection they affect.
+--------------------------------------------------------- */
+
+:root {
+  --sc-workflow-accent: #2563eb;
+  --sc-workflow-accent-soft: rgba(37, 99, 235, 0.08);
+}
+
+.sc-topbar,
+.sc-topbar-polished {
+  min-height: 68px;
+  padding-block: 9px;
+}
+
+.sc-sidebar-brand {
+  padding-block: 12px 10px;
+}
+
+.sc-sidebar-nav {
+  padding-block: 8px;
+}
+
+.sc-sidebar-nav a,
+.sc-sidebar-link {
+  min-height: 36px;
+  padding-block: 7px;
+}
+
+.sc-page-stack {
+  gap: 12px;
+}
+
+.sc-page-header-card {
+  padding: 16px 18px !important;
+}
+
+.sc-page-header h1,
+.sc-hero h1,
+.sc-page-header-card h1 {
+  font-size: clamp(30px, 3.3vw, 48px) !important;
+  line-height: 1.02 !important;
+}
+
+.sc-page-header-card p,
+.sc-page-header p {
+  max-width: 78ch;
+  line-height: 1.45;
+}
+
+.sc-panel,
+.sc-section-card {
+  padding: 14px;
+}
+
+.sc-panel-header,
+.sc-section-card__header {
+  margin-bottom: 10px;
+}
+
+.sc-panel h2,
+.sc-section-card h2 {
+  margin-block: 0 4px;
+}
+
+.sc-form-grid,
+.sc-field-grid {
+  gap: 10px 12px;
+}
+
+.sc-field {
+  gap: 5px;
+}
+
+.sc-field input,
+.sc-field select,
+.sc-field textarea,
+.sc-textarea {
+  min-height: 39px;
+  padding: 8px 10px;
+}
+
+.sc-btn {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.sc-table th,
+.sc-table td {
+  padding: 9px 11px;
+}
+
+.sc-table tbody tr:not(.sc-inline-editor-row):hover td {
+  background: rgba(37, 99, 235, 0.045);
+}
+
+.sc-row-being-edited > td {
+  background: var(--sc-workflow-accent-soft) !important;
+  border-bottom-color: rgba(37, 99, 235, 0.22) !important;
+}
+
+.sc-inline-editor-row > td {
+  padding: 0 10px 14px !important;
+  background: var(--sc-panel-2) !important;
+  border-bottom: 2px solid rgba(37, 99, 235, 0.24) !important;
+}
+
+.sc-inline-editor {
+  position: relative;
+  margin-top: 10px;
+  border: 2px solid rgba(37, 99, 235, 0.34);
+  border-radius: 16px;
+  background: var(--sc-panel);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.10);
+  overflow: visible;
+}
+
+.sc-inline-editor__pointer {
+  position: absolute;
+  top: -9px;
+  left: 34px;
+  width: 16px;
+  height: 16px;
+  background: var(--sc-panel);
+  border-top: 2px solid rgba(37, 99, 235, 0.34);
+  border-left: 2px solid rgba(37, 99, 235, 0.34);
+  transform: rotate(45deg);
+}
+
+.sc-inline-editor__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px 10px;
+  border-bottom: 1px solid var(--sc-border);
+  background: linear-gradient(90deg, var(--sc-workflow-accent-soft), transparent);
+  border-radius: 14px 14px 0 0;
+}
+
+.sc-inline-editor__header h3 {
+  margin: 0 0 3px;
+  font-size: 17px;
+}
+
+.sc-inline-editor__header p {
+  margin: 0;
+  color: var(--sc-muted);
+  line-height: 1.4;
+}
+
+.sc-inline-editor__badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sc-inline-editor__body {
+  padding: 14px;
+}
+
+.sc-inline-editor__body > .sc-panel,
+.sc-inline-editor__body > form > .sc-panel,
+.manual-order-inline-form .sc-panel {
+  box-shadow: none;
+}
+
+.sc-inline-editor__actions,
+.manual-order-inline-form .sc-form-actions {
+  position: sticky;
+  bottom: 8px;
+  z-index: 4;
+  padding: 9px;
+  border: 1px solid var(--sc-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sc-panel) 94%, transparent);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.sc-create-panel {
+  border-style: dashed;
+}
+
+.sc-bulk-editor-section {
+  margin-top: 4px;
+  border-top: 4px solid #7c3aed !important;
+}
+
+.sc-bulk-editor-section::before {
+  content: 'Bulk action';
+  display: inline-flex;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.manual-order-inline-form {
+  display: grid;
+  gap: 10px;
+}
+
+.manual-order-inline-form > .sc-alert {
+  margin-bottom: 0;
+}
+
+.manual-order-inline-form .manual-invoice-form {
+  display: grid;
+  gap: 10px;
+}
+
+.manual-order-inline-form .manual-invoice-form > .sc-panel {
+  margin: 0;
+  border-radius: 12px;
+}
+
+@media (max-width: 760px) {
+  .sc-inline-editor-row > td {
+    padding-inline: 4px !important;
+  }
+
+  .sc-inline-editor__header {
+    flex-direction: column;
+  }
+
+  .sc-inline-editor__badge {
+    align-self: flex-start;
+  }
+
+  .sc-inline-editor__body {
+    padding: 10px;
+  }
+}

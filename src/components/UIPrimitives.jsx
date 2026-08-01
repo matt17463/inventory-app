@@ -98,3 +98,29 @@ export function FormField({ label, help, children, required }) {
 export function ResponsiveTable({ children }) {
   return <div className="sc-responsive-table"><table>{children}</table></div>;
 }
+
+export function InlineEditorPanel({ title, description, children, className = '' }) {
+  return (
+    <section className={`sc-inline-editor ${className}`.trim()} aria-label={title}>
+      <div className="sc-inline-editor__pointer" aria-hidden="true" />
+      <div className="sc-inline-editor__header">
+        <div>
+          <h3>{title}</h3>
+          {description ? <p>{description}</p> : null}
+        </div>
+        <span className="sc-inline-editor__badge">Editing this item</span>
+      </div>
+      <div className="sc-inline-editor__body">{children}</div>
+    </section>
+  );
+}
+
+export function TableInlineEditorRow({ colSpan, title, description, children, className = '' }) {
+  return (
+    <tr className={`sc-inline-editor-row ${className}`.trim()}>
+      <td colSpan={colSpan}>
+        <InlineEditorPanel title={title} description={description}>{children}</InlineEditorPanel>
+      </td>
+    </tr>
+  );
+}

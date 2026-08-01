@@ -99,7 +99,10 @@ export default function ProductionEstimator() {
       qcSecondsPerUnit: rule.qc_seconds_per_unit ?? 0,
       packingSecondsPerUnit: rule.packing_seconds_per_unit ?? 0,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelector('.production-estimator-grid')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
   }
 
   const totals = useMemo(() => estimateHours(estimate), [estimate]);

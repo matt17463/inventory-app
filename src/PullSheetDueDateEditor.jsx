@@ -203,37 +203,7 @@ export default function PullSheetDueDateEditor() {
           </button>
         </div>
 
-        <div className="bulk-due-date-box">
-          <strong>Bulk due date</strong>
-
-          <div className="field-row">
-            <input
-              type="date"
-              value={bulkDueDate}
-              onChange={(event) => setBulkDueDate(event.target.value)}
-            />
-
-            <input
-              type="text"
-              value={bulkReason}
-              placeholder="Reason / note"
-              onChange={(event) => setBulkReason(event.target.value)}
-            />
-
-            <button type="button" onClick={() => saveBulk(false)} disabled={!selectedIds.length}>
-              Apply to {selectedIds.length || 0} selected
-            </button>
-
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => saveBulk(true)}
-              disabled={!selectedIds.length}
-            >
-              Clear selected due dates
-            </button>
-          </div>
-        </div>
+        <p className="sc-toolbar__hint">Edit one date in its row. Select multiple pull sheets to use the bulk section below the list.</p>
       </section>
 
       <section className="panel">
@@ -350,6 +320,22 @@ export default function PullSheetDueDateEditor() {
             ) : null}
           </tbody>
         </table>
+      </section>
+
+      <section className="panel bulk-due-date-box sc-bulk-editor-section">
+        <div className="sc-panel-header">
+          <div>
+            <h2>Bulk Due Date</h2>
+            <p>These controls apply only to the pull sheets checked in the table above.</p>
+          </div>
+          <span className="sc-kpi-pill">{selectedIds.length} selected</span>
+        </div>
+        <div className="field-row">
+          <input type="date" value={bulkDueDate} onChange={(event) => setBulkDueDate(event.target.value)} />
+          <input type="text" value={bulkReason} placeholder="Reason / note" onChange={(event) => setBulkReason(event.target.value)} />
+          <button type="button" onClick={() => saveBulk(false)} disabled={!selectedIds.length}>Apply to {selectedIds.length || 0} selected</button>
+          <button type="button" className="secondary" onClick={() => saveBulk(true)} disabled={!selectedIds.length}>Clear selected due dates</button>
+        </div>
       </section>
     </div>
   );

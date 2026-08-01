@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { PageHeader, SectionCard, ActionButton, EmptyState, StatusBadge } from './components/UIPrimitives';
+import React, { Fragment, useEffect, useMemo, useState } from 'react';
+import { PageHeader, SectionCard, ActionButton, EmptyState, StatusBadge, InlineEditorPanel, TableInlineEditorRow } from './components/UIPrimitives';
 import {
   NON_INVENTORY_RULE_TYPES,
   applyNonInventoryRulesToOpenJobs,
@@ -162,12 +162,26 @@ export default function NonInventoryRules() {
       is_active: rule.is_active !== false,
       include_on_purchasing_report: rule.include_on_purchasing_report !== false,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function resetForm() {
     setForm(emptyRule);
     setMessage('');
+  }
+
+  function renderRuleForm({ editing = false } = {}) {
+    return (
+      <form className="sc-form-grid sc-form-grid--compact" onSubmit={submitRule}>
+        <label><span>Rule Type</span><select value={form.rule_type} onChange={(event) => setForm((current) => ({ ...current, rule_type: event.target.value }))}>{NON_INVENTORY_RULE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
+        <label><span>Match Value</span><input autoFocus={editing} value={form.match_value} onChange={(event) => setForm((current) => ({ ...current, match_value: event.target.value }))} placeholder={exampleForRuleType(form.rule_type)} /></label>
+        <label><span>Label</span><input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="Example: Artwork fee" /></label>
+        <label><span>Priority</span><input type="number" value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: Number(event.target.value || 100) }))} /></label>
+        <label className="sc-form-wide"><span>Reason shown on pull sheet</span><input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} /></label>
+        <label className="sc-checkbox-line sc-form-wide"><input type="checkbox" checked={form.include_on_purchasing_report} onChange={(event) => setForm((current) => ({ ...current, include_on_purchasing_report: event.target.checked }))} /><span><strong>Include matching lines on the Purchasing Report</strong><br /><small className="sc-muted">Turn this off for fees, services, customer-supplied products, and other lines that do not need to be ordered.</small></span></label>
+        <label className="sc-checkbox-line"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} /><span>Active</span></label>
+        <div className="sc-button-row sc-form-wide sc-inline-editor__actions"><ActionButton type="submit" tone="primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save Changes' : 'Save Rule'}</ActionButton>{editing ? <ActionButton type="button" tone="secondary" onClick={resetForm}>Cancel Edit</ActionButton> : null}</div>
+      </form>
+    );
   }
 
   return (
@@ -190,92 +204,11 @@ export default function NonInventoryRules() {
         </SectionCard>
       ) : null}
 
-      <SectionCard title={form.id ? `Edit Rule #${form.id}` : 'Create Non-Inventory Rule'}>
-        <form className="sc-form-grid" onSubmit={submitRule}>
-          <label>
-            <span>Rule Type</span>
-            <select
-              value={form.rule_type}
-              onChange={(event) => setForm((current) => ({ ...current, rule_type: event.target.value }))}
-            >
-              {NON_INVENTORY_RULE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>{type.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>Match Value</span>
-            <input
-              value={form.match_value}
-              onChange={(event) => setForm((current) => ({ ...current, match_value: event.target.value }))}
-              placeholder={exampleForRuleType(form.rule_type)}
-            />
-          </label>
-
-          <label>
-            <span>Label</span>
-            <input
-              value={form.label}
-              onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))}
-              placeholder="Example: Artwork fee"
-            />
-          </label>
-
-          <label>
-            <span>Priority</span>
-            <input
-              type="number"
-              value={form.priority}
-              onChange={(event) => setForm((current) => ({ ...current, priority: Number(event.target.value || 100) }))}
-            />
-          </label>
-
-          <label className="sc-form-wide">
-            <span>Reason shown on pull sheet</span>
-            <input
-              value={form.reason}
-              onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))}
-            />
-          </label>
-
-          <label className="sc-checkbox-line sc-form-wide">
-            <input
-              type="checkbox"
-              checked={form.include_on_purchasing_report}
-              onChange={(event) => setForm((current) => ({
-                ...current,
-                include_on_purchasing_report: event.target.checked,
-              }))}
-            />
-            <span>
-              <strong>Include matching lines on the Purchasing Report</strong><br />
-              <small className="sc-muted">
-                Turn this off for fees, services, customer-supplied products, and
-                other lines that do not need to be ordered.
-              </small>
-            </span>
-          </label>
-
-          <label className="sc-checkbox-line">
-            <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
-            />
-            <span>Active</span>
-          </label>
-
-          <div className="sc-button-row sc-form-wide">
-            <ActionButton type="submit" tone="primary" disabled={saving}>
-              {saving ? 'Saving…' : form.id ? 'Save Changes' : 'Save Rule'}
-            </ActionButton>
-            {form.id ? (
-              <ActionButton type="button" tone="secondary" onClick={resetForm}>Cancel Edit</ActionButton>
-            ) : null}
-          </div>
-        </form>
-      </SectionCard>
+      {!form.id ? (
+        <InlineEditorPanel title="Create Non-Inventory Rule" description="New rules begin here. Existing rules edit directly beneath their selected row." className="sc-create-panel">
+          {renderRuleForm()}
+        </InlineEditorPanel>
+      ) : null}
 
       <SectionCard
         title="Existing Rules"
@@ -302,31 +235,23 @@ export default function NonInventoryRules() {
               </thead>
               <tbody>
                 {filteredRules.map((rule) => (
-                  <tr key={rule.id}>
-                    <td><StatusBadge status={rule.is_active ? 'Active' : 'Inactive'} tone={rule.is_active ? 'success' : 'default'} /></td>
-                    <td>{ruleTypeLabel(rule.rule_type)}</td>
-                    <td><code>{rule.match_value}</code></td>
-                    <td>
-                      <strong>{rule.label || '—'}</strong><br />
-                      <span className="sc-muted">{rule.reason || 'No inventory tracking required'}</span>
-                    </td>
-                    <td>{rule.priority}</td>
-                    <td>
-                      <StatusBadge
-                        status={rule.include_on_purchasing_report ? 'Included' : 'Excluded'}
-                        tone={rule.include_on_purchasing_report ? 'info' : 'default'}
-                      />
-                    </td>
-                    <td>{formatDate(rule.updated_at || rule.created_at)}</td>
-                    <td>
-                      <div className="sc-button-row">
-                        <ActionButton tone="secondary" onClick={() => editRule(rule)}>Edit</ActionButton>
-                        <ActionButton tone={rule.is_active ? 'warning' : 'success'} onClick={() => toggleRule(rule)}>
-                          {rule.is_active ? 'Deactivate' : 'Activate'}
-                        </ActionButton>
-                      </div>
-                    </td>
-                  </tr>
+                  <Fragment key={rule.id}>
+                    <tr className={form.id === rule.id ? 'sc-row-being-edited' : ''}>
+                      <td><StatusBadge status={rule.is_active ? 'Active' : 'Inactive'} tone={rule.is_active ? 'success' : 'default'} /></td>
+                      <td>{ruleTypeLabel(rule.rule_type)}</td>
+                      <td><code>{rule.match_value}</code></td>
+                      <td><strong>{rule.label || '—'}</strong><br /><span className="sc-muted">{rule.reason || 'No inventory tracking required'}</span></td>
+                      <td>{rule.priority}</td>
+                      <td><StatusBadge status={rule.include_on_purchasing_report ? 'Included' : 'Excluded'} tone={rule.include_on_purchasing_report ? 'info' : 'default'} /></td>
+                      <td>{formatDate(rule.updated_at || rule.created_at)}</td>
+                      <td><div className="sc-button-row"><ActionButton tone="secondary" onClick={() => editRule(rule)}>{form.id === rule.id ? 'Editing' : 'Edit'}</ActionButton><ActionButton tone={rule.is_active ? 'warning' : 'success'} onClick={() => toggleRule(rule)}>{rule.is_active ? 'Deactivate' : 'Activate'}</ActionButton></div></td>
+                    </tr>
+                    {form.id === rule.id ? (
+                      <TableInlineEditorRow colSpan={8} title={`Edit Rule #${rule.id}`} description="This editor applies only to the non-inventory rule immediately above.">
+                        {renderRuleForm({ editing: true })}
+                      </TableInlineEditorRow>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
