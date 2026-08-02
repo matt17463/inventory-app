@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
 import {
   createBin,
   getBins,
@@ -8,6 +8,7 @@ import {
   saveBinDisplayOrder,
 } from "./lib/inventoryApi";
 import { supabase } from "./supabaseClient";
+import { InlineEditorPanel } from "./components/UIPrimitives";
 
 /**
  * BinsDashboard.jsx
@@ -370,6 +371,68 @@ export default function BinsDashboard() {
     return number.toLocaleString(undefined, { style: "currency", currency: "USD" });
   }
 
+  function historyMatchesRow(row) {
+    if (!history.open || !history.item) return false;
+    const historyIdentity = history.item.blank_product_id || history.item.id || history.item.sku;
+    const rowIdentity = row.blank_product_id || row.id || row.sku;
+    return String(historyIdentity || '') === String(rowIdentity || '');
+  }
+
+  function renderReceiveHistory() {
+    return (
+      <InlineEditorPanel
+        title={`Receiving History: ${safeText(history.item?.product_name || history.item?.sku, "Item")}`}
+        description={`Bin ${safeText(activeBin?.bin_code || activeBin?.label, "—")} · SKU ${safeText(history.item?.sku)} · Current qty ${Number(history.item?.quantity || 0)}`}
+        className="bin-history-panel"
+      >
+        <div className="bin-history-header">
+          <span className="bins-eyebrow">Receiving History</span>
+          <button type="button" className="bins-button bins-button-secondary" onClick={closeReceiveHistory}>
+            Close
+          </button>
+        </div>
+
+        {history.loading ? (
+          <div className="bins-empty">Loading receiving history...</div>
+        ) : history.error ? (
+          <div className="bins-message bins-message-error">{history.error}</div>
+        ) : history.rows.length === 0 ? (
+          <div className="bins-empty">No receiving history was found for this item in this bin.</div>
+        ) : (
+          <div className="bins-table-wrap">
+            <table className="bins-content-table bin-history-table">
+              <thead>
+                <tr>
+                  <th>Date Received</th>
+                  <th>Qty Added</th>
+                  <th>Vendor / Supplier</th>
+                  <th>Unit Cost</th>
+                  <th>PO / Source</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.rows.map((entry, index) => (
+                  <tr key={entry.movement_id || `${entry.received_at}-${index}`}>
+                    <td>{formatHistoryDate(entry.received_at || entry.created_at)}</td>
+                    <td><span className="bins-qty-pill">{Number(entry.quantity || 0)}</span></td>
+                    <td>{safeText(entry.vendor || entry.supplier)}</td>
+                    <td>{formatMoney(entry.unit_cost)}</td>
+                    <td>
+                      {entry.po_number ? <strong>{entry.po_number}</strong> : safeText(entry.source || entry.movement_type)}
+                      {entry.movement_id ? <div className="bins-subtext">Movement: {entry.movement_id}</div> : null}
+                    </td>
+                    <td>{safeText(entry.notes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </InlineEditorPanel>
+    );
+  }
+
   if (activeBin) {
     const totalUnits = contents.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
     const blankCount = contents.filter((row) => row.source_type === "Blank").length;
@@ -432,8 +495,12 @@ export default function BinsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contents.map((row, index) => (
-                    <tr key={`${row.source_type}-${row.blank_product_id || row.id || row.sku}-${index}`}>
+                  {contents.map((row, index) => {
+                    const itemKey = `${row.source_type}-${row.blank_product_id || row.id || row.sku}-${index}`;
+                    const showHistory = historyMatchesRow(row);
+                    return (
+                    <Fragment key={itemKey}>
+                    <tr className={showHistory ? "sc-row-being-edited" : ""}>
                       <td>
                         <span className={row.source_type === "Sample" ? "source-pill source-pill-sample" : "source-pill"}>
                           {row.source_badge}
@@ -466,67 +533,20 @@ export default function BinsDashboard() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    {showHistory ? (
+                      <tr className="sc-inline-editor-row bin-history-inline-row">
+                        <td colSpan={9}>{renderReceiveHistory()}</td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </section>
 
-        {history.open ? (
-          <section className="bin-history-panel" role="dialog" aria-label="Bin item receiving history">
-            <div className="bin-history-header">
-              <div>
-                <span className="bins-eyebrow">Receiving History</span>
-                <h2>{safeText(history.item?.product_name || history.item?.sku, "Item")}</h2>
-                <p>
-                  Bin {safeText(activeBin.bin_code || activeBin.label, "—")} · SKU {safeText(history.item?.sku)} · Current qty {Number(history.item?.quantity || 0)}
-                </p>
-              </div>
-              <button type="button" className="bins-button bins-button-secondary" onClick={closeReceiveHistory}>
-                Close
-              </button>
-            </div>
-
-            {history.loading ? (
-              <div className="bins-empty">Loading receiving history...</div>
-            ) : history.error ? (
-              <div className="bins-message bins-message-error">{history.error}</div>
-            ) : history.rows.length === 0 ? (
-              <div className="bins-empty">No receiving history was found for this item in this bin.</div>
-            ) : (
-              <div className="bins-table-wrap">
-                <table className="bins-content-table bin-history-table">
-                  <thead>
-                    <tr>
-                      <th>Date Received</th>
-                      <th>Qty Added</th>
-                      <th>Vendor / Supplier</th>
-                      <th>Unit Cost</th>
-                      <th>PO / Source</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.rows.map((entry, index) => (
-                      <tr key={entry.movement_id || `${entry.received_at}-${index}`}>
-                        <td>{formatHistoryDate(entry.received_at || entry.created_at)}</td>
-                        <td><span className="bins-qty-pill">{Number(entry.quantity || 0)}</span></td>
-                        <td>{safeText(entry.vendor || entry.supplier)}</td>
-                        <td>{formatMoney(entry.unit_cost)}</td>
-                        <td>
-                          {entry.po_number ? <strong>{entry.po_number}</strong> : safeText(entry.source || entry.movement_type)}
-                          {entry.movement_id ? <div className="bins-subtext">Movement: {entry.movement_id}</div> : null}
-                        </td>
-                        <td>{safeText(entry.notes)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        ) : null}
       </div>
     );
   }

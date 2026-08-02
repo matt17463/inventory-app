@@ -360,3 +360,27 @@ test('single-item editors stay with selected rows and bulk editors follow their 
     'Due-date bulk editor must follow the pull-sheet table.'
   );
 });
+
+
+test('pull-sheet line dialogs render inside the selected line instead of at page bottom', () => {
+  const pullSheet = fs.readFileSync(
+    path.join(root, 'src/PullSheetView.jsx'),
+    'utf8'
+  );
+  const bins = fs.readFileSync(
+    path.join(root, 'src/BinsDashboard.jsx'),
+    'utf8'
+  );
+
+  assert.match(pullSheet, /nonInventoryDialog\?\.key === key/);
+  assert.match(pullSheet, /overrideRow && rowKey\(overrideRow\) === key/);
+  assert.match(pullSheet, /className="sc-pullsheet-inline-editor"/);
+  assert.match(pullSheet, /These settings apply only to the pull-sheet line immediately above/);
+  assert.match(pullSheet, /Search for the correct blank for the pull-sheet line immediately above/);
+  assert.doesNotMatch(pullSheet, /sc-modal-backdrop/);
+  assert.doesNotMatch(pullSheet, /sc-modal-card/);
+
+  assert.match(bins, /historyMatchesRow/);
+  assert.match(bins, /bin-history-inline-row/);
+  assert.doesNotMatch(bins, /role="dialog"/);
+});

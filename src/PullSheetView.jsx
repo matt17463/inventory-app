@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { PageHeader, HelpPanel, SectionCard, StatusBadge, ActionButton, EmptyState } from './components/UIPrimitives';
+import {
+  PageHeader,
+  HelpPanel,
+  SectionCard,
+  StatusBadge,
+  ActionButton,
+  EmptyState,
+  InlineEditorPanel,
+} from './components/UIPrimitives';
 import {
   applyNonInventoryRulesToJob,
   markJobItemNonInventory,
@@ -445,6 +453,13 @@ export default function PullSheetView() {
     await load();
   }
 
+  function openOverrideEditor(row) {
+    setNonInventoryDialog(null);
+    setOverrideRow(row);
+    setBlankSearch('');
+    setBlankResults([]);
+  }
+
   async function markPulledOnly(row, idx) {
     const key = rowKey(row, idx);
     const jobItemId = pickJobItemId(row);
@@ -659,6 +674,9 @@ export default function PullSheetView() {
 
     const orderedSku = value(row.ordered_sku, row.order_sku, row.sku, '');
 
+    setOverrideRow(null);
+    setBlankSearch('');
+    setBlankResults([]);
     setNonInventoryDialog({
       row,
       idx,
@@ -960,7 +978,7 @@ export default function PullSheetView() {
                       ))}
                     </select>
                   </label>
-                  <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="warning" onClick={() => openOverrideEditor(row)}>Override Blank Pairing</ActionButton>
                   <ActionButton tone="secondary" onClick={() => openNonInventoryDialog(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled={isCompleting || isClosedLine(row) || outOfStock} onClick={() => completeAndDeduct(row, idx)}>
@@ -969,12 +987,135 @@ export default function PullSheetView() {
                 </div>
               ) : (
                 <div className="sc-button-row">
-                  <ActionButton tone="warning" onClick={() => setOverrideRow(row)}>Override Blank Pairing</ActionButton>
+                  <ActionButton tone="warning" onClick={() => openOverrideEditor(row)}>Override Blank Pairing</ActionButton>
                   <ActionButton tone="secondary" onClick={() => openNonInventoryDialog(row, idx)}>Mark Non-Inventory</ActionButton>
                   <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>Mark Pulled Only</ActionButton>
                   <ActionButton tone="primary" disabled>Complete + Deduct Blank</ActionButton>
                 </div>
               )}
+
+              {nonInventoryDialog?.key === key ? (
+                <InlineEditorPanel
+                  title="Non-Inventory Line Settings"
+                  description="These settings apply only to the pull-sheet line immediately above."
+                  className="sc-pullsheet-inline-editor"
+                >
+                  <form onSubmit={saveNonInventoryDialog}>
+                    <p>
+                      This line will stay on the pull sheet but will not reserve or
+                      deduct blank inventory. Choose separately whether it should
+                      create purchasing demand.
+                    </p>
+
+                    <label className="sc-field">
+                      <span>Reason shown on pull sheet</span>
+                      <textarea
+                        rows={3}
+                        autoFocus
+                        value={nonInventoryDialog.reason}
+                        onChange={(event) => setNonInventoryDialog((current) => ({
+                          ...current,
+                          reason: event.target.value,
+                        }))}
+                      />
+                    </label>
+
+                    <label className="sc-purchasing-report-toggle">
+                      <input
+                        type="checkbox"
+                        checked={nonInventoryDialog.includeOnPurchasingReport}
+                        onChange={(event) => setNonInventoryDialog((current) => ({
+                          ...current,
+                          includeOnPurchasingReport: event.target.checked,
+                        }))}
+                      />
+                      <span>
+                        <strong>Include this item on the Purchasing Report</strong>
+                        <small>
+                          Checked: the linked blank remains a purchasing need.
+                          Unchecked: this line is removed from purchasing demand.
+                        </small>
+                      </span>
+                    </label>
+
+                    <label className="sc-purchasing-report-toggle">
+                      <input
+                        type="checkbox"
+                        checked={nonInventoryDialog.createFutureRule}
+                        onChange={(event) => setNonInventoryDialog((current) => ({
+                          ...current,
+                          createFutureRule: event.target.checked,
+                        }))}
+                      />
+                      <span>
+                        <strong>Create a rule for future orders with this SKU</strong>
+                        <small>
+                          The future rule remembers both the non-inventory setting
+                          and the purchasing-report choice.
+                        </small>
+                      </span>
+                    </label>
+
+                    <div className="sc-button-row sc-inline-editor__actions">
+                      <ActionButton type="submit" tone="primary" disabled={nonInventorySaving}>
+                        {nonInventorySaving ? 'Saving…' : 'Save Non-Inventory Settings'}
+                      </ActionButton>
+                      <ActionButton
+                        type="button"
+                        tone="secondary"
+                        disabled={nonInventorySaving}
+                        onClick={() => setNonInventoryDialog(null)}
+                      >
+                        Cancel
+                      </ActionButton>
+                    </div>
+                  </form>
+                </InlineEditorPanel>
+              ) : null}
+
+              {overrideRow && rowKey(overrideRow) === key ? (
+                <InlineEditorPanel
+                  title="Override Blank Pairing"
+                  description="Search for the correct blank for the pull-sheet line immediately above."
+                  className="sc-pullsheet-inline-editor"
+                >
+                  <div className="sc-inline-search">
+                    <input
+                      autoFocus
+                      value={blankSearch}
+                      onChange={(event) => setBlankSearch(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          searchBlanks();
+                        }
+                      }}
+                      placeholder="Search SKU or blank product name"
+                    />
+                    <ActionButton tone="secondary" onClick={searchBlanks}>Search</ActionButton>
+                  </div>
+                  <div className="sc-blank-result-list">
+                    {blankResults.map((blankProduct) => (
+                      <button
+                        key={blankProduct.id}
+                        type="button"
+                        onClick={() => applyOverride(blankProduct.id)}
+                      >
+                        <strong>{blankProduct.sku_base || blankProduct.name}</strong>
+                        <span>{blankProduct.name}</span>
+                      </button>
+                    ))}
+                    {!blankResults.length ? (
+                      <p className="sc-muted">Enter a SKU or product name, then select Search.</p>
+                    ) : null}
+                  </div>
+                  <div className="sc-button-row sc-inline-editor__actions">
+                    <ActionButton tone="secondary" onClick={() => setOverrideRow(null)}>
+                      Cancel
+                    </ActionButton>
+                  </div>
+                </InlineEditorPanel>
+              ) : null}
 
               {lineMessage ? <div className="sc-warning-callout">{lineMessage}</div> : null}
             </article>
@@ -982,101 +1123,6 @@ export default function PullSheetView() {
         })}
       </div>
 
-      {nonInventoryDialog ? (
-        <div className="sc-modal-backdrop">
-          <form className="sc-modal-card sc-non-inventory-modal" onSubmit={saveNonInventoryDialog}>
-            <h2>Non-Inventory Line Settings</h2>
-            <p>
-              This line will stay on the pull sheet but will not reserve or deduct
-              blank inventory. Choose separately whether it should create
-              purchasing demand.
-            </p>
-
-            <label>
-              <span>Reason shown on pull sheet</span>
-              <textarea
-                rows={3}
-                value={nonInventoryDialog.reason}
-                onChange={(event) => setNonInventoryDialog((current) => ({
-                  ...current,
-                  reason: event.target.value,
-                }))}
-              />
-            </label>
-
-            <label className="sc-purchasing-report-toggle sc-purchasing-report-toggle--modal">
-              <input
-                type="checkbox"
-                checked={nonInventoryDialog.includeOnPurchasingReport}
-                onChange={(event) => setNonInventoryDialog((current) => ({
-                  ...current,
-                  includeOnPurchasingReport: event.target.checked,
-                }))}
-              />
-              <span>
-                <strong>Include this item on the Purchasing Report</strong>
-                <small>
-                  Checked: the linked blank remains a purchasing need. Unchecked:
-                  this pull-sheet line is removed from purchasing demand.
-                </small>
-              </span>
-            </label>
-
-            <label className="sc-purchasing-report-toggle sc-purchasing-report-toggle--modal">
-              <input
-                type="checkbox"
-                checked={nonInventoryDialog.createFutureRule}
-                onChange={(event) => setNonInventoryDialog((current) => ({
-                  ...current,
-                  createFutureRule: event.target.checked,
-                }))}
-              />
-              <span>
-                <strong>Create a rule for future orders with this SKU</strong>
-                <small>
-                  The future rule will remember both the non-inventory setting and
-                  the purchasing-report choice.
-                </small>
-              </span>
-            </label>
-
-            <div className="sc-button-row">
-              <ActionButton type="submit" tone="primary" disabled={nonInventorySaving}>
-                {nonInventorySaving ? 'Saving…' : 'Save Non-Inventory Settings'}
-              </ActionButton>
-              <ActionButton
-                type="button"
-                tone="secondary"
-                disabled={nonInventorySaving}
-                onClick={() => setNonInventoryDialog(null)}
-              >
-                Cancel
-              </ActionButton>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      {overrideRow ? (
-        <div className="sc-modal-backdrop">
-          <div className="sc-modal-card">
-            <h2>Override Blank Pairing</h2>
-            <p>Search for the correct blank product and select it for this pull sheet line.</p>
-            <div className="sc-inline-search">
-              <input value={blankSearch} onChange={(e) => setBlankSearch(e.target.value)} placeholder="Search SKU or blank product name" />
-              <ActionButton tone="secondary" onClick={searchBlanks}>Search</ActionButton>
-            </div>
-            <div className="sc-blank-result-list">
-              {blankResults.map((bp) => (
-                <button key={bp.id} type="button" onClick={() => applyOverride(bp.id)}>
-                  <strong>{bp.sku_base || bp.name}</strong><span>{bp.name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="sc-button-row"><ActionButton tone="secondary" onClick={() => setOverrideRow(null)}>Close</ActionButton></div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
