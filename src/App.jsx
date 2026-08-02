@@ -71,6 +71,7 @@ import AuthGate from './AuthGate';
 import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
 import DeploymentHealth from './DeploymentHealth';
+import GoogleCalendarIntegration from './GoogleCalendarIntegration';
 import NotFound from './NotFound';
 
 function EmployeeRoutes() {
@@ -150,6 +151,7 @@ function EmployeeRoutes() {
       <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
       <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
       <Route path="/deployment-health" element={<DeploymentHealth />} />
+      <Route path="/google-calendar" element={<GoogleCalendarIntegration />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

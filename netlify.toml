@@ -8,3 +8,6 @@
 
 [functions.parse_body]
   enabled = false
+
+[functions."google-calendar-scheduled-sync"]
+  schedule = "*/15 * * * *"

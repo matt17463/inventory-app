@@ -85,6 +85,12 @@ export const handler = async (event) => {
       envCheck('MANUAL_PULLSHEET_SECRET', ['SC_PULLSHEET_SECRET']),
       envCheck('SC_ARTWORK_WEBHOOK_SECRET'),
       envCheck('SC_ALLOWED_ORIGINS'),
+      envCheck('GOOGLE_CALENDAR_CLIENT_ID'),
+      envCheck('GOOGLE_CALENDAR_CLIENT_SECRET'),
+      envCheck('GOOGLE_CALENDAR_STATE_SECRET'),
+      envCheck('GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY'),
+      envCheck('GOOGLE_CALENDAR_REDIRECT_URI'),
+      envCheck('SC_APP_URL'),
     ];
 
     const { data: databaseChecks, error: databaseError } = await supabase.rpc('sc_deployment_health_v1');
@@ -92,6 +98,15 @@ export const handler = async (event) => {
       checks.push({ category: 'database', check_name: 'sc_deployment_health_v1', status: 'FAIL', detail: databaseError.message });
     } else {
       checks.push(...(databaseChecks || []));
+    }
+
+    const { data: calendarHealth, error: calendarHealthError } = await supabase.rpc('sc_google_calendar_phase1_health');
+    if (calendarHealthError) {
+      checks.push({ category: 'google_calendar', check_name: 'phase1_database', status: 'FAIL', detail: calendarHealthError.message });
+    } else {
+      checks.push({ category: 'google_calendar', check_name: 'phase1_database', status: calendarHealth?.installed ? 'PASS' : 'FAIL', detail: calendarHealth?.installed ? 'Phase 1 calendar schema is installed.' : 'Phase 1 calendar schema is missing.' });
+      checks.push({ category: 'google_calendar', check_name: 'owner_connection', status: calendarHealth?.connected ? 'PASS' : 'WARN', detail: calendarHealth?.connected ? `${calendarHealth.calendar_targets || 0} calendar targets are connected.` : 'Application is deployed but the owner Google account is not connected yet.' });
+      checks.push({ category: 'google_calendar', check_name: 'recent_sync_errors', status: Number(calendarHealth?.recent_failed_syncs || 0) > 0 ? 'WARN' : 'PASS', detail: `${calendarHealth?.recent_failed_syncs || 0} failed sync(s) in the last 24 hours.` });
     }
 
     const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();

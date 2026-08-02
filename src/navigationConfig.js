@@ -127,6 +127,7 @@ export const navSections = [
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
       { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
+      { label: 'Google Calendar', path: '/google-calendar', keywords: 'google calendar due dates purchase orders owner tasks reminders schedule sync' },
       { label: 'Visual Themes & Layout', path: '/theme-settings', keywords: 'theme appearance colors dark light display density layout accessibility' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },
     ],

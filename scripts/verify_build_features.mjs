@@ -34,6 +34,12 @@ const requiredMarkers = [
   'cancel|void|deleted',
   'Completion is already recorded. No additional inventory was deducted.',
   'Search every blank SKU, linked Woo SKU, product name, description',
+  '/google-calendar',
+  'Google Calendar Integration',
+  '/.netlify/functions/google-calendar-admin',
+  '/.netlify/functions/google-calendar-oauth',
+  'Rebuild Calendar Sync',
+  'Skilled Crafting remains the source of truth',
 ];
 
 function walkFiles(directory) {

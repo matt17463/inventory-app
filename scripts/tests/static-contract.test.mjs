@@ -384,3 +384,37 @@ test('pull-sheet line dialogs render inside the selected line instead of at page
   assert.match(bins, /bin-history-inline-row/);
   assert.doesNotMatch(bins, /role="dialog"/);
 });
+
+
+test('Google Calendar Phase 1 is one-way, secure, scheduled, and duplicate-safe', () => {
+  const appSource = fs.readFileSync(path.join(root, 'src/App.jsx'), 'utf8');
+  const page = fs.readFileSync(path.join(root, 'src/GoogleCalendarIntegration.jsx'), 'utf8');
+  const client = fs.readFileSync(path.join(root, 'src/lib/googleCalendarApi.js'), 'utf8');
+  const shared = fs.readFileSync(path.join(root, 'netlify/functions/_shared/googleCalendar.js'), 'utf8');
+  const oauth = fs.readFileSync(path.join(root, 'netlify/functions/google-calendar-oauth.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'netlify/functions/google-calendar-admin.js'), 'utf8');
+  const scheduled = fs.readFileSync(path.join(root, 'netlify/functions/google-calendar-scheduled-sync.js'), 'utf8');
+  const migration = fs.readFileSync(path.join(root, 'deployment/sql/17_GOOGLE_CALENDAR_PHASE1.sql'), 'utf8');
+  const netlify = fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8');
+
+  assert.match(appSource, /path="\/google-calendar"/);
+  assert.match(page, /Skilled Crafting remains the source of truth/);
+  assert.match(page, /Rebuild Calendar Sync/);
+  assert.match(client, /authenticatedFunctionFetch/);
+  assert.match(oauth, /verifyCalendarOAuthState/);
+  assert.match(admin, /authorizeEmployee/);
+  assert.match(shared, /aes-256-gcm/);
+  assert.match(shared, /calendar\.app\.created/);
+  assert.match(shared, /deterministicEventId/);
+  assert.match(shared, /extendedProperties/);
+  assert.match(shared, /onConflict: 'event_kind,source_id'/);
+  assert.match(shared, /phase1_purchase_orders_with_totals/);
+  assert.match(shared, /phase5_tasks_detail/);
+  assert.doesNotMatch(shared, /VITE_GOOGLE/);
+  assert.match(scheduled, /runCalendarSync/);
+  assert.match(netlify, /google-calendar-scheduled-sync/);
+  assert.match(netlify, /\*\/15 \* \* \* \*/);
+  assert.match(migration, /sc_google_calendar_event_links/);
+  assert.match(migration, /ux_sc_google_calendar_one_running_sync/);
+  assert.match(migration, /enable row level security/);
+});

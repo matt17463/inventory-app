@@ -50,6 +50,7 @@ const fallbackNav = [
     { label: 'Labels', path: '/labels' },
     { label: 'Mapping Repair', path: '/mapping-repair' },
     { label: 'Testing Mode', path: '/testing-mode' },
+    { label: 'Google Calendar', path: '/google-calendar' },
     { label: 'Theme Settings', path: '/theme-settings' },
   ]},
 ];
