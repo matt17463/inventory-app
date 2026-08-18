@@ -38,7 +38,7 @@ import {
   updateMockupOutput,
   updateMockupProject,
 } from './lib/mockupStudioApi';
-import { imageDimensions, renderMockupComposite } from './lib/mockupCanvas';
+import { imageDimensions, inspectArtworkFile, renderMockupComposite } from './lib/mockupCanvas';
 import './MockupStudio.css';
 import './MockupStudioWoo.css';
 
@@ -105,6 +105,12 @@ function variationImageKey(color, logo) {
   return JSON.stringify([normalizedOption(color), normalizedOption(logo)]);
 }
 
+function protectsWhiteInk(placement) {
+  return placement?.preserve_white_ink
+    ?? placement?.perspective_config?.preserve_white_ink
+    ?? true;
+}
+
 function artworkCandidateUrl(row) {
   return row.approved_artwork_url || row.artwork_url || row.file_url || row.image_url || row.mockup_url || row.preview_url || '';
 }
@@ -127,7 +133,7 @@ function PlacementPreview({ blankUrl, artworkUrl, placement }) {
           top: `${placement.y_pct ?? 45}%`,
           width: `${placement.width_pct ?? 40}%`,
           opacity: placement.opacity ?? 1,
-          mixBlendMode: placement.blend_mode || 'multiply',
+          mixBlendMode: protectsWhiteInk(placement) ? 'normal' : (placement.blend_mode || 'normal'),
           transform: `translate(-50%, -50%) rotate(${placement.rotation_degrees || 0}deg)`,
         }}
       />
@@ -330,15 +336,21 @@ function BlankAssetsTab({ projectId, rows, urls, refresh, setBusy, setMessage })
 
 function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setMessage }) {
   const [file, setFile] = useState(null);
-  const [form, setForm] = useState({ artwork_name: '', exact_artwork_locked: true });
+  const [form, setForm] = useState({ artwork_name: '', exact_artwork_locked: true, preserve_white_ink: true });
   const [selectedVault, setSelectedVault] = useState(null);
 
   async function upload(event) {
     event.preventDefault();
     setBusy(true);
     try {
-      const dimensions = file ? await imageDimensions(file) : {};
+      const inspection = file ? await inspectArtworkFile(file) : {};
       const sourceUrl = selectedVault ? artworkCandidateUrl(selectedVault) : '';
+      const lowResolution = inspection.width && Math.max(inspection.width, inspection.height) < 1000;
+      const possibleMissingWhite = form.preserve_white_ink && inspection.hasTransparency === true && inspection.hasOpaqueWhite === false;
+      const preflightNotes = [
+        lowResolution ? 'Artwork is under 1000 pixels. Verify print quality before production.' : '',
+        possibleMissingWhite ? 'This transparent file has no detectable opaque white pixels. If the design should contain white ink, verify the source file before generating.' : '',
+      ].filter(Boolean).join(' ');
       await addArtworkAsset({
         projectId,
         file,
@@ -348,14 +360,19 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
           source_url: sourceUrl || null,
           artwork_request_id_text: selectedVault?.id ? String(selectedVault.id) : null,
           artwork_vault_reference: selectedVault?._source_table || null,
-          pixel_width: dimensions.width,
-          pixel_height: dimensions.height,
-          has_transparency: file?.type === 'image/png' || file?.type === 'image/webp',
-          preflight_status: dimensions.width && Math.max(dimensions.width, dimensions.height) < 1000 ? 'warning' : 'passed',
-          preflight_notes: dimensions.width && Math.max(dimensions.width, dimensions.height) < 1000 ? 'Artwork is under 1000 pixels. Verify print quality before production.' : null,
+          pixel_width: inspection.width,
+          pixel_height: inspection.height,
+          has_transparency: inspection.hasTransparency,
+          preflight_status: lowResolution || possibleMissingWhite ? 'warning' : 'passed',
+          preflight_notes: preflightNotes || null,
+          metadata: {
+            preserve_white_ink: form.preserve_white_ink,
+            has_opaque_white: inspection.hasOpaqueWhite,
+            transparency_ratio: inspection.transparencyRatio,
+          },
         },
       });
-      setFile(null); setSelectedVault(null); setForm({ artwork_name: '', exact_artwork_locked: true });
+      setFile(null); setSelectedVault(null); setForm({ artwork_name: '', exact_artwork_locked: true, preserve_white_ink: true });
       setMessage('Artwork added and locked for exact reproduction.');
       await refresh();
     } catch (error) { setMessage(error.message || 'Could not add artwork.'); }
@@ -371,6 +388,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
             <FormField label="Artwork file" required={!artworkCandidateUrl(selectedVault || {})}><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} /></FormField>
             <FormField label="Artwork name"><input value={form.artwork_name} onChange={(e) => setForm({ ...form, artwork_name: e.target.value })} /></FormField>
             <FormField label="Accuracy"><label className="mockup-check"><input type="checkbox" checked={form.exact_artwork_locked} onChange={(e) => setForm({ ...form, exact_artwork_locked: e.target.checked })} /> Do not redraw or alter this logo</label></FormField>
+            <FormField label="White ink"><label className="mockup-check"><input type="checkbox" checked={form.preserve_white_ink} onChange={(e) => setForm({ ...form, preserve_white_ink: e.target.checked })} /> Protect visible white as opaque printed ink</label></FormField>
           </FieldGrid>
           <ActionButton type="submit" tone="primary">Add Artwork</ActionButton>
         </form>
@@ -379,7 +397,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
         {!rows.length ? <EmptyState title="No artwork" description="Add at least one logo or design file." /> : <div className="mockup-asset-grid">{rows.map((row) => (
           <article className="mockup-asset-card" key={row.id}>
             {urls[row.id] && !/pdf/i.test(row.mime_type || '') ? <img className="mockup-artwork-image" src={urls[row.id]} alt={row.artwork_name} /> : <div className="mockup-file-placeholder">{row.mime_type || 'Artwork file'}</div>}
-            <h3>{row.artwork_name}</h3><p>{row.exact_artwork_locked ? 'Exact artwork locked' : 'AI edits permitted'}</p><StatusBadge status={row.preflight_status} />
+            <h3>{row.artwork_name}</h3><p>{row.exact_artwork_locked ? 'Exact artwork locked' : 'AI edits permitted'} · {row.metadata?.preserve_white_ink !== false ? 'White ink protected' : 'White ink protection off'}</p><StatusBadge status={row.preflight_status} />
             {row.preflight_notes ? <small>{row.preflight_notes}</small> : null}
             <ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm('Remove this artwork and its placements?')) return; setBusy(true); try { await removeMockupAsset('mockup_artwork_assets', row); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Remove</ActionButton>
           </article>
@@ -390,7 +408,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
 }
 
 function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBusy, setMessage }) {
-  const empty = { project_id: projectId, blank_asset_id: blanks[0]?.id || '', artwork_asset_id: artwork[0]?.id || '', placement_name: 'center_chest', decoration_method: 'dtf', x_pct: 50, y_pct: 44, width_pct: 42, print_width_inches: 10, rotation_degrees: 0, opacity: 1, blend_mode: 'multiply', shadow_strength: 0.15, generation_instructions: '' };
+  const empty = { project_id: projectId, blank_asset_id: blanks[0]?.id || '', artwork_asset_id: artwork[0]?.id || '', placement_name: 'center_chest', decoration_method: 'dtf', x_pct: 50, y_pct: 44, width_pct: 42, print_width_inches: 10, rotation_degrees: 0, opacity: 1, blend_mode: 'source-over', preserve_white_ink: true, shadow_strength: 0.15, generation_instructions: '' };
   const [form, setForm] = useState(empty);
   useEffect(() => setForm((current) => ({ ...current, project_id: projectId, blank_asset_id: current.blank_asset_id || blanks[0]?.id || '', artwork_asset_id: current.artwork_asset_id || artwork[0]?.id || '' })), [projectId, blanks, artwork]);
   const blank = blanks.find((row) => row.id === form.blank_asset_id);
@@ -425,7 +443,8 @@ function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBus
               <FormField label={`Image width: ${form.width_pct}%`}><input type="range" min="2" max="100" value={form.width_pct} onChange={(e) => setForm({ ...form, width_pct: e.target.value })} /></FormField>
               <FormField label="Physical width (inches)"><input type="number" step="0.125" value={form.print_width_inches || ''} onChange={(e) => setForm({ ...form, print_width_inches: e.target.value })} /></FormField>
               <FormField label="Rotation"><input type="number" step="1" value={form.rotation_degrees || 0} onChange={(e) => setForm({ ...form, rotation_degrees: e.target.value })} /></FormField>
-              <FormField label="Blend mode"><select value={form.blend_mode} onChange={(e) => setForm({ ...form, blend_mode: e.target.value })}><option value="multiply">Multiply</option><option value="source-over">Normal</option><option value="screen">Screen</option><option value="overlay">Overlay</option></select></FormField>
+              <FormField label="White ink"><label className="mockup-check"><input type="checkbox" checked={protectsWhiteInk(form)} onChange={(e) => setForm({ ...form, preserve_white_ink: e.target.checked, blend_mode: e.target.checked ? 'source-over' : form.blend_mode })} /> Protect visible white as opaque ink</label></FormField>
+              <FormField label="Blend mode" help={protectsWhiteInk(form) ? 'White-ink protection uses Normal compositing. Turn protection off only for intentional fabric blending.' : 'Multiply lightens/removes white; Screen lightens dark colors.'}><select disabled={protectsWhiteInk(form)} value={protectsWhiteInk(form) ? 'source-over' : form.blend_mode} onChange={(e) => setForm({ ...form, blend_mode: e.target.value })}><option value="source-over">Normal — opaque print</option><option value="multiply">Multiply — fabric blend</option><option value="screen">Screen — light blend</option><option value="overlay">Overlay</option></select></FormField>
               <FormField label="AI instructions"><textarea value={form.generation_instructions || ''} placeholder="Preserve the exact logo and make the DTF print follow the hoodie folds." onChange={(e) => setForm({ ...form, generation_instructions: e.target.value })} /></FormField>
             </FieldGrid>
             <div className="sc-button-row"><ActionButton type="submit" tone="primary">{form.id ? 'Update Placement' : 'Save Placement'}</ActionButton>{form.id ? <ActionButton onClick={() => setForm(empty)}>Cancel Edit</ActionButton> : null}</div>

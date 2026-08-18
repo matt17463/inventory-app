@@ -100,6 +100,21 @@ test('exact compositor preserves an AI-free rendering path with captions', async
   assert.match(canvas, /caption/);
   assert.match(canvas, /font/);
   assert.match(canvas, /fillText/);
+  assert.match(canvas, /preserveWhiteInk \? 'source-over'/);
+  assert.match(canvas, /inspectArtworkFile/);
+});
+
+test('white artwork is protected as opaque print in exact and AI mockups', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const api = await read('src/lib/mockupStudioApi.js');
+  const ai = await read('netlify/functions/mockup-generate-background.js');
+  assert.match(studio, /Protect visible white as opaque printed ink/);
+  assert.match(studio, /Normal — opaque print/);
+  assert.match(studio, /function protectsWhiteInk/);
+  assert.match(api, /preserve_white_ink/);
+  assert.match(ai, /CRITICAL WHITE INK RULE/);
+  assert.match(ai, /Do not treat white artwork/);
+  assert.match(ai, /alpha-transparent/);
 });
 
 test('copy to all verifies every blank placement individually', async () => {

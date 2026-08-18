@@ -2,9 +2,15 @@ import { authorizeEmployee, createServiceClient, jsonResponse } from './_shared/
 import { loadMockupAsset, parseJsonBody, requiredEnv, safePathSegment } from './_shared/mockupUtils.js';
 
 function promptFor({ project, blank, artwork, placement, extra }) {
+  const preserveWhiteInk = placement.perspective_config?.preserve_white_ink
+    ?? artwork.metadata?.preserve_white_ink
+    ?? true;
   return [
     'Create a professional ecommerce product mockup using the first input image as the exact blank product photograph and the second input image as the exact supplied artwork.',
     'Do not redraw, reinterpret, respell, simplify, recolor, crop, or add anything to the artwork. Preserve every letter, line, color, proportion, and transparent area.',
+    preserveWhiteInk
+      ? 'CRITICAL WHITE INK RULE: Every visible white or near-white letter, word, outline, and design element in the supplied artwork is intentional opaque printed white ink. Keep it solid white and clearly visible on the product. Do not treat white artwork—including white text—as transparency. Only pixels that are actually alpha-transparent in the source artwork may reveal the garment.'
+      : `Use the requested ${placement.blend_mode || 'normal'} visual blend while preserving the supplied artwork structure.`,
     `The product is ${blank.product_color || ''} ${blank.product_type || 'product'}, ${blank.product_view || 'front'} view.`,
     `Apply the artwork as ${placement.decoration_method || 'DTF'} at ${String(placement.placement_name || 'center chest').replace(/_/g, ' ')}.`,
     `The supplied artwork asset is named ${artwork.artwork_name || artwork.original_file_name || 'uploaded artwork'}.`,
