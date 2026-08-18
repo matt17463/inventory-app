@@ -127,3 +127,12 @@ test('unwanted Color and Logo combinations are excluded from WooCommerce variati
   assert.match(fn, /staleProjectVariations/);
   assert.match(fn, /status: 'private'/);
 });
+
+test('WooCommerce reads retry transient connection failures without duplicating ambiguous writes', async () => {
+  const utils = await read('netlify/functions/_shared/mockupUtils.js');
+  assert.match(utils, /UND_ERR_CONNECT_TIMEOUT/);
+  assert.match(utils, /const maximumAttempts = 3/);
+  assert.match(utils, /safeConnectionRetry \|\| safeReadRetry/);
+  assert.match(utils, /requestMethod === 'GET'/);
+  assert.match(utils, /WooCommerce connection failed after \$\{attempt\} attempt/);
+});
