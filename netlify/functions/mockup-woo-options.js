@@ -1,5 +1,5 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
-import { wooRequest } from './_shared/mockupUtils.js';
+import { wooCollection, wooRequest } from './_shared/mockupUtils.js';
 
 function normalized(value) {
   return String(value || '').trim().toLowerCase();
@@ -13,7 +13,10 @@ async function termsFor(attribute) {
   if (!attribute?.id) return [];
   const terms = [];
   for (let page = 1; page <= 20; page += 1) {
-    const next = await wooRequest(`products/attributes/${attribute.id}/terms?per_page=100&page=${page}`);
+    const next = wooCollection(
+      await wooRequest(`products/attributes/${attribute.id}/terms?per_page=100&page=${page}`),
+      `attribute ${attribute.id} terms`,
+    );
     terms.push(...next.map((row) => ({ id: row.id, name: row.name, slug: row.slug })));
     if (next.length < 100) break;
   }
@@ -23,7 +26,10 @@ async function termsFor(attribute) {
 async function allWooRows(path) {
   const rows = [];
   for (let page = 1; page <= 20; page += 1) {
-    const next = await wooRequest(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
+    const next = wooCollection(
+      await wooRequest(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`),
+      path,
+    );
     rows.push(...next);
     if (next.length < 100) break;
   }
@@ -37,11 +43,12 @@ export async function handler(event) {
   if (!auth.ok) return jsonResponse(auth.statusCode, { success: false, error: auth.message }, event);
 
   try {
-    const [discovered, categories, shippingClasses] = await Promise.all([
+    const [attributePayload, categories, shippingClasses] = await Promise.all([
       wooRequest('products/attributes?per_page=100'),
       allWooRows('products/categories?orderby=name&order=asc'),
       allWooRows('products/shipping_classes?orderby=name&order=asc'),
     ]);
+    const discovered = wooCollection(attributePayload, 'product attributes');
     const definitions = {
       brand: findAttribute(discovered, ['pa_brand'], ['brand']),
       style: findAttribute(discovered, ['pa_style'], ['style', 'product style']),

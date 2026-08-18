@@ -77,8 +77,24 @@ function idText(value) {
 }
 
 function optionList(value) {
-  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
-  return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+  let parsed = value;
+  const trimmed = typeof value === 'string' ? value.trimStart() : '';
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try { parsed = JSON.parse(value); } catch { parsed = value; }
+  }
+  if (Array.isArray(parsed)) return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+  if (parsed && typeof parsed === 'object') {
+    return Object.entries(parsed).filter(([, enabled]) => Boolean(enabled)).map(([key]) => String(key).trim()).filter(Boolean);
+  }
+  return String(parsed || '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function objectValue(value) {
+  let parsed = value;
+  if (typeof value === 'string' && /^[\s]*\{/.test(value)) {
+    try { parsed = JSON.parse(value); } catch { return {}; }
+  }
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
 }
 
 function normalizedOption(value) {
@@ -538,8 +554,8 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     colors: saved.colors || inferredColors,
     sizes: saved.sizes || '',
     logo_options: optionList(saved.logo_options),
-    variation_image_map: saved.variation_image_map || {},
-    excluded_variation_pairs: Array.isArray(saved.excluded_variation_pairs) ? saved.excluded_variation_pairs : [],
+    variation_image_map: objectValue(saved.variation_image_map),
+    excluded_variation_pairs: optionList(saved.excluded_variation_pairs),
     main_product_image_output_id: saved.main_product_image_output_id || selectedOutputs[0]?.id || '',
     shipping_class: saved.shipping_class || '',
     weight: saved.weight || '',
@@ -576,7 +592,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
   useEffect(() => {
     setForm((current) => {
-      const nextMap = { ...(current.variation_image_map || {}) };
+      const nextMap = { ...objectValue(current.variation_image_map) };
       let changed = false;
       selectedOutputs.forEach((output) => {
         const context = outputContextById[output.id] || { color: '', logo: '' };
@@ -599,7 +615,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   const allImagePairs = form.type === 'variable' && form.create_variations
     ? (colors.length ? colors : ['']).flatMap((color) => (logos.length ? logos : ['']).map((logo) => ({ color, logo, key: variationImageKey(color, logo) })))
     : [];
-  const excludedPairKeys = new Set(form.excluded_variation_pairs || []);
+  const excludedPairKeys = new Set(optionList(form.excluded_variation_pairs));
   const imagePairs = allImagePairs.filter((pair) => !excludedPairKeys.has(pair.key));
   const variationCount = form.type === 'variable' && form.create_variations
     ? imagePairs.length * Math.max(sizes.length, 1)
@@ -624,7 +640,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   }
 
   function toggleVariationPair(key, included) {
-    const next = new Set(form.excluded_variation_pairs || []);
+    const next = new Set(optionList(form.excluded_variation_pairs));
     if (included) next.delete(key);
     else next.add(key);
     setForm({ ...form, excluded_variation_pairs: [...next] });
@@ -684,7 +700,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
           {form.type === 'variable' ? <SectionCard title="Logo choices" description="Select the artwork choices customers may order. The order webhook will preserve the Logo Selection value for the pull sheet and production workflow."><div className="mockup-woo-logo-options">{bundle.artwork.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={logos.some((name) => normalizedOption(name) === normalizedOption(row.artwork_name))} onChange={(e) => toggleLogo(row.artwork_name, e.target.checked)} /> {row.artwork_name}</label>)}</div></SectionCard> : null}
 
-          {allImagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose which Color and Logo combinations customers may order, then assign the correct image. Excluded combinations are not created in WooCommerce. All sizes in an included combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Include in product</th><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{allImagePairs.map((pair) => { const included = !excludedPairKeys.has(pair.key); return <tr key={pair.key}><td><label className="mockup-check"><input type="checkbox" checked={included} onChange={(e) => toggleVariationPair(pair.key, e.target.checked)} /> {included ? 'Included' : 'Excluded'}</label></td><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select disabled={!included} value={form.variation_image_map?.[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...(form.variation_image_map || {}), [pair.key]: e.target.value } })}><option value="">{included ? 'Select mockup' : 'Not offered'}</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>; })}</tbody></ResponsiveTable></SectionCard> : null}
+          {allImagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose which Color and Logo combinations customers may order, then assign the correct image. Excluded combinations are not created in WooCommerce. All sizes in an included combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Include in product</th><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{allImagePairs.map((pair) => { const included = !excludedPairKeys.has(pair.key); return <tr key={pair.key}><td><label className="mockup-check"><input type="checkbox" checked={included} onChange={(e) => toggleVariationPair(pair.key, e.target.checked)} /> {included ? 'Included' : 'Excluded'}</label></td><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select disabled={!included} value={objectValue(form.variation_image_map)[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...objectValue(form.variation_image_map), [pair.key]: e.target.value } })}><option value="">{included ? 'Select mockup' : 'Not offered'}</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>; })}</tbody></ResponsiveTable></SectionCard> : null}
 
           <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p><strong>{allImagePairs.length - imagePairs.length}</strong> excluded Color/Logo combination(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
           {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
