@@ -1,0 +1,54 @@
+{
+  "application": "Skilled Crafting Inventory App",
+  "release": "0.7.0",
+  "feature": "Mockup Studio — All Phases",
+  "base_release": "0.6.30",
+  "release_date": "2026-08-18",
+  "deployment_order": [
+    "Back up the current database and deployed application",
+    "Run deployment/sql/18_MOCKUP_STUDIO_ALL_PHASES.sql in Supabase",
+    "Configure Netlify server environment variables",
+    "Run npm ci and npm run check",
+    "Deploy a Netlify preview and complete the smoke test",
+    "Publish the production branch"
+  ],
+  "entry_points": {
+    "employee_workspace": "/mockup-studio",
+    "production_packet": "/mockup-studio/:projectId/production-packet",
+    "public_review": "/mockup-review?token=TOKEN"
+  },
+  "database": {
+    "migration": "deployment/sql/18_MOCKUP_STUDIO_ALL_PHASES.sql",
+    "supabase_migration_copy": "supabase/migrations/202608180100_mockup_studio_all_phases.sql",
+    "tables": 11,
+    "private_storage_buckets": [
+      "sc-mockup-source",
+      "sc-mockup-output",
+      "sc-mockup-production"
+    ]
+  },
+  "server_functions": [
+    "netlify/functions/mockup-generate-background.js",
+    "netlify/functions/mockup-customer-review.js",
+    "netlify/functions/mockup-publish-woocommerce.js",
+    "netlify/functions/mockup-delete-project.js"
+  ],
+  "new_environment_variables": [
+    "OPENAI_API_KEY",
+    "OPENAI_IMAGE_MODEL",
+    "SC_MOCKUP_ALLOWED_ASSET_HOSTS"
+  ],
+  "primary_documents": [
+    "README_FIRST_0.7.0.md",
+    "MOCKUP_STUDIO_SYSTEM_DESIGN.md",
+    "MOCKUP_STUDIO_DEPLOYMENT_GUIDE.md",
+    "RELEASE_NOTES_0.7.0.md"
+  ],
+  "validation_command": "npm run check",
+  "security_notes": [
+    "Never expose the service-role, OpenAI, or WooCommerce secrets through VITE_ variables",
+    "Customer review tokens are stored as SHA-256 hashes",
+    "Mockup asset buckets are private",
+    "AI outputs require human review before publication or production"
+  ]
+}

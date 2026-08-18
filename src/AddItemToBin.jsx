@@ -1,634 +1,420 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 
-function clean(value) {
-  return String(value || '').trim();
+const lineTemplate = {
+  brand_id: '',
+  product_type_id: '',
+  color_id: '',
+  size_id: '',
+  quantity: '',
+  unit_cost: '',
+  bin_id: '',
+  notes: '',
+};
+
+function normalizeId(value) {
+  if (value == null) return '';
+  const text = String(value).trim();
+  if (!text || ['undefined', 'null', 'blank_product_id', 'bin_id'].includes(text.toLowerCase())) return '';
+  return text;
 }
 
-function normalizeCode(value) {
-  return clean(value)
+function dbId(value) {
+  const text = normalizeId(value);
+  if (!text) return null;
+  return /^\d+$/.test(text) ? Number(text) : text;
+}
+
+function skuPiece(value) {
+  return String(value || '')
+    .trim()
     .toUpperCase()
     .replace(/&/g, 'AND')
     .replace(/[^A-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
 
-function lookupLabel(item) {
-  if (!item) return '';
-  return item.name || item.code || '';
+function normalizeBin(row) {
+  if (!row) return null;
+  const id = normalizeId(row.id);
+  const code = row.bin_code || row.code || row.name || row.label || id;
+  const label = row.label || row.name || row.title || code;
+  const location = row.location || row.area || row.zone || '';
+  const display_name = row.display_name || [code, label !== code ? label : '', location].filter(Boolean).join(' · ');
+  return { ...row, id, bin_code: code, label, location, display_name };
 }
 
-function lookupCode(item) {
-  if (!item) return '';
-  return item.code || item.name || '';
-}
-
-function makeRow(overrides = {}) {
+function normalizeLookup(row) {
+  if (!row) return null;
+  const id = normalizeId(row.id);
   return {
-    rowKey: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    brandId: '',
-    productTypeId: '',
-    colorId: '',
-    sizeId: '',
-    binId: '',
-    quantity: 1,
-    unitCost: '',
-    notes: '',
-    artworkNote: '',
-    blankProductId: '',
-    matchStatus: 'not_checked',
-    matchMessage: '',
-    ...overrides,
+    ...row,
+    id,
+    name: row.name || row.label || row.title || row.code || id,
+    code: row.code || row.slug || '',
   };
 }
 
+async function loadBins() {
+  const rpc = await supabase.rpc('sc_receiving_bins_v4');
+  if (!rpc.error && Array.isArray(rpc.data)) {
+    return rpc.data.map(normalizeBin).filter((b) => b?.id);
+  }
+
+  const direct = await supabase.from('bins').select('*');
+  if (direct.error) throw new Error(`Could not load bins: ${direct.error.message}. Run receiving_malformed_array_v4_fix.sql and confirm sc_receiving_bins_v4() works.`);
+  return (direct.data || []).map(normalizeBin).filter((b) => b?.id).sort((a, b) => a.display_name.localeCompare(b.display_name));
+}
+
+async function loadLookupTable(tableName) {
+  const res = await supabase.from(tableName).select('*');
+  if (res.error) throw new Error(`Could not load ${tableName}: ${res.error.message}`);
+  return (res.data || []).map(normalizeLookup).filter((x) => x?.id).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
 export default function AddItemToBin() {
-  const [bins, setBins] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [colors, setColors] = useState([]);
-  const [sizes, setSizes] = useState([]);
-  const [productTypes, setProductTypes] = useState([]);
-  const [blankProducts, setBlankProducts] = useState([]);
-
-  const [defaultBinId, setDefaultBinId] = useState('');
-  const [defaultBrandId, setDefaultBrandId] = useState('');
-  const [defaultProductTypeId, setDefaultProductTypeId] = useState('');
-  const [defaultColorId, setDefaultColorId] = useState('');
-  const [defaultNotes, setDefaultNotes] = useState('');
-  const [quickSizeText, setQuickSizeText] = useState('L 2\nM 2\nS 2\nXL 2\nXS 2');
-
-  const [rows, setRows] = useState([makeRow()]);
-  const [createMissing, setCreateMissing] = useState(true);
-  const [updateUnitCost, setUpdateUnitCost] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [lookups, setLookups] = useState({ brands: [], product_types: [], colors: [], sizes: [], bins: [] });
+  const [defaults, setDefaults] = useState({
+    brand_id: '',
+    product_type_id: '',
+    color_id: '',
+    bin_id: '',
+    supplier: '',
+    po_number: '',
+    notes: '',
+    auto_create_missing_blanks: true,
+  });
+  const [lines, setLines] = useState([{ ...lineTemplate }]);
+  const [paste, setPaste] = useState('');
   const [message, setMessage] = useState('');
-  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  function binLabel(bin) {
-    return [bin.bin_code, bin.label, bin.location].filter(Boolean).join(' - ');
+  async function loadAllLookups() {
+    setLoading(true);
+    setMessage('');
+    try {
+      const [brands, productTypes, colors, sizes, bins] = await Promise.all([
+        loadLookupTable('brands'),
+        loadLookupTable('product_types'),
+        loadLookupTable('colors'),
+        loadLookupTable('sizes'),
+        loadBins(),
+      ]);
+      setLookups({ brands, product_types: productTypes, colors, sizes, bins });
+      if (!bins.length) setMessage('No bins were found. Add bins on the Bins page or check Supabase RLS/read access for the bins table.');
+    } catch (err) {
+      setMessage(err.message || 'Could not load receiving options.');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function productLabel(product) {
-    const brand = product.brands?.code || product.brands?.name || '';
-    const type = product.product_types?.code || product.product_types?.name || '';
-    const color = product.colors?.code || product.colors?.name || '';
-    const size = product.sizes?.code || product.sizes?.name || '';
-    return [product.sku_base, product.name, brand, type, color, size].filter(Boolean).join(' - ');
+  useEffect(() => { loadAllLookups(); }, []);
+
+  const mergedLines = useMemo(() => lines.map((l) => ({
+    ...l,
+    brand_id: l.brand_id || defaults.brand_id,
+    product_type_id: l.product_type_id || defaults.product_type_id,
+    color_id: l.color_id || defaults.color_id,
+    bin_id: l.bin_id || defaults.bin_id,
+  })), [lines, defaults]);
+
+  const lookupRow = (list, id) => list.find((x) => String(x.id) === String(id));
+  const lookupName = (list, id) => lookupRow(list, id)?.name || '';
+  const lookupCodeOrName = (list, id) => {
+    const row = lookupRow(list, id);
+    return row?.code || row?.name || '';
+  };
+
+  const missing = (line) => ['bin_id', 'brand_id', 'product_type_id', 'color_id', 'size_id', 'quantity'].filter((k) => !line[k] || (k === 'quantity' && Number(line[k]) <= 0));
+
+  function updateLine(index, patch) {
+    setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   }
 
-  function getLookup(list, id) {
-    return list.find((item) => String(item.id) === String(id)) || null;
-  }
-
-  function buildSkuBase(row) {
-    const brand = getLookup(brands, row.brandId);
-    const type = getLookup(productTypes, row.productTypeId);
-    const color = getLookup(colors, row.colorId);
-    const size = getLookup(sizes, row.sizeId);
-    const parts = [lookupCode(brand), lookupCode(type), lookupCode(color), lookupCode(size)]
+  function parseSizeRun() {
+    const parsed = paste
+      .split(/\n|,/)
+      .map((row) => row.trim())
       .filter(Boolean)
-      .map(normalizeCode);
+      .map((row) => {
+        const parts = row.split(/\s+/);
+        const qty = parts.pop();
+        const sizeText = parts.join(' ');
+        const size = lookups.sizes.find((s) => [s.name, s.code].filter(Boolean).map((x) => String(x).toUpperCase()).includes(sizeText.toUpperCase()));
+        return { ...lineTemplate, size_id: size?.id || '', quantity: Number(qty) || '', notes: size ? '' : `Review size: ${sizeText}` };
+      });
+    if (parsed.length) setLines(parsed);
+  }
+
+  function blankDescription(line) {
+    return `${lookupName(lookups.brands, line.brand_id)} / ${lookupName(lookups.product_types, line.product_type_id)} / ${lookupName(lookups.colors, line.color_id)} / ${lookupName(lookups.sizes, line.size_id)}`;
+  }
+
+  function buildBlankSku(line) {
+    const parts = [
+      lookupCodeOrName(lookups.brands, line.brand_id),
+      lookupCodeOrName(lookups.product_types, line.product_type_id),
+      lookupCodeOrName(lookups.colors, line.color_id),
+      lookupCodeOrName(lookups.sizes, line.size_id),
+    ].map(skuPiece).filter(Boolean);
+
     return parts.join('-');
   }
 
-  function buildBlankName(row) {
-    const brand = getLookup(brands, row.brandId);
-    const type = getLookup(productTypes, row.productTypeId);
-    const color = getLookup(colors, row.colorId);
-    const size = getLookup(sizes, row.sizeId);
-    return [lookupLabel(brand), lookupLabel(type), lookupLabel(color), lookupLabel(size)].filter(Boolean).join(' ');
+  function buildBlankName(line) {
+    return [
+      lookupName(lookups.brands, line.brand_id),
+      lookupName(lookups.product_types, line.product_type_id),
+      lookupName(lookups.colors, line.color_id),
+      lookupName(lookups.sizes, line.size_id),
+    ].filter(Boolean).join(' ');
   }
 
-  function findMatchingBlankProduct(row) {
-    return blankProducts.find((product) => (
-      String(product.brand_id || '') === String(row.brandId || '') &&
-      String(product.product_type_id || '') === String(row.productTypeId || '') &&
-      String(product.color_id || '') === String(row.colorId || '') &&
-      String(product.size_id || '') === String(row.sizeId || '')
-    ));
+  async function findBlank(line) {
+    const { data, error } = await supabase
+      .from('blank_products')
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('brand_id', dbId(line.brand_id))
+      .eq('product_type_id', dbId(line.product_type_id))
+      .eq('color_id', dbId(line.color_id))
+      .eq('size_id', dbId(line.size_id))
+      .limit(1);
+
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : null;
   }
 
-  async function loadPage() {
-    setLoading(true);
-    setMessage('');
-    try {
-      const [binRes, brandRes, colorRes, sizeRes, typeRes, blankRes] = await Promise.all([
-        supabase.from('bins').select('id, bin_code, label, location').order('bin_code', { ascending: true }),
-        supabase.from('brands').select('id, name, code').order('name', { ascending: true }),
-        supabase.from('colors').select('id, name, code').order('name', { ascending: true }),
-        supabase.from('sizes').select('id, name, code').order('name', { ascending: true }),
-        supabase.from('product_types').select('id, name, code').order('name', { ascending: true }),
-        supabase
-          .from('blank_products')
-          .select(`
-            id,
-            sku_base,
-            name,
-            unit_cost,
-            image_url,
-            brand_id,
-            product_type_id,
-            color_id,
-            size_id,
-            brands:brand_id(name, code),
-            colors:color_id(name, code),
-            sizes:size_id(name, code),
-            product_types:product_type_id(name, code)
-          `),
-      ]);
-
-      for (const response of [binRes, brandRes, colorRes, sizeRes, typeRes, blankRes]) {
-        if (response.error) throw response.error;
-      }
-
-      setBins(binRes.data || []);
-      setBrands(brandRes.data || []);
-      setColors(colorRes.data || []);
-      setSizes(sizeRes.data || []);
-      setProductTypes(typeRes.data || []);
-      setBlankProducts(blankRes.data || []);
-    } catch (err) {
-      setMessage(err.message || 'Failed to load receiving data.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadPage();
-  }, []);
-
-  const totals = useMemo(() => {
-    const unitCount = rows.reduce((sum, row) => sum + Math.max(0, Number(row.quantity || 0)), 0);
-    const costTotal = rows.reduce((sum, row) => {
-      const qty = Math.max(0, Number(row.quantity || 0));
-      const cost = Number(row.unitCost || 0);
-      return sum + (Number.isFinite(cost) ? qty * cost : 0);
-    }, 0);
-    return { unitCount, costTotal };
-  }, [rows]);
-
-  function updateRow(rowKey, patch) {
-    setRows((current) => current.map((row) => {
-      if (row.rowKey !== rowKey) return row;
-      return { ...row, ...patch, matchStatus: 'not_checked', matchMessage: '', blankProductId: patch.blankProductId ?? '' };
-    }));
-  }
-
-  function addRow(overrides = {}) {
-    setRows((current) => [...current, makeRow({
-      binId: defaultBinId,
-      brandId: defaultBrandId,
-      productTypeId: defaultProductTypeId,
-      colorId: defaultColorId,
-      notes: defaultNotes,
-      ...overrides,
-    })]);
-  }
-
-  function removeRow(rowKey) {
-    setRows((current) => current.length === 1 ? current : current.filter((row) => row.rowKey !== rowKey));
-  }
-
-  function applyDefaultsToExistingRows() {
-    setRows((current) => current.map((row) => ({
-      ...row,
-      binId: defaultBinId || row.binId,
-      brandId: defaultBrandId || row.brandId,
-      productTypeId: defaultProductTypeId || row.productTypeId,
-      colorId: defaultColorId || row.colorId,
-      notes: defaultNotes || row.notes,
-      matchStatus: 'not_checked',
-      matchMessage: '',
-      blankProductId: '',
-    })));
-  }
-
-  function addQuickSizeRun() {
-    const lines = quickSizeText
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    const newRows = lines.map((line) => {
-      const parts = line.split(/[\s,=xX*]+/).filter(Boolean);
-      const sizeToken = parts[0] || '';
-      const qtyToken = parts[1] || '1';
-      const matchedSize = sizes.find((size) => {
-        const candidates = [size.name, size.code].map((value) => normalizeCode(value));
-        return candidates.includes(normalizeCode(sizeToken));
-      });
-
-      return makeRow({
-        binId: defaultBinId,
-        brandId: defaultBrandId,
-        productTypeId: defaultProductTypeId,
-        colorId: defaultColorId,
-        sizeId: matchedSize?.id || '',
-        quantity: Number(qtyToken) > 0 ? Number(qtyToken) : 1,
-        notes: defaultNotes,
-      });
-    });
-
-    if (!newRows.length) {
-      setMessage('Enter at least one size/quantity line. Example: XL 2');
-      return;
-    }
-
-    setRows((current) => {
-      const hasOnlyEmptyStarter = current.length === 1 && !current[0].brandId && !current[0].productTypeId && !current[0].colorId && !current[0].sizeId;
-      return hasOnlyEmptyStarter ? newRows : [...current, ...newRows];
-    });
-    setMessage(`Added ${newRows.length} receiving row${newRows.length === 1 ? '' : 's'} from the size run.`);
-  }
-
-  function checkMatches() {
-    setRows((current) => current.map((row) => {
-      if (!row.brandId || !row.productTypeId || !row.colorId || !row.sizeId) {
-        return { ...row, matchStatus: 'incomplete', matchMessage: 'Choose brand, style, color, and size.' };
-      }
-      const match = findMatchingBlankProduct(row);
-      if (match) {
-        return { ...row, blankProductId: match.id, matchStatus: 'matched', matchMessage: productLabel(match) };
-      }
-      return {
-        ...row,
-        blankProductId: '',
-        matchStatus: createMissing ? 'will_create' : 'missing',
-        matchMessage: createMissing ? `Will create ${buildSkuBase(row)}` : 'No blank product exists for this combination.',
-      };
-    }));
-  }
-
-  async function createBlankProductForRow(row) {
-    const payload = {
-      sku_base: buildSkuBase(row),
-      name: buildBlankName(row),
-      brand_id: row.brandId || null,
-      product_type_id: row.productTypeId || null,
-      color_id: row.colorId || null,
-      size_id: row.sizeId || null,
-    };
+  async function findBlankBySku(skuBase) {
+    if (!skuBase) return null;
 
     const { data, error } = await supabase
       .from('blank_products')
-      .upsert(payload, { onConflict: 'sku_base' })
-      .select(`
-        id,
-        sku_base,
-        name,
-        unit_cost,
-        image_url,
-        brand_id,
-        product_type_id,
-        color_id,
-        size_id,
-        brands:brand_id(name, code),
-        colors:color_id(name, code),
-        sizes:size_id(name, code),
-        product_types:product_type_id(name, code)
-      `)
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('sku_base', skuBase)
+      .limit(1);
+
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : null;
+  }
+
+  async function updateBlankAttributes(blank, line, skuBase, name) {
+    const patch = {
+      sku_base: blank.sku_base || skuBase,
+      name: blank.name || name || skuBase,
+      brand_id: dbId(line.brand_id),
+      product_type_id: dbId(line.product_type_id),
+      color_id: dbId(line.color_id),
+      size_id: dbId(line.size_id),
+    };
+
+    Object.keys(patch).forEach((key) => {
+      if (patch[key] === null || patch[key] === '') delete patch[key];
+    });
+
+    const { data, error } = await supabase
+      .from('blank_products')
+      .update(patch)
+      .eq('id', blank.id)
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
       .single();
 
     if (error) throw error;
-    setBlankProducts((current) => {
-      const exists = current.some((item) => String(item.id) === String(data.id));
-      return exists ? current.map((item) => String(item.id) === String(data.id) ? data : item) : [...current, data];
-    });
     return data;
   }
 
-  async function receiveRows(event) {
-    event.preventDefault();
-    setLoading(true);
-    setMessage('');
-    setResults([]);
+  async function createMissingBlank(line) {
+    const skuBase = buildBlankSku(line);
+    const name = buildBlankName(line) || skuBase;
 
-    const output = [];
-    try {
-      for (const [index, row] of rows.entries()) {
-        const rowNumber = index + 1;
-        try {
-          if (!row.binId) throw new Error('Choose a bin.');
-          if (!row.brandId || !row.productTypeId || !row.colorId || !row.sizeId) throw new Error('Choose brand, style, color, and size.');
-          if (!Number(row.quantity) || Number(row.quantity) <= 0) throw new Error('Quantity must be greater than zero.');
-
-          let blankProduct = findMatchingBlankProduct(row);
-          let created = false;
-
-          if (!blankProduct) {
-            if (!createMissing) throw new Error('No matching blank product exists. Enable create missing blank products or add it first.');
-            blankProduct = await createBlankProductForRow(row);
-            created = true;
-          }
-
-          const combinedNotes = [
-            row.notes || defaultNotes,
-            row.artworkNote ? `Artwork note: ${row.artworkNote}` : '',
-            `Batch receiving row ${rowNumber}`,
-          ].filter(Boolean).join('\n');
-
-          const { error: receiveError } = await supabase.rpc('receive_blank_inventory', {
-            p_bin_id: Number(row.binId),
-            p_blank_product_id: blankProduct.id,
-            p_quantity: Number(row.quantity),
-            p_notes: combinedNotes || null,
-          });
-          if (receiveError) throw receiveError;
-
-          if (updateUnitCost && clean(row.unitCost)) {
-            const { error: costError } = await supabase
-              .from('blank_products')
-              .update({ unit_cost: Number(row.unitCost) })
-              .eq('id', blankProduct.id);
-            if (costError) {
-              output.push({ rowNumber, status: 'warning', input: buildBlankName(row), result: `Received, but unit cost was not updated: ${costError.message}` });
-            }
-          }
-
-          output.push({
-            rowNumber,
-            status: 'received',
-            input: buildBlankName(row),
-            result: `${created ? 'Created blank product and received' : 'Received'} ${row.quantity} unit(s) into bin.`,
-          });
-        } catch (err) {
-          output.push({ rowNumber, status: 'error', input: buildBlankName(row) || `Row ${rowNumber}`, result: err.message || 'Failed.' });
-        }
-      }
-
-      setResults(output);
-      const received = output.filter((item) => item.status === 'received' || item.status === 'warning').length;
-      const failed = output.filter((item) => item.status === 'error').length;
-      setMessage(`Batch complete. ${received} row${received === 1 ? '' : 's'} received. ${failed} row${failed === 1 ? '' : 's'} failed.`);
-      if (!failed) {
-        setRows([makeRow({ binId: defaultBinId, brandId: defaultBrandId, productTypeId: defaultProductTypeId, colorId: defaultColorId, notes: defaultNotes })]);
-      }
-      await loadPage();
-    } finally {
-      setLoading(false);
+    if (!skuBase || !name) {
+      throw new Error(`Could not build a blank product SKU/name for ${blankDescription(line)}.`);
     }
+
+    const existingBySku = await findBlankBySku(skuBase);
+    if (existingBySku?.id) {
+      return updateBlankAttributes(existingBySku, line, skuBase, name);
+    }
+
+    const payload = {
+      sku_base: skuBase,
+      name,
+      brand_id: dbId(line.brand_id),
+      product_type_id: dbId(line.product_type_id),
+      color_id: dbId(line.color_id),
+      size_id: dbId(line.size_id),
+    };
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === null || payload[key] === '') delete payload[key];
+    });
+
+    const { data, error } = await supabase
+      .from('blank_products')
+      .insert(payload)
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .single();
+
+    if (!error) return data;
+
+    // If another process created the SKU between our lookup and insert, retry by SKU.
+    const retry = await findBlankBySku(skuBase);
+    if (retry?.id) {
+      return updateBlankAttributes(retry, line, skuBase, name);
+    }
+
+    throw error;
   }
 
-  function statusClass(status) {
-    if (status === 'matched' || status === 'received') return 'ok';
-    if (status === 'will_create' || status === 'warning') return 'warn';
-    if (status === 'missing' || status === 'incomplete' || status === 'error') return 'bad';
-    return '';
+  async function findOrCreateBlank(line) {
+    const existing = await findBlank(line);
+    if (existing?.id) return { blank: existing, created: false };
+
+    if (!defaults.auto_create_missing_blanks) {
+      return { blank: null, created: false };
+    }
+
+    const created = await createMissingBlank(line);
+    return { blank: created, created: true };
   }
+
+  async function saveAll() {
+    setSaving(true);
+    setMessage('');
+    const valid = mergedLines.filter((line) => missing(line).length === 0);
+
+    if (!valid.length) {
+      setMessage('No complete receiving rows are ready to save. Choose a bin and complete brand, style, color, size, and quantity.');
+      setSaving(false);
+      return;
+    }
+
+    let saved = 0;
+    let createdBlanks = 0;
+    const errors = [];
+
+    for (const line of valid) {
+      try {
+        const { blank, created } = await findOrCreateBlank(line);
+        const blankId = normalizeId(blank?.id);
+        const binId = normalizeId(line.bin_id);
+
+        if (!blankId) {
+          errors.push(`No blank product match for ${blankDescription(line)}`);
+          continue;
+        }
+
+        if (created) createdBlanks += 1;
+
+        if (!binId) {
+          errors.push('Missing valid bin id. Refresh bins and choose the bin again.');
+          continue;
+        }
+
+        const note = [defaults.supplier && `Supplier: ${defaults.supplier}`, defaults.po_number && `PO: ${defaults.po_number}`, defaults.notes, line.notes].filter(Boolean).join(' | ');
+
+        const rpcPayload = {
+          p_blank_product_id_text: blankId,
+          p_bin_id_text: binId,
+          p_quantity: Number(line.quantity),
+          p_unit_cost: line.unit_cost === '' ? null : Number(line.unit_cost),
+          p_notes: note || null,
+        };
+
+        const rpc = await supabase.rpc('sc_receive_blank_inventory_v4', rpcPayload);
+        if (rpc.error) throw new Error(rpc.error.message || 'Receiving RPC failed.');
+
+        if (rpc.data && rpc.data.success === false) {
+          throw new Error(rpc.data.message || 'Receiving RPC returned success=false.');
+        }
+
+        saved += 1;
+      } catch (err) {
+        errors.push(err.message || String(err));
+      }
+    }
+
+    setMessage(`${saved} receiving row(s) saved.${createdBlanks ? ` Created ${createdBlanks} missing blank product${createdBlanks === 1 ? '' : 's'}.` : ''}${errors.length ? ` Issues: ${errors.slice(0, 4).join('; ')}` : ''}`);
+    setSaving(false);
+  }
+
+  const select = (value, onChange, list, placeholder, type = 'lookup') => (
+    <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{placeholder}</option>
+      {list.map((x) => (
+        <option key={x.id} value={x.id}>{type === 'bin' ? (x.display_name || x.label || x.bin_code || x.id) : (x.name || x.label || x.code || x.id)}</option>
+      ))}
+    </select>
+  );
 
   return (
-    <main className="page bulk-receive-page bulk-receive-layout-v2">
-      <div className="page-header-row">
+    <div className="sc-page-stack add-bin-page">
+      <div className="sc-page-header-card receiving-hero">
         <div>
-          <p className="eyebrow">Warehouse Receiving</p>
-          <h1>Add Blank Items to Bin</h1>
-          <p className="helper-text">Receive a single blank, a full size run, or several supplier order lines at once.</p>
+          <div className="sc-kicker">Receiving</div>
+          <h2>Add Blank Items to Bin</h2>
+          <p>Receive one blank item or a full size run into inventory. Set defaults once, then enter size and quantity rows.</p>
         </div>
-        <button type="button" onClick={loadPage} disabled={loading}>Refresh Data</button>
+        <button className="sc-btn" onClick={loadAllLookups} disabled={loading}>{loading ? 'Loading...' : 'Refresh Lists'}</button>
       </div>
 
-      {message && <p className="message">{message}</p>}
+      {message && <div className="sc-alert">{message}</div>}
 
-      <section className="card bulk-defaults-card">
-        <div className="bulk-section-title-row">
-          <div>
-            <h2>Order / Group Defaults</h2>
-            <p className="helper-text">Set the common values first, then apply them to receiving lines. These are the fields required to create or match a blank product.</p>
-          </div>
-        </div>
-
-        <div className="required-fields-strip">
-          <span>Required to save: </span>
-          <strong>Bin</strong>
-          <strong>Brand</strong>
-          <strong>Style / Product Type</strong>
-          <strong>Color</strong>
-          <strong>Size</strong>
-          <strong>Quantity</strong>
-        </div>
-
-        <div className="bulk-grid four">
-          <label>
-            Default Bin / Storage Location
-            <select value={defaultBinId} onChange={(event) => setDefaultBinId(event.target.value)}>
-              <option value="">Choose bin...</option>
-              {bins.map((bin) => <option key={bin.id} value={bin.id}>{binLabel(bin)}</option>)}
-            </select>
+      <section className="sc-panel">
+        <div className="sc-panel-header"><div><h3>Receiving Defaults</h3><p>Choose the default bin, brand, style, and color. Lines can still override these values.</p></div></div>
+        <div className="sc-form-grid">
+          <label className="sc-field"><span>Supplier</span><input value={defaults.supplier} onChange={(e) => setDefaults({ ...defaults, supplier: e.target.value })} /></label>
+          <label className="sc-field"><span>PO / Order Number</span><input value={defaults.po_number} onChange={(e) => setDefaults({ ...defaults, po_number: e.target.value })} /></label>
+          <label className="sc-field"><span>Default Bin</span>{select(defaults.bin_id, (v) => setDefaults({ ...defaults, bin_id: v }), lookups.bins, loading ? 'Loading bins...' : 'Choose bin', 'bin')}</label>
+          <label className="sc-field"><span>Default Brand</span>{select(defaults.brand_id, (v) => setDefaults({ ...defaults, brand_id: v }), lookups.brands, 'Choose brand')}</label>
+          <label className="sc-field"><span>Default Style</span>{select(defaults.product_type_id, (v) => setDefaults({ ...defaults, product_type_id: v }), lookups.product_types, 'Choose style')}</label>
+          <label className="sc-field"><span>Default Color</span>{select(defaults.color_id, (v) => setDefaults({ ...defaults, color_id: v }), lookups.colors, 'Choose color')}</label>
+          <label className="sc-field sc-field-wide"><span>Receiving Notes</span><input value={defaults.notes} onChange={(e) => setDefaults({ ...defaults, notes: e.target.value })} /></label>
+          <label className="sc-field sc-field-wide">
+            <span>Missing Blank Products</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(defaults.auto_create_missing_blanks)}
+                onChange={(e) => setDefaults({ ...defaults, auto_create_missing_blanks: e.target.checked })}
+              />
+              Create missing blank products while receiving
+            </label>
           </label>
-          <label>
-            Brand
-            <select value={defaultBrandId} onChange={(event) => setDefaultBrandId(event.target.value)}>
-              <option value="">Choose brand...</option>
-              {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}{brand.code ? ` (${brand.code})` : ''}</option>)}
-            </select>
-          </label>
-          <label>
-            Style / Product Type
-            <select value={defaultProductTypeId} onChange={(event) => setDefaultProductTypeId(event.target.value)}>
-              <option value="">Choose style...</option>
-              {productTypes.map((type) => <option key={type.id} value={type.id}>{type.name}{type.code ? ` (${type.code})` : ''}</option>)}
-            </select>
-          </label>
-          <label>
-            Color
-            <select value={defaultColorId} onChange={(event) => setDefaultColorId(event.target.value)}>
-              <option value="">Choose color...</option>
-              {colors.map((color) => <option key={color.id} value={color.id}>{color.name}{color.code ? ` (${color.code})` : ''}</option>)}
-            </select>
-          </label>
-        </div>
-        <label>
-          Default Receiving Notes
-          <textarea value={defaultNotes} onChange={(event) => setDefaultNotes(event.target.value)} placeholder="Supplier order number, invoice reference, receiving note, etc." />
-        </label>
-        <div className="bulk-actions-row">
-          <button type="button" onClick={applyDefaultsToExistingRows}>Apply Defaults to Existing Lines</button>
-          <button type="button" onClick={() => addRow()}>+ Add Blank Line</button>
-          <button type="button" onClick={checkMatches}>Check All Matches</button>
         </div>
       </section>
 
-      <section className="card quick-size-card">
-        <h2>Quick Size Run</h2>
-        <p className="helper-text">For supplier orders like the screenshot, choose Brand/Style/Color above, paste sizes and quantities, then add rows.</p>
-        <div className="bulk-grid two">
-          <label>
-            Size run
-            <textarea value={quickSizeText} onChange={(event) => setQuickSizeText(event.target.value)} rows={6} placeholder={'L 2\nM 2\nS 2\nXL 2\nXS 2'} />
-          </label>
-          <div className="quick-size-help">
-            <p><strong>Current group:</strong></p>
-            <p>{lookupLabel(getLookup(brands, defaultBrandId)) || 'No brand'} / {lookupLabel(getLookup(productTypes, defaultProductTypeId)) || 'No style'} / {lookupLabel(getLookup(colors, defaultColorId)) || 'No color'}</p>
-            <p className="helper-text">Each line becomes a separate receiving line with its own size and quantity.</p>
-            <button type="button" onClick={addQuickSizeRun}>Add Size Run Rows</button>
-          </div>
-        </div>
+      <section className="sc-panel">
+        <div className="sc-panel-header"><div><h3>Paste Size Run</h3><p>Example: L 2, M 2, S 2, XL 2, XS 2. One line per size also works.</p></div><button className="sc-btn" onClick={parseSizeRun}>Parse Size Run</button></div>
+        <textarea className="sc-textarea" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={'L 2\nM 2\nS 2\nXL 2\nXS 2'} />
       </section>
 
-      <form onSubmit={receiveRows} className="card bulk-lines-card">
-        <div className="bulk-lines-header">
-          <div>
-            <h2>Receiving Lines</h2>
-            <p className="helper-text">Each card shows all categories required to create, match, and receive a blank product.</p>
-          </div>
-          <div className="bulk-summary-pill">
-            <strong>{rows.length}</strong> rows · <strong>{totals.unitCount}</strong> units · <strong>${totals.costTotal.toFixed(2)}</strong> cost
-          </div>
-        </div>
-
-        <div className="bulk-options bulk-options-v2">
-          <label><input type="checkbox" checked={createMissing} onChange={(event) => setCreateMissing(event.target.checked)} /> Create missing blank products automatically</label>
-          <label><input type="checkbox" checked={updateUnitCost} onChange={(event) => setUpdateUnitCost(event.target.checked)} /> Update blank product unit cost from line price</label>
-        </div>
-
-        <div className="receiving-card-list">
-          {rows.map((row, index) => {
-            const brand = getLookup(brands, row.brandId);
-            const type = getLookup(productTypes, row.productTypeId);
-            const color = getLookup(colors, row.colorId);
-            const size = getLookup(sizes, row.sizeId);
-            const bin = getLookup(bins, row.binId);
-            const skuPreview = buildSkuBase(row);
-            const missingFields = [
-              !row.binId ? 'Bin' : '',
-              !row.brandId ? 'Brand' : '',
-              !row.productTypeId ? 'Style' : '',
-              !row.colorId ? 'Color' : '',
-              !row.sizeId ? 'Size' : '',
-              !Number(row.quantity) || Number(row.quantity) <= 0 ? 'Quantity' : '',
-            ].filter(Boolean);
-
+      <section className="sc-panel">
+        <div className="sc-panel-header"><div><h3>Receiving Lines</h3><p>Each complete line will be received into the selected bin.</p></div><button className="sc-btn" onClick={() => setLines([...lines, { ...lineTemplate }])}>Add Line</button></div>
+        <div className="sc-receiving-lines">
+          {mergedLines.map((line, index) => {
+            const missingFields = missing(line);
             return (
-              <article key={row.rowKey} className={`receiving-line-card ${missingFields.length ? 'needs-attention' : ''}`}>
-                <div className="receiving-line-top">
-                  <div>
-                    <h3>Line {index + 1}</h3>
-                    <p className="line-preview-text">
-                      {[lookupLabel(brand), lookupLabel(type), lookupLabel(color), lookupLabel(size)].filter(Boolean).join(' / ') || 'Choose blank product attributes'}
-                    </p>
-                  </div>
-                  <div className="line-status-box">
-                    <span className={`bulk-status ${statusClass(row.matchStatus)}`}>{row.matchStatus.replace(/_/g, ' ')}</span>
-                    {missingFields.length > 0 && <small>Missing: {missingFields.join(', ')}</small>}
-                  </div>
+              <article className="sc-receiving-card" key={index}>
+                <div className="sc-card-title-row"><strong>Line {index + 1}</strong><span className={`sc-badge ${missingFields.length ? 'warning' : 'success'}`}>{missingFields.length ? `Missing: ${missingFields.join(', ')}` : 'Ready'}</span></div>
+                <div className="sc-form-grid compact">
+                  <label className="sc-field"><span>Bin</span>{select(line.bin_id, (v) => updateLine(index, { bin_id: v }), lookups.bins, defaults.bin_id ? 'Using default bin' : 'Choose bin', 'bin')}</label>
+                  <label className="sc-field"><span>Brand</span>{select(line.brand_id, (v) => updateLine(index, { brand_id: v }), lookups.brands, 'Default / choose')}</label>
+                  <label className="sc-field"><span>Style</span>{select(line.product_type_id, (v) => updateLine(index, { product_type_id: v }), lookups.product_types, 'Default / choose')}</label>
+                  <label className="sc-field"><span>Color</span>{select(line.color_id, (v) => updateLine(index, { color_id: v }), lookups.colors, 'Default / choose')}</label>
+                  <label className="sc-field"><span>Size</span>{select(line.size_id, (v) => updateLine(index, { size_id: v }), lookups.sizes, 'Choose size')}</label>
+                  <label className="sc-field"><span>Quantity</span><input type="number" min="1" value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} /></label>
+                  <label className="sc-field"><span>Unit Cost</span><input type="number" step="0.01" min="0" value={line.unit_cost} onChange={(e) => updateLine(index, { unit_cost: e.target.value })} /></label>
+                  <label className="sc-field"><span>Line Note</span><input value={line.notes} onChange={(e) => updateLine(index, { notes: e.target.value })} /></label>
                 </div>
-
-                <div className="receiving-field-grid">
-                  <label>
-                    Bin / Storage Location <span className="required-marker">required</span>
-                    <select value={row.binId} onChange={(event) => updateRow(row.rowKey, { binId: event.target.value })} required>
-                      <option value="">Choose bin...</option>
-                      {bins.map((item) => <option key={item.id} value={item.id}>{binLabel(item)}</option>)}
-                    </select>
-                    {bin && <small>{binLabel(bin)}</small>}
-                  </label>
-
-                  <label>
-                    Brand <span className="required-marker">required</span>
-                    <select value={row.brandId} onChange={(event) => updateRow(row.rowKey, { brandId: event.target.value })} required>
-                      <option value="">Choose brand...</option>
-                      {brands.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
-                    </select>
-                    {brand && <small>ID {brand.id} · {brand.name}{brand.code ? ` · ${brand.code}` : ''}</small>}
-                  </label>
-
-                  <label>
-                    Style / Product Type <span className="required-marker">required</span>
-                    <select value={row.productTypeId} onChange={(event) => updateRow(row.rowKey, { productTypeId: event.target.value })} required>
-                      <option value="">Choose style...</option>
-                      {productTypes.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
-                    </select>
-                    {type && <small>ID {type.id} · {type.name}{type.code ? ` · ${type.code}` : ''}</small>}
-                  </label>
-
-                  <label>
-                    Color <span className="required-marker">required</span>
-                    <select value={row.colorId} onChange={(event) => updateRow(row.rowKey, { colorId: event.target.value })} required>
-                      <option value="">Choose color...</option>
-                      {colors.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
-                    </select>
-                    {color && <small>ID {color.id} · {color.name}{color.code ? ` · ${color.code}` : ''}</small>}
-                  </label>
-
-                  <label>
-                    Size <span className="required-marker">required</span>
-                    <select value={row.sizeId} onChange={(event) => updateRow(row.rowKey, { sizeId: event.target.value })} required>
-                      <option value="">Choose size...</option>
-                      {sizes.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` (${item.code})` : ''}</option>)}
-                    </select>
-                    {size && <small>ID {size.id} · {size.name}{size.code ? ` · ${size.code}` : ''}</small>}
-                  </label>
-
-                  <label>
-                    Quantity <span className="required-marker">required</span>
-                    <input type="number" min="1" value={row.quantity} onChange={(event) => updateRow(row.rowKey, { quantity: event.target.value })} required />
-                  </label>
-
-                  <label>
-                    Unit Cost
-                    <input type="number" min="0" step="0.01" value={row.unitCost} onChange={(event) => updateRow(row.rowKey, { unitCost: event.target.value })} placeholder="0.00" />
-                  </label>
-
-                  <label>
-                    Artwork Note
-                    <input value={row.artworkNote} onChange={(event) => updateRow(row.rowKey, { artworkNote: event.target.value })} placeholder="Optional: customer/logo/artwork note" />
-                  </label>
-
-                  <label className="wide-field">
-                    Receiving / Line Note
-                    <input value={row.notes} onChange={(event) => updateRow(row.rowKey, { notes: event.target.value })} placeholder="Optional: supplier order, condition, special note" />
-                  </label>
-
-                  <div className="wide-field sku-preview-box">
-                    <strong>SKU / Blank Product Preview</strong>
-                    <code>{skuPreview || 'Choose brand, style, color, and size to generate SKU preview.'}</code>
-                    <small>Name preview: {buildBlankName(row) || 'Choose required fields.'}</small>
-                  </div>
-
-                  <div className="wide-field match-preview-box">
-                    <strong>Match Result</strong>
-                    {row.matchMessage ? <p>{row.matchMessage}</p> : <p>Click Check Matches to verify whether this line matches an existing blank product or will create a new one.</p>}
-                    {row.blankProductId && <small>Matched blank_product_id: {row.blankProductId}</small>}
-                  </div>
-                </div>
-
-                <div className="receiving-line-actions">
-                  <button type="button" onClick={checkMatches}>Check Matches</button>
-                  <button type="button" className="danger-light" onClick={() => removeRow(row.rowKey)}>Remove Line</button>
-                </div>
+                <div className="sc-receiving-line-actions"><button className="sc-btn sc-btn-danger sc-btn-small" onClick={() => setLines(lines.filter((_, i) => i !== index))} disabled={lines.length === 1}>Remove Line</button></div>
               </article>
             );
           })}
         </div>
-
-        <div className="bulk-actions-row end">
-          <button type="button" onClick={() => addRow()}>+ Add Another Line</button>
-          <button type="button" onClick={checkMatches}>Check All Matches</button>
-          <button type="submit" disabled={loading}>{loading ? 'Receiving...' : 'Receive All Lines'}</button>
-        </div>
-      </form>
-
-      {results.length > 0 && (
-        <section className="card">
-          <h2>Batch Results</h2>
-          <div className="bulk-table-wrap">
-            <table className="bulk-receive-table results-table">
-              <thead><tr><th>Row</th><th>Status</th><th>Input</th><th>Result</th></tr></thead>
-              <tbody>
-                {results.map((result) => (
-                  <tr key={`${result.rowNumber}-${result.status}`}>
-                    <td>{result.rowNumber}</td>
-                    <td><span className={`bulk-status ${statusClass(result.status)}`}>{result.status}</span></td>
-                    <td>{result.input}</td>
-                    <td>{result.result}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </main>
+        <div className="sc-form-actions"><button className="sc-btn sc-btn-primary" onClick={saveAll} disabled={saving || loading}>{saving ? 'Saving...' : 'Receive All Complete Lines'}</button></div>
+      </section>
+    </div>
   );
 }

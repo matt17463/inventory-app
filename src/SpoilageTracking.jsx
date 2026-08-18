@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBins, getBlankProducts, searchFinishedProductsForReceiving, getSpoilageReport, recordBlankSpoilage, recordFinishedSpoilage } from './lib/inventoryApi';
+import { getBins, searchBlankInventoryForSpoilage, searchFinishedProductsForReceiving, getSpoilageReport, recordBlankSpoilage, recordFinishedSpoilage } from './lib/inventoryApi';
 
 const REASONS = ['Misprint', 'Damaged blank', 'Wrong size pulled', 'Vendor defect', 'Test print', 'Customer cancellation', 'Other'];
 
@@ -24,7 +24,7 @@ export default function SpoilageTracking() {
 
   async function searchProducts() {
     try {
-      const data = type === 'blank' ? await getBlankProducts(search) : await searchFinishedProductsForReceiving(search);
+      const data = type === 'blank' ? await searchBlankInventoryForSpoilage(search) : await searchFinishedProductsForReceiving(search);
       setProducts(data);
       setProductId('');
     } catch (err) {
@@ -53,7 +53,22 @@ export default function SpoilageTracking() {
   }
 
   function productLabel(product) {
-    if (type === 'blank') return [product.sku_base, product.name, product.brand || product.brands?.name, product.color || product.colors?.name, product.size || product.sizes?.name].filter(Boolean).join(' - ');
+    if (type === 'blank') {
+      const onHand = product.on_hand_quantity ?? product.quantity_on_hand ?? product.total_quantity;
+      const available = product.available_quantity;
+      const qtyLabel = onHand !== undefined && onHand !== null && onHand !== ''
+        ? `On hand: ${onHand}${available !== undefined && available !== null && available !== '' ? ` / Available: ${available}` : ''}`
+        : null;
+      return [
+        product.sku_base || product.blank_sku || product.sku,
+        product.name || product.blank_product_name,
+        product.brand || product.brands?.name || product.brands?.code,
+        product.style || product.product_types?.name || product.product_types?.code,
+        product.color || product.colors?.name || product.colors?.code,
+        product.size || product.sizes?.name || product.sizes?.code,
+        qtyLabel,
+      ].filter(Boolean).join(' - ');
+    }
     return [product.finished_sku || product.sku, product.finished_name || product.name, product.customer || product.customer_name, product.logo || product.logo_name].filter(Boolean).join(' - ');
   }
 
@@ -64,9 +79,9 @@ export default function SpoilageTracking() {
       <section className="card elevated-card">
         <form onSubmit={submit} className="phase2-form-grid">
           <label>Inventory Type<select value={type} onChange={(e) => { setType(e.target.value); setProducts([]); setProductId(''); }}><option value="blank">Blank</option><option value="finished">Finished</option></select></label>
-          <label>Search Product<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="SKU, product, color, size..." /></label>
-          <button type="button" onClick={searchProducts}>Search</button>
-          <label>Product<select value={productId} onChange={(e) => setProductId(e.target.value)} required><option value="">Choose product...</option>{products.map((product) => <option key={product.id || product.finished_product_id} value={product.id || product.finished_product_id}>{productLabel(product)}</option>)}</select></label>
+          <label>Search Product<input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchProducts(); } }} placeholder={type === 'blank' ? 'SKU, brand, style, color, size... e.g. Under Armour' : 'SKU, customer, logo, product...'} /></label>
+          <button type="button" onClick={searchProducts}>{busy ? 'Working...' : 'Search'}</button>
+          <label>Product<select value={productId} onChange={(e) => setProductId(e.target.value)} required><option value="">{products.length ? 'Choose product...' : 'Search first...'}</option>{products.map((product) => <option key={product.id || product.blank_product_id || product.finished_product_id} value={product.id || product.blank_product_id || product.finished_product_id}>{productLabel(product)}</option>)}</select></label>
           <label>Bin<select value={binId} onChange={(e) => setBinId(e.target.value)} required><option value="">Choose bin...</option>{bins.map((bin) => <option key={bin.id} value={bin.id}>{[bin.bin_code, bin.label, bin.location].filter(Boolean).join(' - ')}</option>)}</select></label>
           <label>Quantity<input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /></label>
           <label>Reason<select value={reason} onChange={(e) => setReason(e.target.value)}>{REASONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>

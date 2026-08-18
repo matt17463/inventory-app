@@ -1,0 +1,21 @@
+{
+  "version": "0.6.18",
+  "replaces": "0.6.17",
+  "feature": "Pending Stock bin naming and purchasing-report shortage integration",
+  "database_change_required": true,
+  "database_script": "deployment/sql/06_RENAME_UNASSIGNED_BIN_TO_PENDING_STOCK.sql",
+  "backward_compatibility": "Legacy Unassigned bin names remain recognized",
+  "changed_files": [
+    "src/lib/pullSheetBinAssignmentApi.js",
+    "src/lib/manualOrdersApi.js",
+    "src/PullSheetView.jsx",
+    "src/ManualInvoicedOrders.jsx",
+    "src/lib/inventoryApi.js",
+    "src/Purchasing.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json",
+    "deployment/sql/06_RENAME_UNASSIGNED_BIN_TO_PENDING_STOCK.sql"
+  ]
+}

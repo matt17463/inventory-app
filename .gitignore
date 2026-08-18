@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Never commit row-data backups or database credentials
+supabase/backups/
+*.data.sql
+*.roles.sql
+.env
+.env.*
+!.env.example

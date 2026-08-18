@@ -1,0 +1,17 @@
+{
+  "version": "0.6.17",
+  "replaces": "0.6.16",
+  "database_changes_required": false,
+  "feature": "Out-of-stock pull-sheet lines automatically assigned to Unassigned bin",
+  "required_existing_bin_match": "code or label contains 'Unassigned' (case-insensitive)",
+  "changed_files": [
+    "src/lib/pullSheetBinAssignmentApi.js",
+    "src/lib/manualOrdersApi.js",
+    "src/ManualInvoicedOrders.jsx",
+    "src/PullSheetView.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json"
+  ]
+}

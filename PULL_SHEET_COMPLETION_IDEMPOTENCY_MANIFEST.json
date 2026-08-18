@@ -1,0 +1,16 @@
+{
+  "version": "0.6.26",
+  "replaces": "0.6.25",
+  "database_changes_required": true,
+  "database_script": "deployment/sql/16_PULL_SHEET_COMPLETION_IDEMPOTENCY_AND_165_REPAIR.sql",
+  "changed_files": [
+    "src/PullSheetView.jsx",
+    "src/lib/pullSheetCompletionApi.js",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json",
+    "deployment/sql/16_PULL_SHEET_COMPLETION_IDEMPOTENCY_AND_165_REPAIR.sql",
+    "supabase/migrations/202607310901_pull_sheet_completion_idempotency.sql"
+  ]
+}

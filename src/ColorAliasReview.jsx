@@ -1,319 +1,719 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getColorAliasApprovals,
-  getColorAliasCandidates,
-  getWooBlankMatchSummary,
-  relinkWooProductsToBlankMaster,
-  saveColorAliasDecision,
+  applyColorPairingRules,
+  disableColorPairingRule,
+  getColorPairingRules,
+  getColorPairingSuggestions,
+  saveBulkColorPairingRules,
+  saveColorPairingRule,
+  searchColorsForPairing,
+  searchColorVariationsForPairing,
 } from './lib/inventoryApi';
 
-function colorKey(row) {
-  return `${row.woo_color || ''}|||${row.possible_blank_color || ''}`;
+const DEFAULT_REVIEWER = 'Matthew';
+
+function compactNumber(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n.toLocaleString() : '0';
 }
 
-function groupCandidates(rows) {
-  const map = new Map();
+function colorLabel(color) {
+  if (!color) return '';
+  return color.color_name || color.name || color.canonical_color_name || color.source_color_name || '';
+}
 
-  rows.forEach((row) => {
-    const key = colorKey(row);
-    const existing = map.get(key) || {
-      woo_color: row.woo_color,
-      possible_blank_color: row.possible_blank_color,
-      affected_woo_products: 0,
-      approval_status: row.approval_status,
-      notes: row.notes,
-      examples: [],
-    };
+function ColorSearchBox({ label, value, onSearchChange, results, selected, onSelect, placeholder, helper }) {
+  return (
+    <div className="color-pairing-search-box">
+      <label>
+        {label}
+        <input
+          value={value}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={placeholder || 'Search colors...'}
+        />
+      </label>
+      {helper && <p className="muted-text small-note">{helper}</p>}
+      {selected && (
+        <div className="selected-color-card">
+          <span>Selected</span>
+          <strong>{colorLabel(selected)}</strong>
+          <small>ID: {selected.color_id}</small>
+        </div>
+      )}
+      <div className="color-search-results">
+        {(results || []).slice(0, 14).map((color) => {
+          const isSelected = selected?.color_id === color.color_id;
+          return (
+            <button
+              key={`${color.color_id}-${color.color_name}`}
+              type="button"
+              className={`color-result-card ${isSelected ? 'selected' : ''}`}
+              onClick={() => onSelect(color)}
+            >
+              <strong>{color.color_name}</strong>
+              <span>{compactNumber(color.usage_count)} uses</span>
+              {color.match_reason && <small>{color.match_reason}</small>}
+              {color.mapped_to_color_name && (
+                <small>Currently maps to {color.mapped_to_color_name}</small>
+              )}
+            </button>
+          );
+        })}
+        {value.trim() && results?.length === 0 && (
+          <p className="muted-text">No matching colors found.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
-    existing.affected_woo_products += Number(row.affected_woo_products || 0);
-    if (existing.examples.length < 5) {
-      existing.examples.push([
-        row.brand,
-        row.style,
-        row.size,
-      ].filter(Boolean).join(' / '));
-    }
-
-    if (row.approval_status && row.approval_status !== 'not_reviewed') {
-      existing.approval_status = row.approval_status;
-    }
-
-    map.set(key, existing);
-  });
-
-  return Array.from(map.values()).sort((a, b) => {
-    if ((b.affected_woo_products || 0) !== (a.affected_woo_products || 0)) {
-      return (b.affected_woo_products || 0) - (a.affected_woo_products || 0);
-    }
-    return `${a.woo_color} ${a.possible_blank_color}`.localeCompare(`${b.woo_color} ${b.possible_blank_color}`);
-  });
+function VariationRow({ row, checked, disabled, onToggle }) {
+  return (
+    <label className={`color-variation-row ${checked ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={() => onToggle(row.color_id)}
+      />
+      <span className="variation-main">
+        <strong>{row.color_name}</strong>
+        <small>
+          {compactNumber(row.usage_count)} uses
+          {row.family_key ? ` • ${row.family_key} family` : ''}
+          {row.match_reason ? ` • ${row.match_reason}` : ''}
+        </small>
+        {row.mapped_to_color_name && (
+          <small>Currently maps to {row.mapped_to_color_name}</small>
+        )}
+      </span>
+    </label>
+  );
 }
 
 export default function ColorAliasReview() {
-  const [candidates, setCandidates] = useState([]);
-  const [approvals, setApprovals] = useState([]);
-  const [summary, setSummary] = useState([]);
-  const [filter, setFilter] = useState('pending');
-  const [search, setSearch] = useState('');
-  const [reviewer, setReviewer] = useState('Matthew');
-  const [notesByKey, setNotesByKey] = useState({});
-  const [message, setMessage] = useState('');
-  const [busyKey, setBusyKey] = useState('');
-  const [relinking, setRelinking] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [rules, setRules] = useState([]);
 
-  async function load() {
+  const [variationSearch, setVariationSearch] = useState('green');
+  const [variationResults, setVariationResults] = useState([]);
+  const [selectedVariationIds, setSelectedVariationIds] = useState([]);
+  const [variationCanonicalSearch, setVariationCanonicalSearch] = useState('');
+  const [variationCanonicalResults, setVariationCanonicalResults] = useState([]);
+  const [selectedVariationCanonical, setSelectedVariationCanonical] = useState(null);
+
+  const [sourceSearch, setSourceSearch] = useState('');
+  const [canonicalSearch, setCanonicalSearch] = useState('');
+  const [suggestionSearch, setSuggestionSearch] = useState('');
+  const [sourceResults, setSourceResults] = useState([]);
+  const [canonicalResults, setCanonicalResults] = useState([]);
+  const [selectedSource, setSelectedSource] = useState(null);
+  const [selectedCanonical, setSelectedCanonical] = useState(null);
+  const [applyExisting, setApplyExisting] = useState(true);
+  const [reviewer, setReviewer] = useState(DEFAULT_REVIEWER);
+  const [notes, setNotes] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busyRule, setBusyRule] = useState('');
+  const [activeTab, setActiveTab] = useState('variations');
+  const [minScore, setMinScore] = useState(35);
+
+  async function loadSuggestions(searchValue = suggestionSearch, scoreValue = minScore) {
+    const rows = await getColorPairingSuggestions({
+      search: searchValue,
+      minScore: Number(scoreValue || 35),
+      limit: 600,
+    });
+    setSuggestions(rows || []);
+  }
+
+  async function loadRules() {
+    const rows = await getColorPairingRules('all');
+    setRules(rows || []);
+  }
+
+  async function loadAll() {
+    setLoading(true);
     setMessage('');
     try {
-      const [candidateRows, approvalRows, summaryRows] = await Promise.all([
-        getColorAliasCandidates(),
-        getColorAliasApprovals('all'),
-        getWooBlankMatchSummary().catch(() => []),
-      ]);
-      setCandidates(candidateRows);
-      setApprovals(approvalRows);
-      setSummary(summaryRows);
+      await Promise.all([loadSuggestions(), loadRules()]);
     } catch (err) {
-      setMessage(err.message || 'Failed to load color alias review data. Run the included SQL migration first.');
+      setMessage(err.message || 'Failed to load color pairing data. Run the Supabase SQL migration first.');
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const grouped = useMemo(() => groupCandidates(candidates), [candidates]);
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        const rows = await searchColorVariationsForPairing(variationSearch, 250);
+        if (!cancelled) setVariationResults(rows || []);
+      } catch (err) {
+        if (!cancelled) setMessage(err.message || 'Color variation search failed. Run the V2 SQL patch first.');
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [variationSearch]);
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        const rows = await searchColorsForPairing(variationCanonicalSearch, 80);
+        if (!cancelled) setVariationCanonicalResults(rows || []);
+      } catch (err) {
+        if (!cancelled) setMessage(err.message || 'Canonical color search failed.');
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [variationCanonicalSearch]);
 
-    return grouped.filter((row) => {
-      const status = row.approval_status || 'not_reviewed';
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        const rows = await searchColorVariationsForPairing(sourceSearch, 80);
+        if (!cancelled) setSourceResults(rows || []);
+      } catch (err) {
+        if (!cancelled) setMessage(err.message || 'Source color search failed.');
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [sourceSearch]);
 
-      if (filter === 'pending' && status !== 'not_reviewed' && status !== 'pending') return false;
-      if (filter === 'approved' && status !== 'approved') return false;
-      if (filter === 'rejected' && status !== 'rejected') return false;
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        const rows = await searchColorsForPairing(canonicalSearch, 80);
+        if (!cancelled) setCanonicalResults(rows || []);
+      } catch (err) {
+        if (!cancelled) setMessage(err.message || 'Canonical color search failed.');
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [canonicalSearch]);
 
-      if (!term) return true;
+  const stats = useMemo(() => {
+    const active = rules.filter((rule) => rule.status === 'active').length;
+    const inactive = rules.filter((rule) => rule.status === 'inactive').length;
+    const pendingSuggestions = suggestions.filter((row) => row.existing_status !== 'active').length;
+    return { active, inactive, pendingSuggestions };
+  }, [rules, suggestions]);
 
-      return [
-        row.woo_color,
-        row.possible_blank_color,
-        ...(row.examples || []),
-      ].filter(Boolean).join(' ').toLowerCase().includes(term);
-    });
-  }, [grouped, filter, search]);
+  const selectedVariationRows = useMemo(() => {
+    const ids = new Set(selectedVariationIds.map(String));
+    return variationResults.filter((row) => ids.has(String(row.color_id)));
+  }, [variationResults, selectedVariationIds]);
 
-  const totals = useMemo(() => ({
-    candidates: grouped.length,
-    pending: grouped.filter((row) => !row.approval_status || row.approval_status === 'not_reviewed' || row.approval_status === 'pending').length,
-    approved: grouped.filter((row) => row.approval_status === 'approved').length,
-    rejected: grouped.filter((row) => row.approval_status === 'rejected').length,
-  }), [grouped]);
+  function toggleVariation(id) {
+    const idText = String(id);
+    setSelectedVariationIds((current) => (
+      current.map(String).includes(idText)
+        ? current.filter((existing) => String(existing) !== idText)
+        : [...current, idText]
+    ));
+  }
 
-  async function decide(row, status) {
-    const key = colorKey(row);
-    setBusyKey(`${key}:${status}`);
-    setMessage('');
+  function selectVisibleVariations() {
+    const canonicalId = selectedVariationCanonical?.color_id ? String(selectedVariationCanonical.color_id) : '';
+    const ids = variationResults
+      .filter((row) => String(row.color_id) !== canonicalId)
+      .map((row) => String(row.color_id));
+    setSelectedVariationIds(Array.from(new Set(ids)));
+  }
 
+  function clearSelectedVariations() {
+    setSelectedVariationIds([]);
+  }
+
+  function chooseSuggestion(row) {
+    const source = {
+      color_id: row.source_color_id,
+      color_name: row.source_color_name,
+      usage_count: row.source_usage_count,
+    };
+    const canonical = {
+      color_id: row.suggested_canonical_color_id,
+      color_name: row.suggested_canonical_color_name,
+      usage_count: row.canonical_usage_count,
+    };
+    setSelectedSource(source);
+    setSelectedCanonical(canonical);
+    setSourceSearch(row.source_color_name || '');
+    setCanonicalSearch(row.suggested_canonical_color_name || '');
+    setNotes(`Suggested automatically: ${row.reason || 'similar name'}; score ${row.score}`);
+    setActiveTab('manual');
+  }
+
+  async function saveRule(source = selectedSource, canonical = selectedCanonical, customNotes = notes) {
+    if (!source?.color_id && !source?.color_name) {
+      setMessage('Choose a source color first.');
+      return;
+    }
+    if (!canonical?.color_id) {
+      setMessage('Choose the color value you want to use as the canonical color.');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('Saving color pairing rule...');
     try {
-      await saveColorAliasDecision({
-        wooColor: row.woo_color,
-        blankColor: row.possible_blank_color,
-        status,
-        notes: notesByKey[key] || (status === 'approved' ? 'Approved in app' : 'Rejected in app'),
-        reviewedBy: reviewer || 'Matthew',
+      const result = await saveColorPairingRule({
+        sourceColorId: source.color_id,
+        sourceColorName: source.color_name,
+        canonicalColorId: canonical.color_id,
+        notes: customNotes || notes,
+        reviewedBy: reviewer || DEFAULT_REVIEWER,
+        applyExisting,
       });
-      setMessage(`${status === 'approved' ? 'Approved' : 'Rejected'}: ${row.woo_color} → ${row.possible_blank_color}`);
-      await load();
+      setMessage(
+        `Saved ${result.source_color_name} → ${result.canonical_color_name}. `
+        + `Products updated: ${compactNumber(result.products_updated)}. `
+        + `Blank products updated: ${compactNumber(result.blank_products_updated)}.`
+      );
+      setSelectedSource(null);
+      setSelectedCanonical(null);
+      setSourceSearch('');
+      setCanonicalSearch('');
+      setNotes('');
+      await loadAll();
     } catch (err) {
-      setMessage(err.message || 'Failed to save color alias decision.');
+      setMessage(err.message || 'Failed to save color pairing rule.');
     } finally {
-      setBusyKey('');
+      setSaving(false);
     }
   }
 
-  async function handleRelink() {
-    setRelinking(true);
-    setMessage('Relinking WooCommerce products to blank master using approved aliases...');
+  async function saveSelectedVariationRules() {
+    if (!selectedVariationCanonical?.color_id) {
+      setMessage('Choose the canonical color value first.');
+      return;
+    }
+    if (selectedVariationIds.length === 0) {
+      setMessage('Select at least one source color variation to map.');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('Saving selected color variation rules...');
     try {
-      const result = await relinkWooProductsToBlankMaster();
-      setMessage(`Relink complete. Processed: ${result?.processed ?? 0}. Linked: ${result?.linked ?? 0}. Unmatched: ${result?.unmatched ?? 0}.`);
-      await load();
+      const result = await saveBulkColorPairingRules({
+        sourceColorIds: selectedVariationIds,
+        canonicalColorId: selectedVariationCanonical.color_id,
+        notes: notes || `Bulk variation pairing from search: ${variationSearch}`,
+        reviewedBy: reviewer || DEFAULT_REVIEWER,
+        applyExisting,
+      });
+
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+      setMessage(
+        `Saved ${compactNumber(result?.saved_rules)} rule(s). `
+        + `Skipped: ${compactNumber(result?.skipped)}. `
+        + `Products updated: ${compactNumber(result?.products_updated)}. `
+        + `Blank products updated: ${compactNumber(result?.blank_products_updated)}.`
+        + (errors.length ? ` ${errors.length} error(s) occurred.` : '')
+      );
+
+      setSelectedVariationIds([]);
+      await Promise.all([loadAll(), searchColorVariationsForPairing(variationSearch, 250).then(setVariationResults)]);
     } catch (err) {
-      setMessage(err.message || 'Relink failed.');
+      setMessage(err.message || 'Failed to save selected variation rules.');
     } finally {
-      setRelinking(false);
+      setSaving(false);
+    }
+  }
+
+  async function saveSuggestedRule(row) {
+    const source = { color_id: row.source_color_id, color_name: row.source_color_name };
+    const canonical = { color_id: row.suggested_canonical_color_id, color_name: row.suggested_canonical_color_name };
+    await saveRule(source, canonical, `Approved from automated suggestion: ${row.reason || 'similar color'}; score ${row.score}`);
+  }
+
+  async function handleApplyAllRules() {
+    setSaving(true);
+    setMessage('Applying active color pairing rules to existing products...');
+    try {
+      const result = await applyColorPairingRules();
+      const row = Array.isArray(result) ? result[0] : result;
+      setMessage(
+        `Applied ${compactNumber(row?.rules_applied)} rule(s). `
+        + `Products updated: ${compactNumber(row?.products_updated)}. `
+        + `Blank products updated: ${compactNumber(row?.blank_products_updated)}.`
+      );
+      await loadAll();
+    } catch (err) {
+      setMessage(err.message || 'Failed to apply rules.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function disableRule(rule) {
+    setBusyRule(rule.id);
+    setMessage('Disabling rule...');
+    try {
+      await disableColorPairingRule(rule.id);
+      setMessage(`Disabled rule: ${rule.source_color_name} → ${rule.canonical_color_name}`);
+      await loadRules();
+    } catch (err) {
+      setMessage(err.message || 'Failed to disable rule.');
+    } finally {
+      setBusyRule('');
+    }
+  }
+
+  async function refreshSuggestions() {
+    setLoading(true);
+    setMessage('Refreshing automatic suggestions...');
+    try {
+      await loadSuggestions(suggestionSearch, minScore);
+      setMessage('Suggestions refreshed.');
+    } catch (err) {
+      setMessage(err.message || 'Failed to refresh suggestions.');
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main className="page color-alias-page">
+    <main className="page color-pairing-page">
       <section className="page-header">
         <div>
-          <p className="eyebrow">WooCommerce Matching</p>
-          <h1>Color Alias Review</h1>
+          <p className="eyebrow">Inventory Data Health</p>
+          <h1>Color Pairing Tool</h1>
           <p>
-            Approve color aliases only when the WooCommerce color and blank master color are truly the same.
-            Nothing is normalized automatically. Rejected or pending aliases are ignored by the matcher.
+            Map manufacturer color variations to the color value you want the system to use. Once a rule is active,
+            products and blanks using that source color are automatically switched to the canonical color for future matching.
           </p>
         </div>
-        <button type="button" className="primary-action" onClick={handleRelink} disabled={relinking}>
-          {relinking ? 'Relinking...' : 'Relink Products'}
+        <button type="button" className="primary-action" onClick={handleApplyAllRules} disabled={saving}>
+          Apply Active Rules
         </button>
       </section>
 
       {message && <p className="message">{message}</p>}
 
       <section className="summary-grid">
-        <div className="metric-card"><strong>{totals.candidates}</strong><span>Candidate aliases</span></div>
-        <div className="metric-card"><strong>{totals.pending}</strong><span>Pending review</span></div>
-        <div className="metric-card"><strong>{totals.approved}</strong><span>Approved</span></div>
-        <div className="metric-card"><strong>{totals.rejected}</strong><span>Rejected</span></div>
+        <div className="metric-card"><strong>{compactNumber(stats.pendingSuggestions)}</strong><span>Suggested pairings</span></div>
+        <div className="metric-card"><strong>{compactNumber(stats.active)}</strong><span>Active rules</span></div>
+        <div className="metric-card"><strong>{compactNumber(stats.inactive)}</strong><span>Inactive rules</span></div>
       </section>
 
-      {summary.length > 0 && (
+      <section className="card elevated-card color-pairing-tabs">
+        <button type="button" className={activeTab === 'variations' ? 'active' : ''} onClick={() => setActiveTab('variations')}>Find Variations</button>
+        <button type="button" className={activeTab === 'suggestions' ? 'active' : ''} onClick={() => setActiveTab('suggestions')}>Auto Suggestions</button>
+        <button type="button" className={activeTab === 'manual' ? 'active' : ''} onClick={() => setActiveTab('manual')}>Single Pairing</button>
+        <button type="button" className={activeTab === 'rules' ? 'active' : ''} onClick={() => setActiveTab('rules')}>Active Rules</button>
+      </section>
+
+      {activeTab === 'variations' && (
         <section className="card elevated-card">
-          <h2>Current Match Summary</h2>
-          <div className="status-pill-list">
-            {summary.map((row) => (
-              <span key={row.match_diagnostic} className="status-pill">
-                {row.match_diagnostic}: {row.qty}
-              </span>
-            ))}
+          <div className="section-heading-row">
+            <div>
+              <h2>Find Color Variations and Map Them Together</h2>
+              <p className="muted-text">
+                Search a color family such as <strong>green</strong>. This will show manufacturer variations like Forest,
+                FOREST, F Green, Kelly, and other related green-family names so you can map them to one canonical value.
+              </p>
+            </div>
+          </div>
+
+          <div className="color-variation-layout">
+            <div className="color-variation-panel">
+              <label>
+                Find source variations
+                <input
+                  value={variationSearch}
+                  onChange={(event) => setVariationSearch(event.target.value)}
+                  placeholder="green, forest, sport grey, navy..."
+                />
+              </label>
+              <div className="button-row compact-row">
+                <button type="button" className="secondary-action" onClick={selectVisibleVariations}>Select visible</button>
+                <button type="button" className="secondary-action" onClick={clearSelectedVariations}>Clear selection</button>
+              </div>
+              <div className="color-variation-results">
+                {variationResults.map((row) => {
+                  const canonicalId = selectedVariationCanonical?.color_id ? String(selectedVariationCanonical.color_id) : '';
+                  const disabled = String(row.color_id) === canonicalId;
+                  return (
+                    <VariationRow
+                      key={`${row.color_id}-${row.color_name}`}
+                      row={row}
+                      checked={selectedVariationIds.map(String).includes(String(row.color_id))}
+                      disabled={disabled}
+                      onToggle={toggleVariation}
+                    />
+                  );
+                })}
+                {variationSearch.trim() && variationResults.length === 0 && (
+                  <p className="muted-text">No variations found. Try a broader color family such as green, blue, grey, red, or black.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="color-variation-panel">
+              <ColorSearchBox
+                label="Canonical color to use"
+                value={variationCanonicalSearch}
+                onSearchChange={setVariationCanonicalSearch}
+                results={variationCanonicalResults}
+                selected={selectedVariationCanonical}
+                onSelect={(row) => {
+                  setSelectedVariationCanonical(row);
+                  setVariationCanonicalSearch(row.color_name || '');
+                }}
+                placeholder="Forest Green, Sport Grey, Black..."
+                helper="Choose the one color name you want all selected variations to become."
+              />
+
+              <div className="filter-row">
+                <label>
+                  Reviewer
+                  <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="Reviewer name" />
+                </label>
+                <label>
+                  Notes
+                  <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Reason for this pairing..." />
+                </label>
+              </div>
+
+              <label className="checkbox-row">
+                <input type="checkbox" checked={applyExisting} onChange={(event) => setApplyExisting(event.target.checked)} />
+                Apply to existing products and blank products immediately
+              </label>
+
+              <div className="pairing-preview-card">
+                <span>Bulk rule preview</span>
+                <strong>{compactNumber(selectedVariationIds.length)} selected variation(s) → {selectedVariationCanonical ? colorLabel(selectedVariationCanonical) : 'Choose canonical color'}</strong>
+                {selectedVariationRows.length > 0 && (
+                  <small>{selectedVariationRows.slice(0, 6).map((row) => row.color_name).join(', ')}{selectedVariationRows.length > 6 ? `, +${selectedVariationRows.length - 6} more` : ''}</small>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="primary-action"
+                onClick={saveSelectedVariationRules}
+                disabled={saving || selectedVariationIds.length === 0 || !selectedVariationCanonical}
+              >
+                {saving ? 'Saving...' : 'Save Selected Pairings'}
+              </button>
+            </div>
           </div>
         </section>
       )}
 
-      <section className="card elevated-card">
-        <h2>Review Controls</h2>
-        <div className="filter-row">
-          <label>
-            Reviewer
-            <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="Reviewer name" />
-          </label>
-          <label>
-            Search
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search color or example..." />
-          </label>
-          <label>
-            Status
-            <select value={filter} onChange={(event) => setFilter(event.target.value)}>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="all">All</option>
-            </select>
-          </label>
-        </div>
-      </section>
+      {activeTab === 'suggestions' && (
+        <section className="card elevated-card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Automatically Identified Similar Colors</h2>
+              <p className="muted-text">
+                Suggestions now use normalized names, abbreviations, shared words, and apparel color families. Review before approving.
+              </p>
+            </div>
+            <button type="button" className="secondary-action" onClick={refreshSuggestions} disabled={loading}>Refresh</button>
+          </div>
 
-      <section className="card elevated-card">
-        <h2>Candidate Color Aliases</h2>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Woo Color</th>
-                <th>Possible Blank Color</th>
-                <th>Affected</th>
-                <th>Status</th>
-                <th>Examples</th>
-                <th>Notes</th>
-                <th>Decision</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => {
-                const key = colorKey(row);
-                const status = row.approval_status || 'not_reviewed';
+          <div className="filter-row">
+            <label>
+              Search suggestions
+              <input value={suggestionSearch} onChange={(event) => setSuggestionSearch(event.target.value)} placeholder="green, forest, f green, black..." />
+            </label>
+            <label>
+              Minimum score
+              <select value={minScore} onChange={(event) => setMinScore(Number(event.target.value))}>
+                <option value={25}>Very loose</option>
+                <option value={35}>Loose</option>
+                <option value={55}>Balanced</option>
+                <option value={70}>Strict</option>
+                <option value={85}>Very strict</option>
+              </select>
+            </label>
+          </div>
 
-                return (
-                  <tr key={key}>
-                    <td><strong>{row.woo_color}</strong></td>
-                    <td><strong>{row.possible_blank_color}</strong></td>
-                    <td>{row.affected_woo_products}</td>
-                    <td><span className={`alias-status alias-status-${status}`}>{status}</span></td>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source color</th>
+                  <th>Suggested canonical color</th>
+                  <th>Score</th>
+                  <th>Reason</th>
+                  <th>Usage</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {suggestions.map((row) => (
+                  <tr key={`${row.source_color_id}-${row.suggested_canonical_color_id}`}>
+                    <td><strong>{row.source_color_name}</strong></td>
+                    <td><strong>{row.suggested_canonical_color_name}</strong></td>
+                    <td>{Number(row.score || 0).toFixed(0)}</td>
+                    <td>{row.reason}</td>
                     <td>
-                      {(row.examples || []).map((example) => (
-                        <div key={example} className="example-line">{example}</div>
-                      ))}
+                      <div>{compactNumber(row.source_usage_count)} source uses</div>
+                      <small>{compactNumber(row.source_product_usage_count)} products / {compactNumber(row.source_blank_product_usage_count)} blanks</small>
                     </td>
                     <td>
-                      <textarea
-                        rows="3"
-                        value={notesByKey[key] ?? row.notes ?? ''}
-                        onChange={(event) => setNotesByKey((current) => ({ ...current, [key]: event.target.value }))}
-                        placeholder="Optional review note"
-                      />
+                      {row.existing_status === 'active'
+                        ? <span className="alias-status alias-status-approved">active</span>
+                        : <span className="alias-status alias-status-not_reviewed">not mapped</span>}
                     </td>
                     <td>
                       <div className="button-stack">
-                        <button
-                          type="button"
-                          className="success-button"
-                          onClick={() => decide(row, 'approved')}
-                          disabled={Boolean(busyKey)}
-                        >
-                          {busyKey === `${key}:approved` ? 'Approving...' : 'Approve'}
+                        <button type="button" className="success-button" onClick={() => saveSuggestedRule(row)} disabled={saving || row.existing_status === 'active'}>
+                          Use Suggested
                         </button>
-                        <button
-                          type="button"
-                          className="danger-button"
-                          onClick={() => decide(row, 'rejected')}
-                          disabled={Boolean(busyKey)}
-                        >
-                          {busyKey === `${key}:rejected` ? 'Rejecting...' : 'Reject'}
+                        <button type="button" className="secondary-action" onClick={() => chooseSuggestion(row)}>
+                          Choose Different
                         </button>
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+                ))}
+                {suggestions.length === 0 && (
+                  <tr><td colSpan="7">No suggestions found. Try a lower score or use Find Variations.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan="7">No candidates found for this filter.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {activeTab === 'manual' && (
+        <section className="card elevated-card">
+          <h2>Single Color Pairing</h2>
+          <p className="muted-text">
+            Choose one inconsistent source color, then choose the canonical color value you want the app to use.
+          </p>
 
-      <section className="card elevated-card">
-        <h2>Saved Decisions</h2>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Woo Color</th>
-                <th>Blank Color</th>
-                <th>Status</th>
-                <th>Notes</th>
-                <th>Reviewed By</th>
-                <th>Reviewed At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approvals.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.woo_color}</td>
-                  <td>{row.blank_color}</td>
-                  <td><span className={`alias-status alias-status-${row.status}`}>{row.status}</span></td>
-                  <td>{row.notes}</td>
-                  <td>{row.reviewed_by}</td>
-                  <td>{row.reviewed_at ? new Date(row.reviewed_at).toLocaleString() : ''}</td>
-                </tr>
-              ))}
-              {approvals.length === 0 && (
+          <div className="color-pairing-grid">
+            <ColorSearchBox
+              label="Source color to replace"
+              value={sourceSearch}
+              onSearchChange={setSourceSearch}
+              results={sourceResults}
+              selected={selectedSource}
+              onSelect={setSelectedSource}
+              placeholder="green, Forest, FOREST, F Green..."
+              helper="Source search is family-aware, so green will also find Forest/Kelly/Hunter/etc."
+            />
+            <ColorSearchBox
+              label="Canonical color to use"
+              value={canonicalSearch}
+              onSearchChange={setCanonicalSearch}
+              results={canonicalResults}
+              selected={selectedCanonical}
+              onSelect={setSelectedCanonical}
+              placeholder="Forest Green..."
+            />
+          </div>
+
+          <div className="filter-row">
+            <label>
+              Reviewer
+              <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="Reviewer name" />
+            </label>
+            <label>
+              Notes
+              <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Reason for this pairing..." />
+            </label>
+          </div>
+
+          <label className="checkbox-row">
+            <input type="checkbox" checked={applyExisting} onChange={(event) => setApplyExisting(event.target.checked)} />
+            Apply this rule to existing products and blank products immediately
+          </label>
+
+          <div className="pairing-preview-card">
+            <span>Rule preview</span>
+            <strong>{selectedSource ? colorLabel(selectedSource) : 'Choose source color'} → {selectedCanonical ? colorLabel(selectedCanonical) : 'Choose canonical color'}</strong>
+          </div>
+
+          <button type="button" className="primary-action" onClick={() => saveRule()} disabled={saving || !selectedSource || !selectedCanonical}>
+            {saving ? 'Saving...' : 'Save Color Pairing Rule'}
+          </button>
+        </section>
+      )}
+
+      {activeTab === 'rules' && (
+        <section className="card elevated-card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Saved Color Pairing Rules</h2>
+              <p className="muted-text">
+                Active rules are applied by database triggers to future products and blanks.
+              </p>
+            </div>
+            <button type="button" className="secondary-action" onClick={loadRules}>Refresh Rules</button>
+          </div>
+
+          <div className="table-scroll">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan="6">No saved decisions yet.</td>
+                  <th>Source color</th>
+                  <th>Canonical color</th>
+                  <th>Status</th>
+                  <th>Remaining source use</th>
+                  <th>Canonical use</th>
+                  <th>Last applied</th>
+                  <th>Notes</th>
+                  <th>Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {rules.map((rule) => (
+                  <tr key={rule.id}>
+                    <td><strong>{rule.source_color_name}</strong></td>
+                    <td><strong>{rule.canonical_color_name}</strong></td>
+                    <td><span className={`alias-status alias-status-${rule.status}`}>{rule.status}</span></td>
+                    <td>
+                      {compactNumber(Number(rule.remaining_products_using_source || 0) + Number(rule.remaining_blank_products_using_source || 0))}
+                      <small> products/blanks</small>
+                    </td>
+                    <td>
+                      {compactNumber(Number(rule.products_using_canonical || 0) + Number(rule.blank_products_using_canonical || 0))}
+                      <small> products/blanks</small>
+                    </td>
+                    <td>{rule.applied_at ? new Date(rule.applied_at).toLocaleString() : 'Not applied yet'}</td>
+                    <td>{rule.notes}</td>
+                    <td>
+                      {rule.status === 'active' ? (
+                        <button type="button" className="danger-button" onClick={() => disableRule(rule)} disabled={busyRule === rule.id}>
+                          {busyRule === rule.id ? 'Disabling...' : 'Disable'}
+                        </button>
+                      ) : (
+                        <span className="muted-text">Inactive</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {rules.length === 0 && (
+                  <tr><td colSpan="8">No color pairing rules saved yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

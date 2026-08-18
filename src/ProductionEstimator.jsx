@@ -83,7 +83,7 @@ export default function ProductionEstimator() {
     }
   }
 
-  function useRule(rule) {
+  function applyRule(rule) {
     setEstimate({
       ...estimate,
       setupMinutes: rule.setup_minutes ?? 0,
@@ -99,7 +99,10 @@ export default function ProductionEstimator() {
       qcSecondsPerUnit: rule.qc_seconds_per_unit ?? 0,
       packingSecondsPerUnit: rule.packing_seconds_per_unit ?? 0,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelector('.production-estimator-grid')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
   }
 
   const totals = useMemo(() => estimateHours(estimate), [estimate]);
@@ -171,7 +174,7 @@ export default function ProductionEstimator() {
                 <span><strong>{rule.packing_seconds_per_unit}</strong><small>pack sec/unit</small></span>
               </div>
               <div className="production-rule-actions">
-                <button className="secondary-button small-button" type="button" onClick={() => useRule(rule)}>Use Rule</button>
+                <button className="secondary-button small-button" type="button" onClick={() => applyRule(rule)}>Use Rule</button>
                 <button className="danger-button small-button" type="button" disabled={deletingId === rule.id} onClick={() => deleteRule(rule)}>{deletingId === rule.id ? 'Deleting…' : 'Delete'}</button>
               </div>
             </article>

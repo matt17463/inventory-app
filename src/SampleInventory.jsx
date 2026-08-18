@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import './standalone_samples_manual.css';
@@ -49,6 +50,16 @@ const EMPTY_FILTERS = {
   binId: '',
 };
 
+const EMPTY_BULK_FORM = {
+  binId: '',
+  productType: '',
+  newProductType: '',
+  customer: '',
+  vendor: '',
+  notes: '',
+  notesMode: 'none',
+};
+
 function formatMoney(value) {
   if (value === null || value === undefined || value === '') return '';
   const number = Number(value);
@@ -62,6 +73,10 @@ function formatMoney(value) {
 function binLabel(bin) {
   if (!bin) return '';
   return [bin.bin_code, bin.label, bin.location].filter(Boolean).join(' - ') || `Bin ${bin.id}`;
+}
+
+function sampleBinLabel(row) {
+  return [row.bin_code, row.bin_label, row.bin_location].filter(Boolean).join(' - ');
 }
 
 function searchableText(row) {
@@ -123,6 +138,10 @@ function filtersMatch(row, filters) {
   return textMatch && binMatch;
 }
 
+function imageAlt(row) {
+  return [row.brand, row.style, row.color, row.size].filter(Boolean).join(' ') || 'Sample product image';
+}
+
 export default function SampleInventory() {
   const [rows, setRows] = useState([]);
   const [bins, setBins] = useState([]);
@@ -132,12 +151,24 @@ export default function SampleInventory() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [bulkForm, setBulkForm] = useState(EMPTY_BULK_FORM);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [imagePreview, setImagePreview] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   const filteredRows = useMemo(() => {
     return rows.filter((row) => tokensMatch(row, search) && filtersMatch(row, filters));
   }, [rows, search, filters]);
+
+  const visibleIds = useMemo(() => filteredRows.map((row) => row.id), [filteredRows]);
+
+  const selectedRows = useMemo(() => {
+    const selectedSet = new Set(selectedIds.map(String));
+    return rows.filter((row) => selectedSet.has(String(row.id)));
+  }, [rows, selectedIds]);
+
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.map(String).includes(String(id)));
 
   async function loadProductTypes() {
     const { data, error } = await supabase
@@ -146,7 +177,6 @@ export default function SampleInventory() {
       .order('name', { ascending: true });
 
     if (error) {
-      // If SQL has not been run yet, keep default dropdown values.
       setProductTypes(DEFAULT_PRODUCT_TYPES);
       return;
     }
@@ -220,6 +250,43 @@ export default function SampleInventory() {
       ...current,
       [field]: value,
     }));
+  }
+
+  function updateBulkField(field, value) {
+    setBulkForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function toggleSelected(rowId) {
+    setSelectedIds((current) => {
+      const exists = current.map(String).includes(String(rowId));
+      if (exists) return current.filter((id) => String(id) !== String(rowId));
+      return [...current, rowId];
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      const currentSet = new Set(current.map(String));
+      const allSelected = visibleIds.length > 0 && visibleIds.every((id) => currentSet.has(String(id)));
+
+      if (allSelected) {
+        return current.filter((id) => !visibleIds.map(String).includes(String(id)));
+      }
+
+      const merged = [...current];
+      visibleIds.forEach((id) => {
+        if (!merged.map(String).includes(String(id))) merged.push(id);
+      });
+      return merged;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds([]);
+    setBulkForm(EMPTY_BULK_FORM);
   }
 
   async function ensureProductType(name) {
@@ -397,6 +464,98 @@ export default function SampleInventory() {
     }
   }
 
+  async function applyBulkEdit(event) {
+    event.preventDefault();
+
+    if (!selectedIds.length) {
+      setMessage('Select at least one sample before using bulk edit.');
+      return;
+    }
+
+    const updatePayload = {};
+
+    if (bulkForm.binId !== '') {
+      updatePayload.bin_id = bulkForm.binId === '__none__' ? null : Number(bulkForm.binId);
+    }
+
+    const selectedProductType = bulkForm.productType === '__new__'
+      ? bulkForm.newProductType
+      : bulkForm.productType;
+
+    if (String(selectedProductType || '').trim()) {
+      const cleanedType = await ensureProductType(selectedProductType);
+      updatePayload.product_type = cleanedType;
+    }
+
+    if (bulkForm.customer.trim()) {
+      updatePayload.customer = bulkForm.customer.trim();
+    }
+
+    if (bulkForm.vendor.trim()) {
+      updatePayload.vendor = bulkForm.vendor.trim();
+    }
+
+    if (bulkForm.notesMode !== 'none') {
+      const noteText = bulkForm.notes.trim();
+
+      if (bulkForm.notesMode === 'replace') {
+        updatePayload.notes = noteText || null;
+      } else if (bulkForm.notesMode === 'append' && noteText) {
+        updatePayload.notes = null;
+      }
+    }
+
+    const hasStandardUpdates = Object.keys(updatePayload).some((key) => !(key === 'notes' && bulkForm.notesMode === 'append'));
+
+    if (!hasStandardUpdates && !(bulkForm.notesMode === 'append' && bulkForm.notes.trim())) {
+      setMessage('Choose at least one bulk edit value before applying changes.');
+      return;
+    }
+
+    setBusy(true);
+    setMessage('');
+
+    try {
+      if (hasStandardUpdates) {
+        const payloadWithoutAppendPlaceholder = { ...updatePayload };
+        if (bulkForm.notesMode === 'append') delete payloadWithoutAppendPlaceholder.notes;
+
+        if (Object.keys(payloadWithoutAppendPlaceholder).length) {
+          const { error } = await supabase
+            .from('sample_products')
+            .update(payloadWithoutAppendPlaceholder)
+            .in('id', selectedIds);
+
+          if (error) throw error;
+        }
+      }
+
+      if (bulkForm.notesMode === 'append' && bulkForm.notes.trim()) {
+        await Promise.all(selectedRows.map(async (row) => {
+          const existingNotes = String(row.notes || '').trim();
+          const nextNotes = existingNotes
+            ? `${existingNotes}\n${bulkForm.notes.trim()}`
+            : bulkForm.notes.trim();
+
+          const { error } = await supabase
+            .from('sample_products')
+            .update({ notes: nextNotes })
+            .eq('id', row.id);
+
+          if (error) throw error;
+        }));
+      }
+
+      setMessage(`Bulk edit applied to ${selectedIds.length} sample item(s).`);
+      clearSelection();
+      await loadAll();
+    } catch (err) {
+      setMessage(err.message || 'Failed to apply bulk edit.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function printReport() {
     const htmlRows = filteredRows.map((row) => `
       <tr>
@@ -408,7 +567,7 @@ export default function SampleInventory() {
         <td>${row.vendor || ''}</td>
         <td>${row.customer || ''}</td>
         <td>${row.quantity ?? ''}</td>
-        <td>${row.bin_code || row.bin_label || ''}</td>
+        <td>${sampleBinLabel(row) || ''}</td>
         <td>${row.price ?? ''}</td>
         <td>${row.notes || ''}</td>
       </tr>
@@ -475,20 +634,53 @@ export default function SampleInventory() {
     );
   }
 
+  function renderThumbnail(row) {
+    if (!row.image_url) return <span className="muted">No image</span>;
+
+    return (
+      <button
+        type="button"
+        className="sample-thumb-button"
+        onClick={() => setImagePreview(row)}
+        title="Click to enlarge image"
+      >
+        <img src={row.image_url} alt={imageAlt(row)} className="sample-thumb sample-thumb-small" />
+      </button>
+    );
+  }
+
   return (
-    <main className="page sample-page">
+    <main className="page sample-page sample-page-only">
+      <SamplePageScopedStyles />
+
       <section className="page-header">
         <div>
           <p className="eyebrow">Samples</p>
           <h1>Standalone Sample Products</h1>
           <p>
             Manually track sample products that are not linked to WooCommerce blanks or finished products.
-            Samples can now be assigned to bins, include photos, edited, deleted, and reported.
+            Samples can be assigned to bins, include photos, edited, deleted, bulk edited, and reported.
           </p>
         </div>
       </section>
 
       {message && <p className="message">{message}</p>}
+
+      {imagePreview && (
+        <div className="sample-image-modal" role="dialog" aria-modal="true" aria-label="Sample image preview">
+          <div className="sample-image-modal-backdrop" onClick={() => setImagePreview(null)} />
+          <div className="sample-image-modal-card">
+            <div className="sample-image-modal-header">
+              <div>
+                <h2>{imageAlt(imagePreview)}</h2>
+                <p>{[imagePreview.product_type, sampleBinLabel(imagePreview)].filter(Boolean).join(' · ')}</p>
+              </div>
+              <button type="button" onClick={() => setImagePreview(null)}>Close</button>
+            </div>
+            <img src={imagePreview.image_url} alt={imageAlt(imagePreview)} />
+          </div>
+        </div>
+      )}
 
       <section className="card elevated-card">
         <h2>Create New Sample</h2>
@@ -599,22 +791,123 @@ export default function SampleInventory() {
         </div>
       </section>
 
+      <section className="card elevated-card sample-bulk-card">
+        <div className="sample-bulk-header">
+          <div>
+            <h2>Bulk Edit Selected Samples</h2>
+            <p className="helper-text">
+              Select sample rows below, then use this panel to assign a bin or update common details.
+            </p>
+          </div>
+          <strong>{selectedIds.length} selected</strong>
+        </div>
+
+        <form onSubmit={applyBulkEdit}>
+          <div className="form-grid">
+            <label>
+              Assign Bin
+              <select value={bulkForm.binId} onChange={(event) => updateBulkField('binId', event.target.value)}>
+                <option value="">Leave bin unchanged</option>
+                <option value="__none__">Remove bin assignment</option>
+                {bins.map((bin) => (
+                  <option key={bin.id} value={bin.id}>{binLabel(bin)}</option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Product Type
+              <select value={bulkForm.productType} onChange={(event) => updateBulkField('productType', event.target.value)}>
+                <option value="">Leave type unchanged</option>
+                {productTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+                <option value="__new__">+ Create new type</option>
+              </select>
+              {bulkForm.productType === '__new__' && (
+                <input
+                  value={bulkForm.newProductType}
+                  onChange={(event) => updateBulkField('newProductType', event.target.value)}
+                  placeholder="Enter new product type"
+                />
+              )}
+            </label>
+
+            <label>
+              Customer
+              <input
+                value={bulkForm.customer}
+                onChange={(event) => updateBulkField('customer', event.target.value)}
+                placeholder="Leave blank to keep current"
+              />
+            </label>
+
+            <label>
+              Vendor
+              <input
+                value={bulkForm.vendor}
+                onChange={(event) => updateBulkField('vendor', event.target.value)}
+                placeholder="Leave blank to keep current"
+              />
+            </label>
+
+            <label>
+              Notes Action
+              <select value={bulkForm.notesMode} onChange={(event) => updateBulkField('notesMode', event.target.value)}>
+                <option value="none">Leave notes unchanged</option>
+                <option value="append">Append note</option>
+                <option value="replace">Replace notes</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            Bulk Notes
+            <textarea
+              value={bulkForm.notes}
+              onChange={(event) => updateBulkField('notes', event.target.value)}
+              placeholder="Used only when Notes Action is Append or Replace"
+            />
+          </label>
+
+          <div className="inline-form-row">
+            <button type="submit" disabled={busy || !selectedIds.length}>
+              {busy ? 'Applying...' : `Apply to ${selectedIds.length} Selected`}
+            </button>
+            <button type="button" onClick={clearSelection} disabled={!selectedIds.length || busy}>
+              Clear Selection
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section className="card">
         <h2>Search Sample Products</h2>
 
-        <div className="inline-form-row">
+        <div className="inline-form-row sample-search-row">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search brand, style, price, vendor, color, size, product type, customer, notes, bin..."
           />
           <button type="button" onClick={() => setSearch('')}>Clear</button>
+          <button type="button" onClick={toggleAllVisible}>
+            {allVisibleSelected ? 'Unselect Visible' : `Select Visible (${filteredRows.length})`}
+          </button>
         </div>
 
         <div className="table-wrap sample-table-wrap">
-          <table>
+          <table className="sample-inventory-table">
             <thead>
               <tr>
+                <th className="sample-select-cell">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    aria-label="Select all visible sample products"
+                  />
+                </th>
                 <th>Image</th>
                 <th>Brand</th>
                 <th>Style</th>
@@ -633,11 +926,20 @@ export default function SampleInventory() {
             <tbody>
               {filteredRows.map((row) => {
                 const editing = editingId === row.id;
+                const selected = selectedIds.map(String).includes(String(row.id));
 
                 return (
-                  <tr key={row.id}>
+                  <tr key={row.id} className={selected ? 'sample-row-selected' : ''}>
+                    <td className="sample-select-cell">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleSelected(row.id)}
+                        aria-label={`Select ${imageAlt(row)}`}
+                      />
+                    </td>
                     <td>
-                      {row.image_url ? <img src={row.image_url} alt="" className="sample-thumb" /> : <span className="muted">No image</span>}
+                      {renderThumbnail(row)}
                       {editing && <input type="file" accept="image/*" onChange={(event) => updateEditField('imageFile', event.target.files?.[0] || null)} />}
                     </td>
                     <td>{editing ? <input value={editForm.brand} onChange={(event) => updateEditField('brand', event.target.value)} /> : row.brand}</td>
@@ -664,7 +966,7 @@ export default function SampleInventory() {
                             <option key={bin.id} value={bin.id}>{binLabel(bin)}</option>
                           ))}
                         </select>
-                      ) : (row.bin_code || row.bin_label || row.bin_location || '')}
+                      ) : (sampleBinLabel(row) || '')}
                     </td>
                     <td>{editing ? <textarea value={editForm.notes} onChange={(event) => updateEditField('notes', event.target.value)} /> : row.notes}</td>
                     <td>
@@ -686,7 +988,7 @@ export default function SampleInventory() {
 
               {!filteredRows.length && (
                 <tr>
-                  <td colSpan="13">No sample products found.</td>
+                  <td colSpan="14">No sample products found.</td>
                 </tr>
               )}
             </tbody>
@@ -694,5 +996,169 @@ export default function SampleInventory() {
         </div>
       </section>
     </main>
+  );
+}
+
+function SamplePageScopedStyles() {
+  return (
+    <style>{`
+      .sample-page-only .sample-table-wrap {
+        overflow-x: auto;
+      }
+
+      .sample-page-only .sample-inventory-table {
+        min-width: 1180px;
+      }
+
+      .sample-page-only .sample-select-cell {
+        width: 42px;
+        text-align: center;
+      }
+
+      .sample-page-only .sample-row-selected {
+        background: rgba(37, 99, 235, 0.06);
+      }
+
+      .sample-page-only .sample-thumb-button {
+        border: 0;
+        padding: 0;
+        background: transparent;
+        cursor: zoom-in;
+        display: inline-flex;
+        border-radius: 12px;
+      }
+
+      .sample-page-only .sample-thumb-small,
+      .sample-page-only img.sample-thumb.sample-thumb-small {
+        width: 56px !important;
+        height: 56px !important;
+        max-width: 56px !important;
+        max-height: 56px !important;
+        object-fit: cover;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+        display: block;
+      }
+
+      .sample-page-only .sample-thumb-button:hover .sample-thumb-small {
+        transform: scale(1.04);
+      }
+
+      .sample-page-only .sample-bulk-card {
+        border: 1px solid rgba(37, 99, 235, 0.14);
+        background:
+          radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 24rem),
+          #ffffff;
+      }
+
+      .sample-page-only .sample-bulk-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .sample-page-only .sample-bulk-header strong {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 110px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(37, 99, 235, 0.10);
+        color: #1d4ed8;
+        font-weight: 900;
+      }
+
+      .sample-page-only .sample-search-row {
+        align-items: stretch;
+      }
+
+      .sample-page-only .sample-search-row input {
+        min-width: min(100%, 460px);
+      }
+
+      .sample-image-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .sample-image-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.72);
+        backdrop-filter: blur(4px);
+      }
+
+      .sample-image-modal-card {
+        position: relative;
+        z-index: 1;
+        width: min(980px, 96vw);
+        max-height: 92vh;
+        overflow: auto;
+        border-radius: 24px;
+        background: #ffffff;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
+        padding: 18px;
+      }
+
+      .sample-image-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .sample-image-modal-header h2 {
+        margin: 0;
+      }
+
+      .sample-image-modal-header p {
+        margin: 4px 0 0;
+        color: #64748b;
+      }
+
+      .sample-image-modal-card > img {
+        width: 100%;
+        max-height: 72vh;
+        object-fit: contain;
+        border-radius: 18px;
+        background: #f8fafc;
+      }
+
+      html[data-theme="dark"] .sample-page-only .sample-bulk-card,
+      body[data-theme="dark"] .sample-page-only .sample-bulk-card,
+      html[data-theme="dark"] .sample-image-modal-card,
+      body[data-theme="dark"] .sample-image-modal-card {
+        background: #111827;
+        color: #f8fafc;
+      }
+
+      html[data-theme="dark"] .sample-image-modal-header p,
+      body[data-theme="dark"] .sample-image-modal-header p {
+        color: #a8b3c7;
+      }
+
+      @media (max-width: 760px) {
+        .sample-page-only .sample-bulk-header {
+          display: grid;
+        }
+
+        .sample-page-only .sample-bulk-header strong {
+          width: fit-content;
+        }
+
+        .sample-image-modal {
+          padding: 12px;
+        }
+      }
+    `}</style>
   );
 }

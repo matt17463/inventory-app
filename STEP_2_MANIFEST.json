@@ -1,0 +1,166 @@
+{
+  "package": "Skilled Crafting Inventory App Step 2 Safe Migration Package",
+  "build": "inventory-app-main-step2-safe",
+  "generated_at_utc": "2026-07-25T04:42:13.708909+00:00",
+  "contract_version": "2026-07-25-step2-v1",
+  "contract_summary": {
+    "relations": 74,
+    "required_relations": 74,
+    "columns": 230,
+    "rpc_functions": 143,
+    "required_rpc_functions": 137,
+    "storage_buckets": 2,
+    "routes": 74
+  },
+  "safety": {
+    "required_migrations_are_additive_metadata_only": true,
+    "operational_rows_modified": false,
+    "operational_tables_replaced": false,
+    "operational_rpcs_replaced": false,
+    "rls_changed_by_required_migrations": false,
+    "storage_changed_by_required_migrations": false,
+    "exact_live_baseline_must_be_captured_by_user": true
+  },
+  "required_order": [
+    "Create a managed Supabase recovery checkpoint",
+    "Run supabase/verification/000_step2_preflight_read_only.sql",
+    "Run scripts/step2_capture_production_baseline.sh",
+    "Review and align migration history",
+    "Run scripts/step2_db_push_dry_run.sh",
+    "Apply migrations 202607250101, 202607250102, 202607250103",
+    "Run supabase/verification/900_step2_post_install_verification.sql",
+    "Complete smoke tests in docs/STEP_2_SAFE_DEPLOYMENT.md"
+  ],
+  "files": [
+    {
+      "path": "README_FIRST.md",
+      "bytes": 911,
+      "sha256": "41496d3cbd7c31daae320a3765fb4069a72072e2fb833279fd31dd3132728569"
+    },
+    {
+      "path": "docs/STEP_2_SAFE_DEPLOYMENT.md",
+      "bytes": 7153,
+      "sha256": "8a048b92d6ee74546c5d0de8e53f916fe7888af282ba18bc0415b7cf46216db7"
+    },
+    {
+      "path": "docs/STEP_2_DATABASE_CONTRACT.md",
+      "bytes": 2709,
+      "sha256": "873a989ad686bf4fb5cc0e940015fb6fada77462664c357e4c748cd898f421a7"
+    },
+    {
+      "path": "supabase/migrations/202607250101_step2_schema_contract_registry.sql",
+      "bytes": 134586,
+      "sha256": "3cc7f612d7668f78e7a273cfcf609abece7316aec93a2843555a9a4c8aebb66a"
+    },
+    {
+      "path": "supabase/migrations/202607250102_step2_schema_introspection_helpers.sql",
+      "bytes": 13276,
+      "sha256": "85b6a35c82a48253d11fb0f283f0360ff1d4cd7db4bef60fd48bde832dd6de35"
+    },
+    {
+      "path": "supabase/migrations/202607250103_step2_schema_version_marker.sql",
+      "bytes": 2310,
+      "sha256": "726fa823c0f10fb4d31d2119f3f2843e4128d1a826bcd4ebf94c9026934bd69a"
+    },
+    {
+      "path": "supabase/verification/000_step2_preflight_read_only.sql",
+      "bytes": 130825,
+      "sha256": "4df932758d3499cf1e5aaf72528437d911afa6789c24769a95c4b33c14279387"
+    },
+    {
+      "path": "supabase/verification/900_step2_post_install_verification.sql",
+      "bytes": 808,
+      "sha256": "f62a93150b7c7fd4dfd61b3127a04424ea2011c205bd0f573ecc4b447e1dc49d"
+    },
+    {
+      "path": "supabase/tests/001_step2_contract_smoke.sql",
+      "bytes": 1055,
+      "sha256": "244d0c92fc07204d2c38057c175ca93f8bf5d41c671a27da747cd8a628d14883"
+    },
+    {
+      "path": "supabase/rollback/202607250101_step2_limited_rollback.sql",
+      "bytes": 1787,
+      "sha256": "4dd94e33f05deeb9796b1f5896cd23fd1add9f757d4c28f2db688f0ea20d0979"
+    },
+    {
+      "path": "supabase/optional/202607250104_optional_production_photo_bucket.sql",
+      "bytes": 2013,
+      "sha256": "bec5cb3713e35753aa805592bdae72a3663edbf478a20eed72d795ca291d8961"
+    },
+    {
+      "path": "supabase/contract/application_database_contract.json",
+      "bytes": 188879,
+      "sha256": "71a1300c0861253812078fdff89bd2d9bee768cda4a2752b06d9125e513cccc5"
+    },
+    {
+      "path": "supabase/contract/relations.csv",
+      "bytes": 10768,
+      "sha256": "37277d3fc4ff718ee2513ddaa87e90a6c51130ed58c1c1db1bd7cfeb21d98a43"
+    },
+    {
+      "path": "supabase/contract/columns.csv",
+      "bytes": 42976,
+      "sha256": "474a04582b6870d2d450add2e3df1ee22d7cbe69e7b795972716b7f1e8870522"
+    },
+    {
+      "path": "supabase/contract/rpc_functions.csv",
+      "bytes": 19283,
+      "sha256": "5147893c9dc94316f7212d23f734f9aa0c4be83acdca24a6a6b753deffa7f340"
+    },
+    {
+      "path": "supabase/contract/storage_buckets.csv",
+      "bytes": 246,
+      "sha256": "1630c60f77f9ac172c0d56cca1c740942fa94cb794291aaa6b19d0b0a8919046"
+    },
+    {
+      "path": "supabase/baseline/README.md",
+      "bytes": 942,
+      "sha256": "6e6632f7253aede4e91dd8f7c3b0bcee47fc1b71fd563205039ae16a08ba0e94"
+    },
+    {
+      "path": "scripts/build_database_contract.py",
+      "bytes": 19539,
+      "sha256": "f31c94a4fd90e1b995f43d15b1344aff8fe83ab1e674fd1b7189b10baca79dec"
+    },
+    {
+      "path": "scripts/generate_step2_sql.py",
+      "bytes": 35989,
+      "sha256": "f2e0b326449527778b14582d363f7031e3cdf2f0fda59e4a3afae3520cbc29a4"
+    },
+    {
+      "path": "scripts/step2_capture_production_baseline.sh",
+      "bytes": 1646,
+      "sha256": "24d54f9e5e0591487ad621e8893a443fb700cfb8fd06074b77840e97b61c7d62"
+    },
+    {
+      "path": "scripts/step2_migration_status.sh",
+      "bytes": 319,
+      "sha256": "9978e4a8365a944d4dbaf5297ec0b7c40d098b4865982a8336341848c7aced48"
+    },
+    {
+      "path": "scripts/step2_db_push_dry_run.sh",
+      "bytes": 390,
+      "sha256": "4a8386861d1a01af9c8388b3d48945fd5c7292cd3c4e024d703ebc9119bf561a"
+    },
+    {
+      "path": "scripts/step2_generate_types.sh",
+      "bytes": 422,
+      "sha256": "ff04e1193150cc3db42a4c6ed144321bc7fcfe5dfc67a68ffa627cdbee906108"
+    },
+    {
+      "path": "src/types/README.md",
+      "bytes": 346,
+      "sha256": "32e9b0703388d45afef92b1c5c07eba24c1b55ac747fa1dabebff106f2d73fbe"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1086,
+      "sha256": "43c5730436c9706eeb5ad1d02606ef04c6e4889ee93d18cfa681b1f3ca60c20f"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 377,
+      "sha256": "4dc2292f1e60a54d485b410e6313ea8c857ceb8d0c76d9aa562f90151765165b"
+    }
+  ]
+}

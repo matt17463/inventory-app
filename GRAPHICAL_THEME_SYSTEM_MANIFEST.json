@@ -1,0 +1,38 @@
+{
+  "version": "0.6.22",
+  "replaces": "0.6.21",
+  "database_changes_required": false,
+  "feature": "Six visually distinct graphical interface themes",
+  "default_preset": "professional-enterprise",
+  "storage_key": "sc_display_preferences_v2",
+  "legacy_theme_aliases_supported": true,
+  "presets": [
+    "technical-blueprint",
+    "futuristic-interface",
+    "cyberpunk-neon",
+    "formal-executive",
+    "professional-enterprise",
+    "industrial-command"
+  ],
+  "graphical_differences": [
+    "Typography and heading treatment",
+    "Button geometry and interaction styling",
+    "Card construction and border treatment",
+    "Table headers and row behavior",
+    "Navigation shape and active states",
+    "Background graphics and overlays",
+    "Status badge construction",
+    "Input and control geometry"
+  ],
+  "changed_files": [
+    "src/themePresets.js",
+    "src/themes.css",
+    "src/ui/ThemeProvider.jsx",
+    "src/ThemeSettings.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json",
+    "THEME_SYSTEM_MANIFEST.json"
+  ]
+}

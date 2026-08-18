@@ -1,0 +1,15 @@
+{
+  "version": "0.6.27",
+  "replaces": "0.6.26",
+  "database_changes_required": false,
+  "purpose": "Inventory Overview universal SKU, name, and description search",
+  "changed_files": [
+    "src/BlankInventory.jsx",
+    "src/lib/inventoryApi.js",
+    "src/App.css",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json"
+  ]
+}

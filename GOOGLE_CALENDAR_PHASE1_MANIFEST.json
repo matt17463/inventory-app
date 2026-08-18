@@ -1,0 +1,41 @@
+{
+  "release": "0.6.30",
+  "feature": "Google Calendar Phase 1",
+  "base_release": "0.6.29",
+  "database_migration": "deployment/sql/17_GOOGLE_CALENDAR_PHASE1.sql",
+  "new_files": [
+    "src/GoogleCalendarIntegration.jsx",
+    "src/lib/googleCalendarApi.js",
+    "netlify/functions/_shared/googleCalendar.js",
+    "netlify/functions/google-calendar-admin.js",
+    "netlify/functions/google-calendar-oauth.js",
+    "netlify/functions/google-calendar-scheduled-sync.js",
+    "scripts/tests/google-calendar.test.mjs",
+    "GOOGLE_CALENDAR_PHASE1_DEPLOYMENT_GUIDE.md",
+    "GOOGLE_CALENDAR_PHASE1_FILE_CHECKSUMS.txt",
+    "GOOGLE_CALENDAR_PHASE1_MANIFEST.json",
+    "README_FIRST_0.6.30.md",
+    "RELEASE_NOTES_0.6.30.md",
+    "VALIDATION_RESULTS_0.6.30.md"
+  ],
+  "modified_files": [
+    ".env.example",
+    "package.json",
+    "package-lock.json",
+    "netlify.toml",
+    "src/App.jsx",
+    "src/navigationConfig.js",
+    "src/components/AppShell.jsx",
+    "netlify/functions/deployment-health.js",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "deployment/NETLIFY_ENVIRONMENT_VARIABLES.md"
+  ],
+  "calendar_targets": [
+    "order_due",
+    "purchase_order_expected",
+    "owner_task"
+  ],
+  "sync_direction": "application_to_google_only",
+  "automatic_sync_minutes": 15
+}

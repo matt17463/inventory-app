@@ -30,7 +30,10 @@ export default function WaitingOn() {
     acc.lines += 1;
     acc.short += Number(row.short_quantity || 0);
     acc.openPo += Number(row.open_po_quantity || 0);
-    acc.uncovered += Math.max(Number(row.short_quantity || 0) - Number(row.open_po_quantity || 0), 0);
+    acc.uncovered += Number(
+      row.uncovered_quantity
+      ?? Math.max(Number(row.short_quantity || 0) - Number(row.open_po_quantity || 0), 0)
+    );
     return acc;
   }, { lines: 0, short: 0, openPo: 0, uncovered: 0 }), [rows]);
 
@@ -40,7 +43,7 @@ export default function WaitingOn() {
         <div>
           <p className="eyebrow">Purchasing Phase 1</p>
           <h1>What Am I Waiting On?</h1>
-          <p>See production shortages, whether they are covered by open purchase orders, and what still needs to be ordered.</p>
+          <p>Uses the same shortage data as the Purchasing Report, then shows whether each item is covered by open purchase orders.</p>
         </div>
         <div className="phase1-actions">
           <Link className="secondary-button" to="/purchase-orders/new">Create PO</Link>
@@ -72,10 +75,13 @@ export default function WaitingOn() {
               <thead><tr><th>Order / Job</th><th>Customer</th><th>SKU</th><th>Item</th><th>On Hand</th><th>Reserved</th><th>Available</th><th>Short</th><th>Open PO Qty</th><th>Next PO</th><th>ETA</th><th>Status</th></tr></thead>
               <tbody>
                 {!rows.length ? <tr><td colSpan="12">No current shortages found.</td></tr> : rows.map((row) => {
-                  const uncovered = Math.max(Number(row.short_quantity || 0) - Number(row.open_po_quantity || 0), 0);
+                  const uncovered = Number(
+                    row.uncovered_quantity
+                    ?? Math.max(Number(row.short_quantity || 0) - Number(row.open_po_quantity || 0), 0)
+                  );
                   return (
                     <tr key={`${row.blank_product_id}-${row.order_ref || 'shortage'}`} className={uncovered > 0 ? 'shortage-row' : 'covered-row'}>
-                      <td>{row.order_ref || 'Unassigned'}</td>
+                      <td>{row.order_ref || 'Pending Stock'}</td>
                       <td>{row.customer_name || ''}</td>
                       <td><strong>{row.sku_base}</strong></td>
                       <td>{[row.brand, row.product_type, row.color, row.size].filter(Boolean).join(' / ')}</td>

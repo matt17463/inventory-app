@@ -1,0 +1,17 @@
+{
+  "version": "0.6.19",
+  "replaces": "0.6.18",
+  "database_changes_required": false,
+  "root_cause": "Purchasing Report and PO screens used different recommendation sources",
+  "changed_files": [
+    "src/lib/inventoryApi.js",
+    "src/PurchaseOrderGenerator.jsx",
+    "src/Purchasing.jsx",
+    "src/ReceivePurchaseOrder.jsx",
+    "src/WaitingOn.jsx",
+    "scripts/tests/static-contract.test.mjs",
+    "scripts/verify_build_features.mjs",
+    "package.json",
+    "package-lock.json"
+  ]
+}

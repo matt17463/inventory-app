@@ -1,4 +1,6 @@
 import { supabase } from '../supabaseClient';
+import { authenticatedFunctionFetch } from './netlifyFunctionClient';
+import { getPendingStockBins } from './pullSheetBinAssignmentApi';
 
 function normalizeSearchValue(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -14,6 +16,127 @@ function searchTokens(term) {
     .split(/[^a-z0-9]+/i)
     .map((token) => token.trim())
     .filter(Boolean);
+}
+
+
+const INVENTORY_SEARCHABLE_KEY = /(?:sku|name|description|desc|title|content|excerpt|brand|style|product[_-]?type|color|size|barcode|upc|supplier|vendor|status|note|attribute|variation|customer|logo|placement|bin|search)/i;
+
+function collectInventorySearchValues(value, output = [], depth = 0, parentKey = '') {
+  if (value === null || value === undefined || depth > 6) return output;
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectInventorySearchValues(item, output, depth + 1, parentKey));
+    return output;
+  }
+
+  if (typeof value === 'object') {
+    Object.entries(value).forEach(([key, child]) => {
+      collectInventorySearchValues(child, output, depth + 1, key);
+    });
+    return output;
+  }
+
+  if (INVENTORY_SEARCHABLE_KEY.test(parentKey)) {
+    const text = String(value).trim();
+    if (text) output.push(text);
+  }
+
+  return output;
+}
+
+function inventoryRecordMatchesAllTokens(records, term) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const values = (Array.isArray(records) ? records : [records])
+    .flatMap((record) => collectInventorySearchValues(record));
+  const text = textSearchValue(values.join(' '));
+  const normalized = normalizeSearchValue(values.join(' '));
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    return text.includes(token) || normalized.includes(normalizedToken);
+  });
+}
+
+function cleanInventoryDescription(value) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function inventoryDescriptionFromRecords(records) {
+  const descriptionKeys = [
+    'description',
+    'short_description',
+    'product_description',
+    'blank_description',
+    'woo_description',
+    'woo_short_description',
+    'post_content',
+    'post_excerpt',
+    'content',
+    'excerpt',
+  ];
+
+  for (const record of Array.isArray(records) ? records : [records]) {
+    if (!record || typeof record !== 'object') continue;
+    for (const key of descriptionKeys) {
+      const description = cleanInventoryDescription(record[key]);
+      if (description) return description;
+    }
+  }
+
+  return '';
+}
+
+async function fetchAllRelationRows(
+  relation,
+  {
+    select = '*',
+    orderColumn = null,
+    ascending = true,
+    pageSize = 1000,
+    maxRows = 50000,
+  } = {},
+) {
+  const rows = [];
+  const safePageSize = Math.max(100, Math.min(Number(pageSize || 1000), 1000));
+  const safeMaxRows = Math.max(safePageSize, Number(maxRows || 50000));
+
+  for (let offset = 0; offset < safeMaxRows; offset += safePageSize) {
+    let query = supabase.from(relation).select(select);
+    if (orderColumn) query = query.order(orderColumn, { ascending });
+
+    const { data, error } = await query.range(
+      offset,
+      Math.min(offset + safePageSize - 1, safeMaxRows - 1),
+    );
+
+    if (error) throw error;
+
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < safePageSize) break;
+  }
+
+  return rows;
+}
+
+async function fetchRelationRowsForSearch(relation, options = {}) {
+  try {
+    return await fetchAllRelationRows(relation, options);
+  } catch {
+    // Older databases may not expose every supplemental catalog relation to
+    // authenticated users. The inventory overview remains usable with its
+    // app-facing view even when supplemental description metadata is absent.
+    return [];
+  }
 }
 
 function productMatchesAllTokens(product, term) {
@@ -332,6 +455,56 @@ export async function getBlankProducts(search = '') {
   return rows.filter((product) => productMatchesAllTokens(product, term));
 }
 
+
+export async function searchBlankInventoryForSpoilage(search = '', limit = 200) {
+  const term = String(search || '').trim();
+  const cappedLimit = Math.max(25, Math.min(Number(limit || 200), 500));
+
+  const { data, error } = await supabase.rpc('sc_search_spoilage_blank_items', {
+    p_search: term || null,
+    p_limit: cappedLimit,
+  });
+
+  if (!error && Array.isArray(data)) {
+    return data.map((row) => ({
+      ...row,
+      id: row.blank_product_id || row.id,
+      blank_product_id: row.blank_product_id || row.id,
+      sku_base: row.sku_base || row.blank_sku || row.sku || '',
+      name: row.name || row.blank_product_name || '',
+      brand: row.brand || row.brand_name || '',
+      style: row.style || row.product_type || row.product_type_name || '',
+      color: row.color || row.color_name || '',
+      size: row.size || row.size_name || row.size_code || '',
+      barcode: row.barcode || '',
+      on_hand_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0),
+      available_quantity: Number(row.available_quantity ?? row.on_hand_quantity ?? 0),
+      reserved_quantity: Number(row.reserved_quantity ?? 0),
+      inventory_status: row.inventory_status || (Number(row.on_hand_quantity || 0) > 0 ? 'in_stock' : 'zero_on_hand'),
+      brands: row.brands || (row.brand ? { name: row.brand } : undefined),
+      product_types: row.product_types || (row.style ? { name: row.style } : undefined),
+      colors: row.colors || (row.color ? { name: row.color } : undefined),
+      sizes: row.sizes || (row.size ? { name: row.size } : undefined),
+    }));
+  }
+
+  // Fallback for deployments where the SQL patch has not been installed yet.
+  // This still searches the blank catalog, but it may not be limited to in-stock rows.
+  const fallback = await getBlankProducts(term);
+  return fallback.slice(0, cappedLimit).map((row) => ({
+    ...row,
+    id: row.id || row.blank_product_id,
+    blank_product_id: row.blank_product_id || row.id,
+    brand: row.brand || row.brands?.name || row.brands?.code || '',
+    style: row.style || row.product_types?.name || row.product_types?.code || '',
+    color: row.color || row.colors?.name || row.colors?.code || '',
+    size: row.size || row.sizes?.name || row.sizes?.code || '',
+    on_hand_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0),
+    available_quantity: Number(row.available_quantity ?? row.on_hand_quantity ?? 0),
+    inventory_status: row.inventory_status || 'catalog_match',
+  }));
+}
+
 export async function findBlankProductsByScannedValue(value) {
   const term = String(value || '').trim();
   if (!term) return [];
@@ -355,45 +528,182 @@ export async function findBlankProductByScannedValue(value) {
   return products[0] || null;
 }
 
-export async function getBlankInventory(search = '') {
-  const { data, error } = await supabase
-    .from('blank_inventory_by_product')
-    .select('*')
-    .order('name', { ascending: true })
-    .limit(10000);
+function normalizeCatalogInventoryRow(row) {
+  const onHand = Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0);
+  const reserved = Number(row.reserved_quantity ?? row.quantity_reserved ?? row.reserved ?? 0);
+  const available = Number(row.available_quantity ?? (onHand - reserved));
+  const skuBase = row.blank_sku || row.sku_base || row.blank_sku_base || row.woo_sku || row.sku || '';
+  const displayName = row.blank_product_name || row.product_display_name || row.name || row.woo_product_name || skuBase;
 
-  if (error) throw error;
+  return {
+    ...row,
+    product_row_id: row.product_row_id || row.synced_product_id || row.product_id || null,
+    blank_product_id: row.blank_product_id || row.product_row_id || row.id || null,
+    sku_base: skuBase,
+    blank_sku: row.blank_sku || row.sku_base || row.blank_sku_base || skuBase,
+    woo_sku: row.woo_sku || row.sku || row.linked_woo_skus || '',
+    name: displayName,
+    blank_product_name: row.blank_product_name || displayName,
+    product_type: row.product_type || row.style,
+    style: row.style || row.product_type,
+    quantity_on_hand: Number.isFinite(onHand) ? onHand : 0,
+    total_quantity: Number.isFinite(onHand) ? onHand : 0,
+    reserved_quantity: Number.isFinite(reserved) ? reserved : 0,
+    available_quantity: Number.isFinite(available) ? available : 0,
+    inventory_status: row.inventory_status || (onHand > 0 ? 'in_stock' : 'zero_on_hand'),
+    description: inventoryDescriptionFromRecords([row]),
+    search_description: inventoryDescriptionFromRecords([row]),
+    search_text: row.search_text || '',
+  };
+}
 
-  const rows = data || [];
+function toInventorySearchParts(values) {
+  return values.filter(Boolean).map((part) => ({
+    text: textSearchValue(part),
+    normalized: normalizeSearchValue(part),
+  }));
+}
+
+function inventoryCatalogCoreSearchParts(row) {
+  return toInventorySearchParts([
+    row.product_row_id,
+    row.blank_product_id,
+    row.sku_base,
+    row.blank_sku,
+    row.blank_sku_base,
+    row.blank_product_name,
+    row.product_display_name,
+    row.name,
+    row.description,
+    row.search_description,
+    row.short_description,
+    row.product_description,
+    row.brand,
+    row.product_type,
+    row.style,
+    row.color,
+    row.size,
+    row.inventory_status,
+    row.barcode,
+    row.supplier_skus,
+    row.vendor,
+    row.supplier,
+  ]);
+}
+
+function inventoryCatalogLinkedWooSearchParts(row) {
+  return toInventorySearchParts([
+    row.woo_sku,
+    row.sku,
+    row.woo_product_name,
+    row.linked_woo_skus,
+    row.search_text,
+  ]);
+}
+
+function rowMatchesInventoryTokens(row, term) {
+  const tokens = searchTokens(term);
+  if (!tokens.length) return true;
+
+  const searchable = inventoryCatalogCoreSearchParts(row)
+    .concat(inventoryCatalogLinkedWooSearchParts(row));
+  const supplementalRecords = row._inventory_search_metadata || [];
+
+  return tokens.every((token) => {
+    const normalizedToken = normalizeSearchValue(token);
+    const explicitMatch = searchable.some((part) =>
+      part.text.includes(token) || part.normalized.includes(normalizedToken)
+    );
+
+    return explicitMatch || inventoryRecordMatchesAllTokens(supplementalRecords, token);
+  });
+}
+
+export async function getBlankInventory(search = '', options = {}) {
+  void options;
+
+  let rows = [];
+  let catalogError = null;
+
+  try {
+    const preferredRows = await fetchAllRelationRows(
+      'app_blank_inventory_overview_v2',
+      { orderColumn: 'blank_product_name', maxRows: 50000 },
+    );
+    rows = preferredRows.map(normalizeCatalogInventoryRow);
+  } catch (error) {
+    catalogError = error;
+
+    try {
+      const catalogRows = await fetchAllRelationRows(
+        'app_synced_inventory_catalog_v1',
+        { orderColumn: 'name', maxRows: 50000 },
+      );
+      rows = catalogRows.map(normalizeCatalogInventoryRow);
+    } catch (catalogFallbackError) {
+      catalogError = catalogError || catalogFallbackError;
+
+      try {
+        const legacyRows = await fetchAllRelationRows(
+          'blank_inventory_by_product',
+          { orderColumn: 'name', maxRows: 50000 },
+        );
+        rows = legacyRows.map(normalizeCatalogInventoryRow);
+      } catch (legacyError) {
+        throw catalogError || legacyError;
+      }
+    }
+  }
+
   const term = String(search || '').trim();
-
   if (!term) return rows;
 
-  const tokens = searchTokens(term);
-  if (!tokens.length) return rows;
+  const [blankMetadataRows, wooProductRows] = await Promise.all([
+    fetchRelationRowsForSearch('blank_products', { maxRows: 50000 }),
+    fetchRelationRowsForSearch('products', { maxRows: 50000 }),
+  ]);
 
-  return rows.filter((row) => {
-    const searchable = [
-      row.blank_product_id,
-      row.sku_base,
-      row.name,
-      row.brand,
-      row.product_type,
-      row.style,
-      row.color,
-      row.size,
-    ].filter(Boolean).map((part) => ({
-      text: textSearchValue(part),
-      normalized: normalizeSearchValue(part),
-    }));
+  const metadataByBlankProductId = new Map();
 
-    return tokens.every((token) => {
-      const normalizedToken = normalizeSearchValue(token);
-      return searchable.some((part) =>
-        part.text.includes(token) || part.normalized.includes(normalizedToken)
+  const addMetadata = (blankProductId, record) => {
+    const key = String(blankProductId || '').trim();
+    if (!key || !record) return;
+    const current = metadataByBlankProductId.get(key) || [];
+    current.push(record);
+    metadataByBlankProductId.set(key, current);
+  };
+
+  blankMetadataRows.forEach((record) => addMetadata(record.id, record));
+  wooProductRows.forEach((record) => addMetadata(record.blank_product_id, record));
+
+  return rows
+    .map((row) => {
+      const candidateIds = [
+        row.blank_product_id,
+        row.product_row_id,
+        row.id,
+      ]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+
+      const metadata = candidateIds.flatMap(
+        (candidateId) => metadataByBlankProductId.get(candidateId) || [],
       );
+      const description = inventoryDescriptionFromRecords([row, ...metadata]);
+
+      return {
+        ...row,
+        description: row.description || description,
+        search_description: description,
+        _inventory_search_metadata: metadata,
+      };
+    })
+    .filter((row) => rowMatchesInventoryTokens(row, term))
+    .sort((a, b) => {
+      const aText = [a.blank_sku, a.sku_base, a.name].filter(Boolean).join(' ');
+      const bText = [b.blank_sku, b.sku_base, b.name].filter(Boolean).join(' ');
+      return aText.localeCompare(bText);
     });
-  });
 }
 
 export async function getBinContents(binId, search = '') {
@@ -415,6 +725,68 @@ export async function getBinContents(binId, search = '') {
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
+}
+
+export async function getBinItemReceiveHistory({ binId, blankProductId, skuBase } = {}) {
+  const normalizedBinId = binId == null ? '' : String(binId);
+  const normalizedBlankId = blankProductId == null ? null : String(blankProductId);
+  const normalizedSkuBase = skuBase == null ? null : String(skuBase);
+
+  if (!normalizedBinId) {
+    throw new Error('Missing bin ID for receiving history.');
+  }
+
+  const rpc = await supabase.rpc('sc_get_bin_blank_receive_history_v1', {
+    p_bin_id_text: normalizedBinId,
+    p_blank_product_id_text: normalizedBlankId,
+    p_sku_base_text: normalizedSkuBase,
+  });
+
+  if (!rpc.error) {
+    return rpc.data || [];
+  }
+
+  // Fallback for deployments before the SQL patch is installed.
+  let query = supabase
+    .from('blank_inventory_movements')
+    .select(`
+      *,
+      blank_products:blank_product_id(sku_base,name)
+    `)
+    .eq('bin_id', Number(binId))
+    .order('created_at', { ascending: false })
+    .limit(250);
+
+  if (normalizedBlankId) {
+    query = query.eq('blank_product_id', normalizedBlankId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw rpc.error || error;
+
+  return (data || [])
+    .filter((row) => {
+      const sku = row?.blank_products?.sku_base || row?.sku_base || '';
+      if (normalizedSkuBase && normalizeSearchValue(sku) !== normalizeSearchValue(normalizedSkuBase)) return false;
+      const quantity = Number(row.quantity_change ?? row.quantity ?? 0);
+      return Number.isFinite(quantity) && quantity > 0;
+    })
+    .map((row) => ({
+      movement_id: row.id,
+      received_at: row.created_at,
+      quantity: Number(row.quantity_change ?? row.quantity ?? 0),
+      unit_cost: row.unit_cost ?? row.price ?? row.cost ?? null,
+      vendor: row.vendor || row.supplier || null,
+      supplier: row.supplier || row.vendor || null,
+      po_number: row.po_number || row.purchase_order_number || null,
+      source: row.source || row.source_type || row.movement_type || null,
+      movement_type: row.movement_type || null,
+      notes: row.notes || '',
+      blank_product_id: row.blank_product_id,
+      sku_base: row?.blank_products?.sku_base || row.sku_base || '',
+      blank_name: row?.blank_products?.name || row.name || '',
+      details: row,
+    }));
 }
 
 export async function receiveBlankInventory({ binId, blankProductId, quantity, notes }) {
@@ -587,6 +959,59 @@ export async function getDashboardMetrics() {
   };
 }
 
+function normalizeActivityRow(row) {
+  const unwrapped = row?.activity && typeof row.activity === 'object' && !Array.isArray(row.activity)
+    ? row.activity
+    : row;
+  const payload = unwrapped?.payload || unwrapped?.metadata || unwrapped?.details_json || unwrapped?.raw_payload || null;
+  const payloadObject = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+
+  return {
+    ...payloadObject,
+    ...unwrapped,
+    source_table:
+      unwrapped?.source_table ||
+      unwrapped?.table_name ||
+      unwrapped?.entity_table ||
+      payloadObject.source_table ||
+      payloadObject.table_name ||
+      null,
+    source_id:
+      unwrapped?.source_id ||
+      unwrapped?.movement_id ||
+      unwrapped?.blank_inventory_movement_id ||
+      unwrapped?.entity_id ||
+      payloadObject.source_id ||
+      payloadObject.movement_id ||
+      null,
+  };
+}
+
+async function attachUndoMetadata(rows) {
+  const activityIds = rows.map((row) => row.id).filter((id) => id !== null && id !== undefined).map(String);
+
+  if (!activityIds.length) return rows;
+
+  const undoLog = await supabase
+    .from('sc_activity_undo_log')
+    .select('activity_id, source_table, source_id, reversal_movement_id, undone_at, reason')
+    .in('activity_id', activityIds);
+
+  if (!undoLog.error && Array.isArray(undoLog.data)) {
+    const byActivityId = new Map(undoLog.data.map((entry) => [String(entry.activity_id), entry]));
+    rows.forEach((row) => {
+      const undo = byActivityId.get(String(row.id));
+      if (undo) {
+        row.undone_at = undo.undone_at;
+        row.undo_reason = undo.reason;
+        row.undo_reversal_movement_id = undo.reversal_movement_id;
+      }
+    });
+  }
+
+  return rows;
+}
+
 export async function getActivityFeed(limit = 25) {
   const { data, error } = await supabase
     .from('inventory_activity_feed')
@@ -595,7 +1020,154 @@ export async function getActivityFeed(limit = 25) {
     .limit(limit);
 
   if (error) throw error;
-  return data || [];
+
+  return attachUndoMetadata((data || []).map(normalizeActivityRow));
+}
+
+function rowMatchesPullSheet(row, jobId) {
+  const target = String(jobId || '').trim();
+  if (!target) return true;
+
+  const directFields = [
+    row.job_id,
+    row.pullsheet_job_id,
+    row.pull_sheet_id,
+    row.pullsheet_id,
+    row.source_job_id,
+    row.order_job_id,
+  ];
+
+  if (directFields.some((value) => String(value ?? '').trim() === target)) return true;
+
+  const text = [
+    row.description,
+    row.summary,
+    row.details,
+    row.notes,
+    row.activity_type,
+    row.action_type,
+    row.action,
+    row.order_ref,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return [
+    `job ${target}`,
+    `job:${target}`,
+    `job_id ${target}`,
+    `job_id:${target}`,
+    `pullsheet ${target}`,
+    `pull sheet ${target}`,
+  ].some((needle) => text.includes(needle));
+}
+
+export async function getActivityFeedForPullSheet(jobId, limit = 250) {
+  if (!jobId) return getActivityFeed(limit);
+
+  let { data, error } = await supabase.rpc('sc_activity_feed_for_pullsheet', {
+    p_job_id: Number(jobId),
+    p_limit: Number(limit),
+  });
+
+  if (error && /function .* does not exist|could not find/i.test(error.message || '')) {
+    const allRows = await getActivityFeed(Math.max(Number(limit) * 4, 500));
+    return allRows.filter((row) => rowMatchesPullSheet(row, jobId)).slice(0, Number(limit));
+  }
+
+  if (error) throw error;
+
+  const rows = (data || []).map(normalizeActivityRow);
+  return attachUndoMetadata(rows);
+}
+
+export async function undoActivityFeedEntry(activity, reason = '') {
+  if (!activity?.id && !activity?.source_id && !activity?.movement_id && !activity?.blank_inventory_movement_id) {
+    throw new Error('This activity entry does not include an ID that can be undone.');
+  }
+
+  const payload = {
+    p_activity_id: activity?.id == null ? null : String(activity.id),
+    p_source_table: activity?.source_table || activity?.table_name || activity?.entity_table || null,
+    p_source_id: activity?.source_id || activity?.movement_id || activity?.blank_inventory_movement_id || activity?.entity_id || null,
+    p_reason: reason || null,
+  };
+
+  let { data, error } = await supabase.rpc('sc_undo_activity_feed_entry', payload);
+
+  // Older SQL installs may expose a smaller argument list. Try the minimal
+  // version before surfacing the error.
+  if (error && /function .* does not exist|could not find/i.test(error.message || '')) {
+    const fallback = await supabase.rpc('sc_undo_activity_feed_entry', {
+      p_activity_id: payload.p_activity_id,
+      p_reason: payload.p_reason,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) throw error;
+  if (data && data.success === false) {
+    throw new Error(data.message || 'Activity could not be undone.');
+  }
+
+  return data || { success: true, message: 'Activity was undone.' };
+}
+
+function toBulkUndoTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function normalizeBulkUndoOptions(options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.limit || 250), 2000));
+  const jobId = options.jobId || options.pullSheetId || null;
+  const orderId = options.orderId || options.woocommerceOrderId || null;
+
+  return {
+    p_start_at: toBulkUndoTimestamp(options.startAt),
+    p_end_at: toBulkUndoTimestamp(options.endAt),
+    p_job_id: jobId ? Number(jobId) : null,
+    p_woocommerce_order_id: orderId ? Number(orderId) : null,
+    p_limit: limit,
+    p_reason: String(options.reason || '').trim() || null,
+    p_dry_run: options.dryRun !== false,
+  };
+}
+
+async function runBulkUndoActivity(options = {}) {
+  const payload = normalizeBulkUndoOptions(options);
+
+  const hasScope = payload.p_start_at || payload.p_end_at || payload.p_job_id || payload.p_woocommerce_order_id;
+  if (!hasScope) {
+    throw new Error('Choose a time range, pull sheet, or WooCommerce order before running bulk undo.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_bulk_undo_activity_feed', payload);
+
+  if (error) {
+    if (/function .* does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Bulk undo SQL has not been installed yet. Run supabase_activity_feed_bulk_undo.sql in Supabase first.');
+    }
+    throw error;
+  }
+
+  if (data && data.success === false) {
+    throw new Error(data.message || 'Bulk undo could not be completed.');
+  }
+
+  return data || { success: true, items: [] };
+}
+
+export async function previewBulkUndoActivity(options = {}) {
+  return runBulkUndoActivity({ ...options, dryRun: true });
+}
+
+export async function applyBulkUndoActivity(options = {}) {
+  return runBulkUndoActivity({ ...options, dryRun: false });
 }
 
 export async function getWooSyncQueue(limit = 50) {
@@ -627,6 +1199,10 @@ function finishedProductSearchText(product) {
     product?.sku,
     product?.finished_name,
     product?.name,
+    product?.description,
+    product?.short_description,
+    product?.product_description,
+    product?.search_description,
     product?.customer,
     product?.customer_name,
     product?.logo,
@@ -677,20 +1253,42 @@ export function formatFinishedProductLabel(product) {
 }
 
 export async function getFinishedProducts(search = '') {
-  // Query the finished inventory compatibility view and filter locally with token search.
-  // This lets searches like "Bremerton navy left chest" or "Bella Canvas customer" work
-  // across SKU, customer, logo, placement, blank, brand, color, size, and bin columns.
-  const { data, error } = await supabase
-    .from('finished_inventory_by_product')
-    .select('*')
-    .order('finished_sku', { ascending: true })
-    .limit(1000);
+  const rows = await fetchAllRelationRows(
+    'finished_inventory_by_product',
+    { orderColumn: 'finished_sku', maxRows: 50000 },
+  );
 
-  if (error) throw error;
+  const term = String(search || '').trim();
+  if (!term) return rows;
 
-  const rows = data || [];
+  const finishedMetadataRows = await fetchRelationRowsForSearch(
+    'finished_products',
+    { maxRows: 50000 },
+  );
+  const metadataById = new Map();
+
+  finishedMetadataRows.forEach((record) => {
+    const id = String(record.id || record.finished_product_id || '').trim();
+    if (id) metadataById.set(id, record);
+  });
+
   return rows
-    .filter((row) => rowMatchesAllTokens(row, search, finishedProductSearchText))
+    .map((row) => {
+      const id = String(row.finished_product_id || row.id || '').trim();
+      const metadata = id ? metadataById.get(id) : null;
+      const description = inventoryDescriptionFromRecords([row, metadata]);
+
+      return {
+        ...row,
+        description: row.description || description,
+        search_description: description,
+        _inventory_search_metadata: metadata ? [metadata] : [],
+      };
+    })
+    .filter((row) => (
+      rowMatchesAllTokens(row, term, finishedProductSearchText)
+      || inventoryRecordMatchesAllTokens(row._inventory_search_metadata, term)
+    ))
     .sort((a, b) => finishedProductSearchText(a).localeCompare(finishedProductSearchText(b)));
 }
 
@@ -748,6 +1346,113 @@ export async function updatePullSheetStatus({ jobId, status }) {
     .eq('id', jobId);
 
   if (error) throw error;
+}
+
+export async function updatePullSheetStatuses({ jobIds, status }) {
+  const ids = Array.from(new Set((jobIds || []).filter((id) => id !== undefined && id !== null && String(id).trim() !== '')));
+  const nextStatus = String(status || '').trim();
+
+  if (!ids.length) throw new Error('Choose at least one pull sheet.');
+  if (!nextStatus) throw new Error('Choose a status.');
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({ status: nextStatus })
+    .in('id', ids)
+    .select('id, status');
+
+  if (error) throw error;
+  return data || [];
+}
+
+
+// Bulk Pairing Repair V5 API functions
+// Replace these existing functions in src/lib/inventoryApi.js:
+// - toPairingRepairTimestamp
+// - normalizePairingRepairOptions
+// - previewBulkPairingRepair
+// - applyBulkPairingRepair
+
+function toPairingRepairTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function normalizePairingRepairOptions(options = {}) {
+  const jobItemIds = Array.isArray(options.jobItemIds)
+    ? options.jobItemIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+    : [];
+
+  const limit = Math.max(1, Math.min(Number(options.limit || 250), 2000));
+
+  return {
+    p_search: String(options.search || '').trim() || null,
+    p_woocommerce_order_id_text: options.woocommerceOrderId ? String(options.woocommerceOrderId).trim() : null,
+    p_job_id_text: options.jobId ? String(options.jobId).trim() : null,
+    p_order_sku: String(options.orderSku || '').trim() || null,
+    p_current_blank_product_id_text: options.currentBlankProductId ? String(options.currentBlankProductId).trim() : null,
+    p_new_blank_product_id_text: options.newBlankProductId ? String(options.newBlankProductId).trim() : null,
+    p_start_at: toPairingRepairTimestamp(options.startAt),
+    p_end_at: toPairingRepairTimestamp(options.endAt),
+    p_status: String(options.status || '').trim() || null,
+    p_job_item_ids_text: jobItemIds.length ? jobItemIds : null,
+    p_limit: limit,
+  };
+}
+
+export async function previewBulkPairingRepair(options = {}) {
+  const payload = normalizePairingRepairOptions(options);
+
+  const { data, error } = await supabase.rpc('sc_preview_bulk_pairing_repair_v5_text_ids', payload);
+
+  if (error) {
+    if (/function .* does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Bulk pairing repair V5 SQL has not been installed yet. Run supabase_bulk_pairing_repair_v5_safe_text_ids.sql in Supabase first.');
+    }
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function applyBulkPairingRepair(options = {}) {
+  const payload = {
+    ...normalizePairingRepairOptions(options),
+    p_new_blank_product_id_text: options.newBlankProductId ? String(options.newBlankProductId).trim() : null,
+    p_clear_reservations: options.clearReservations !== false,
+    // Default false in V5. The pairing repair should not fail because reservation recreation has a schema/type issue.
+    // Run the reservation retry tool after the pairing repair if needed.
+    p_recreate_reservations: options.recreateReservations === true,
+    p_update_source_mapping: Boolean(options.updateSourceMapping),
+    p_clear_finished_product_link: Boolean(options.clearFinishedProductLink),
+    p_reason: String(options.reason || '').trim() || null,
+    p_applied_by: String(options.appliedBy || '').trim() || null,
+    p_dry_run: options.dryRun !== false,
+  };
+
+  if (!payload.p_new_blank_product_id_text) {
+    throw new Error('Choose the correct replacement blank product.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_apply_bulk_pairing_repair_v5_text_ids', payload);
+
+  if (error) {
+    if (/function .* does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Bulk pairing repair V5 SQL has not been installed yet. Run supabase_bulk_pairing_repair_v5_safe_text_ids.sql in Supabase first.');
+    }
+    throw error;
+  }
+
+  if (data && data.success === false && Number(data.failed || 0) > 0 && Number(data.updated || 0) === 0) {
+    const firstError = Array.isArray(data.items) ? data.items.find((item) => item.status === 'failed') : null;
+    throw new Error(firstError?.message || data.message || 'Bulk pairing repair failed.');
+  }
+
+  return data || { success: true, updated: 0, failed: 0, items: [] };
 }
 
 export async function getPullSheetItems(jobId) {
@@ -904,6 +1609,26 @@ export async function returnPullSheetItemToFinishedInventory({ jobItemId, binId,
 }
 
 
+function purchasingDemandSourceText(row) {
+  const sources = Array.isArray(row?.demand_sources) ? row.demand_sources : [];
+  return sources
+    .map((source) => [
+      source?.order_number,
+      source?.order_label,
+      source?.job_id,
+      source?.pullsheet_label,
+      source?.job_name,
+      source?.customer_name,
+      source?.order_sku,
+      source?.item_name,
+      source?.job_status,
+      source?.job_item_status,
+      source?.pairing_source,
+      source?.pairing_warning,
+    ].filter(Boolean).join(' '))
+    .join(' ');
+}
+
 function purchasingSearchText(row) {
   return [
     row?.sku_base,
@@ -918,43 +1643,704 @@ function purchasingSearchText(row) {
     row?.size_code,
     row?.vendor,
     row?.supplier,
+    row?.demand_order_numbers,
+    row?.demand_pullsheet_numbers,
+    purchasingDemandSourceText(row),
   ].filter(Boolean).join(' ');
 }
 
-export async function getPurchasingShortages(search = '') {
+function normalizePurchasingDemandSourceRow(row) {
+  let sources = row?.sources || [];
+
+  if (typeof sources === 'string') {
+    try {
+      sources = JSON.parse(sources);
+    } catch (_err) {
+      sources = [];
+    }
+  }
+
+  if (!Array.isArray(sources)) sources = [];
+
+  return {
+    blank_product_id: row?.blank_product_id,
+    demand_source_count: Number(row?.source_count || 0),
+    demand_total_quantity: Number(row?.total_quantity || 0),
+    demand_order_numbers: row?.order_numbers || '',
+    demand_pullsheet_numbers: row?.pullsheet_numbers || '',
+    demand_sources: sources,
+  };
+}
+
+async function getPurchasingDemandSourceMap() {
   const { data, error } = await supabase
-    .from('purchasing_shortages')
-    .select('*')
-    .order('need_to_order', { ascending: false });
+    .from('purchasing_demand_sources_v1')
+    .select('*');
 
-  if (error) throw error;
+  if (error) {
+    // The purchasing page still works before the SQL patch is installed;
+    // order/pull sheet references simply show as unavailable.
+    console.warn('Purchasing demand source view unavailable:', error.message || error);
+    return new Map();
+  }
 
-  const rows = data || [];
+  return new Map((data || []).map((row) => {
+    const normalized = normalizePurchasingDemandSourceRow(row);
+    return [String(normalized.blank_product_id || ''), normalized];
+  }));
+}
+
+function attachPurchasingDemandSources(rows, sourceMap) {
+  return (rows || []).map((row) => {
+    const source = sourceMap.get(String(row?.blank_product_id || ''));
+    if (!source) {
+      return {
+        ...row,
+        demand_source_count: 0,
+        demand_total_quantity: 0,
+        demand_order_numbers: '',
+        demand_pullsheet_numbers: '',
+        demand_sources: [],
+      };
+    }
+
+    return {
+      ...row,
+      demand_source_count: source.demand_source_count,
+      demand_total_quantity: source.demand_total_quantity,
+      demand_order_numbers: source.demand_order_numbers,
+      demand_pullsheet_numbers: source.demand_pullsheet_numbers,
+      demand_sources: source.demand_sources,
+    };
+  });
+}
+
+
+function purchasingJobItemIsOpen(row) {
+  const status = String(row?.status || '').trim().toLowerCase();
+  return !/complete|completed|deduct|cancel|cancelled|void/.test(status);
+}
+
+function purchasingInventoryRequired(row) {
+  return row?.inventory_required !== false && row?.inventory_required !== 'false';
+}
+
+function purchasingReportIncluded(row) {
+  return row?.include_on_purchasing_report !== false
+    && row?.include_on_purchasing_report !== 'false';
+}
+
+function normalizePendingStockCatalogRow(row) {
+  const onHand = Number(
+    row?.quantity_on_hand
+    ?? row?.on_hand_quantity
+    ?? row?.total_quantity
+    ?? row?.quantity
+    ?? 0
+  );
+  const reserved = Number(row?.reserved_quantity ?? 0);
+  const threshold = Number(row?.low_stock_threshold ?? 0);
+  const unitCost = Number(row?.unit_cost ?? 0);
+
+  return {
+    ...row,
+    blank_product_id: row?.blank_product_id || row?.id || null,
+    sku_base: row?.sku_base || row?.blank_sku || row?.sku || '',
+    name: row?.name || row?.blank_product_name || row?.product_display_name || '',
+    brand: row?.brand || row?.brands?.name || row?.brands?.code || '',
+    product_type:
+      row?.product_type
+      || row?.style
+      || row?.product_types?.name
+      || row?.product_types?.code
+      || '',
+    color: row?.color || row?.colors?.name || row?.colors?.code || '',
+    size: row?.size || row?.sizes?.name || row?.sizes?.code || '',
+    quantity_on_hand: Number.isFinite(onHand) ? onHand : 0,
+    reserved_quantity: Number.isFinite(reserved) ? reserved : 0,
+    available_quantity: Number(row?.available_quantity ?? (onHand - reserved)),
+    low_stock_threshold: Number.isFinite(threshold) ? threshold : 0,
+    unit_cost: Number.isFinite(unitCost) ? unitCost : 0,
+  };
+}
+
+async function getPendingStockPurchasingContext() {
+  let pendingBins = [];
+
+  try {
+    pendingBins = await getPendingStockBins();
+  } catch (error) {
+    console.warn('Pending Stock bin lookup failed:', error.message || error);
+    return {
+      demandMap: new Map(),
+      catalogMap: new Map(),
+    };
+  }
+
+  const pendingBinIds = pendingBins
+    .map((bin) => bin?.bin_id ?? bin?.id)
+    .filter((value) => value !== null && value !== undefined);
+
+  if (!pendingBinIds.length) {
+    return {
+      demandMap: new Map(),
+      catalogMap: new Map(),
+    };
+  }
+
+  const { data: jobItems, error: jobItemsError } = await supabase
+    .from('job_items')
+    .select(
+      'id, job_id, quantity, status, blank_product_id, selected_bin_id, inventory_required, include_on_purchasing_report, sku, name, item_name, order_sku'
+    )
+    .in('selected_bin_id', pendingBinIds)
+    .not('blank_product_id', 'is', null)
+    .gt('quantity', 0);
+
+  if (jobItemsError) throw jobItemsError;
+
+  const activeItems = (jobItems || []).filter(
+    (row) => (
+      purchasingJobItemIsOpen(row)
+      && purchasingInventoryRequired(row)
+      && purchasingReportIncluded(row)
+    )
+  );
+
+  const jobIds = [...new Set(activeItems.map((row) => row.job_id).filter(Boolean))];
+  const closedJobIds = new Set();
+
+  if (jobIds.length) {
+    const { data: jobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('id, status')
+      .in('id', jobIds);
+
+    if (jobsError) throw jobsError;
+
+    (jobs || []).forEach((job) => {
+      if (!purchasingJobItemIsOpen(job)) {
+        closedJobIds.add(String(job.id));
+      }
+    });
+  }
+
+  const demandMap = new Map();
+
+  activeItems
+    .filter((row) => !closedJobIds.has(String(row.job_id || '')))
+    .forEach((row) => {
+      const key = String(row.blank_product_id || '');
+      if (!key) return;
+
+      const quantity = Math.max(0, Number(row.quantity || 0));
+      const current = demandMap.get(key) || {
+        blank_product_id: row.blank_product_id,
+        pending_stock_quantity: 0,
+        pending_stock_sources: [],
+      };
+
+      current.pending_stock_quantity += quantity;
+      current.pending_stock_sources.push({
+        job_id: row.job_id || null,
+        job_item_id: row.id || null,
+        quantity,
+        order_sku: row.order_sku || row.sku || '',
+        item_name: row.item_name || row.name || '',
+        pairing_warning: 'Pending Stock — this line has no available physical-bin inventory.',
+        pending_stock: true,
+      });
+
+      demandMap.set(key, current);
+    });
+
+  const blankProductIds = [...demandMap.values()].map((row) => row.blank_product_id);
+  const catalogMap = new Map();
+
+  if (blankProductIds.length) {
+    const overview = await supabase
+      .from('app_blank_inventory_overview_v2')
+      .select('*')
+      .in('blank_product_id', blankProductIds);
+
+    if (!overview.error) {
+      (overview.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+
+    const missingIds = blankProductIds.filter(
+      (id) => !catalogMap.has(String(id))
+    );
+
+    if (missingIds.length) {
+      const fallback = await supabase
+        .from('blank_products')
+        .select(`
+          id,
+          sku_base,
+          name,
+          unit_cost,
+          low_stock_threshold,
+          brands:brand_id(name, code),
+          product_types:product_type_id(name, code),
+          colors:color_id(name, code),
+          sizes:size_id(name, code)
+        `)
+        .in('id', missingIds);
+
+      if (fallback.error) throw fallback.error;
+
+      (fallback.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+  }
+
+  return { demandMap, catalogMap };
+}
+
+
+async function getNonInventoryPurchasingContext() {
+  const { data: jobItems, error: jobItemsError } = await supabase
+    .from('job_items')
+    .select(
+      'id, job_id, quantity, status, blank_product_id, inventory_required, include_on_purchasing_report, sku, name, item_name, order_sku'
+    )
+    .eq('inventory_required', false)
+    .not('blank_product_id', 'is', null)
+    .gt('quantity', 0);
+
+  if (jobItemsError) throw jobItemsError;
+
+  const openLineItems = (jobItems || []).filter(purchasingJobItemIsOpen);
+  const jobIds = [...new Set(openLineItems.map((row) => row.job_id).filter(Boolean))];
+  const closedJobIds = new Set();
+
+  if (jobIds.length) {
+    const { data: jobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('id, status')
+      .in('id', jobIds);
+
+    if (jobsError) throw jobsError;
+
+    (jobs || []).forEach((job) => {
+      if (!purchasingJobItemIsOpen(job)) {
+        closedJobIds.add(String(job.id));
+      }
+    });
+  }
+
+  const activeItems = openLineItems.filter(
+    (row) => !closedJobIds.has(String(row.job_id || ''))
+  );
+  const demandMap = new Map();
+  const excludedJobItemIds = new Set();
+
+  activeItems.forEach((row) => {
+    if (!purchasingReportIncluded(row)) {
+      excludedJobItemIds.add(String(row.id));
+      return;
+    }
+
+    const key = String(row.blank_product_id || '');
+    if (!key) return;
+
+    const quantity = Math.max(0, Number(row.quantity || 0));
+    const current = demandMap.get(key) || {
+      blank_product_id: row.blank_product_id,
+      non_inventory_purchase_quantity: 0,
+      non_inventory_purchase_sources: [],
+    };
+
+    current.non_inventory_purchase_quantity += quantity;
+    current.non_inventory_purchase_sources.push({
+      job_id: row.job_id || null,
+      job_item_id: row.id || null,
+      quantity,
+      order_sku: row.order_sku || row.sku || '',
+      item_name: row.item_name || row.name || '',
+      pairing_warning: 'Non-inventory line — included on Purchasing Report.',
+      non_inventory_purchase: true,
+    });
+
+    demandMap.set(key, current);
+  });
+
+  const blankProductIds = [...demandMap.values()].map(
+    (row) => row.blank_product_id
+  );
+  const catalogMap = new Map();
+
+  if (blankProductIds.length) {
+    const overview = await supabase
+      .from('app_blank_inventory_overview_v2')
+      .select('*')
+      .in('blank_product_id', blankProductIds);
+
+    if (!overview.error) {
+      (overview.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+
+    const missingIds = blankProductIds.filter(
+      (id) => !catalogMap.has(String(id))
+    );
+
+    if (missingIds.length) {
+      const fallback = await supabase
+        .from('blank_products')
+        .select(`
+          id,
+          sku_base,
+          name,
+          unit_cost,
+          low_stock_threshold,
+          brands:brand_id(name, code),
+          product_types:product_type_id(name, code),
+          colors:color_id(name, code),
+          sizes:size_id(name, code)
+        `)
+        .in('id', missingIds);
+
+      if (fallback.error) throw fallback.error;
+
+      (fallback.data || []).forEach((row) => {
+        const normalized = normalizePendingStockCatalogRow(row);
+        catalogMap.set(String(normalized.blank_product_id || ''), normalized);
+      });
+    }
+  }
+
+  return {
+    demandMap,
+    excludedJobItemIds,
+    catalogMap,
+  };
+}
+
+function purchasingSourceQuantity(source) {
+  return Math.max(
+    0,
+    Number(source?.quantity ?? source?.reserved_quantity ?? 0)
+  );
+}
+
+function sourceIsExcluded(source, excludedJobItemIds) {
+  const jobItemId = source?.job_item_id;
+  return jobItemId !== null
+    && jobItemId !== undefined
+    && excludedJobItemIds.has(String(jobItemId));
+}
+
+function mergeDemandSourceLists(existingSources, pendingSources) {
+  const merged = [];
+  const seen = new Set();
+
+  [...(existingSources || []), ...(pendingSources || [])].forEach((source) => {
+    const key = source?.job_item_id
+      ? `job-item:${source.job_item_id}`
+      : JSON.stringify([
+        source?.job_id || '',
+        source?.quantity || 0,
+        source?.order_sku || '',
+        source?.item_name || '',
+      ]);
+
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(source);
+  });
+
+  return merged;
+}
+
+function mergePurchasingLineOverrides(
+  rows,
+  pendingContext,
+  nonInventoryContext,
+  mode,
+  sourceMap = new Map()
+) {
+  const sourceRows = rows || [];
+  const pendingDemandMap = pendingContext?.demandMap || new Map();
+  const nonInventoryDemandMap = nonInventoryContext?.demandMap || new Map();
+  const excludedJobItemIds =
+    nonInventoryContext?.excludedJobItemIds || new Set();
+  const pendingCatalogMap = pendingContext?.catalogMap || new Map();
+  const nonInventoryCatalogMap =
+    nonInventoryContext?.catalogMap || new Map();
+
+  const rowsById = new Map(
+    sourceRows.map((row) => [
+      String(row?.blank_product_id || ''),
+      { ...row },
+    ])
+  );
+
+  const allKeys = new Set([
+    ...rowsById.keys(),
+    ...pendingDemandMap.keys(),
+    ...nonInventoryDemandMap.keys(),
+  ]);
+
+  allKeys.forEach((key) => {
+    if (!key) return;
+
+    const existing = rowsById.get(key) || null;
+    const pending = pendingDemandMap.get(key) || null;
+    const nonInventory = nonInventoryDemandMap.get(key) || null;
+    const catalog =
+      pendingCatalogMap.get(key)
+      || nonInventoryCatalogMap.get(key)
+      || {};
+
+    const base = {
+      ...catalog,
+      ...(existing || {}),
+    };
+
+    const sourceRecord = sourceMap.get(key) || {};
+    const sourceRecordSources = Array.isArray(sourceRecord.demand_sources)
+      ? sourceRecord.demand_sources
+      : [];
+    const includedSourceRecordSources = sourceRecordSources.filter(
+      (source) => !sourceIsExcluded(source, excludedJobItemIds)
+    );
+    const excludedSourceQuantity = sourceRecordSources
+      .filter((source) => sourceIsExcluded(source, excludedJobItemIds))
+      .reduce(
+        (sum, source) => sum + purchasingSourceQuantity(source),
+        0
+      );
+
+    const representedJobItemIds = new Set(
+      includedSourceRecordSources
+        .map((source) => source?.job_item_id)
+        .filter((value) => value !== null && value !== undefined)
+        .map(String)
+    );
+
+    const additionalPendingSources = (
+      pending?.pending_stock_sources || []
+    ).filter((source) => (
+      !source?.job_item_id
+      || !representedJobItemIds.has(String(source.job_item_id))
+    ));
+    const additionalPendingQuantity = additionalPendingSources.reduce(
+      (sum, source) => sum + purchasingSourceQuantity(source),
+      0
+    );
+
+    const additionalNonInventorySources = (
+      nonInventory?.non_inventory_purchase_sources || []
+    ).filter((source) => (
+      !source?.job_item_id
+      || !representedJobItemIds.has(String(source.job_item_id))
+    ));
+    const additionalNonInventoryQuantity =
+      additionalNonInventorySources.reduce(
+        (sum, source) => sum + purchasingSourceQuantity(source),
+        0
+      );
+
+    const rawReserved = Number(base.reserved_quantity ?? 0);
+    const adjustedBaseReserved = Math.max(
+      0,
+      rawReserved - excludedSourceQuantity
+    );
+    const effectiveReserved =
+      adjustedBaseReserved
+      + additionalPendingQuantity
+      + additionalNonInventoryQuantity;
+
+    const onHand = Number(base.quantity_on_hand ?? 0);
+    const threshold = Number(base.low_stock_threshold ?? 0);
+    const unitCost = Number(base.unit_cost ?? 0);
+    const available = onHand - effectiveReserved;
+    const shortageQuantity = Math.max(0, effectiveReserved - onHand);
+    const recommendedQuantity = Math.max(
+      0,
+      effectiveReserved + threshold - onHand
+    );
+
+    const existingSources = Array.isArray(base.demand_sources)
+      ? base.demand_sources.filter(
+          (source) => !sourceIsExcluded(source, excludedJobItemIds)
+        )
+      : [];
+    const demandSources = mergeDemandSourceLists(
+      mergeDemandSourceLists(
+        mergeDemandSourceLists(
+          existingSources,
+          includedSourceRecordSources
+        ),
+        additionalPendingSources
+      ),
+      additionalNonInventorySources
+    );
+
+    const hasLineOverride =
+      Boolean(pending)
+      || Boolean(nonInventory)
+      || excludedSourceQuantity > 0;
+    const orderQuantity = hasLineOverride
+      ? (
+          mode === 'shortages'
+            ? shortageQuantity
+            : recommendedQuantity
+        )
+      : (
+          mode === 'shortages'
+            ? Number(base.need_to_order || 0)
+            : Number(base.recommended_order_quantity || 0)
+        );
+
+    rowsById.set(key, {
+      ...base,
+      blank_product_id:
+        pending?.blank_product_id
+        || nonInventory?.blank_product_id
+        || base.blank_product_id,
+      pending_stock_requested_quantity: Number(
+        pending?.pending_stock_quantity || 0
+      ),
+      pending_stock_quantity: additionalPendingQuantity,
+      non_inventory_purchase_requested_quantity: Number(
+        nonInventory?.non_inventory_purchase_quantity || 0
+      ),
+      non_inventory_purchase_quantity:
+        additionalNonInventoryQuantity,
+      excluded_non_inventory_quantity: excludedSourceQuantity,
+      quantity_on_hand: onHand,
+      reserved_quantity: effectiveReserved,
+      available_quantity: available,
+      need_to_order:
+        mode === 'shortages'
+          ? orderQuantity
+          : (
+              hasLineOverride
+                ? shortageQuantity
+                : Number(base.need_to_order || 0)
+            ),
+      recommended_order_quantity:
+        mode === 'recommended'
+          ? orderQuantity
+          : (
+              hasLineOverride
+                ? recommendedQuantity
+                : Number(base.recommended_order_quantity || 0)
+            ),
+      estimated_order_value: orderQuantity * unitCost,
+      demand_source_count: demandSources.length,
+      demand_total_quantity: demandSources.reduce(
+        (sum, source) => sum + purchasingSourceQuantity(source),
+        0
+      ),
+      demand_sources: demandSources,
+      purchasing_status:
+        additionalNonInventoryQuantity > 0
+          ? 'non_inventory_purchase'
+          : (
+              additionalPendingQuantity > 0
+                ? 'pending_stock'
+                : (base.purchasing_status || 'inventory_demand')
+            ),
+    });
+  });
+
+  return [...rowsById.values()]
+    .filter((row) => (
+      mode === 'shortages'
+        ? Number(row.need_to_order || 0) > 0
+        : Number(row.recommended_order_quantity || 0) > 0
+    ))
+    .sort((a, b) => (
+      mode === 'shortages'
+        ? Number(b.need_to_order || 0) - Number(a.need_to_order || 0)
+        : Number(b.recommended_order_quantity || 0)
+          - Number(a.recommended_order_quantity || 0)
+    ));
+}
+
+export async function getPurchasingShortages(search = '') {
+  const [
+    rowsRes,
+    sourceMap,
+    pendingContext,
+    nonInventoryContext,
+  ] = await Promise.all([
+    supabase
+      .from('purchasing_shortages')
+      .select('*')
+      .order('need_to_order', { ascending: false }),
+    getPurchasingDemandSourceMap(),
+    getPendingStockPurchasingContext(),
+    getNonInventoryPurchasingContext(),
+  ]);
+
+  if (rowsRes.error) throw rowsRes.error;
+
+  const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
+  const rows = mergePurchasingLineOverrides(
+    sourcedRows,
+    pendingContext,
+    nonInventoryContext,
+    'shortages',
+    sourceMap
+  );
+
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
 
 export async function getPurchasingLowStock(search = '') {
-  const { data, error } = await supabase
-    .from('low_stock_blank_inventory')
-    .select('*')
-    .order('reorder_quantity', { ascending: false });
+  const [rowsRes, sourceMap] = await Promise.all([
+    supabase
+      .from('low_stock_blank_inventory')
+      .select('*')
+      .order('reorder_quantity', { ascending: false }),
+    getPurchasingDemandSourceMap(),
+  ]);
 
-  if (error) throw error;
+  if (rowsRes.error) throw rowsRes.error;
 
-  const rows = data || [];
+  const rows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
 export async function getPurchasingRecommendedOrders(search = '') {
-  const { data, error } = await supabase
-    .from('purchasing_recommended_orders')
-    .select('*')
-    .order('recommended_order_quantity', { ascending: false });
+  const [
+    rowsRes,
+    sourceMap,
+    pendingContext,
+    nonInventoryContext,
+  ] = await Promise.all([
+    supabase
+      .from('purchasing_recommended_orders')
+      .select('*')
+      .order('recommended_order_quantity', { ascending: false }),
+    getPurchasingDemandSourceMap(),
+    getPendingStockPurchasingContext(),
+    getNonInventoryPurchasingContext(),
+  ]);
 
-  if (error) throw error;
+  if (rowsRes.error) throw rowsRes.error;
 
-  const rows = data || [];
+  const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
+  const rows = mergePurchasingLineOverrides(
+    sourcedRows,
+    pendingContext,
+    nonInventoryContext,
+    'recommended',
+    sourceMap
+  );
+
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
 
@@ -1329,13 +2715,113 @@ export async function getStandaloneSampleProducts(search = '') {
 export async function getBlankItemsInBin(binId, search = '') {
   if (!binId) return [];
 
-  const { data, error } = await supabase.rpc('get_blank_items_in_bin', {
-    p_bin_id: Number(binId),
-    p_search: String(search || '').trim(),
+  const numericBinId = Number(binId);
+  const normalizedSearch = String(search || '').trim();
+  const matchesSearch = (row) => rowMatchesAllTokens(row, normalizedSearch, (item) => [
+    item?.blank_product_id,
+    item?.sku_base,
+    item?.name,
+    item?.brand,
+    item?.style,
+    item?.product_type,
+    item?.color,
+    item?.size,
+    item?.on_hand_quantity,
+  ].filter(Boolean).join(' '));
+
+  const normalizeRows = (rows = []) => rows
+    .map((row) => ({
+      ...row,
+      bin_id: row.bin_id ?? numericBinId,
+      blank_product_id: row.blank_product_id ?? row.id,
+      sku_base: row.sku_base ?? row.blank_sku_base ?? row.sku,
+      name: row.name ?? row.blank_name ?? row.product_name,
+      brand: row.brand ?? row.brand_name,
+      style: row.style ?? row.product_type ?? row.product_type_name,
+      color: row.color ?? row.color_name,
+      size: row.size ?? row.size_name ?? row.size_code,
+      on_hand_quantity: Number(row.on_hand_quantity ?? row.quantity_on_hand ?? row.total_quantity ?? row.quantity ?? 0),
+    }))
+    .filter((row) => row.blank_product_id && Number(row.on_hand_quantity || 0) > 0)
+    .filter(matchesSearch)
+    .sort((a, b) => [a.brand, a.style, a.color, a.size, a.sku_base, a.name].filter(Boolean).join(' ').localeCompare(
+      [b.brand, b.style, b.color, b.size, b.sku_base, b.name].filter(Boolean).join(' ')
+    ));
+
+  // Preferred path: the Supabase RPC. Some older deployments return no rows
+  // for the UNASSIGNED/System bin, so the page falls back to direct reads below.
+  const rpc = await supabase.rpc('get_blank_items_in_bin', {
+    p_bin_id: numericBinId,
+    p_search: normalizedSearch,
   });
 
-  if (error) throw error;
-  return data || [];
+  if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length) {
+    return normalizeRows(rpc.data);
+  }
+
+  // Fallback 1: app-facing inventory view.
+  const view = await supabase
+    .from('bin_blank_inventory_contents')
+    .select('*')
+    .eq('bin_id', numericBinId)
+    .order('sku_base', { ascending: true });
+
+  if (!view.error && Array.isArray(view.data) && view.data.length) {
+    return normalizeRows(view.data);
+  }
+
+  // Fallback 2: raw movement table. This is intentionally broader so that
+  // the transfer page still works if the RPC/view is stale or missing a bin.
+  const movement = await supabase
+    .from('blank_inventory_movements')
+    .select(`
+      bin_id,
+      blank_product_id,
+      quantity_change,
+      blank_products:blank_product_id(
+        id,
+        sku_base,
+        name,
+        brand_id,
+        product_type_id,
+        color_id,
+        size_id,
+        brands:brand_id(name, code),
+        product_types:product_type_id(name, code),
+        colors:color_id(name, code),
+        sizes:size_id(name, code)
+      )
+    `)
+    .eq('bin_id', numericBinId);
+
+  if (movement.error) {
+    // If all paths fail, surface the most useful error to the screen.
+    throw rpc.error || view.error || movement.error;
+  }
+
+  const byProduct = new Map();
+  (movement.data || []).forEach((row) => {
+    const product = row.blank_products || {};
+    const id = row.blank_product_id || product.id;
+    if (!id) return;
+
+    const current = byProduct.get(id) || {
+      bin_id: row.bin_id,
+      blank_product_id: id,
+      sku_base: product.sku_base,
+      name: product.name,
+      brand: product.brands?.name || product.brands?.code || '',
+      style: product.product_types?.name || product.product_types?.code || '',
+      color: product.colors?.name || product.colors?.code || '',
+      size: product.sizes?.name || product.sizes?.code || '',
+      on_hand_quantity: 0,
+    };
+
+    current.on_hand_quantity += Number(row.quantity_change || 0);
+    byProduct.set(id, current);
+  });
+
+  return normalizeRows(Array.from(byProduct.values()));
 }
 
 // =========================================================
@@ -1451,13 +2937,152 @@ export async function createOrReceiveFinishedProduct({
 // Phase 1 Purchasing: Purchase Orders + Waiting On dashboard
 // =========================================================
 
-export async function getPurchaseOrderRecommendations(search = '') {
-  const { data, error } = await supabase.rpc('phase1_get_purchase_recommendations', {
-    p_search: String(search || '').trim() || null,
-  });
+function purchaseOrderOpenQuantity(row) {
+  const explicit = Number(row?.quantity_open);
+  if (Number.isFinite(explicit)) return Math.max(explicit, 0);
+
+  const ordered = Number(row?.quantity_ordered || 0);
+  const received = Number(row?.quantity_received || 0);
+  return Math.max(ordered - received, 0);
+}
+
+function purchaseOrderExpectedTimestamp(value) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+async function getOpenPurchaseOrderCoverageMap() {
+  const purchaseOrders = await getPurchaseOrders('open');
+  const purchaseOrderIds = (purchaseOrders || [])
+    .map((row) => row?.id || row?.purchase_order_id)
+    .filter((value) => value !== null && value !== undefined);
+
+  if (!purchaseOrderIds.length) return new Map();
+
+  const { data: items, error } = await supabase
+    .from('phase1_purchase_order_items_detail')
+    .select('*')
+    .in('purchase_order_id', purchaseOrderIds);
 
   if (error) throw error;
-  return data || [];
+
+  const poById = new Map(
+    (purchaseOrders || []).map((row) => [
+      String(row?.id || row?.purchase_order_id || ''),
+      row,
+    ])
+  );
+  const coverage = new Map();
+
+  (items || []).forEach((item) => {
+    const blankProductId = item?.blank_product_id;
+    const openQuantity = purchaseOrderOpenQuantity(item);
+
+    if (!blankProductId || openQuantity <= 0) return;
+
+    const key = String(blankProductId);
+    const po = poById.get(String(item?.purchase_order_id || '')) || {};
+    const detail = {
+      purchase_order_id: item?.purchase_order_id || po?.id || po?.purchase_order_id || null,
+      po_number: item?.po_number || po?.po_number || '',
+      supplier_name: item?.supplier_name || po?.supplier_name || '',
+      expected_at: item?.expected_at || po?.expected_at || null,
+      quantity_open: openQuantity,
+    };
+
+    const current = coverage.get(key) || {
+      blank_product_id: blankProductId,
+      open_po_quantity: 0,
+      purchase_orders: [],
+      next_purchase_order_id: null,
+      next_po_number: '',
+      next_expected_at: null,
+    };
+
+    current.open_po_quantity += openQuantity;
+    current.purchase_orders.push(detail);
+
+    const currentExpected = purchaseOrderExpectedTimestamp(current.next_expected_at);
+    const candidateExpected = purchaseOrderExpectedTimestamp(detail.expected_at);
+
+    if (
+      !current.next_purchase_order_id
+      || candidateExpected < currentExpected
+    ) {
+      current.next_purchase_order_id = detail.purchase_order_id;
+      current.next_po_number = detail.po_number;
+      current.next_expected_at = detail.expected_at;
+    }
+
+    coverage.set(key, current);
+  });
+
+  return coverage;
+}
+
+function normalizePurchaseOrderRecommendation(row, coverageMap) {
+  const key = String(row?.blank_product_id || '');
+  const coverage = coverageMap.get(key) || {
+    open_po_quantity: 0,
+    purchase_orders: [],
+    next_purchase_order_id: null,
+    next_po_number: '',
+    next_expected_at: null,
+  };
+
+  const reportRecommendedQuantity = Math.max(
+    Number(row?.recommended_order_quantity || 0),
+    0
+  );
+  const openPoQuantity = Math.max(
+    Number(coverage.open_po_quantity || 0),
+    0
+  );
+  const quantityToOrder = Math.max(
+    reportRecommendedQuantity - openPoQuantity,
+    0
+  );
+
+  return {
+    ...row,
+    supplier_name:
+      row?.supplier_name
+      || row?.supplier
+      || row?.vendor
+      || '',
+    report_recommended_order_quantity: reportRecommendedQuantity,
+    open_po_quantity: openPoQuantity,
+    quantity_to_order: quantityToOrder,
+    // Existing UI and PO creation code use this field.
+    recommended_order_quantity: quantityToOrder,
+    purchase_order_status:
+      quantityToOrder > 0 ? 'needs_po' : 'covered_by_open_po',
+    open_purchase_orders: coverage.purchase_orders || [],
+    next_purchase_order_id: coverage.next_purchase_order_id,
+    next_po_number: coverage.next_po_number,
+    next_expected_at: coverage.next_expected_at,
+  };
+}
+
+export async function getPurchaseOrderRecommendations(search = '') {
+  const [reportRows, coverageMap] = await Promise.all([
+    getPurchasingRecommendedOrders(search),
+    getOpenPurchaseOrderCoverageMap(),
+  ]);
+
+  return (reportRows || [])
+    .map((row) => normalizePurchaseOrderRecommendation(row, coverageMap))
+    .sort((a, b) => {
+      const aNeedsPo = Number(a.quantity_to_order || 0) > 0 ? 1 : 0;
+      const bNeedsPo = Number(b.quantity_to_order || 0) > 0 ? 1 : 0;
+
+      return (
+        bNeedsPo - aNeedsPo
+        || Number(b.quantity_to_order || 0) - Number(a.quantity_to_order || 0)
+        || String(a.sku_base || '').localeCompare(String(b.sku_base || ''))
+      );
+    });
 }
 
 export async function createPurchaseOrderFromItems({ supplierName, expectedAt, notes, items }) {
@@ -1527,13 +3152,81 @@ export async function receivePurchaseOrderItem({ poItemId, quantity, binId, note
   return data;
 }
 
-export async function getWaitingOnItems(search = '') {
-  const { data, error } = await supabase.rpc('phase1_get_waiting_on_items', {
-    p_search: String(search || '').trim() || null,
-  });
+function purchasingDemandLabel(row) {
+  const sources = Array.isArray(row?.demand_sources)
+    ? row.demand_sources
+    : [];
 
-  if (error) throw error;
-  return data || [];
+  const orderLabels = sources
+    .map((source) => (
+      source?.order_number
+      || source?.woocommerce_order_id
+      || source?.order_id
+      || null
+    ))
+    .filter(Boolean)
+    .map((value) => `Order #${value}`);
+
+  const pullSheetLabels = sources
+    .map((source) => source?.job_id || source?.pullsheet_number || null)
+    .filter(Boolean)
+    .map((value) => `Pull Sheet #${value}`);
+
+  return [...new Set([...orderLabels, ...pullSheetLabels])].join(', ')
+    || row?.demand_order_numbers
+    || row?.demand_pullsheet_numbers
+    || 'Pending Stock';
+}
+
+function purchasingDemandCustomers(row) {
+  const sources = Array.isArray(row?.demand_sources)
+    ? row.demand_sources
+    : [];
+
+  return [...new Set(
+    sources
+      .map((source) => source?.customer_name)
+      .filter(Boolean)
+  )].join(', ');
+}
+
+export async function getWaitingOnItems(search = '') {
+  const [shortageRows, coverageMap] = await Promise.all([
+    getPurchasingShortages(search),
+    getOpenPurchaseOrderCoverageMap(),
+  ]);
+
+  return (shortageRows || [])
+    .map((row) => {
+      const key = String(row?.blank_product_id || '');
+      const coverage = coverageMap.get(key) || {};
+      const shortQuantity = Math.max(
+        Number(row?.need_to_order || 0),
+        0
+      );
+      const openPoQuantity = Math.max(
+        Number(coverage?.open_po_quantity || 0),
+        0
+      );
+
+      return {
+        ...row,
+        order_ref: purchasingDemandLabel(row),
+        customer_name: purchasingDemandCustomers(row),
+        short_quantity: shortQuantity,
+        open_po_quantity: openPoQuantity,
+        uncovered_quantity: Math.max(shortQuantity - openPoQuantity, 0),
+        next_purchase_order_id: coverage?.next_purchase_order_id || null,
+        next_po_number: coverage?.next_po_number || '',
+        next_expected_at: coverage?.next_expected_at || null,
+        open_purchase_orders: coverage?.purchase_orders || [],
+      };
+    })
+    .sort((a, b) => (
+      Number(b.uncovered_quantity || 0) - Number(a.uncovered_quantity || 0)
+      || Number(b.short_quantity || 0) - Number(a.short_quantity || 0)
+      || String(a.sku_base || '').localeCompare(String(b.sku_base || ''))
+    ));
 }
 
 // =====================================================
@@ -1615,7 +3308,7 @@ export async function getFinishedMatchSuggestions(search = '') {
   return data || [];
 }
 
-export async function useFinishedInventoryForJobItem({ jobItemId, finishedProductId, quantity, notes }) {
+export async function applyFinishedInventoryToJobItem({ jobItemId, finishedProductId, quantity, notes }) {
   const { data, error } = await supabase.rpc('phase2_use_finished_inventory_for_job_item', {
     p_job_item_id: jobItemId,
     p_finished_product_id: finishedProductId,
@@ -1863,4 +3556,249 @@ export async function savePhase5ArtworkRequest(request) {
   const { data, error } = await query;
   if (error) throw error;
   return data;
+}
+
+// ---------------------------------------------------------
+// Supplier Catalog Reference Review Workflow
+// Required by src/SupplierCatalogReview.jsx
+// ---------------------------------------------------------
+export async function getSupplierCatalogReviewStats() {
+  const { data, error } = await supabase.rpc('sc_supplier_catalog_review_stats');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateSupplierCatalogReviewItem({
+  itemId,
+  review_status,
+  use_in_quote_builder = false,
+  use_in_substitution_suggestions = false,
+  create_blank_candidate = false,
+  review_notes = '',
+  updated_by = null,
+}) {
+  const { data, error } = await supabase.rpc('sc_update_supplier_catalog_review_item', {
+    p_item_id: itemId,
+    p_review_status: review_status || 'unreviewed',
+    p_use_in_quote_builder: Boolean(use_in_quote_builder),
+    p_use_in_substitution_suggestions: Boolean(use_in_substitution_suggestions),
+    p_create_blank_candidate: Boolean(create_blank_candidate),
+    p_review_notes: review_notes || null,
+    p_updated_by: updated_by || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getSupplierCatalogQuoteReference(search = '') {
+  let query = supabase
+    .from('supplier_catalog_quote_reference')
+    .select('*')
+    .order('supplier_name', { ascending: true })
+    .limit(5000);
+
+  const term = String(search || '').trim();
+
+  if (term) {
+    const escaped = escapeOrTerm(term);
+    query = query.or([
+      `supplier_name.ilike.%${escaped}%`,
+      `brand.ilike.%${escaped}%`,
+      `style.ilike.%${escaped}%`,
+      `color.ilike.%${escaped}%`,
+      `size.ilike.%${escaped}%`,
+      `supplier_sku.ilike.%${escaped}%`,
+      `upc.ilike.%${escaped}%`,
+      `blank_sku_base.ilike.%${escaped}%`,
+    ].join(','));
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+
+// ---------------------------------------------------------
+// Supplier Catalog Website CSV Feed Sync
+// Required by src/SupplierCatalogImport.jsx
+// ---------------------------------------------------------
+export async function listSupplierCatalogFeeds() {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createSupplierCatalogFeed(feed) {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .insert({
+      supplier_name: feed.supplier_name,
+      feed_name: feed.feed_name || null,
+      feed_url: feed.feed_url,
+      source_file_name: feed.source_file_name || null,
+      is_active: feed.is_active !== false,
+      update_blank_products: Boolean(feed.update_blank_products),
+      create_missing_lookups: feed.create_missing_lookups !== false,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSupplierCatalogFeed(feedId, values) {
+  const { data, error } = await supabase
+    .from('supplier_catalog_feeds')
+    .update({
+      supplier_name: values.supplier_name,
+      feed_name: values.feed_name || null,
+      feed_url: values.feed_url,
+      source_file_name: values.source_file_name || null,
+      is_active: values.is_active !== false,
+      update_blank_products: Boolean(values.update_blank_products),
+      create_missing_lookups: values.create_missing_lookups !== false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', feedId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteSupplierCatalogFeed(feedId) {
+  const { error } = await supabase
+    .from('supplier_catalog_feeds')
+    .delete()
+    .eq('id', feedId);
+
+  if (error) throw error;
+  return true;
+}
+
+export async function syncSupplierCatalogFeed(feedId) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/supplier-catalog-feed-sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ feed_id: feedId }),
+  });
+
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok || body?.success === false) {
+    throw new Error(body?.message || `Supplier catalog feed sync failed: HTTP ${response.status}`);
+  }
+
+  return body;
+}
+
+
+// =========================================================
+// Color Pairing / Canonical Color Mapping Tool
+// =========================================================
+
+export async function searchColorsForPairing(search = '', limit = 50) {
+  const { data, error } = await supabase.rpc('sc_search_colors_for_pairing', {
+    p_search: search || null,
+    p_limit: Number(limit || 50),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function searchColorVariationsForPairing(search = '', limit = 250) {
+  const { data, error } = await supabase.rpc('sc_search_color_variations_for_pairing', {
+    p_search: search || null,
+    p_limit: Number(limit || 250),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getColorPairingSuggestions({ search = '', minScore = 55, limit = 300 } = {}) {
+  const { data, error } = await supabase.rpc('sc_suggest_color_pairings', {
+    p_search: search || null,
+    p_min_score: Number(minScore || 55),
+    p_limit: Number(limit || 300),
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getColorPairingRules(status = 'active') {
+  const { data, error } = await supabase.rpc('sc_get_color_pairing_rules', {
+    p_status: status || 'active',
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveColorPairingRule({
+  sourceColorId,
+  sourceColorName,
+  canonicalColorId,
+  notes,
+  reviewedBy,
+  applyExisting = true,
+}) {
+  const { data, error } = await supabase.rpc('sc_save_color_pairing_rule', {
+    p_source_color_id_text: sourceColorId ? String(sourceColorId) : null,
+    p_source_color_name: sourceColorName || null,
+    p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
+    p_notes: notes || null,
+    p_reviewed_by: reviewedBy || null,
+    p_apply_existing: Boolean(applyExisting),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function saveBulkColorPairingRules({
+  sourceColorIds = [],
+  canonicalColorId,
+  notes,
+  reviewedBy,
+  applyExisting = true,
+}) {
+  const { data, error } = await supabase.rpc('sc_save_color_pairing_rules_bulk', {
+    p_source_color_ids_text: (sourceColorIds || []).map((id) => String(id)),
+    p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
+    p_notes: notes || null,
+    p_reviewed_by: reviewedBy || null,
+    p_apply_existing: Boolean(applyExisting),
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function disableColorPairingRule(ruleId) {
+  const { data, error } = await supabase.rpc('sc_disable_color_pairing_rule', {
+    p_rule_id_text: ruleId ? String(ruleId) : null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function applyColorPairingRules() {
+  const { data, error } = await supabase.rpc('sc_apply_color_pairing_rules');
+
+  if (error) throw error;
+  return data || [];
 }

@@ -8,3 +8,9 @@
 
 [functions.parse_body]
   enabled = false
+
+[functions."google-calendar-scheduled-sync"]
+  schedule = "*/15 * * * *"
+
+[functions."mockup-generate-background"]
+  background = true

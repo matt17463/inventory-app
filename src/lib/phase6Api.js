@@ -40,11 +40,17 @@ export async function getProductDataHealthSummary() {
 }
 
 export async function getProductDataHealthReport(issueType = 'all') {
-  const { data, error } = await supabase.rpc('phase6_product_data_health_report', {
-    p_issue_type: issueType || 'all',
-  });
-  if (error) throw error;
-  return data || [];
+  const issue = issueType || 'all';
+
+  // Older Supabase snippets used p_issue. Newer ones used p_issue_type.
+  // Try both so the Exception Center can show specific rows instead of only category counts.
+  const first = await supabase.rpc('phase6_product_data_health_report', { p_issue: issue });
+  if (!first.error) return first.data || [];
+
+  const second = await supabase.rpc('phase6_product_data_health_report', { p_issue_type: issue });
+  if (!second.error) return second.data || [];
+
+  throw first.error || second.error;
 }
 
 export async function markProductHealthIssueStatus(row, status = 'ignored', resolutionNote = '') {
@@ -130,7 +136,7 @@ export async function createCustomerPortalToken(input) {
 }
 
 export async function getCustomerPortalData(token) {
-  const { data, error } = await supabase.rpc('phase6_customer_portal_data', { p_token: token });
+  const { data, error } = await supabase.rpc('sc_customer_portal_data_v2', { p_token: token });
   if (error) throw error;
   return data;
 }

@@ -1,3 +1,4 @@
+import { validateSharedSecret } from './_shared/security.js';
 // Netlify Function: artwork-system-handoff
 // Receives webhook payloads from the consolidated WordPress plugin sc-artwork-system.php
 // and mirrors them into Supabase for the inventory app.
@@ -19,7 +20,7 @@ function env(name, fallback = '') {
 
 async function supabaseRequest(path, method, body, extraHeaders = {}) {
   const url = (env('SUPABASE_URL') || env('VITE_SUPABASE_URL') || '').replace(/\/$/, '');
-  const key = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SERVICE_KEY') || env('SUPABASE_ANON_KEY') || env('VITE_SUPABASE_ANON_KEY');
+  const key = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SERVICE_KEY');
 
   if (!url || !key) {
     throw new Error('Supabase URL/key is not configured for this Netlify function.');
@@ -142,15 +143,16 @@ function normalizeReorder(payload) {
   };
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return response(200, { ok: true });
   if (event.httpMethod !== 'POST') return response(405, { success: false, message: 'Use POST.' });
 
-  const expectedSecret = env('SC_ARTWORK_WEBHOOK_SECRET') || env('SC_INVENTORY_BRIDGE_SECRET') || env('VITE_SC_INVENTORY_BRIDGE_SECRET');
-  const providedSecret = getHeader(event, 'x-sc-artwork-secret') || getHeader(event, 'x-webhook-secret');
-
-  if (expectedSecret && providedSecret !== expectedSecret) {
-    return response(401, { success: false, message: 'Invalid artwork webhook secret.' });
+  const authorization = validateSharedSecret(event, {
+    envNames: ['SC_ARTWORK_WEBHOOK_SECRET', 'SC_INVENTORY_BRIDGE_SECRET'],
+    headerNames: ['x-sc-artwork-secret', 'x-webhook-secret'],
+  });
+  if (!authorization.ok) {
+    return response(authorization.statusCode, { success: false, message: authorization.message, code: authorization.code });
   }
 
   let payload;

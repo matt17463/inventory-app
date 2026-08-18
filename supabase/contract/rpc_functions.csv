@@ -1,0 +1,144 @@
+schema_name,function_name,required,usage_scopes,expected_argument_names,source_files
+public,add_sample_inventory,True,frontend_bundle,p_blank_product_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,adjust_sample_inventory,True,frontend_bundle,p_notes | p_quantity_change | p_sample_inventory_id,src/lib/inventoryApi.js
+public,append_blank_products_from_json,True,frontend_bundle,p_rows | p_source_file_name,src/lib/inventoryApi.js
+public,assign_job_to_production_window,True,frontend_bundle,p_assigned_minutes | p_assignment_title | p_job_id | p_job_item_id | p_notes | p_window_id,src/lib/productionSchedulingApi.js
+public,complete_job_item,True,frontend_bundle,p_bin_id | p_job_item_id | p_notes,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,create_finished_product_from_blank,True,frontend_bundle,p_blank_bin_id | p_blank_product_id | p_customer_name | p_decoration_size | p_decoration_type | p_deduct_blank | p_existing_finished_product_id | p_finished_bin_id | p_logo_name | p_notes | p_placement | p_quantity,src/lib/inventoryApi.js
+public,create_inventory_reservation_safe,True,frontend_bundle,p_bin_id | p_blank_product_id | p_customer | p_customer_name | p_notes | p_order_ref | p_quantity,src/lib/inventoryApi.js
+public,create_or_receive_finished_product_inventory,True,frontend_bundle,p_bin_id | p_brand | p_color | p_customer_name | p_existing_finished_product_id | p_finished_sku | p_logo_name | p_name | p_notes | p_product_type | p_quantity | p_size | p_style,src/lib/inventoryApi.js
+public,deduct_finished_inventory_for_job_item,True,frontend_bundle,p_bin_id | p_finished_product_id | p_job_item_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,delete_production_time_rule,True,frontend_bundle,p_rule_id,src/lib/productionSchedulingApi.js
+public,get_blank_items_in_bin,True,frontend_bundle,p_bin_id | p_search,src/lib/inventoryApi.js
+public,get_blank_product_source_bins,True,frontend_bundle,p_blank_product_id,src/CreateFinishedFromBlank.jsx
+public,get_inventory_reservations_safe,True,frontend_bundle,p_status,src/lib/inventoryApi.js
+public,import_supplier_catalog_rows,True,frontend_bundle | netlify_function,p_create_missing_lookups | p_rows | p_source_file_name | p_supplier_name | p_update_blank_products,netlify/functions/supplier-catalog-feed-sync.js | src/lib/inventoryApi.js
+public,mark_sc_artwork_system_reorder,True,frontend_bundle,p_app_notes | p_app_status | p_id,src/lib/artworkSystemApi.js
+public,mark_sc_artwork_system_request,True,frontend_bundle,p_app_notes | p_app_status | p_id,src/lib/artworkSystemApi.js
+public,override_job_item_blank_pairing,True,dormant_source | frontend_bundle,p_job_item_id | p_new_blank_product_id | p_reason,src/PullSheetView.jsx | src/lib/pullSheetPairingApi.js
+public,phase1_create_purchase_order_from_items,True,frontend_bundle,p_expected_at | p_items | p_notes | p_supplier_name,src/lib/inventoryApi.js
+public,phase1_get_purchase_recommendations,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase1_get_waiting_on_items,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase1_receive_purchase_order_item,True,frontend_bundle,p_bin_id | p_notes | p_purchase_order_item_id | p_quantity,src/lib/inventoryApi.js
+public,phase2_get_finished_match_suggestions,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase2_get_production_board,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase2_get_spoilage_report,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase2_record_blank_spoilage,True,frontend_bundle,p_bin_id | p_blank_product_id | p_job_id | p_job_item_id | p_notes | p_quantity | p_reason,src/lib/inventoryApi.js
+public,phase2_record_finished_spoilage,True,frontend_bundle,p_bin_id | p_finished_product_id | p_job_id | p_job_item_id | p_notes | p_quantity | p_reason,src/lib/inventoryApi.js
+public,phase2_update_job_status,True,frontend_bundle,p_job_id | p_notes | p_status,src/lib/inventoryApi.js
+public,phase2_use_finished_inventory_for_job_item,True,frontend_bundle,p_finished_product_id | p_job_item_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,phase4_get_campaign_forecast,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase4_get_customer_reorders,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase4_get_job_costing,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase4_upsert_job_cost_settings,True,frontend_bundle,p_decoration_cost_per_unit | p_job_id | p_labor_cost_per_unit | p_notes | p_order_revenue | p_overhead_cost | p_shipping_cost | p_shipping_revenue | p_spoilage_allowance,src/lib/inventoryApi.js
+public,phase5_create_quote,True,frontend_bundle,p_customer_name | p_items | p_notes | p_quote_title | p_status,src/lib/inventoryApi.js
+public,phase5_get_capacity_planning,True,frontend_bundle,,src/lib/inventoryApi.js
+public,phase5_get_command_center,True,frontend_bundle,,src/lib/inventoryApi.js
+public,phase5_get_job_risk_dashboard,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase5_get_production_calendar,True,frontend_bundle,,src/lib/inventoryApi.js
+public,phase5_get_qc_jobs,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase5_get_shop_tv,True,frontend_bundle,,src/lib/inventoryApi.js
+public,phase5_get_vendor_price_comparison,True,frontend_bundle,p_search,src/lib/inventoryApi.js
+public,phase5_save_qc_checklist,True,frontend_bundle,p_checked_by | p_checklist | p_job_id | p_notes | p_passed,src/lib/inventoryApi.js
+public,phase6_exception_center,True,frontend_bundle,,src/lib/phase6Api.js
+public,phase6_log_action,True,frontend_bundle,p_action_type | p_actor_name | p_entity_id | p_entity_type | p_metadata | p_severity | p_summary,src/lib/phase6Api.js
+public,phase6_mark_approval_ready_for_production,True,frontend_bundle,p_handoff_id | p_job_id | p_note,src/lib/phase6Api.js
+public,phase6_mark_quote_converted,True,frontend_bundle,p_handoff_id | p_job_id | p_note | p_order_id,src/lib/phase6Api.js
+public,phase6_product_data_health_report,True,frontend_bundle,p_issue | p_issue_type,src/ProductDataHealth.jsx | src/lib/phase6Api.js
+public,phase6_product_data_health_summary,True,frontend_bundle,,src/ProductDataHealth.jsx | src/lib/phase6Api.js
+public,production_time_estimate,True,frontend_bundle,p_quantity | p_rule_id,src/lib/productionSchedulingApi.js
+public,receive_blank_inventory,True,frontend_bundle,p_bin_id | p_blank_product_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,receive_finished_inventory,True,frontend_bundle,p_bin_id | p_finished_product_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,record_bin_audit_count,True,frontend_bundle,p_bin_id | p_blank_product_id | p_counted_quantity | p_expected_quantity | p_notes,src/lib/inventoryApi.js
+public,release_inventory_reservation_safe,True,frontend_bundle,p_notes | p_reservation_id,src/lib/inventoryApi.js
+public,return_pullsheet_item_to_finished_inventory,True,frontend_bundle,p_bin_id | p_job_item_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,save_color_alias_decision,True,frontend_bundle,p_blank_color | p_notes | p_reviewed_by | p_status | p_woo_color,src/lib/inventoryApi.js
+public,sc_activity_feed_for_pullsheet,True,frontend_bundle,p_job_id | p_limit,src/lib/inventoryApi.js
+public,sc_apply_bulk_pairing_repair_v5_text_ids,True,frontend_bundle,,src/lib/inventoryApi.js
+public,sc_apply_color_pairing_rules,True,frontend_bundle,,src/lib/inventoryApi.js
+public,sc_apply_non_inventory_rules_to_job,True,frontend_bundle,p_job_id,src/lib/nonInventoryApi.js
+public,sc_apply_non_inventory_rules_to_open_jobs,True,frontend_bundle,p_limit,src/lib/nonInventoryApi.js
+public,sc_artwork_bridge_status,True,frontend_bundle,,src/lib/artworkBridgeApi.js
+public,sc_artwork_bridge_summary,True,frontend_bundle,,src/lib/artworkBridgeApi.js
+public,sc_artwork_handoff_to_production,True,frontend_bundle,p_notes | p_source_id | p_source_type,src/lib/artworkBridgeApi.js
+public,sc_artwork_requests_app,True,frontend_bundle,p_filter,src/lib/artworkBridgeApi.js
+public,sc_artwork_update_status,True,frontend_bundle,p_notes | p_source_id | p_source_type | p_status,src/lib/artworkBridgeApi.js
+public,sc_bulk_set_due_dates_by_woo_orders,True,frontend_bundle,p_changed_by | p_due_date | p_reason | p_source | p_woocommerce_order_ids,src/lib/dueDateApi.js
+public,sc_bulk_set_job_due_dates,True,frontend_bundle,p_changed_by | p_due_date | p_job_ids | p_reason | p_source,src/lib/dueDateApi.js
+public,sc_bulk_undo_activity_feed,True,frontend_bundle,,src/lib/inventoryApi.js
+public,sc_cancel_pull_sheet,False,dormant_source,p_cancelled_by | p_job_id | p_notes | p_reason | p_release_reservations,src/lib/pullSheetCancelApi.js
+public,sc_clear_supplier_catalog_imported_data,True,frontend_bundle,p_clear_mode | p_supplier_name,src/lib/supplierCatalogApi.js
+public,sc_complete_pull_sheet_item_deduct_blank_safe,False,dormant_source,p_bin_id_text | p_blank_product_id_text | p_job_item_id_text | p_notes | p_quantity,src/lib/pullSheetCompletionApi.js
+public,sc_create_blank_product_from_manual_invoice_line,True,frontend_bundle,p_line,src/lib/manualOrdersApi.js
+public,sc_create_manual_invoice_order,True,frontend_bundle,p_generate_job | p_items | p_order,src/lib/manualOrdersApi.js
+public,sc_customer_portal_data_v2,True,frontend_bundle,p_token,src/CustomerPortalPreview.jsx | src/lib/phase6Api.js
+public,sc_customer_portal_preview_samples,True,frontend_bundle,,src/CustomerPortalPreview.jsx
+public,sc_deployment_health_v1,True,netlify_function,,netlify/functions/deployment-health.js
+public,sc_disable_color_pairing_rule,True,frontend_bundle,p_rule_id_text,src/lib/inventoryApi.js
+public,sc_ensure_job_item_reservation_v1,True,netlify_function,p_blank_product_id | p_job_id | p_job_item_id | p_quantity,netlify/functions/_shared/pullsheetReservations.js
+public,sc_ensure_manual_invoice_blank_for_size_run,True,frontend_bundle,p_line,src/lib/manualOrdersApi.js
+public,sc_existing_pull_sheets,True,frontend_bundle,,src/lib/inventoryApi.js
+public,sc_find_non_inventory_rule_for_line,True,frontend_bundle | netlify_function,p_product_name | p_sku | p_woo_product_id | p_woo_variation_id,netlify/functions/manual-pullsheet.js | netlify/functions/woocommerce-webhook.js | src/lib/nonInventoryApi.js
+public,sc_generate_job_from_manual_invoice_order,True,frontend_bundle,p_manual_order_id,src/lib/manualOrdersApi.js
+public,sc_get_bin_blank_receive_history_v1,True,frontend_bundle,p_bin_id_text | p_blank_product_id_text | p_sku_base_text,src/lib/inventoryApi.js
+public,sc_get_color_pairing_rules,True,frontend_bundle,p_status,src/lib/inventoryApi.js
+public,sc_home_dashboard_stats,True,dormant_source | frontend_bundle,,src/Home.jsx | src/pages/Home.jsx
+public,sc_import_supplier_catalog_rows_controlled,True,frontend_bundle,p_allowed_brands | p_allowed_styles | p_create_missing_lookups | p_keep_latest_only | p_rows | p_source_file_name | p_supplier_name | p_update_blank_products,src/lib/supplierCatalogApi.js
+public,sc_list_non_inventory_product_rules_v2,True,frontend_bundle,,src/lib/nonInventoryApi.js
+public,sc_list_order_status_board,True,frontend_bundle,p_limit | p_search | p_status,src/lib/productionStatusApi.js
+public,sc_list_pullsheet_due_dates,True,frontend_bundle,p_limit | p_search,src/lib/dueDateApi.js
+public,sc_log_testing_mode_event,False,dormant_source,p_action_summary | p_created_by | p_entity_id | p_entity_type | p_event_type | p_payload,src/lib/pullSheetCancelApi.js
+public,sc_manual_invoice_blank_receipt_summary,True,frontend_bundle,p_bin_id_text | p_manual_order_id,src/lib/manualOrdersApi.js
+public,sc_mapping_repair_create_blank_product,True,frontend_bundle,p_source_sku,src/lib/mappingRepairApi.js
+public,sc_mapping_repair_create_lookups,True,frontend_bundle,p_source_sku,src/lib/mappingRepairApi.js
+public,sc_mapping_repair_issues,True,frontend_bundle,p_include_resolved | p_search,src/lib/mappingRepairApi.js
+public,sc_mark_job_item_non_inventory,True,frontend_bundle,p_create_future_rule | p_job_item_id | p_reason | p_rule_match_value | p_rule_type,src/lib/nonInventoryApi.js
+public,sc_preview_bulk_pairing_repair_v5_text_ids,True,frontend_bundle,,src/lib/inventoryApi.js
+public,sc_preview_void_manual_invoice_order,True,frontend_bundle,p_manual_order_id,src/lib/manualOrdersApi.js
+public,sc_pull_sheet_blank_source_bins,False,dormant_source,p_blank_product_id_text,src/lib/pullSheetCompletionApi.js
+public,sc_pull_sheet_cancel_preview,False,dormant_source,p_job_id,src/lib/pullSheetCancelApi.js
+public,sc_pull_sheet_items,True,frontend_bundle,p_job_id,src/PullSheetView.jsx | src/lib/inventoryApi.js
+public,sc_pull_sheet_items_catalog_v1,True,frontend_bundle,p_job_id,src/PullSheetView.jsx
+public,sc_pull_sheet_ordered_blank_pairings,True,dormant_source | frontend_bundle,p_job_id,src/PullSheetView.jsx | src/lib/pullSheetPairingApi.js
+public,sc_quote_builder_pricing_rules,True,frontend_bundle,,src/QuoteBuilder.jsx
+public,sc_rebuild_pullsheet_due_date_status_board,True,frontend_bundle,p_limit,src/lib/dueDateApi.js
+public,sc_recalculate_order_status,True,frontend_bundle | netlify_function,p_job_id,netlify/functions/manual-pullsheet.js | netlify/functions/update-woocommerce-order-status.js | netlify/functions/woocommerce-webhook.js | src/lib/productionStatusApi.js
+public,sc_receive_blank_inventory_v4,True,frontend_bundle,,src/AddItemToBin.jsx
+public,sc_receive_manual_invoice_blank_to_bin,True,frontend_bundle,p_bin_id_text | p_line | p_manual_order_id | p_manual_order_item_id | p_notes | p_po_number | p_quantity | p_supplier | p_unit_cost,src/lib/manualOrdersApi.js
+public,sc_receive_manual_invoice_order_blanks_to_bin,True,frontend_bundle,p_bin_id_text | p_manual_order_id | p_notes | p_po_number | p_supplier | p_unit_cost,src/lib/manualOrdersApi.js
+public,sc_receiving_bins_v4,True,frontend_bundle,,src/AddItemToBin.jsx | src/lib/manualOrdersApi.js
+public,sc_refresh_order_status_board,True,frontend_bundle,p_limit,src/lib/productionStatusApi.js
+public,sc_save_color_pairing_rule,True,frontend_bundle,p_apply_existing | p_canonical_color_id_text | p_notes | p_reviewed_by | p_source_color_id_text | p_source_color_name,src/lib/inventoryApi.js
+public,sc_save_color_pairing_rules_bulk,True,frontend_bundle,p_apply_existing | p_canonical_color_id_text | p_notes | p_reviewed_by | p_source_color_ids_text,src/lib/inventoryApi.js
+public,sc_save_non_inventory_product_rule_v2,True,frontend_bundle,,src/lib/nonInventoryApi.js
+public,sc_search_blank_products_for_pairing,True,frontend_bundle,p_limit | p_search,src/BulkPairingRepair.jsx
+public,sc_search_blanks_for_manual_invoice,True,frontend_bundle,p_search,src/lib/manualOrdersApi.js
+public,sc_search_blanks_for_manual_invoice_v3,True,frontend_bundle,p_brand | p_color | p_limit | p_search | p_size | p_style,src/lib/manualOrdersApi.js
+public,sc_search_color_variations_for_pairing,True,frontend_bundle,p_limit | p_search,src/lib/inventoryApi.js
+public,sc_search_colors_for_pairing,True,frontend_bundle,p_limit | p_search,src/lib/inventoryApi.js
+public,sc_search_manual_invoice_products_v1,True,frontend_bundle,,src/lib/manualOrdersApi.js
+public,sc_search_manual_invoice_products_v2,True,frontend_bundle,,src/lib/manualOrdersApi.js
+public,sc_search_spoilage_blank_items,True,frontend_bundle,p_limit | p_search,src/lib/inventoryApi.js
+public,sc_set_job_due_date,True,frontend_bundle,p_changed_by | p_due_date | p_job_id | p_reason | p_source,src/lib/dueDateApi.js
+public,sc_set_job_due_date_by_woo_order,True,frontend_bundle,p_changed_by | p_due_date | p_reason | p_source | p_woocommerce_order_id,src/lib/dueDateApi.js
+public,sc_set_manual_invoice_blank_received_quantity,True,frontend_bundle,p_bin_id_text | p_line | p_manual_order_id | p_manual_order_item_id | p_notes | p_po_number | p_supplier | p_target_quantity | p_unit_cost,src/lib/manualOrdersApi.js
+public,sc_set_non_inventory_rule_active_v2,True,frontend_bundle,p_is_active | p_rule_id_text,src/lib/nonInventoryApi.js
+public,sc_set_production_board_status,True,frontend_bundle,p_job_id | p_note | p_status,src/lib/productionStatusApi.js
+public,sc_shop_touch_mode_v2,True,frontend_bundle,p_limit | p_search | p_station,src/lib/shopTvApi.js
+public,sc_suggest_color_pairings,True,frontend_bundle,p_limit | p_min_score | p_search,src/lib/inventoryApi.js
+public,sc_supplier_catalog_filter_options,True,frontend_bundle,,src/lib/supplierCatalogApi.js
+public,sc_supplier_catalog_review_stats,True,frontend_bundle,,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,sc_sync_manual_invoice_order_to_generated_job,True,frontend_bundle,p_cancel_removed_lines | p_manual_order_id | p_recreate_reservations,src/lib/manualOrdersApi.js
+public,sc_sync_woocommerce_order_status,True,netlify_function,p_customer_name | p_order_total | p_payload | p_woo_date_created | p_woo_date_modified | p_woo_order_number | p_woo_payment_status | p_woo_status | p_woocommerce_order_id,netlify/functions/update-woocommerce-order-status.js | netlify/functions/woocommerce-webhook.js
+public,sc_undo_activity_feed_entry,True,frontend_bundle,p_activity_id | p_reason,src/lib/inventoryApi.js
+public,sc_update_manual_invoice_order,True,frontend_bundle,p_items | p_manual_order_id | p_order,src/lib/manualOrdersApi.js
+public,sc_update_manual_invoice_payment_status,True,frontend_bundle,p_invoice_sent | p_manual_order_id | p_payment_received,src/lib/manualOrdersApi.js
+public,sc_update_supplier_catalog_review_item,True,frontend_bundle,p_create_blank_candidate | p_item_id | p_review_notes | p_review_status | p_updated_by | p_use_in_quote_builder | p_use_in_substitution_suggestions,src/lib/inventoryApi.js | src/lib/supplierCatalogApi.js
+public,sc_void_manual_invoice_order,True,frontend_bundle,p_cancel_generated_job | p_manual_order_id | p_reason | p_release_reservations | p_voided_by,src/lib/manualOrdersApi.js
+public,search_blank_products_for_edit,True,dormant_source | frontend_bundle,p_search,src/EditBlankItems.jsx | src/lib/pullSheetPairingApi.js
+public,search_blank_products_for_finished_creation,True,frontend_bundle,p_limit | p_search,src/CreateFinishedFromBlank.jsx
+public,search_finished_products_for_pairing,True,frontend_bundle,p_limit | p_search,src/CreateFinishedFromBlank.jsx
+public,search_finished_products_for_receiving,True,frontend_bundle,p_limit | p_search,src/lib/inventoryApi.js
+public,set_bin_blank_inventory_quantity,True,frontend_bundle,p_bin_id | p_blank_product_id | p_notes | p_quantity,src/lib/inventoryApi.js
+public,transfer_blank_inventory,True,frontend_bundle,p_blank_product_id | p_from_bin_id | p_notes | p_quantity | p_to_bin_id,src/lib/inventoryApi.js
+public,wcsb_relink_woo_products_to_blank_master_batch,True,frontend_bundle,p_limit,src/lib/inventoryApi.js

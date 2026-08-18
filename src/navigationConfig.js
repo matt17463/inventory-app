@@ -4,6 +4,7 @@ export const quickActions = [
   { label: 'Scan', path: '/scan', icon: '📷' },
   { label: 'Receive', path: '/add-item', icon: '📦' },
   { label: 'Pull Sheets', path: '/pullsheets', icon: '📋' },
+  { label: 'Shop Touch', path: '/shop-tv?mode=touch', icon: '🖥️' },
   { label: 'Manual', path: '/manual-orders', icon: '🧾' },
   { label: 'POs', path: '/purchase-orders', icon: '🛒' },
 ];
@@ -17,7 +18,7 @@ export const navSections = [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
       { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },
-      { label: 'Shop TV Mode', path: '/shop-tv', keywords: 'production display wall tv floor' },
+      { label: 'Shop TV / Touch Mode', path: '/shop-tv', keywords: 'production display wall tv touch floor kiosk station dashboard due date blockers' },
     ],
   },
   {
@@ -46,6 +47,7 @@ export const navSections = [
     icon: '🏭',
     items: [
       { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
+      { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates schedule production deadline pull sheets' },
       { label: 'Production Board', path: '/production-board', keywords: 'kanban status ready produce qc ship' },
       { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
       { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
@@ -97,7 +99,7 @@ export const navSections = [
     icon: '👥',
     items: [
       { label: 'Customer Portal Admin', path: '/customer-portal-admin', keywords: 'customer portal token status order artwork portal links' },
-      { label: 'Customer Portal Preview', path: '/customer-portal', keywords: 'public customer portal preview token' },
+      { label: 'Customer Portal Preview', path: '/customer-portal-preview', keywords: 'public customer portal preview token' },
     ],
   },
   {
@@ -105,6 +107,7 @@ export const navSections = [
     label: 'Artwork',
     icon: '🎨',
     items: [
+      { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
       { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },
     ],
@@ -115,13 +118,18 @@ export const navSections = [
     icon: '🧰',
     items: [
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
-      { label: 'Color Aliases', path: '/color-aliases', keywords: 'color aliases mapping woo sync' },
+      { label: 'Color Pairings', path: '/color-pairings', keywords: 'color aliases pairings mapping canonical manufacturer colors woo sync blank products' },
       { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
       { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },
+      { label: 'Bulk Pairing Repair', path: '/bulk-pairing-repair', keywords: 'bulk pairing repair pull sheet order incorrect blank product job items reservations' },
+      { label: 'Non-Inventory Rules', path: '/non-inventory-rules', keywords: 'non inventory product rules fees rush artwork no blank pull sheet close' },
       { label: 'Product Data Health', path: '/product-data-health', keywords: 'product data health missing attributes cost barcode supplier reports' },
       { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
+      { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
+      { label: 'Google Calendar', path: '/google-calendar', keywords: 'google calendar due dates purchase orders owner tasks reminders schedule sync' },
+      { label: 'Visual Themes & Layout', path: '/theme-settings', keywords: 'theme appearance colors dark light display density layout accessibility' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },
     ],
   },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getFinishedMatchSuggestions, useFinishedInventoryForJobItem } from './lib/inventoryApi';
+import { getFinishedMatchSuggestions, applyFinishedInventoryToJobItem } from './lib/inventoryApi';
 
 export default function FinishedMatchSuggestions() {
   const [rows, setRows] = useState([]);
@@ -24,7 +24,7 @@ export default function FinishedMatchSuggestions() {
     setBusyKey(`${row.job_item_id}-${row.finished_product_id}`);
     setMessage('');
     try {
-      await useFinishedInventoryForJobItem({
+      await applyFinishedInventoryToJobItem({
         jobItemId: row.job_item_id,
         finishedProductId: row.finished_product_id,
         quantity: qty,
