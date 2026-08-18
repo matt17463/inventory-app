@@ -64,16 +64,70 @@ export function wooBaseUrl() {
   return requiredEnv('WOO_SITE_URL').replace(/\/$/, '');
 }
 
+const WOO_RETRYABLE_CONNECT_CODES = new Set([
+  'UND_ERR_CONNECT_TIMEOUT',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'EAI_AGAIN',
+]);
+
+const WOO_RETRYABLE_GET_STATUSES = new Set([429, 502, 503, 504]);
+
+function connectionCode(error) {
+  return String(error?.cause?.code || error?.code || '').trim();
+}
+
+function connectionDetail(error) {
+  const cause = error?.cause || error;
+  const address = cause?.address ? ` ${cause.address}${cause.port ? `:${cause.port}` : ''}` : '';
+  return `${connectionCode(error) || 'NETWORK_ERROR'}${address}: ${cause?.message || error?.message || 'Connection failed.'}`;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 export async function wooRequest(path, { method = 'GET', body } = {}) {
-  const response = await fetch(`${wooBaseUrl()}/wp-json/wc/v3/${String(path).replace(/^\//, '')}`, {
-    method,
-    headers: { Authorization: wooAuthHeader(), 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(60000),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.message || `WooCommerce request failed (HTTP ${response.status}).`);
-  return payload;
+  const requestMethod = String(method || 'GET').toUpperCase();
+  const resource = String(path).replace(/^\//, '');
+  const url = `${wooBaseUrl()}/wp-json/wc/v3/${resource}`;
+  const maximumAttempts = 3;
+
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    let response;
+    try {
+      response = await fetch(url, {
+        method: requestMethod,
+        headers: { Authorization: wooAuthHeader(), 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(60000),
+      });
+    } catch (error) {
+      const code = connectionCode(error);
+      const safeConnectionRetry = WOO_RETRYABLE_CONNECT_CODES.has(code);
+      const safeReadRetry = requestMethod === 'GET';
+      if (attempt < maximumAttempts && (safeConnectionRetry || safeReadRetry)) {
+        console.warn(`WooCommerce ${requestMethod} connection attempt ${attempt} failed (${connectionDetail(error)}). Retrying.`);
+        await wait(750 * attempt);
+        continue;
+      }
+      throw new Error(`WooCommerce connection failed after ${attempt} attempt${attempt === 1 ? '' : 's'} while requesting ${requestMethod} ${resource} (${connectionDetail(error)}).`, { cause: error });
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) return payload;
+
+    if (requestMethod === 'GET' && attempt < maximumAttempts && WOO_RETRYABLE_GET_STATUSES.has(response.status)) {
+      const retryAfter = Number(response.headers.get('retry-after') || 0);
+      await wait(Math.max(750 * attempt, Math.min(retryAfter * 1000, 5000)));
+      continue;
+    }
+    throw new Error(payload?.message || `WooCommerce request failed (HTTP ${response.status}) while requesting ${requestMethod} ${resource}.`);
+  }
+
+  throw new Error(`WooCommerce request did not complete: ${requestMethod} ${resource}.`);
 }
 
 export function commaList(value) {
