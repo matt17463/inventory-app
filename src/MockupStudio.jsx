@@ -520,7 +520,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   const inferredColors = [...new Set(bundle.blanks.map((row) => row.product_color).filter(Boolean))].join(', ');
   const inferredBrand = bundle.blanks.find((row) => row.metadata?.catalog_brand)?.metadata?.catalog_brand || '';
   const inferredStyle = bundle.blanks.find((row) => row.metadata?.catalog_style)?.metadata?.catalog_style || '';
-  const [wooOptions, setWooOptions] = useState({ brand: null, style: null, color: null, size: null });
+  const [wooOptions, setWooOptions] = useState({ brand: null, style: null, color: null, size: null, categories: [], shipping_classes: [] });
   const [optionsMessage, setOptionsMessage] = useState('Loading WooCommerce attributes…');
   const [form, setForm] = useState({
     name: saved.name || project.project_name,
@@ -538,6 +538,12 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     sizes: saved.sizes || '',
     logo_options: optionList(saved.logo_options),
     variation_image_map: saved.variation_image_map || {},
+    main_product_image_output_id: saved.main_product_image_output_id || selectedOutputs[0]?.id || '',
+    shipping_class: saved.shipping_class || '',
+    weight: saved.weight || '',
+    length: saved.length || '',
+    width: saved.width || '',
+    height: saved.height || '',
     create_variations: saved.create_variations !== false,
     update_existing_product_id: saved.update_existing_product_id || project.woo_product_id || '',
   });
@@ -579,6 +585,12 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     });
   }, [selectedOutputs, outputContextById]);
 
+  useEffect(() => {
+    setForm((current) => selectedOutputs.some((output) => output.id === current.main_product_image_output_id)
+      ? current
+      : { ...current, main_product_image_output_id: selectedOutputs[0]?.id || '' });
+  }, [selectedOutputs]);
+
   const colors = optionList(form.colors);
   const sizes = optionList(form.sizes);
   const logos = optionList(form.logo_options);
@@ -589,6 +601,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     ? Math.max(colors.length, 1) * Math.max(sizes.length, 1) * Math.max(logos.length, 1)
     : 0;
   const missingMappings = imagePairs.filter((pair) => !form.variation_image_map?.[pair.key]);
+  const selectedCategoryIds = optionList(form.category_ids).map(String);
 
   function toggleLogo(name, checked) {
     const current = optionList(form.logo_options);
@@ -598,11 +611,23 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     setForm({ ...form, logo_options: next });
   }
 
+  function toggleCategory(id, checked) {
+    const value = String(id);
+    const next = checked
+      ? [...selectedCategoryIds, value].filter((item, index, rows) => rows.indexOf(item) === index)
+      : selectedCategoryIds.filter((item) => item !== value);
+    setForm({ ...form, category_ids: next.join(', ') });
+  }
+
   async function publish(event) {
     event.preventDefault();
     if (!selectedOutputs.length) { setMessage('Select at least one output for the store first.'); return; }
+    if (!form.main_product_image_output_id) { setMessage('Choose the main product image.'); return; }
     if (!form.brand) { setMessage('Select a Brand.'); return; }
     if (!form.style) { setMessage('Select a Style.'); return; }
+    if (!selectedCategoryIds.length) { setMessage('Select at least one product category.'); return; }
+    if (!form.shipping_class) { setMessage('Select a shipping class.'); return; }
+    if (['weight', 'length', 'width', 'height'].some((key) => !(Number(form[key]) > 0))) { setMessage('Enter weight, length, width, and height greater than zero.'); return; }
     if (variationCount > 500) { setMessage('Reduce the variation combinations to 500 or fewer.'); return; }
     if (missingMappings.length) { setMessage('Choose a mockup for every Color and Logo combination.'); return; }
     setBusy(true);
@@ -628,21 +653,27 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
             <FormField label="Style" required help="Uses the existing WooCommerce pa_style attribute."><select value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })}><option value="">Select Style</option>{form.style && !wooOptions.style?.terms?.some((row) => normalizedOption(row.name) === normalizedOption(form.style)) ? <option value={form.style}>{form.style}</option> : null}{(wooOptions.style?.terms || []).map((row) => <option key={row.id} value={row.name}>{row.name}</option>)}</select></FormField>
             <FormField label="Base price" required><input type="number" min="0" step="0.01" value={form.regular_price} onChange={(e) => setForm({ ...form, regular_price: e.target.value })} /></FormField>
             <FormField label="Base SKU" help="Variation SKUs add Color, Size, and Logo codes. If blank, Mockup Studio creates a product-based SKU."><input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></FormField>
-            <FormField label="Category IDs"><input value={form.category_ids} placeholder="12, 48" onChange={(e) => setForm({ ...form, category_ids: e.target.value })} /></FormField>
             <FormField label="Tag IDs"><input value={form.tag_ids} placeholder="21, 22" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} /></FormField>
             <FormField label="Colors" help="Comma-separated existing WooCommerce Color terms."><input value={form.colors} list="mockup-woo-colors" placeholder="Black, Forest Green, White" onChange={(e) => setForm({ ...form, colors: e.target.value })} /><datalist id="mockup-woo-colors">{(wooOptions.color?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
             <FormField label="Sizes" help="Comma-separated existing WooCommerce Size terms."><input value={form.sizes} list="mockup-woo-sizes" placeholder="YS, YM, YL, AS, AM, AL, AXL" onChange={(e) => setForm({ ...form, sizes: e.target.value })} /><datalist id="mockup-woo-sizes">{(wooOptions.size?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
+            <FormField label="Shipping class" required><select value={form.shipping_class} onChange={(e) => setForm({ ...form, shipping_class: e.target.value })}><option value="">Select Shipping Class</option>{(wooOptions.shipping_classes || []).map((row) => <option key={row.id} value={row.slug}>{row.name}</option>)}</select></FormField>
+            <FormField label="Weight" required help="Use the weight unit configured in WooCommerce."><input type="number" min="0.001" step="0.001" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></FormField>
+            <FormField label="Length" required help="Use the dimension unit configured in WooCommerce."><input type="number" min="0.01" step="0.01" value={form.length} onChange={(e) => setForm({ ...form, length: e.target.value })} /></FormField>
+            <FormField label="Width" required><input type="number" min="0.01" step="0.01" value={form.width} onChange={(e) => setForm({ ...form, width: e.target.value })} /></FormField>
+            <FormField label="Height" required><input type="number" min="0.01" step="0.01" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></FormField>
             <FormField label="Short description"><textarea value={form.short_description} onChange={(e) => setForm({ ...form, short_description: e.target.value })} /></FormField>
             <FormField label="Full description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></FormField>
             <FormField label="Variations"><label className="mockup-check"><input type="checkbox" checked={form.create_variations} onChange={(e) => setForm({ ...form, create_variations: e.target.checked })} /> Create and update Color × Size × Logo variations</label></FormField>
           </FieldGrid>
+
+          <SectionCard title="Product categories" description="Select every WooCommerce category that should contain this product."><div className="mockup-woo-category-options">{(wooOptions.categories || []).map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedCategoryIds.includes(String(row.id))} onChange={(e) => toggleCategory(row.id, e.target.checked)} /> {row.name}</label>)}</div>{!wooOptions.categories?.length ? <p className="mockup-woo-warning">No WooCommerce categories were returned. Confirm the API key has Read/Write access.</p> : null}</SectionCard>
 
           {form.type === 'variable' ? <SectionCard title="Logo choices" description="Select the artwork choices customers may order. The order webhook will preserve the Logo Selection value for the pull sheet and production workflow."><div className="mockup-woo-logo-options">{bundle.artwork.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={logos.some((name) => normalizedOption(name) === normalizedOption(row.artwork_name))} onChange={(e) => toggleLogo(row.artwork_name, e.target.checked)} /> {row.artwork_name}</label>)}</div></SectionCard> : null}
 
           {imagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose one mockup for each Color and Logo combination. All sizes in that combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{imagePairs.map((pair) => <tr key={pair.key}><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select value={form.variation_image_map?.[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...(form.variation_image_map || {}), [pair.key]: e.target.value } })}><option value="">Select mockup</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>)}</tbody></ResponsiveTable></SectionCard> : null}
 
           <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
-          {selectedOutputs.length ? <div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<figcaption>{output.output_name}</figcaption></figure>)}</div> : null}
+          {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
           <ActionButton type="submit" tone="primary">{form.update_existing_product_id ? 'Update WooCommerce Draft' : 'Create WooCommerce Draft'}</ActionButton>
         </form>
       </SectionCard>

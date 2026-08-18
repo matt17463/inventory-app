@@ -59,14 +59,22 @@ test('WooCommerce export supports catalog attributes, logo variations, image map
   assert.match(fn, /Logo Selection/);
   assert.match(fn, /variation_image_map/);
   assert.match(fn, /row\.image = \{ id: imageId \}/);
+  assert.match(fn, /main_product_image_output_id/);
+  assert.match(fn, /shipping_class/);
+  assert.match(fn, /dimensions:/);
+  assert.match(fn, /weight:/);
   assert.match(fn, /listExistingVariations/);
   assert.match(fn, /WOO_BATCH_SIZE = 100/);
   assert.match(fn, /variations\/batch/);
   assert.match(fn, /'draft'/);
   assert.match(options, /mockup-woo-options/);
   assert.match(options, /products\/attributes/);
+  assert.match(options, /products\/categories/);
+  assert.match(options, /products\/shipping_classes/);
   assert.match(studio, /Color × Size × Logo/);
   assert.match(studio, /Variation mockup mapping/);
+  assert.match(studio, /Main product image and gallery/);
+  assert.match(studio, /Product categories/);
 });
 
 test('project deletion is privileged and cleans private storage', async () => {

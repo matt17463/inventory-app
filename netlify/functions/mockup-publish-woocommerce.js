@@ -209,13 +209,30 @@ export async function handler(event) {
     if (outputsError) throw outputsError;
     if (!outputs?.length) throw new Error('Select at least one mockup output for the store.');
 
+    const categoryIds = numericIdList(config.category_ids);
+    if (!categoryIds.length) throw new Error('Select at least one WooCommerce product category.');
+    if (!String(config.shipping_class || '').trim()) throw new Error('Select a WooCommerce shipping class.');
+    const shippingValues = {
+      weight: Number(config.weight || 0),
+      length: Number(config.length || 0),
+      width: Number(config.width || 0),
+      height: Number(config.height || 0),
+    };
+    for (const [label, value] of Object.entries(shippingValues)) {
+      if (!Number.isFinite(value) || value <= 0) throw new Error(`Enter a ${label} greater than zero.`);
+    }
+    const mainOutputId = String(config.main_product_image_output_id || '');
+    const mainOutput = outputs.find((row) => row.id === mainOutputId);
+    if (!mainOutput) throw new Error('Choose a selected mockup as the main product image.');
+    const storeOutputs = [mainOutput, ...outputs.filter((row) => row.id !== mainOutput.id)];
+
     const existingId = Number(config.update_existing_product_id || project.woo_product_id || 0) || null;
     const operation = existingId ? (config.status === 'publish' ? 'update_published' : 'update_draft') : (config.status === 'publish' ? 'publish' : 'create_draft');
     const { data: exportRow, error: exportError } = await auth.supabase.from('mockup_woo_exports').insert({ project_id: projectId, operation, status: 'processing', request_payload: config }).select('*').single();
     if (exportError) throw exportError;
     exportId = exportRow.id;
 
-    for (const output of outputs) {
+    for (const output of storeOutputs) {
       if (output.woo_media_id) continue;
       const { data: signed, error: signedError } = await auth.supabase.storage.from(output.storage_bucket).createSignedUrl(output.storage_path, 900);
       if (signedError) throw signedError;
@@ -232,24 +249,33 @@ export async function handler(event) {
       short_description: String(config.short_description || ''),
       sku: String(config.sku || '').trim() || undefined,
       regular_price: config.type === 'simple' ? String(config.regular_price || '') : undefined,
-      categories: numericIdList(config.category_ids).map((id) => ({ id })),
+      categories: categoryIds.map((id) => ({ id })),
       tags: numericIdList(config.tag_ids).map((id) => ({ id })),
-      images: imageRowsFor(outputs),
+      images: imageRowsFor(storeOutputs),
+      virtual: false,
+      weight: String(shippingValues.weight),
+      dimensions: {
+        length: String(shippingValues.length),
+        width: String(shippingValues.width),
+        height: String(shippingValues.height),
+      },
+      shipping_class: String(config.shipping_class).trim(),
       attributes: parentAttributes.definitions,
       meta_data: [
         { key: '_sc_mockup_project_id', value: projectId },
+        { key: '_sc_main_product_image_output_id', value: mainOutputId },
         { key: '_sc_brand', value: config.brand },
         { key: '_sc_style', value: config.style },
         { key: '_sc_logo_options', value: JSON.stringify(listValue(config.logo_options)) },
         { key: '_sc_variation_image_map', value: JSON.stringify(config.variation_image_map || {}) },
-        { key: '_sc_mockup_captions', value: JSON.stringify(outputs.map((row) => ({ output_id: row.id, caption: row.caption_text, font: row.caption_font, size: row.caption_size, color: row.caption_color }))) },
+        { key: '_sc_mockup_captions', value: JSON.stringify(storeOutputs.map((row) => ({ output_id: row.id, caption: row.caption_text, font: row.caption_font, size: row.caption_size, color: row.caption_color }))) },
       ],
     };
     Object.keys(productPayload).forEach((key) => productPayload[key] === undefined && delete productPayload[key]);
 
     const product = await wooRequest(existingId ? `products/${existingId}` : 'products', { method: existingId ? 'PUT' : 'POST', body: productPayload });
-    const imageIdByOutput = mapWooImages(outputs, product.images || []);
-    await Promise.all(outputs.map((output) => {
+    const imageIdByOutput = mapWooImages(storeOutputs, product.images || []);
+    await Promise.all(storeOutputs.map((output) => {
       const mediaId = imageIdByOutput.get(output.id);
       return mediaId && Number(mediaId) !== Number(output.woo_media_id)
         ? auth.supabase.from('mockup_outputs').update({ woo_media_id: mediaId }).eq('id', output.id)

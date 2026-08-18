@@ -20,6 +20,16 @@ async function termsFor(attribute) {
   return terms;
 }
 
+async function allWooRows(path) {
+  const rows = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const next = await wooRequest(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
+    rows.push(...next);
+    if (next.length < 100) break;
+  }
+  return rows;
+}
+
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
   if (event.httpMethod !== 'GET') return jsonResponse(405, { success: false, error: 'Method not allowed.' }, event);
@@ -27,7 +37,11 @@ export async function handler(event) {
   if (!auth.ok) return jsonResponse(auth.statusCode, { success: false, error: auth.message }, event);
 
   try {
-    const discovered = await wooRequest('products/attributes?per_page=100');
+    const [discovered, categories, shippingClasses] = await Promise.all([
+      wooRequest('products/attributes?per_page=100'),
+      allWooRows('products/categories?orderby=name&order=asc'),
+      allWooRows('products/shipping_classes?orderby=name&order=asc'),
+    ]);
     const definitions = {
       brand: findAttribute(discovered, ['pa_brand'], ['brand']),
       style: findAttribute(discovered, ['pa_style'], ['style', 'product style']),
@@ -40,7 +54,12 @@ export async function handler(event) {
       slug: attribute.slug,
       terms: await termsFor(attribute),
     } : null]));
-    return jsonResponse(200, { success: true, attributes: Object.fromEntries(entries) }, event);
+    return jsonResponse(200, {
+      success: true,
+      attributes: Object.fromEntries(entries),
+      categories: categories.map((row) => ({ id: row.id, name: row.name, slug: row.slug, parent: row.parent || 0 })),
+      shipping_classes: shippingClasses.map((row) => ({ id: row.id, name: row.name, slug: row.slug })),
+    }, event);
   } catch (error) {
     console.error('WooCommerce option discovery failed:', error);
     return jsonResponse(500, { success: false, error: error.message || 'WooCommerce options could not be loaded.' }, event);

@@ -19,13 +19,15 @@
   color: #92400e !important;
 }
 
-.mockup-woo-logo-options {
+.mockup-woo-logo-options,
+.mockup-woo-category-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: .65rem;
 }
 
-.mockup-woo-logo-options .mockup-check {
+.mockup-woo-logo-options .mockup-check,
+.mockup-woo-category-options .mockup-check {
   padding: .65rem .75rem;
   border: 1px solid var(--mockup-border, var(--sc-border, #cbd5e1));
   border-radius: 9px;
@@ -65,6 +67,11 @@
   color: var(--mockup-text, var(--sc-text, #0f172a));
 }
 
+.mockup-woo-preview figure.is-main {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, .18);
+}
+
 .mockup-woo-preview img {
   display: block;
   width: 100%;
@@ -79,6 +86,12 @@
   font-size: .8rem;
   font-weight: 700;
   text-align: center;
+}
+
+.mockup-woo-preview .mockup-check {
+  justify-content: center;
+  margin-top: .4rem;
+  color: var(--mockup-text, var(--sc-text, #0f172a)) !important;
 }
 
 @media (max-width: 700px) {

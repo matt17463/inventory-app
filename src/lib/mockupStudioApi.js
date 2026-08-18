@@ -404,7 +404,11 @@ export async function getWooCommerceMockupOptions() {
   const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-woo-options');
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'WooCommerce attributes could not be loaded.');
-  return payload.attributes || {};
+  return {
+    ...(payload.attributes || {}),
+    categories: payload.categories || [],
+    shipping_classes: payload.shipping_classes || [],
+  };
 }
 
 export async function saveProductionPacket(projectId, packetData) {
