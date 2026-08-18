@@ -248,22 +248,50 @@ export async function saveMockupPlacement(values) {
 }
 
 export async function copyPlacementToBlanks(placement, blankAssetIds = []) {
-  const rows = blankAssetIds
-    .filter((id) => id !== placement.blank_asset_id)
-    .map((blankId) => ({
-      ...placement,
-      id: undefined,
-      blank_asset_id: blankId,
-      created_at: undefined,
-      updated_at: undefined,
-      created_by: undefined,
-    }));
-  if (!rows.length) return [];
-  const { data, error } = await supabase.from('mockup_placements').upsert(rows, {
-    onConflict: 'blank_asset_id,artwork_asset_id,placement_name',
-  }).select('*');
-  if (error) throw error;
-  return data || [];
+  const targetIds = [...new Set(blankAssetIds)]
+    .filter((id) => id && id !== placement.blank_asset_id);
+  if (!targetIds.length) return [];
+
+  const basePayload = {
+    project_id: placement.project_id,
+    artwork_asset_id: placement.artwork_asset_id,
+    placement_name: placement.placement_name || 'center_chest',
+    decoration_method: placement.decoration_method || 'dtf',
+    x_pct: Number(placement.x_pct ?? 50),
+    y_pct: Number(placement.y_pct ?? 45),
+    width_pct: Number(placement.width_pct ?? 40),
+    height_pct: placement.height_pct ? Number(placement.height_pct) : null,
+    print_width_inches: placement.print_width_inches ? Number(placement.print_width_inches) : null,
+    print_height_inches: placement.print_height_inches ? Number(placement.print_height_inches) : null,
+    rotation_degrees: Number(placement.rotation_degrees || 0),
+    opacity: Number(placement.opacity ?? 1),
+    blend_mode: placement.blend_mode || 'multiply',
+    shadow_strength: Number(placement.shadow_strength ?? 0.15),
+    curvature: Number(placement.curvature || 0),
+    perspective_config: placement.perspective_config || {},
+    generation_instructions: placement.generation_instructions || null,
+    layer_order: Number(placement.layer_order || 0),
+    is_active: placement.is_active !== false,
+  };
+
+  const copied = [];
+  for (const blankAssetId of targetIds) {
+    const { data, error } = await supabase
+      .from('mockup_placements')
+      .upsert({ ...basePayload, blank_asset_id: blankAssetId }, {
+        onConflict: 'blank_asset_id,artwork_asset_id,placement_name',
+      })
+      .select('*')
+      .single();
+    if (error) throw new Error(`Could not copy placement to blank ${blankAssetId}: ${error.message}`);
+    if (!data) throw new Error(`Copy to blank ${blankAssetId} did not return a saved placement.`);
+    copied.push(data);
+  }
+
+  if (copied.length !== targetIds.length) {
+    throw new Error(`Only ${copied.length} of ${targetIds.length} placement copies were saved.`);
+  }
+  return copied;
 }
 
 export async function saveExactCompositeOutput({ projectId, placementId, blob, caption = null, metadata = {} }) {
