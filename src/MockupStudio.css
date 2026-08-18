@@ -57,6 +57,10 @@
 .mockup-review-actions button { padding: .8rem 1rem; border: 0 !important; border-radius: 9px; color: #fff !important; font-weight: 800; cursor: pointer; }
 .mockup-review-actions .approve { background: #15803d !important; }
 .mockup-review-actions .changes { background: #b45309 !important; }
+.mockup-review-actions button:disabled { cursor: not-allowed; opacity: .72; }
+.mockup-review-feedback { margin: 0; padding: .85rem 1rem; border: 1px solid; border-radius: 9px; font-weight: 700; }
+.mockup-review-feedback.success { border-color: #86efac; background: #dcfce7 !important; color: #166534 !important; }
+.mockup-review-feedback.error { border-color: #fca5a5; background: #fee2e2 !important; color: #991b1b !important; }
 .mockup-production-packet { max-width: 1200px; margin: 0 auto; padding: 2rem; color: #0f172a; background: #fff; font-family: Arial, sans-serif; }
 .mockup-production-packet h1, .mockup-production-packet h2, .mockup-production-packet h3, .mockup-production-packet p, .mockup-production-packet span, .mockup-production-packet strong, .mockup-production-packet figcaption { color: #0f172a; }
 .mockup-production-packet > header { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center; border-bottom: 3px solid #0f766e; padding-bottom: 1rem; }
@@ -77,4 +81,3 @@
 .mockup-packet-art { display: block; width: 80px; height: 60px; margin-top: .4rem; object-fit: contain; }
 @media print { .mockup-production-packet { max-width: none; padding: 0; } .mockup-packet-actions, .mockup-production-packet .message { display: none; } .mockup-production-packet section { break-inside: avoid; } }
 @media (max-width: 800px) { .mockup-production-packet > header { grid-template-columns: 1fr; } .mockup-packet-summary { grid-template-columns: 1fr 1fr; } }
-
