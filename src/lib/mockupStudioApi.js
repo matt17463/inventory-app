@@ -169,6 +169,14 @@ export async function addBlankAsset({ projectId, file, values = {}, catalogItem 
     pixel_height: values.pixel_height || null,
     preflight_status: values.preflight_status || 'pending',
     preflight_notes: values.preflight_notes || null,
+    metadata: {
+      ...(values.metadata || {}),
+      catalog_brand: catalogItem?.brands?.name || null,
+      catalog_style: catalogItem?.product_types?.name || null,
+      catalog_color: catalogItem?.colors?.name || null,
+      catalog_size: catalogItem?.sizes?.name || null,
+      catalog_sku_base: catalogItem?.sku_base || null,
+    },
     ...location,
   };
   const { data, error } = await supabase.from('mockup_blank_assets').insert(payload).select('*').single();
@@ -390,6 +398,13 @@ export async function publishMockupToWooCommerce(projectId, config) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'WooCommerce export failed.');
   return payload;
+}
+
+export async function getWooCommerceMockupOptions() {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-woo-options');
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'WooCommerce attributes could not be loaded.');
+  return payload.attributes || {};
 }
 
 export async function saveProductionPacket(projectId, packetData) {
