@@ -76,6 +76,39 @@ function idText(value) {
   return value === null || value === undefined ? '' : String(value);
 }
 
+function displayNameFromFile(fileName = 'Upload') {
+  return String(fileName).replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Upload';
+}
+
+function uploadQueueRows(fileList, buildRow, limit = 50) {
+  return Array.from(fileList || []).slice(0, limit).map((file) => ({
+    queue_id: crypto.randomUUID(),
+    file,
+    ...buildRow(file),
+  }));
+}
+
+async function runUploadQueue(items, worker, onProgress, concurrency = 3) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  let completed = 0;
+  async function consume() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      try {
+        results[index] = { ok: true, item: items[index], value: await worker(items[index], index) };
+      } catch (error) {
+        results[index] = { ok: false, item: items[index], error };
+      }
+      completed += 1;
+      onProgress?.(completed, items.length, items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => consume()));
+  return results;
+}
+
 function optionList(value) {
   let parsed = value;
   const trimmed = typeof value === 'string' ? value.trimStart() : '';
@@ -263,7 +296,8 @@ function ProjectTab({ project, customers, onRefresh, setMessage, setBusy }) {
 }
 
 function BlankAssetsTab({ projectId, rows, urls, refresh, setBusy, setMessage }) {
-  const [file, setFile] = useState(null);
+  const [uploadRows, setUploadRows] = useState([]);
+  const [pickerKey, setPickerKey] = useState(0);
   const [form, setForm] = useState({ asset_name: '', product_type: 'tee', product_color: '', product_view: 'front' });
   const [search, setSearch] = useState('');
   const [catalog, setCatalog] = useState([]);
@@ -278,46 +312,81 @@ function BlankAssetsTab({ projectId, rows, urls, refresh, setBusy, setMessage })
 
   async function upload(event) {
     event.preventDefault();
+    const queued = uploadRows.length
+      ? uploadRows
+      : selectedCatalog?.image_url
+        ? [{ queue_id: `catalog-${selectedCatalog.id}`, file: null, ...form, asset_name: form.asset_name || selectedCatalog.name }]
+        : [];
+    if (!queued.length) { setMessage('Choose one or more blank-product images, or select a catalog product.'); return; }
     setBusy(true);
     try {
-      const dimensions = file ? await imageDimensions(file) : {};
-      const warnings = [];
-      if (dimensions.width && Math.max(dimensions.width, dimensions.height) < 1600) warnings.push('Image is under 1600 pixels and may appear soft.');
-      await addBlankAsset({
-        projectId,
-        file,
-        catalogItem: selectedCatalog,
-        values: {
-          ...form,
-          pixel_width: dimensions.width,
-          pixel_height: dimensions.height,
-          preflight_status: warnings.length ? 'warning' : 'passed',
-          preflight_notes: warnings.join(' '),
-        },
-      });
-      setFile(null);
-      setSelectedCatalog(null);
-      setForm({ asset_name: '', product_type: 'tee', product_color: '', product_view: 'front' });
-      setMessage('Blank-product image added.');
+      const results = await runUploadQueue(queued, async (item) => {
+        const dimensions = item.file ? await imageDimensions(item.file) : {};
+        const warnings = [];
+        if (dimensions.width && Math.max(dimensions.width, dimensions.height) < 1600) warnings.push('Image is under 1600 pixels and may appear soft.');
+        return addBlankAsset({
+          projectId,
+          file: item.file,
+          catalogItem: item.file ? null : selectedCatalog,
+          values: {
+            asset_name: item.asset_name,
+            product_type: item.product_type,
+            product_color: item.product_color,
+            product_view: item.product_view,
+            pixel_width: dimensions.width,
+            pixel_height: dimensions.height,
+            preflight_status: warnings.length ? 'warning' : 'passed',
+            preflight_notes: warnings.join(' '),
+          },
+        });
+      }, (completed, total, item) => setMessage(`Uploading blank images: ${completed} of ${total} finished (${item.asset_name}).`));
+      const succeeded = results.filter((result) => result.ok);
+      const failed = results.filter((result) => !result.ok);
+      setUploadRows(failed.map((result) => result.item));
+      if (!failed.length) { setPickerKey((value) => value + 1); setSelectedCatalog(null); }
+      setForm((current) => ({ ...current, asset_name: '' }));
       await refresh();
-    } catch (error) { setMessage(error.message || 'Could not add blank image.'); }
+      const failureNames = failed.slice(0, 3).map((result) => `${result.item.asset_name}: ${result.error?.message || 'upload failed'}`).join('; ');
+      setMessage(`${succeeded.length} blank image${succeeded.length === 1 ? '' : 's'} added.${failed.length ? ` ${failed.length} failed and remain in the queue. ${failureNames}` : ''}`);
+    } catch (error) { setMessage(error.message || 'Could not add blank images.'); }
     finally { setBusy(false); }
+  }
+
+  function chooseBlankFiles(fileList) {
+    const selected = uploadQueueRows(fileList, (nextFile) => ({
+      asset_name: displayNameFromFile(nextFile.name),
+      product_type: form.product_type,
+      product_color: form.product_color,
+      product_view: form.product_view,
+    }));
+    setUploadRows(selected);
+    if (selected.length) setSelectedCatalog(null);
+    if ((fileList?.length || 0) > 50) setMessage('The first 50 blank images were added to the upload queue. Upload additional files in a second batch.');
+  }
+
+  function updateBlankQueue(queueId, changes) {
+    setUploadRows((current) => current.map((row) => row.queue_id === queueId ? { ...row, ...changes } : row));
+  }
+
+  function applyBlankDefaults() {
+    setUploadRows((current) => current.map((row) => ({ ...row, product_type: form.product_type, product_color: form.product_color, product_view: form.product_view })));
   }
 
   return (
     <>
-      <SectionCard title="Add blank-product photos" description="Upload the exact photo you want to decorate. Optionally link it to an existing blank-product record.">
+      <SectionCard title="Add blank-product photos" description="Upload up to 50 blank images at once. Review the name, color, product type, and view for each file before uploading.">
         <div className="mockup-search-row"><input placeholder="Search existing blank products" value={search} onChange={(e) => setSearch(e.target.value)} /><ActionButton onClick={doSearch}>Search Catalog</ActionButton></div>
-        {catalog.length ? <div className="mockup-catalog-results">{catalog.map((item) => <button type="button" className={selectedCatalog?.id === item.id ? 'selected' : ''} key={item.id} onClick={() => setSelectedCatalog(item)}><strong>{item.sku_base}</strong><span>{item.name}</span><small>{item.colors?.name || ''} {item.sizes?.name || ''}</small></button>)}</div> : null}
+        {catalog.length ? <div className="mockup-catalog-results">{catalog.map((item) => <button type="button" className={selectedCatalog?.id === item.id ? 'selected' : ''} key={item.id} onClick={() => { setSelectedCatalog(item); setUploadRows([]); setPickerKey((value) => value + 1); }}><strong>{item.sku_base}</strong><span>{item.name}</span><small>{item.colors?.name || ''} {item.sizes?.name || ''}</small></button>)}</div> : null}
         <form onSubmit={upload}>
           <FieldGrid>
-            <FormField label="Blank photo" required={!selectedCatalog?.image_url}><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] || null)} /></FormField>
-            <FormField label="Display name"><input value={form.asset_name} placeholder={selectedCatalog?.name || 'Black hoodie – front'} onChange={(e) => setForm({ ...form, asset_name: e.target.value })} /></FormField>
-            <FormField label="Product type"><select value={form.product_type} onChange={(e) => setForm({ ...form, product_type: e.target.value })}>{PRODUCT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></FormField>
-            <FormField label="Color"><input value={form.product_color} onChange={(e) => setForm({ ...form, product_color: e.target.value })} /></FormField>
-            <FormField label="View"><select value={form.product_view} onChange={(e) => setForm({ ...form, product_view: e.target.value })}>{PRODUCT_VIEWS.map((view) => <option key={view}>{view}</option>)}</select></FormField>
+            <FormField label="Blank photos"><input key={pickerKey} type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseBlankFiles(e.target.files)} /></FormField>
+            <FormField label="Catalog display name"><input value={form.asset_name} disabled={uploadRows.length > 0} placeholder={selectedCatalog?.name || 'Used only for one selected catalog item'} onChange={(e) => setForm({ ...form, asset_name: e.target.value })} /></FormField>
+            <FormField label="Default product type"><select value={form.product_type} onChange={(e) => setForm({ ...form, product_type: e.target.value })}>{PRODUCT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></FormField>
+            <FormField label="Default color"><input value={form.product_color} placeholder="Optional; can be changed per file" onChange={(e) => setForm({ ...form, product_color: e.target.value })} /></FormField>
+            <FormField label="Default view"><select value={form.product_view} onChange={(e) => setForm({ ...form, product_view: e.target.value })}>{PRODUCT_VIEWS.map((view) => <option key={view}>{view}</option>)}</select></FormField>
           </FieldGrid>
-          <ActionButton type="submit" tone="primary">Add Blank Photo</ActionButton>
+          {uploadRows.length ? <><div className="sc-button-row"><ActionButton type="button" size="sm" onClick={applyBlankDefaults}>Apply defaults to all queued files</ActionButton><ActionButton type="button" tone="danger" size="sm" onClick={() => { setUploadRows([]); setPickerKey((value) => value + 1); }}>Clear queue</ActionButton></div><div className="mockup-upload-queue">{uploadRows.map((row) => <article key={row.queue_id}><strong>{row.file.name}</strong><small>{(row.file.size / 1048576).toFixed(2)} MB</small><FormField label="Display name"><input value={row.asset_name} onChange={(e) => updateBlankQueue(row.queue_id, { asset_name: e.target.value })} /></FormField><FormField label="Color"><input value={row.product_color} onChange={(e) => updateBlankQueue(row.queue_id, { product_color: e.target.value })} /></FormField><FormField label="Product type"><select value={row.product_type} onChange={(e) => updateBlankQueue(row.queue_id, { product_type: e.target.value })}>{PRODUCT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></FormField><FormField label="View"><select value={row.product_view} onChange={(e) => updateBlankQueue(row.queue_id, { product_view: e.target.value })}>{PRODUCT_VIEWS.map((view) => <option key={view}>{view}</option>)}</select></FormField><ActionButton type="button" tone="danger" size="sm" onClick={() => setUploadRows((current) => current.filter((item) => item.queue_id !== row.queue_id))}>Remove</ActionButton></article>)}</div></> : null}
+          <ActionButton type="submit" tone="primary">{uploadRows.length > 1 ? `Upload ${uploadRows.length} Blank Images` : 'Add Blank Photo'}</ActionButton>
         </form>
       </SectionCard>
       <SectionCard title={`Blank photos (${rows.length})`}>
@@ -335,62 +404,84 @@ function BlankAssetsTab({ projectId, rows, urls, refresh, setBusy, setMessage })
 }
 
 function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setMessage }) {
-  const [file, setFile] = useState(null);
+  const [uploadRows, setUploadRows] = useState([]);
+  const [pickerKey, setPickerKey] = useState(0);
   const [form, setForm] = useState({ artwork_name: '', exact_artwork_locked: true, preserve_white_ink: true });
   const [selectedVault, setSelectedVault] = useState(null);
 
   async function upload(event) {
     event.preventDefault();
+    const sourceUrl = selectedVault ? artworkCandidateUrl(selectedVault) : '';
+    const queued = uploadRows.length
+      ? uploadRows
+      : sourceUrl
+        ? [{ queue_id: `vault-${selectedVault.id}`, file: null, artwork_name: form.artwork_name || artworkCandidateName(selectedVault) }]
+        : [];
+    if (!queued.length) { setMessage('Choose one or more logo/graphic files, or select an artwork-vault record.'); return; }
     setBusy(true);
     try {
-      const inspection = file ? await inspectArtworkFile(file) : {};
-      const sourceUrl = selectedVault ? artworkCandidateUrl(selectedVault) : '';
-      const lowResolution = inspection.width && Math.max(inspection.width, inspection.height) < 1000;
-      const possibleMissingWhite = form.preserve_white_ink && inspection.hasTransparency === true && inspection.hasOpaqueWhite === false;
-      const preflightNotes = [
-        lowResolution ? 'Artwork is under 1000 pixels. Verify print quality before production.' : '',
-        possibleMissingWhite ? 'This transparent file has no detectable opaque white pixels. If the design should contain white ink, verify the source file before generating.' : '',
-      ].filter(Boolean).join(' ');
-      await addArtworkAsset({
-        projectId,
-        file,
-        values: {
-          ...form,
-          artwork_name: form.artwork_name || (selectedVault ? artworkCandidateName(selectedVault) : file?.name),
-          source_url: sourceUrl || null,
-          artwork_request_id_text: selectedVault?.id ? String(selectedVault.id) : null,
-          artwork_vault_reference: selectedVault?._source_table || null,
-          pixel_width: inspection.width,
-          pixel_height: inspection.height,
-          has_transparency: inspection.hasTransparency,
-          preflight_status: lowResolution || possibleMissingWhite ? 'warning' : 'passed',
-          preflight_notes: preflightNotes || null,
-          metadata: {
-            preserve_white_ink: form.preserve_white_ink,
-            has_opaque_white: inspection.hasOpaqueWhite,
-            transparency_ratio: inspection.transparencyRatio,
+      const results = await runUploadQueue(queued, async (item) => {
+        const inspection = item.file ? await inspectArtworkFile(item.file) : {};
+        const lowResolution = inspection.width && Math.max(inspection.width, inspection.height) < 1000;
+        const possibleMissingWhite = form.preserve_white_ink && inspection.hasTransparency === true && inspection.hasOpaqueWhite === false;
+        const preflightNotes = [
+          lowResolution ? 'Artwork is under 1000 pixels. Verify print quality before production.' : '',
+          possibleMissingWhite ? 'This transparent file has no detectable opaque white pixels. If the design should contain white ink, verify the source file before generating.' : '',
+        ].filter(Boolean).join(' ');
+        return addArtworkAsset({
+          projectId,
+          file: item.file,
+          values: {
+            ...form,
+            artwork_name: item.artwork_name,
+            source_url: item.file ? null : sourceUrl,
+            artwork_request_id_text: item.file ? null : String(selectedVault?.id || '') || null,
+            artwork_vault_reference: item.file ? null : selectedVault?._source_table || null,
+            pixel_width: inspection.width,
+            pixel_height: inspection.height,
+            has_transparency: inspection.hasTransparency,
+            preflight_status: lowResolution || possibleMissingWhite ? 'warning' : 'passed',
+            preflight_notes: preflightNotes || null,
+            metadata: {
+              preserve_white_ink: form.preserve_white_ink,
+              has_opaque_white: inspection.hasOpaqueWhite,
+              transparency_ratio: inspection.transparencyRatio,
+            },
           },
-        },
-      });
-      setFile(null); setSelectedVault(null); setForm({ artwork_name: '', exact_artwork_locked: true, preserve_white_ink: true });
-      setMessage('Artwork added and locked for exact reproduction.');
+        });
+      }, (completed, total, item) => setMessage(`Uploading artwork: ${completed} of ${total} finished (${item.artwork_name}).`));
+      const succeeded = results.filter((result) => result.ok);
+      const failed = results.filter((result) => !result.ok);
+      setUploadRows(failed.map((result) => result.item));
+      if (!failed.length) { setPickerKey((value) => value + 1); setSelectedVault(null); }
+      setForm((current) => ({ ...current, artwork_name: '' }));
       await refresh();
-    } catch (error) { setMessage(error.message || 'Could not add artwork.'); }
+      const failureNames = failed.slice(0, 3).map((result) => `${result.item.artwork_name}: ${result.error?.message || 'upload failed'}`).join('; ');
+      setMessage(`${succeeded.length} artwork file${succeeded.length === 1 ? '' : 's'} added.${failed.length ? ` ${failed.length} failed and remain in the queue. ${failureNames}` : ''}`);
+    } catch (error) { setMessage(error.message || 'Could not add artwork files.'); }
     finally { setBusy(false); }
+  }
+
+  function chooseArtworkFiles(fileList) {
+    const selected = uploadQueueRows(fileList, (nextFile) => ({ artwork_name: displayNameFromFile(nextFile.name) }));
+    setUploadRows(selected);
+    if (selected.length) setSelectedVault(null);
+    if ((fileList?.length || 0) > 50) setMessage('The first 50 artwork files were added to the upload queue. Upload additional files in a second batch.');
   }
 
   return (
     <>
-      <SectionCard title="Add artwork" description="Upload production artwork or choose a usable file from the existing artwork system.">
-        {vault.length ? <FormField label="Existing artwork vault / request"><select value={selectedVault?.id || ''} onChange={(e) => setSelectedVault(vault.find((row) => idText(row.id) === e.target.value) || null)}><option value="">Choose an existing artwork record</option>{vault.map((row) => <option key={`${row._source_table}-${row.id}`} value={row.id}>{artworkCandidateName(row)}{artworkCandidateUrl(row) ? '' : ' — upload file required'}</option>)}</select></FormField> : null}
+      <SectionCard title="Add artwork" description="Upload up to 50 logos or graphics at once, edit each name, and apply shared accuracy and white-ink settings.">
+        {vault.length ? <FormField label="Existing artwork vault / request"><select value={selectedVault?.id || ''} onChange={(e) => { setSelectedVault(vault.find((row) => idText(row.id) === e.target.value) || null); setUploadRows([]); setPickerKey((value) => value + 1); }}><option value="">Choose an existing artwork record</option>{vault.map((row) => <option key={`${row._source_table}-${row.id}`} value={row.id}>{artworkCandidateName(row)}{artworkCandidateUrl(row) ? '' : ' — upload file required'}</option>)}</select></FormField> : null}
         <form onSubmit={upload}>
           <FieldGrid>
-            <FormField label="Artwork file" required={!artworkCandidateUrl(selectedVault || {})}><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} /></FormField>
-            <FormField label="Artwork name"><input value={form.artwork_name} onChange={(e) => setForm({ ...form, artwork_name: e.target.value })} /></FormField>
+            <FormField label="Logo / graphic files"><input key={pickerKey} type="file" multiple accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf" onChange={(e) => chooseArtworkFiles(e.target.files)} /></FormField>
+            <FormField label="Vault artwork name"><input value={form.artwork_name} disabled={uploadRows.length > 0} placeholder="Used only for one selected vault item" onChange={(e) => setForm({ ...form, artwork_name: e.target.value })} /></FormField>
             <FormField label="Accuracy"><label className="mockup-check"><input type="checkbox" checked={form.exact_artwork_locked} onChange={(e) => setForm({ ...form, exact_artwork_locked: e.target.checked })} /> Do not redraw or alter this logo</label></FormField>
             <FormField label="White ink"><label className="mockup-check"><input type="checkbox" checked={form.preserve_white_ink} onChange={(e) => setForm({ ...form, preserve_white_ink: e.target.checked })} /> Protect visible white as opaque printed ink</label></FormField>
           </FieldGrid>
-          <ActionButton type="submit" tone="primary">Add Artwork</ActionButton>
+          {uploadRows.length ? <><div className="sc-button-row"><ActionButton type="button" tone="danger" size="sm" onClick={() => { setUploadRows([]); setPickerKey((value) => value + 1); }}>Clear queue</ActionButton></div><div className="mockup-upload-queue artwork">{uploadRows.map((row) => <article key={row.queue_id}><strong>{row.file.name}</strong><small>{(row.file.size / 1048576).toFixed(2)} MB</small><FormField label="Artwork name"><input value={row.artwork_name} onChange={(e) => setUploadRows((current) => current.map((item) => item.queue_id === row.queue_id ? { ...item, artwork_name: e.target.value } : item))} /></FormField><ActionButton type="button" tone="danger" size="sm" onClick={() => setUploadRows((current) => current.filter((item) => item.queue_id !== row.queue_id))}>Remove</ActionButton></article>)}</div></> : null}
+          <ActionButton type="submit" tone="primary">{uploadRows.length > 1 ? `Upload ${uploadRows.length} Artwork Files` : 'Add Artwork'}</ActionButton>
         </form>
       </SectionCard>
       <SectionCard title={`Artwork (${rows.length})`}>

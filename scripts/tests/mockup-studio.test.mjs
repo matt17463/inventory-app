@@ -117,6 +117,19 @@ test('white artwork is protected as opaque print in exact and AI mockups', async
   assert.match(ai, /alpha-transparent/);
 });
 
+test('blank photos and artwork support editable bulk upload queues', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const css = await read('src/MockupStudio.css');
+  assert.match(studio, /function runUploadQueue/);
+  assert.match(studio, /multiple accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(studio, /multiple accept="image\/png,image\/jpeg,image\/webp,image\/svg\+xml,application\/pdf"/);
+  assert.match(studio, /Upload \$\{uploadRows\.length\} Blank Images/);
+  assert.match(studio, /Upload \$\{uploadRows\.length\} Artwork Files/);
+  assert.match(studio, /Apply defaults to all queued files/);
+  assert.match(studio, /failed and remain in the queue/);
+  assert.match(css, /\.mockup-upload-queue/);
+});
+
 test('copy to all verifies every blank placement individually', async () => {
   const api = await read('src/lib/mockupStudioApi.js');
   const studio = await read('src/MockupStudio.jsx');
