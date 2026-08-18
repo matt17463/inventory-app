@@ -644,7 +644,9 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     if (missingMappings.length) { setMessage('Choose a mockup for every Color and Logo combination.'); return; }
     setBusy(true);
     try {
-      const payload = await publishMockupToWooCommerce(project.id, form);
+      const payload = await publishMockupToWooCommerce(project.id, form, (progress) => {
+        if (progress?.message) setMessage(progress.message);
+      });
       setMessage(`WooCommerce ${payload.product?.status || 'draft'} ${payload.product?.id}: ${payload.variations_created || 0} variations created, ${payload.variations_updated || 0} updated, and ${payload.variations_deactivated || 0} excluded variations deactivated.`);
       await refresh();
     } catch (error) { setMessage(error.message); }
