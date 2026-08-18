@@ -100,6 +100,16 @@ export async function deleteMockupProject(projectId) {
   return payload;
 }
 
+export async function deleteMockupOutput(outputId) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-delete-output', {
+    method: 'POST',
+    body: JSON.stringify({ output_id: outputId }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'The generated mockup could not be deleted.');
+  return payload;
+}
+
 export async function getMockupProjectBundle(projectId) {
   const [project, blanks, artwork, placements, jobs, outputs, pricing, reviews, exports, packets] = await Promise.all([
     supabase.from('mockup_projects').select('*').eq('id', projectId).single(),

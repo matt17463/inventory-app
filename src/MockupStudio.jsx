@@ -19,6 +19,7 @@ import {
   createMockupProject,
   createMockupReviewLink,
   deleteMockupProject,
+  deleteMockupOutput,
   deletePricingItem,
   getMockupProjectBundle,
   getWooCommerceMockupOptions,
@@ -468,7 +469,7 @@ function GenerateTab({ project, blanks, artwork, placements, jobs, outputs, urls
         })}</div>}
       </SectionCard>
       <SectionCard title={`Outputs (${outputs.length})`}>
-        {!outputs.length ? <EmptyState title="No outputs generated" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : <div className="mockup-file-placeholder">No preview</div>}<h3>{output.output_name}</h3><div><StatusBadge status={output.approval_status} /> <StatusBadge status={output.output_kind} /></div><ActionButton tone={output.is_selected ? 'success' : 'secondary'} size="sm" onClick={async () => { setBusy(true); try { await selectMockupOutput(output.id, !output.is_selected); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>{output.is_selected ? 'Selected' : 'Select for Store'}</ActionButton></article>)}</div>}
+        {!outputs.length ? <EmptyState title="No outputs generated" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : <div className="mockup-file-placeholder">No preview</div>}<h3>{output.output_name}</h3><div><StatusBadge status={output.approval_status} /> <StatusBadge status={output.output_kind} /></div><div className="sc-button-row"><ActionButton tone={output.is_selected ? 'success' : 'secondary'} size="sm" onClick={async () => { setBusy(true); try { await selectMockupOutput(output.id, !output.is_selected); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>{output.is_selected ? 'Selected' : 'Select for Store'}</ActionButton><ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm(`Permanently delete “${output.output_name}”? It will no longer be available for captions, approval, the product gallery, or WooCommerce variation mapping.`)) return; setBusy(true); try { const result = await deleteMockupOutput(output.id); await refresh(); setMessage(result.cleanup_warning ? `Mockup deleted. Storage cleanup warning: ${result.cleanup_warning}` : 'Mockup deleted and removed from WooCommerce variation choices.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup</ActionButton></div></article>)}</div>}
       </SectionCard>
       {jobs.length ? <SectionCard title="Generation history"><ResponsiveTable><thead><tr><th>Date</th><th>Mode</th><th>Model</th><th>Status</th><th>Error</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.id}><td>{new Date(job.created_at).toLocaleString()}</td><td>{job.generation_mode}</td><td>{job.model_name || '—'}</td><td><StatusBadge status={job.status} /></td><td>{job.error_message || '—'}</td></tr>)}</tbody></ResponsiveTable></SectionCard> : null}
     </>
@@ -538,6 +539,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     sizes: saved.sizes || '',
     logo_options: optionList(saved.logo_options),
     variation_image_map: saved.variation_image_map || {},
+    excluded_variation_pairs: Array.isArray(saved.excluded_variation_pairs) ? saved.excluded_variation_pairs : [],
     main_product_image_output_id: saved.main_product_image_output_id || selectedOutputs[0]?.id || '',
     shipping_class: saved.shipping_class || '',
     weight: saved.weight || '',
@@ -594,11 +596,13 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   const colors = optionList(form.colors);
   const sizes = optionList(form.sizes);
   const logos = optionList(form.logo_options);
-  const imagePairs = form.type === 'variable' && form.create_variations
+  const allImagePairs = form.type === 'variable' && form.create_variations
     ? (colors.length ? colors : ['']).flatMap((color) => (logos.length ? logos : ['']).map((logo) => ({ color, logo, key: variationImageKey(color, logo) })))
     : [];
+  const excludedPairKeys = new Set(form.excluded_variation_pairs || []);
+  const imagePairs = allImagePairs.filter((pair) => !excludedPairKeys.has(pair.key));
   const variationCount = form.type === 'variable' && form.create_variations
-    ? Math.max(colors.length, 1) * Math.max(sizes.length, 1) * Math.max(logos.length, 1)
+    ? imagePairs.length * Math.max(sizes.length, 1)
     : 0;
   const missingMappings = imagePairs.filter((pair) => !form.variation_image_map?.[pair.key]);
   const selectedCategoryIds = optionList(form.category_ids).map(String);
@@ -619,6 +623,13 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     setForm({ ...form, category_ids: next.join(', ') });
   }
 
+  function toggleVariationPair(key, included) {
+    const next = new Set(form.excluded_variation_pairs || []);
+    if (included) next.delete(key);
+    else next.add(key);
+    setForm({ ...form, excluded_variation_pairs: [...next] });
+  }
+
   async function publish(event) {
     event.preventDefault();
     if (!selectedOutputs.length) { setMessage('Select at least one output for the store first.'); return; }
@@ -628,12 +639,13 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     if (!selectedCategoryIds.length) { setMessage('Select at least one product category.'); return; }
     if (!form.shipping_class) { setMessage('Select a shipping class.'); return; }
     if (['weight', 'length', 'width', 'height'].some((key) => !(Number(form[key]) > 0))) { setMessage('Enter weight, length, width, and height greater than zero.'); return; }
+    if (form.type === 'variable' && form.create_variations && !imagePairs.length) { setMessage('Include at least one Color and Logo combination.'); return; }
     if (variationCount > 500) { setMessage('Reduce the variation combinations to 500 or fewer.'); return; }
     if (missingMappings.length) { setMessage('Choose a mockup for every Color and Logo combination.'); return; }
     setBusy(true);
     try {
       const payload = await publishMockupToWooCommerce(project.id, form);
-      setMessage(`WooCommerce ${payload.product?.status || 'draft'} ${payload.product?.id}: ${payload.variations_created || 0} variations created and ${payload.variations_updated || 0} updated.`);
+      setMessage(`WooCommerce ${payload.product?.status || 'draft'} ${payload.product?.id}: ${payload.variations_created || 0} variations created, ${payload.variations_updated || 0} updated, and ${payload.variations_deactivated || 0} excluded variations deactivated.`);
       await refresh();
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
@@ -670,9 +682,9 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
           {form.type === 'variable' ? <SectionCard title="Logo choices" description="Select the artwork choices customers may order. The order webhook will preserve the Logo Selection value for the pull sheet and production workflow."><div className="mockup-woo-logo-options">{bundle.artwork.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={logos.some((name) => normalizedOption(name) === normalizedOption(row.artwork_name))} onChange={(e) => toggleLogo(row.artwork_name, e.target.checked)} /> {row.artwork_name}</label>)}</div></SectionCard> : null}
 
-          {imagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose one mockup for each Color and Logo combination. All sizes in that combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{imagePairs.map((pair) => <tr key={pair.key}><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select value={form.variation_image_map?.[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...(form.variation_image_map || {}), [pair.key]: e.target.value } })}><option value="">Select mockup</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>)}</tbody></ResponsiveTable></SectionCard> : null}
+          {allImagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose which Color and Logo combinations customers may order, then assign the correct image. Excluded combinations are not created in WooCommerce. All sizes in an included combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Include in product</th><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{allImagePairs.map((pair) => { const included = !excludedPairKeys.has(pair.key); return <tr key={pair.key}><td><label className="mockup-check"><input type="checkbox" checked={included} onChange={(e) => toggleVariationPair(pair.key, e.target.checked)} /> {included ? 'Included' : 'Excluded'}</label></td><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select disabled={!included} value={form.variation_image_map?.[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...(form.variation_image_map || {}), [pair.key]: e.target.value } })}><option value="">{included ? 'Select mockup' : 'Not offered'}</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>; })}</tbody></ResponsiveTable></SectionCard> : null}
 
-          <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
+          <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p><strong>{allImagePairs.length - imagePairs.length}</strong> excluded Color/Logo combination(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
           {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
           <ActionButton type="submit" tone="primary">{form.update_existing_product_id ? 'Update WooCommerce Draft' : 'Create WooCommerce Draft'}</ActionButton>
         </form>
