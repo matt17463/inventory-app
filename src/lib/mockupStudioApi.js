@@ -428,14 +428,70 @@ export async function deletePricingItem(id) {
   if (error) throw error;
 }
 
-export async function publishMockupToWooCommerce(projectId, config) {
+export async function publishMockupToWooCommerce(projectId, config, onProgress = () => {}) {
+  const operation = Number(config.update_existing_product_id || 0)
+    ? (config.status === 'publish' ? 'update_published' : 'update_draft')
+    : (config.status === 'publish' ? 'publish' : 'create_draft');
+  const { data: exportRow, error: exportError } = await supabase.from('mockup_woo_exports').insert({
+    project_id: projectId,
+    operation,
+    status: 'queued',
+    request_payload: config,
+    response_payload: { stage: 'queued' },
+  }).select('*').single();
+  if (exportError) throw exportError;
+
   const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-publish-woocommerce', {
     method: 'POST',
-    body: JSON.stringify({ project_id: projectId, config }),
+    body: JSON.stringify({ project_id: projectId, export_id: exportRow.id, config }),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'WooCommerce export failed.');
-  return payload;
+  if (!response.ok || payload?.success === false) {
+    const message = payload?.error || payload?.message || 'WooCommerce export could not be started.';
+    await supabase.from('mockup_woo_exports').update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() }).eq('id', exportRow.id);
+    throw new Error(message);
+  }
+
+  onProgress({ stage: 'queued', message: 'WooCommerce export queued. You may keep this page open while variations are created.' });
+  let lastProgress = '';
+  for (let attempt = 0; attempt < 320; attempt += 1) {
+    const { data: current, error } = await supabase
+      .from('mockup_woo_exports')
+      .select('status,woo_product_id,response_payload,error_message')
+      .eq('id', exportRow.id)
+      .single();
+    if (error) throw error;
+    if (current.status === 'failed') throw new Error(current.error_message || 'WooCommerce export failed.');
+    if (current.status === 'completed') {
+      const result = current.response_payload || {};
+      return {
+        success: true,
+        product: {
+          id: current.woo_product_id || result.product_id,
+          status: result.status,
+          permalink: result.permalink,
+        },
+        ...result,
+      };
+    }
+
+    const progress = current.response_payload || {};
+    const progressKey = JSON.stringify(progress);
+    if (progressKey !== lastProgress) {
+      lastProgress = progressKey;
+      const processed = Number(progress.variations_processed || 0);
+      const total = Number(progress.variations_total || 0);
+      const message = progress.stage === 'variations' && total
+        ? `Creating WooCommerce variations: ${processed} of ${total} operations completed.`
+        : progress.stage === 'product_ready'
+          ? `WooCommerce product ${progress.product_id} created. Preparing variations…`
+          : 'Preparing the WooCommerce product…';
+      onProgress({ ...progress, message });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+
+  throw new Error('WooCommerce is still processing this export. Refresh the project in a few minutes to check its status.');
 }
 
 export async function getWooCommerceMockupOptions() {

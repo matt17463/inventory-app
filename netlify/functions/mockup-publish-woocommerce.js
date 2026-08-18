@@ -2,7 +2,7 @@ import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { commaList, numericIdList, parseJsonBody, safePathSegment, wooRequest } from './_shared/mockupUtils.js';
 
 const MAX_VARIATIONS = 500;
-const WOO_BATCH_SIZE = 100;
+const WOO_BATCH_SIZE = 25;
 
 function listValue(value) {
   if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
@@ -153,20 +153,27 @@ async function listExistingVariations(productId) {
   return rows;
 }
 
-async function syncVariations(productId, desired) {
+async function syncVariations(productId, desired, onProgress = async () => {}) {
   const existing = await listExistingVariations(productId);
   const existingBySignature = new Map(existing.map((row) => [variationSignature(row.attributes || []), row]));
   const desiredSignatures = new Set(desired.map((row) => variationSignature(row.attributes)));
   const projectId = String(desired[0]?.meta_data?.find((row) => row.key === '_sc_mockup_project_id')?.value || '');
-  const operations = desired.map((row) => {
+  const creates = [];
+  const updates = [];
+  desired.forEach((row) => {
     const match = existingBySignature.get(variationSignature(row.attributes));
-    return match ? { type: 'update', row: { ...row, id: match.id } } : { type: 'create', row };
+    if (match) updates.push({ type: 'update', row: { ...row, id: match.id } });
+    else creates.push({ type: 'create', row });
   });
   const staleProjectVariations = existing.filter((row) => {
     const belongsToProject = row.meta_data?.some((item) => item.key === '_sc_mockup_project_id' && String(item.value) === projectId);
     return belongsToProject && !desiredSignatures.has(variationSignature(row.attributes || []));
   });
-  operations.push(...staleProjectVariations.map((row) => ({ type: 'deactivate', row: { id: row.id, status: 'private' } })));
+  const deactivates = staleProjectVariations.map((row) => ({ type: 'deactivate', row: { id: row.id, status: 'private' } }));
+  // Create missing combinations first. A previous partial export may already have
+  // 100+ variations; updating those first can starve the missing sizes if a host
+  // or function timeout interrupts a later batch.
+  const operations = [...creates, ...updates, ...deactivates];
   let created = 0;
   let updated = 0;
   let deactivated = 0;
@@ -180,6 +187,13 @@ async function syncVariations(productId, desired) {
     created += result.create?.length || 0;
     updated += updateRows.length;
     deactivated += deactivateRows.length;
+    await onProgress({
+      processed: Math.min(offset + batch.length, operations.length),
+      total: operations.length,
+      created,
+      updated,
+      deactivated,
+    });
   }
   const touchedExisting = desired.filter((row) => existingBySignature.has(variationSignature(row.attributes))).length + staleProjectVariations.length;
   return { created, updated, deactivated, untouched: Math.max(0, existing.length - touchedExisting) };
@@ -214,6 +228,22 @@ export async function handler(event) {
     const projectId = String(body.project_id || '');
     const config = { ...(body.config || {}), project_id: projectId };
     if (!projectId) throw new Error('Missing mockup project ID.');
+
+    let exportRow = null;
+    const requestedExportId = String(body.export_id || '');
+    if (requestedExportId) {
+      const { data, error } = await auth.supabase
+        .from('mockup_woo_exports')
+        .select('*')
+        .eq('id', requestedExportId)
+        .eq('project_id', projectId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('The queued WooCommerce export could not be found for this project.');
+      exportRow = data;
+      exportId = data.id;
+    }
+
     if (!String(config.name || '').trim()) throw new Error('Enter the WooCommerce product name.');
 
     const [{ data: project, error: projectError }, { data: outputs, error: outputsError }] = await Promise.all([
@@ -241,11 +271,30 @@ export async function handler(event) {
     if (!mainOutput) throw new Error('Choose a selected mockup as the main product image.');
     const storeOutputs = [mainOutput, ...outputs.filter((row) => row.id !== mainOutput.id)];
 
-    const existingId = Number(config.update_existing_product_id || project.woo_product_id || 0) || null;
+    const existingId = Number(config.update_existing_product_id || project.woo_product_id || exportRow?.woo_product_id || 0) || null;
     const operation = existingId ? (config.status === 'publish' ? 'update_published' : 'update_draft') : (config.status === 'publish' ? 'publish' : 'create_draft');
-    const { data: exportRow, error: exportError } = await auth.supabase.from('mockup_woo_exports').insert({ project_id: projectId, operation, status: 'processing', request_payload: config }).select('*').single();
-    if (exportError) throw exportError;
-    exportId = exportRow.id;
+    if (exportRow) {
+      const { error: exportError } = await auth.supabase.from('mockup_woo_exports').update({
+        operation,
+        status: 'processing',
+        request_payload: config,
+        response_payload: { stage: 'preparing_product' },
+        error_message: null,
+        completed_at: null,
+      }).eq('id', exportId);
+      if (exportError) throw exportError;
+    } else {
+      const { data, error: exportError } = await auth.supabase.from('mockup_woo_exports').insert({
+        project_id: projectId,
+        operation,
+        status: 'processing',
+        request_payload: config,
+        response_payload: { stage: 'preparing_product' },
+      }).select('*').single();
+      if (exportError) throw exportError;
+      exportRow = data;
+      exportId = data.id;
+    }
 
     for (const output of storeOutputs) {
       if (output.woo_media_id) continue;
@@ -290,6 +339,19 @@ export async function handler(event) {
     Object.keys(productPayload).forEach((key) => productPayload[key] === undefined && delete productPayload[key]);
 
     const product = await wooRequest(existingId ? `products/${existingId}` : 'products', { method: existingId ? 'PUT' : 'POST', body: productPayload });
+    // Save the parent ID before starting variation batches. This makes a retry
+    // resume the same product even if a later variation request is interrupted.
+    await Promise.all([
+      auth.supabase.from('mockup_woo_exports').update({
+        woo_product_id: product.id,
+        response_payload: { stage: 'product_ready', product_id: product.id },
+      }).eq('id', exportId),
+      auth.supabase.from('mockup_projects').update({
+        woo_product_id: product.id,
+        woo_product_url: product.permalink || null,
+        woo_config: config,
+      }).eq('id', projectId),
+    ]);
     const imageIdByOutput = mapWooImages(storeOutputs, product.images || []);
     await Promise.all(storeOutputs.map((output) => {
       const mediaId = imageIdByOutput.get(output.id);
@@ -301,7 +363,21 @@ export async function handler(event) {
     let variationResult = { created: 0, updated: 0, deactivated: 0, untouched: 0 };
     if (productPayload.type === 'variable' && config.create_variations !== false) {
       const desired = variationRows(parentAttributes, config, product.id, imageIdByOutput);
-      if (desired.length) variationResult = await syncVariations(product.id, desired);
+      if (desired.length) {
+        variationResult = await syncVariations(product.id, desired, async (progress) => {
+          await auth.supabase.from('mockup_woo_exports').update({
+            response_payload: {
+              stage: 'variations',
+              product_id: product.id,
+              variations_processed: progress.processed,
+              variations_total: progress.total,
+              variations_created: progress.created,
+              variations_updated: progress.updated,
+              variations_deactivated: progress.deactivated,
+            },
+          }).eq('id', exportId);
+        });
+      }
     }
 
     const responsePayload = {
