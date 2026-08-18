@@ -92,3 +92,13 @@ test('exact compositor preserves an AI-free rendering path with captions', async
   assert.match(canvas, /font/);
   assert.match(canvas, /fillText/);
 });
+
+test('copy to all verifies every blank placement individually', async () => {
+  const api = await read('src/lib/mockupStudioApi.js');
+  const studio = await read('src/MockupStudio.jsx');
+  assert.match(api, /const targetIds = \[\.\.\.new Set\(blankAssetIds\)\]/);
+  assert.match(api, /for \(const blankAssetId of targetIds\)/);
+  assert.match(api, /\.upsert\(\{ \.\.\.basePayload, blank_asset_id: blankAssetId \}/);
+  assert.match(api, /copied\.length !== targetIds\.length/);
+  assert.match(studio, /Placement copied to \$\{copied\.length\} additional blank photo/);
+});
