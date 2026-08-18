@@ -130,6 +130,22 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
   throw new Error(`WooCommerce request did not complete: ${requestMethod} ${resource}.`);
 }
 
+export function wooCollection(payload, label = 'collection') {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === 'object') {
+    for (const key of ['data', 'items', 'results']) {
+      if (payload[key] !== undefined) return wooCollection(payload[key], label);
+    }
+    const entries = Object.entries(payload);
+    if (entries.length && entries.every(([key]) => /^\d+$/.test(key))) {
+      return entries.sort(([left], [right]) => Number(left) - Number(right)).map(([, value]) => value);
+    }
+    const keys = Object.keys(payload).slice(0, 5).join(', ');
+    throw new Error(`WooCommerce returned an unexpected response while loading ${label}${keys ? ` (fields: ${keys})` : ''}. Exclude /wp-json/wc/v3/ from WordPress caching and security response transformations.`);
+  }
+  throw new Error(`WooCommerce returned an empty or invalid response while loading ${label}.`);
+}
+
 export function commaList(value) {
   return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 }

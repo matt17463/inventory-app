@@ -145,3 +145,22 @@ test('WooCommerce reads retry transient connection failures without duplicating 
   assert.match(utils, /requestMethod === 'GET'/);
   assert.match(utils, /WooCommerce connection failed after \$\{attempt\} attempt/);
 });
+
+test('WooCommerce list responses and legacy saved settings are normalized before spreading', async () => {
+  const { wooCollection } = await import('../../netlify/functions/_shared/mockupUtils.js');
+  const utils = await read('netlify/functions/_shared/mockupUtils.js');
+  const publish = await read('netlify/functions/mockup-publish-woocommerce.js');
+  const options = await read('netlify/functions/mockup-woo-options.js');
+  const studio = await read('src/MockupStudio.jsx');
+  assert.match(utils, /export function wooCollection/);
+  assert.match(utils, /entries\.every\(\(\[key\]\) => \/\^\\d\+\$\//);
+  assert.match(publish, /wooCollection/);
+  assert.match(options, /wooCollection/);
+  assert.match(studio, /function objectValue/);
+  assert.match(studio, /new Set\(optionList\(form\.excluded_variation_pairs\)\)/);
+  assert.match(studio, /objectValue\(form\.variation_image_map\)/);
+  assert.deepEqual(wooCollection([{ id: 1 }], 'test'), [{ id: 1 }]);
+  assert.deepEqual(wooCollection({ 1: { id: 2 }, 0: { id: 1 } }, 'test'), [{ id: 1 }, { id: 2 }]);
+  assert.deepEqual(wooCollection({ data: [{ id: 3 }] }, 'test'), [{ id: 3 }]);
+  assert.throws(() => wooCollection({ code: 'unexpected' }, 'test'), /unexpected response/);
+});

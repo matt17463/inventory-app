@@ -1,5 +1,5 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
-import { commaList, numericIdList, parseJsonBody, safePathSegment, wooRequest } from './_shared/mockupUtils.js';
+import { commaList, numericIdList, parseJsonBody, safePathSegment, wooCollection, wooRequest } from './_shared/mockupUtils.js';
 
 const MAX_VARIATIONS = 500;
 const WOO_BATCH_SIZE = 25;
@@ -26,7 +26,10 @@ function findAttribute(discovered, slugs, names = []) {
 async function allAttributeTerms(attributeId) {
   const rows = [];
   for (let page = 1; page <= 20; page += 1) {
-    const next = await wooRequest(`products/attributes/${attributeId}/terms?per_page=100&page=${page}`);
+    const next = wooCollection(
+      await wooRequest(`products/attributes/${attributeId}/terms?per_page=100&page=${page}`),
+      `attribute ${attributeId} terms`,
+    );
     rows.push(...next);
     if (next.length < 100) break;
   }
@@ -146,7 +149,10 @@ function variationRows(parent, config, productId, imageIdByOutput) {
 async function listExistingVariations(productId) {
   const rows = [];
   for (let page = 1; page <= 50; page += 1) {
-    const next = await wooRequest(`products/${productId}/variations?per_page=100&page=${page}`);
+    const next = wooCollection(
+      await wooRequest(`products/${productId}/variations?per_page=100&page=${page}`),
+      `product ${productId} variations`,
+    );
     rows.push(...next);
     if (next.length < 100) break;
   }
@@ -303,7 +309,7 @@ export async function handler(event) {
       output.signed_url = signed.signedUrl;
     }
 
-    const discovered = await wooRequest('products/attributes?per_page=100');
+    const discovered = wooCollection(await wooRequest('products/attributes?per_page=100'), 'product attributes');
     const parentAttributes = await productAttributes(config, discovered);
     const productPayload = {
       name: String(config.name).trim(),
