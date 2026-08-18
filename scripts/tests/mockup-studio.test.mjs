@@ -102,3 +102,28 @@ test('copy to all verifies every blank placement individually', async () => {
   assert.match(api, /copied\.length !== targetIds\.length/);
   assert.match(studio, /Placement copied to \$\{copied\.length\} additional blank photo/);
 });
+
+test('generated mockups can be permanently removed from store choices and storage', async () => {
+  const api = await read('src/lib/mockupStudioApi.js');
+  const studio = await read('src/MockupStudio.jsx');
+  const fn = await read('netlify/functions/mockup-delete-output.js');
+  assert.match(api, /mockup-delete-output/);
+  assert.match(studio, /Delete Mockup/);
+  assert.match(studio, /removed from WooCommerce variation choices/);
+  assert.match(fn, /allowedRoles: \['admin', 'manager', 'operator'\]/);
+  assert.match(fn, /from\('mockup_outputs'\)[\s\S]*\.delete\(\)/);
+  assert.match(fn, /storage_bucket/);
+  assert.match(fn, /\.remove\(\[output\.storage_path\]\)/);
+});
+
+test('unwanted Color and Logo combinations are excluded from WooCommerce variations', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const fn = await read('netlify/functions/mockup-publish-woocommerce.js');
+  assert.match(studio, /excluded_variation_pairs/);
+  assert.match(studio, /Include in product/);
+  assert.match(studio, /Excluded combinations are not created in WooCommerce/);
+  assert.match(fn, /excludedPairs\.has\(imageMapKey\(color, logo\)\)/);
+  assert.match(fn, /_sc_excluded_variation_pairs/);
+  assert.match(fn, /staleProjectVariations/);
+  assert.match(fn, /status: 'private'/);
+});

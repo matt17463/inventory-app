@@ -108,10 +108,12 @@ function variationRows(parent, config, productId, imageIdByOutput) {
   const logos = parent.logo?.options?.length ? parent.logo.options : [null];
   const rows = [];
   const outputMap = config.variation_image_map && typeof config.variation_image_map === 'object' ? config.variation_image_map : {};
+  const excludedPairs = new Set(Array.isArray(config.excluded_variation_pairs) ? config.excluded_variation_pairs.map(String) : []);
   const fallbackImageId = imageIdByOutput.values().next().value || null;
   const skuBase = skuPart(config.sku || `MS-${productId}`, `MS${productId}`);
 
   for (const color of colors) for (const size of sizes) for (const logo of logos) {
+    if (excludedPairs.has(imageMapKey(color, logo))) continue;
     const attributes = [];
     if (color) attributes.push(variationAttribute(parent.color.reference, color));
     if (size) attributes.push(variationAttribute(parent.size.reference, size));
@@ -136,6 +138,7 @@ function variationRows(parent, config, productId, imageIdByOutput) {
     if (imageId) row.image = { id: imageId };
     rows.push(row);
   }
+  if (!rows.length) throw new Error('Include at least one Color and Logo combination before exporting variations.');
   if (rows.length > MAX_VARIATIONS) throw new Error(`This export would create ${rows.length} variations. Reduce the combinations to ${MAX_VARIATIONS} or fewer.`);
   return rows;
 }
@@ -153,21 +156,33 @@ async function listExistingVariations(productId) {
 async function syncVariations(productId, desired) {
   const existing = await listExistingVariations(productId);
   const existingBySignature = new Map(existing.map((row) => [variationSignature(row.attributes || []), row]));
+  const desiredSignatures = new Set(desired.map((row) => variationSignature(row.attributes)));
+  const projectId = String(desired[0]?.meta_data?.find((row) => row.key === '_sc_mockup_project_id')?.value || '');
   const operations = desired.map((row) => {
     const match = existingBySignature.get(variationSignature(row.attributes));
     return match ? { type: 'update', row: { ...row, id: match.id } } : { type: 'create', row };
   });
+  const staleProjectVariations = existing.filter((row) => {
+    const belongsToProject = row.meta_data?.some((item) => item.key === '_sc_mockup_project_id' && String(item.value) === projectId);
+    return belongsToProject && !desiredSignatures.has(variationSignature(row.attributes || []));
+  });
+  operations.push(...staleProjectVariations.map((row) => ({ type: 'deactivate', row: { id: row.id, status: 'private' } })));
   let created = 0;
   let updated = 0;
+  let deactivated = 0;
   for (let offset = 0; offset < operations.length; offset += WOO_BATCH_SIZE) {
     const batch = operations.slice(offset, offset + WOO_BATCH_SIZE);
     const create = batch.filter((item) => item.type === 'create').map((item) => item.row);
-    const update = batch.filter((item) => item.type === 'update').map((item) => item.row);
+    const updateRows = batch.filter((item) => item.type === 'update');
+    const deactivateRows = batch.filter((item) => item.type === 'deactivate');
+    const update = [...updateRows, ...deactivateRows].map((item) => item.row);
     const result = await wooRequest(`products/${productId}/variations/batch`, { method: 'POST', body: { create, update } });
     created += result.create?.length || 0;
-    updated += result.update?.length || 0;
+    updated += updateRows.length;
+    deactivated += deactivateRows.length;
   }
-  return { created, updated, untouched: Math.max(0, existing.length - updated) };
+  const touchedExisting = desired.filter((row) => existingBySignature.has(variationSignature(row.attributes))).length + staleProjectVariations.length;
+  return { created, updated, deactivated, untouched: Math.max(0, existing.length - touchedExisting) };
 }
 
 function imageRowsFor(outputs) {
@@ -268,6 +283,7 @@ export async function handler(event) {
         { key: '_sc_style', value: config.style },
         { key: '_sc_logo_options', value: JSON.stringify(listValue(config.logo_options)) },
         { key: '_sc_variation_image_map', value: JSON.stringify(config.variation_image_map || {}) },
+        { key: '_sc_excluded_variation_pairs', value: JSON.stringify(config.excluded_variation_pairs || []) },
         { key: '_sc_mockup_captions', value: JSON.stringify(storeOutputs.map((row) => ({ output_id: row.id, caption: row.caption_text, font: row.caption_font, size: row.caption_size, color: row.caption_color }))) },
       ],
     };
@@ -282,7 +298,7 @@ export async function handler(event) {
         : Promise.resolve();
     }));
 
-    let variationResult = { created: 0, updated: 0, untouched: 0 };
+    let variationResult = { created: 0, updated: 0, deactivated: 0, untouched: 0 };
     if (productPayload.type === 'variable' && config.create_variations !== false) {
       const desired = variationRows(parentAttributes, config, product.id, imageIdByOutput);
       if (desired.length) variationResult = await syncVariations(product.id, desired);
@@ -294,6 +310,7 @@ export async function handler(event) {
       permalink: product.permalink,
       variations_created: variationResult.created,
       variations_updated: variationResult.updated,
+      variations_deactivated: variationResult.deactivated || 0,
       existing_variations_untouched: variationResult.untouched,
     };
     await auth.supabase.from('mockup_woo_exports').update({ status: 'completed', woo_product_id: product.id, response_payload: responsePayload, completed_at: new Date().toISOString() }).eq('id', exportId);
