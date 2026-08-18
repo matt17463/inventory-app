@@ -1,12 +1,14 @@
-# Skilled Crafting Inventory App v0.6.29
+# Skilled Crafting Inventory App v0.7.0
 
-This release corrects the remaining pull-sheet and bin dialogs that v0.6.28 left at the bottom of long pages.
+This complete source package adds **Mockup Studio — All Phases** to the v0.6.30 release.
 
-- Non-inventory settings are row-local.
-- Blank-pairing override is row-local.
-- Bin receiving history is row-local.
-- All v0.6.23–v0.6.28 safety, search, and usability improvements remain included.
-- No Supabase SQL migration is required.
+Install the additive Supabase migration first:
+
+`deployment/sql/18_MOCKUP_STUDIO_ALL_PHASES.sql`
+
+Then follow:
+
+`MOCKUP_STUDIO_DEPLOYMENT_GUIDE.md`
 
 Validate with:
 
@@ -21,3 +23,4 @@ Expected final result:
 PASS: Required production bundle features are present.
 ```
 
+The OpenAI key, Supabase service-role key, and WooCommerce credentials belong only in Netlify server environment variables. Never expose them through `VITE_` variables or commit them to GitHub.

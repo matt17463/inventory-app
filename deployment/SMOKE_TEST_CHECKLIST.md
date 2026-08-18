@@ -14,3 +14,10 @@
 - [ ] Manual pull-sheet rerun creates no duplicate job or item.
 - [ ] Supplier sync starts and records a run ID.
 - [ ] Final read-only SQL audit contains no STOP rows.
+- [ ] Mockup Studio creates a project and uploads a private blank and artwork file.
+- [ ] Exact mockup rendering and caption controls work.
+- [ ] Public mockup review link displays only selected images and records approval.
+- [ ] Pricing calculator returns the expected cost, retail, and margin.
+- [ ] WooCommerce test export creates a draft with selected mockup images.
+- [ ] Production packet prints and its placement CSV/JSON downloads work.
+- [ ] AI Assist creates a PNG output, or is intentionally disabled until an OpenAI key is configured.

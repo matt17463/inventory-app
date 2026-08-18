@@ -72,6 +72,9 @@ import CreateFinishedFromBlank from './CreateFinishedFromBlank';
 import WarehouseAuditReport from './WarehouseAuditReport';
 import DeploymentHealth from './DeploymentHealth';
 import GoogleCalendarIntegration from './GoogleCalendarIntegration';
+import MockupStudio from './MockupStudio';
+import MockupCustomerReview from './MockupCustomerReview';
+import MockupProductionPacket from './MockupProductionPacket';
 import NotFound from './NotFound';
 
 function EmployeeRoutes() {
@@ -152,6 +155,8 @@ function EmployeeRoutes() {
       <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
       <Route path="/deployment-health" element={<DeploymentHealth />} />
       <Route path="/google-calendar" element={<GoogleCalendarIntegration />} />
+      <Route path="/mockup-studio" element={<MockupStudio />} />
+      <Route path="/mockup-studio/:projectId/production-packet" element={<MockupProductionPacket />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -162,6 +167,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/customer-portal" element={<CustomerPortal />} />
+        <Route path="/mockup-review" element={<MockupCustomerReview />} />
         <Route
           path="*"
           element={(

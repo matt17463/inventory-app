@@ -34,3 +34,15 @@ These values are server-only. Never prefix them with `VITE_`, commit them to Git
 | `SC_APP_URL` | Yes | `https://inventory.skilledcrafting.com` for event links back to the app. |
 
 The token-encryption key must remain stable. If it is changed after connecting Google, open **Tools & Admin → Google Calendar** and reconnect the Google account before the next sync.
+
+# Mockup Studio — All Phases (v0.7.0)
+
+These values are server-only. Never prefix the OpenAI key with `VITE_`.
+
+| Variable | Required | Purpose |
+|---|---:|---|
+| `OPENAI_API_KEY` | Yes for AI Assist | Calls the OpenAI Images edit endpoint from the background function. |
+| `OPENAI_IMAGE_MODEL` | Recommended | Image model name; defaults to `gpt-image-1.5`. |
+| `SC_MOCKUP_ALLOWED_ASSET_HOSTS` | Recommended | Comma-separated HTTPS host allowlist for linked blank/artwork sources. Direct uploads do not need this. |
+
+The existing `WOO_SITE_URL`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` values are reused. Captions and images are sent to WooCommerce only from server functions.

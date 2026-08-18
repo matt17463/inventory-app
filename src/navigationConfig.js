@@ -107,6 +107,7 @@ export const navSections = [
     label: 'Artwork',
     icon: '🎨',
     items: [
+      { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
       { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },
     ],

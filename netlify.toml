@@ -11,3 +11,6 @@
 
 [functions."google-calendar-scheduled-sync"]
   schedule = "*/15 * * * *"
+
+[functions."mockup-generate-background"]
+  background = true

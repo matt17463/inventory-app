@@ -91,6 +91,7 @@ export const handler = async (event) => {
       envCheck('GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY'),
       envCheck('GOOGLE_CALENDAR_REDIRECT_URI'),
       envCheck('SC_APP_URL'),
+      envCheck('OPENAI_API_KEY'),
     ];
 
     const { data: databaseChecks, error: databaseError } = await supabase.rpc('sc_deployment_health_v1');
@@ -114,7 +115,7 @@ export const handler = async (event) => {
       checks.push({ category: 'storage', check_name: 'storage_buckets', status: 'FAIL', detail: bucketError.message });
     } else {
       const names = new Set((buckets || []).map((bucket) => bucket.name));
-      for (const name of ['supplier-sync-cache']) {
+      for (const name of ['supplier-sync-cache', 'sc-mockup-source', 'sc-mockup-output', 'sc-mockup-production']) {
         checks.push({
           category: 'storage',
           check_name: name,
