@@ -1,0 +1,99 @@
+.mockup-woo-ready,
+.mockup-woo-warning {
+  margin: 0 0 1rem;
+  padding: .75rem .9rem;
+  border: 1px solid;
+  border-radius: 9px;
+  font-weight: 700;
+}
+
+.mockup-woo-ready {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534 !important;
+}
+
+.mockup-woo-warning {
+  border-color: #fbbf24;
+  background: #fef3c7;
+  color: #92400e !important;
+}
+
+.mockup-woo-logo-options,
+.mockup-woo-category-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: .65rem;
+}
+
+.mockup-woo-logo-options .mockup-check,
+.mockup-woo-category-options .mockup-check {
+  padding: .65rem .75rem;
+  border: 1px solid var(--mockup-border, var(--sc-border, #cbd5e1));
+  border-radius: 9px;
+  background: var(--mockup-surface-muted, var(--sc-panel-2, #f8fafc));
+  color: var(--mockup-text, var(--sc-text, #0f172a)) !important;
+}
+
+.mockup-woo-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+  margin: 1rem 0;
+}
+
+.mockup-woo-summary > p {
+  margin: 0;
+  padding: .75rem;
+  border: 1px solid var(--mockup-border, var(--sc-border, #cbd5e1));
+  border-radius: 9px;
+  background: var(--mockup-surface-muted, var(--sc-panel-2, #f8fafc));
+  color: var(--mockup-text, var(--sc-text, #0f172a));
+}
+
+.mockup-woo-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .75rem;
+  margin: 1rem 0;
+}
+
+.mockup-woo-preview figure {
+  margin: 0;
+  padding: .5rem;
+  border: 1px solid var(--mockup-border, var(--sc-border, #cbd5e1));
+  border-radius: 9px;
+  background: var(--mockup-surface, var(--sc-panel, #fff));
+  color: var(--mockup-text, var(--sc-text, #0f172a));
+}
+
+.mockup-woo-preview figure.is-main {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, .18);
+}
+
+.mockup-woo-preview img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.mockup-woo-preview figcaption {
+  padding-top: .4rem;
+  font-size: .8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mockup-woo-preview .mockup-check {
+  justify-content: center;
+  margin-top: .4rem;
+  color: var(--mockup-text, var(--sc-text, #0f172a)) !important;
+}
+
+@media (max-width: 700px) {
+  .mockup-woo-summary { grid-template-columns: 1fr; }
+}

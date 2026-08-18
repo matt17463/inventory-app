@@ -1,29 +1,190 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
-import { commaList, numericIdList, parseJsonBody, wooRequest } from './_shared/mockupUtils.js';
+import { commaList, numericIdList, parseJsonBody, safePathSegment, wooRequest } from './_shared/mockupUtils.js';
 
-function attributesFor(config, discovered) {
-  const colorOptions = commaList(config.colors);
-  const sizeOptions = commaList(config.sizes);
-  const attributes = [];
-  const color = discovered.find((row) => row.slug === 'pa_color' || String(row.name).toLowerCase() === 'color');
-  const size = discovered.find((row) => row.slug === 'pa_size' || String(row.name).toLowerCase() === 'size');
-  if (colorOptions.length) attributes.push({ ...(color?.id ? { id: color.id } : { name: 'Color' }), position: 0, visible: true, variation: true, options: colorOptions });
-  if (sizeOptions.length) attributes.push({ ...(size?.id ? { id: size.id } : { name: 'Size' }), position: 1, visible: true, variation: true, options: sizeOptions });
-  return { attributes, color, size, colorOptions, sizeOptions };
+const MAX_VARIATIONS = 500;
+const WOO_BATCH_SIZE = 100;
+
+function listValue(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  return commaList(value);
 }
 
-function variationRows(parent, price) {
-  const colors = parent.colorOptions.length ? parent.colorOptions : [null];
-  const sizes = parent.sizeOptions.length ? parent.sizeOptions : [null];
+function normalized(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function imageMapKey(color, logo) {
+  return JSON.stringify([normalized(color), normalized(logo)]);
+}
+
+function findAttribute(discovered, slugs, names = []) {
+  const wantedSlugs = slugs.map(normalized);
+  const wantedNames = names.map(normalized);
+  return discovered.find((row) => wantedSlugs.includes(normalized(row.slug)) || wantedNames.includes(normalized(row.name)));
+}
+
+async function allAttributeTerms(attributeId) {
   const rows = [];
-  for (const color of colors) for (const size of sizes) {
-    const attributes = [];
-    if (color) attributes.push(parent.color?.id ? { id: parent.color.id, option: color } : { name: 'Color', option: color });
-    if (size) attributes.push(parent.size?.id ? { id: parent.size.id, option: size } : { name: 'Size', option: size });
-    rows.push({ regular_price: String(price || ''), status: 'publish', attributes });
+  for (let page = 1; page <= 20; page += 1) {
+    const next = await wooRequest(`products/attributes/${attributeId}/terms?per_page=100&page=${page}`);
+    rows.push(...next);
+    if (next.length < 100) break;
   }
-  if (rows.length > 100) throw new Error('This export would create more than 100 variations. Reduce the number of colors or sizes.');
   return rows;
+}
+
+async function validatedGlobalAttribute(attribute, options, label, position, variation) {
+  if (!options.length) return null;
+  if (!attribute?.id) throw new Error(`WooCommerce global attribute ${label} was not found. Create ${label} in Products > Attributes before exporting.`);
+  const terms = await allAttributeTerms(attribute.id);
+  const canonical = [];
+  for (const requested of options) {
+    const term = terms.find((row) => normalized(row.name) === normalized(requested) || normalized(row.slug) === normalized(requested));
+    if (!term) throw new Error(`${label} option "${requested}" does not exist in WooCommerce. Add it under Products > Attributes > ${label} first.`);
+    if (!canonical.some((name) => normalized(name) === normalized(term.name))) canonical.push(term.name);
+  }
+  return {
+    definition: { id: attribute.id, position, visible: true, variation, options: canonical },
+    reference: { id: attribute.id, name: attribute.name },
+    options: canonical,
+  };
+}
+
+function customLogoAttribute(options, position) {
+  if (!options.length) return null;
+  return {
+    definition: { name: 'Logo Selection', position, visible: true, variation: true, options },
+    reference: { name: 'Logo Selection' },
+    options,
+  };
+}
+
+async function productAttributes(config, discovered) {
+  const brandValue = String(config.brand || '').trim();
+  const styleValue = String(config.style || '').trim();
+  if (!brandValue) throw new Error('Select a Brand before creating the WooCommerce product.');
+  if (!styleValue) throw new Error('Select a Style before creating the WooCommerce product.');
+
+  const brand = findAttribute(discovered, ['pa_brand'], ['brand']);
+  const style = findAttribute(discovered, ['pa_style'], ['style', 'product style']);
+  const color = findAttribute(discovered, ['pa_color'], ['color', 'colour']);
+  const size = findAttribute(discovered, ['pa_size'], ['size']);
+
+  const brandAttribute = await validatedGlobalAttribute(brand, [brandValue], 'Brand', 0, false);
+  const styleAttribute = await validatedGlobalAttribute(style, [styleValue], 'Style', 1, false);
+  const colorAttribute = await validatedGlobalAttribute(color, listValue(config.colors), 'Color', 2, config.type === 'variable');
+  const sizeAttribute = await validatedGlobalAttribute(size, listValue(config.sizes), 'Size', 3, config.type === 'variable');
+  const logoAttribute = config.type === 'variable' ? customLogoAttribute(listValue(config.logo_options), 4) : null;
+  const ordered = [brandAttribute, styleAttribute, colorAttribute, sizeAttribute, logoAttribute].filter(Boolean);
+
+  return {
+    definitions: ordered.map((row) => row.definition),
+    brand: brandAttribute,
+    style: styleAttribute,
+    color: colorAttribute,
+    size: sizeAttribute,
+    logo: logoAttribute,
+  };
+}
+
+function variationAttribute(reference, option) {
+  return reference.id ? { id: reference.id, option } : { name: reference.name, option };
+}
+
+function skuPart(value, fallback) {
+  return safePathSegment(value, fallback).replace(/-/g, '').toUpperCase().slice(0, 24);
+}
+
+function variationSignature(attributes) {
+  return attributes
+    .map((row) => `${row.id ? `id:${row.id}` : `name:${normalized(row.name)}`}=${normalized(row.option)}`)
+    .sort()
+    .join('|');
+}
+
+function variationRows(parent, config, productId, imageIdByOutput) {
+  const colors = parent.color?.options?.length ? parent.color.options : [null];
+  const sizes = parent.size?.options?.length ? parent.size.options : [null];
+  const logos = parent.logo?.options?.length ? parent.logo.options : [null];
+  const rows = [];
+  const outputMap = config.variation_image_map && typeof config.variation_image_map === 'object' ? config.variation_image_map : {};
+  const fallbackImageId = imageIdByOutput.values().next().value || null;
+  const skuBase = skuPart(config.sku || `MS-${productId}`, `MS${productId}`);
+
+  for (const color of colors) for (const size of sizes) for (const logo of logos) {
+    const attributes = [];
+    if (color) attributes.push(variationAttribute(parent.color.reference, color));
+    if (size) attributes.push(variationAttribute(parent.size.reference, size));
+    if (logo) attributes.push(variationAttribute(parent.logo.reference, logo));
+    const outputId = outputMap[imageMapKey(color, logo)] || '';
+    const imageId = imageIdByOutput.get(outputId) || ((!color && !logo) ? fallbackImageId : null);
+    if ((colors.length > 1 || logos.length > 1 || color || logo) && !imageId) {
+      throw new Error(`Choose a variation mockup for ${color || 'all colors'} / ${logo || 'no logo option'}.`);
+    }
+    const suffix = [color, size, logo].filter(Boolean).map((value) => skuPart(value, 'OPTION')).join('-');
+    const row = {
+      regular_price: String(config.regular_price || ''),
+      status: 'publish',
+      sku: `${skuBase}-${suffix}`.slice(0, 100),
+      attributes,
+      meta_data: [
+        { key: '_sc_mockup_project_id', value: String(config.project_id || '') },
+        { key: '_sc_logo_selection', value: logo || '' },
+        { key: '_sc_blank_color', value: color || '' },
+      ],
+    };
+    if (imageId) row.image = { id: imageId };
+    rows.push(row);
+  }
+  if (rows.length > MAX_VARIATIONS) throw new Error(`This export would create ${rows.length} variations. Reduce the combinations to ${MAX_VARIATIONS} or fewer.`);
+  return rows;
+}
+
+async function listExistingVariations(productId) {
+  const rows = [];
+  for (let page = 1; page <= 50; page += 1) {
+    const next = await wooRequest(`products/${productId}/variations?per_page=100&page=${page}`);
+    rows.push(...next);
+    if (next.length < 100) break;
+  }
+  return rows;
+}
+
+async function syncVariations(productId, desired) {
+  const existing = await listExistingVariations(productId);
+  const existingBySignature = new Map(existing.map((row) => [variationSignature(row.attributes || []), row]));
+  const operations = desired.map((row) => {
+    const match = existingBySignature.get(variationSignature(row.attributes));
+    return match ? { type: 'update', row: { ...row, id: match.id } } : { type: 'create', row };
+  });
+  let created = 0;
+  let updated = 0;
+  for (let offset = 0; offset < operations.length; offset += WOO_BATCH_SIZE) {
+    const batch = operations.slice(offset, offset + WOO_BATCH_SIZE);
+    const create = batch.filter((item) => item.type === 'create').map((item) => item.row);
+    const update = batch.filter((item) => item.type === 'update').map((item) => item.row);
+    const result = await wooRequest(`products/${productId}/variations/batch`, { method: 'POST', body: { create, update } });
+    created += result.create?.length || 0;
+    updated += result.update?.length || 0;
+  }
+  return { created, updated, untouched: Math.max(0, existing.length - updated) };
+}
+
+function imageRowsFor(outputs) {
+  return outputs.map((output) => output.woo_media_id
+    ? { id: output.woo_media_id, name: output.output_name, alt: output.caption_text || output.output_name }
+    : { src: output.signed_url, name: `SC Mockup ${output.id} - ${output.output_name}`, alt: output.caption_text || output.output_name });
+}
+
+function mapWooImages(outputs, productImages) {
+  const result = new Map();
+  outputs.forEach((output, index) => {
+    const existing = output.woo_media_id ? productImages.find((image) => Number(image.id) === Number(output.woo_media_id)) : null;
+    const byName = productImages.find((image) => String(image.name || '').includes(output.id));
+    const matched = existing || byName || productImages[index];
+    if (matched?.id) result.set(output.id, Number(matched.id));
+  });
+  return result;
 }
 
 export async function handler(event) {
@@ -36,7 +197,7 @@ export async function handler(event) {
   try {
     const body = parseJsonBody(event);
     const projectId = String(body.project_id || '');
-    const config = body.config || {};
+    const config = { ...(body.config || {}), project_id: projectId };
     if (!projectId) throw new Error('Missing mockup project ID.');
     if (!String(config.name || '').trim()) throw new Error('Enter the WooCommerce product name.');
 
@@ -48,51 +209,96 @@ export async function handler(event) {
     if (outputsError) throw outputsError;
     if (!outputs?.length) throw new Error('Select at least one mockup output for the store.');
 
+    const categoryIds = numericIdList(config.category_ids);
+    if (!categoryIds.length) throw new Error('Select at least one WooCommerce product category.');
+    if (!String(config.shipping_class || '').trim()) throw new Error('Select a WooCommerce shipping class.');
+    const shippingValues = {
+      weight: Number(config.weight || 0),
+      length: Number(config.length || 0),
+      width: Number(config.width || 0),
+      height: Number(config.height || 0),
+    };
+    for (const [label, value] of Object.entries(shippingValues)) {
+      if (!Number.isFinite(value) || value <= 0) throw new Error(`Enter a ${label} greater than zero.`);
+    }
+    const mainOutputId = String(config.main_product_image_output_id || '');
+    const mainOutput = outputs.find((row) => row.id === mainOutputId);
+    if (!mainOutput) throw new Error('Choose a selected mockup as the main product image.');
+    const storeOutputs = [mainOutput, ...outputs.filter((row) => row.id !== mainOutput.id)];
+
     const existingId = Number(config.update_existing_product_id || project.woo_product_id || 0) || null;
     const operation = existingId ? (config.status === 'publish' ? 'update_published' : 'update_draft') : (config.status === 'publish' ? 'publish' : 'create_draft');
     const { data: exportRow, error: exportError } = await auth.supabase.from('mockup_woo_exports').insert({ project_id: projectId, operation, status: 'processing', request_payload: config }).select('*').single();
     if (exportError) throw exportError;
     exportId = exportRow.id;
 
-    const imageRows = [];
-    for (const output of outputs) {
+    for (const output of storeOutputs) {
+      if (output.woo_media_id) continue;
       const { data: signed, error: signedError } = await auth.supabase.storage.from(output.storage_bucket).createSignedUrl(output.storage_path, 900);
       if (signedError) throw signedError;
-      imageRows.push({ src: signed.signedUrl, name: output.output_name, alt: output.caption_text || output.output_name });
+      output.signed_url = signed.signedUrl;
     }
 
-    let discovered = [];
-    if (config.type === 'variable') discovered = await wooRequest('products/attributes?per_page=100');
-    const parentAttributes = attributesFor(config, discovered);
+    const discovered = await wooRequest('products/attributes?per_page=100');
+    const parentAttributes = await productAttributes(config, discovered);
     const productPayload = {
       name: String(config.name).trim(),
       type: config.type === 'variable' ? 'variable' : 'simple',
       status: ['draft', 'pending', 'private', 'publish'].includes(config.status) ? config.status : 'draft',
       description: String(config.description || ''),
       short_description: String(config.short_description || ''),
-      sku: String(config.sku || ''),
+      sku: String(config.sku || '').trim() || undefined,
       regular_price: config.type === 'simple' ? String(config.regular_price || '') : undefined,
-      categories: numericIdList(config.category_ids).map((id) => ({ id })),
+      categories: categoryIds.map((id) => ({ id })),
       tags: numericIdList(config.tag_ids).map((id) => ({ id })),
-      images: imageRows,
-      attributes: parentAttributes.attributes,
+      images: imageRowsFor(storeOutputs),
+      virtual: false,
+      weight: String(shippingValues.weight),
+      dimensions: {
+        length: String(shippingValues.length),
+        width: String(shippingValues.width),
+        height: String(shippingValues.height),
+      },
+      shipping_class: String(config.shipping_class).trim(),
+      attributes: parentAttributes.definitions,
       meta_data: [
         { key: '_sc_mockup_project_id', value: projectId },
-        { key: '_sc_mockup_captions', value: JSON.stringify(outputs.map((row) => ({ output_id: row.id, caption: row.caption_text, font: row.caption_font, size: row.caption_size, color: row.caption_color }))) },
+        { key: '_sc_main_product_image_output_id', value: mainOutputId },
+        { key: '_sc_brand', value: config.brand },
+        { key: '_sc_style', value: config.style },
+        { key: '_sc_logo_options', value: JSON.stringify(listValue(config.logo_options)) },
+        { key: '_sc_variation_image_map', value: JSON.stringify(config.variation_image_map || {}) },
+        { key: '_sc_mockup_captions', value: JSON.stringify(storeOutputs.map((row) => ({ output_id: row.id, caption: row.caption_text, font: row.caption_font, size: row.caption_size, color: row.caption_color }))) },
       ],
     };
     Object.keys(productPayload).forEach((key) => productPayload[key] === undefined && delete productPayload[key]);
 
     const product = await wooRequest(existingId ? `products/${existingId}` : 'products', { method: existingId ? 'PUT' : 'POST', body: productPayload });
-    let variations = null;
-    if (!existingId && productPayload.type === 'variable' && config.create_variations !== false) {
-      const create = variationRows(parentAttributes, config.regular_price);
-      if (create.length) variations = await wooRequest(`products/${product.id}/variations/batch`, { method: 'POST', body: { create } });
+    const imageIdByOutput = mapWooImages(storeOutputs, product.images || []);
+    await Promise.all(storeOutputs.map((output) => {
+      const mediaId = imageIdByOutput.get(output.id);
+      return mediaId && Number(mediaId) !== Number(output.woo_media_id)
+        ? auth.supabase.from('mockup_outputs').update({ woo_media_id: mediaId }).eq('id', output.id)
+        : Promise.resolve();
+    }));
+
+    let variationResult = { created: 0, updated: 0, untouched: 0 };
+    if (productPayload.type === 'variable' && config.create_variations !== false) {
+      const desired = variationRows(parentAttributes, config, product.id, imageIdByOutput);
+      if (desired.length) variationResult = await syncVariations(product.id, desired);
     }
 
-    await auth.supabase.from('mockup_woo_exports').update({ status: 'completed', woo_product_id: product.id, response_payload: { product_id: product.id, status: product.status, permalink: product.permalink, variation_count: variations?.create?.length || 0 }, completed_at: new Date().toISOString() }).eq('id', exportId);
+    const responsePayload = {
+      product_id: product.id,
+      status: product.status,
+      permalink: product.permalink,
+      variations_created: variationResult.created,
+      variations_updated: variationResult.updated,
+      existing_variations_untouched: variationResult.untouched,
+    };
+    await auth.supabase.from('mockup_woo_exports').update({ status: 'completed', woo_product_id: product.id, response_payload: responsePayload, completed_at: new Date().toISOString() }).eq('id', exportId);
     await auth.supabase.from('mockup_projects').update({ status: product.status === 'publish' ? 'published' : 'woo_draft', woo_product_id: product.id, woo_product_url: product.permalink || null, woo_config: config }).eq('id', projectId);
-    return jsonResponse(200, { success: true, product: { id: product.id, status: product.status, permalink: product.permalink }, variations_created: variations?.create?.length || 0 }, event);
+    return jsonResponse(200, { success: true, product: { id: product.id, status: product.status, permalink: product.permalink }, ...responsePayload }, event);
   } catch (error) {
     console.error('WooCommerce mockup export failed:', error);
     if (exportId) await auth.supabase.from('mockup_woo_exports').update({ status: 'failed', error_message: error.message, completed_at: new Date().toISOString() }).eq('id', exportId);

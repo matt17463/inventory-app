@@ -21,6 +21,7 @@ import {
   deleteMockupProject,
   deletePricingItem,
   getMockupProjectBundle,
+  getWooCommerceMockupOptions,
   listArtworkVaultCandidates,
   listMockupCustomers,
   listMockupProjects,
@@ -38,6 +39,7 @@ import {
 } from './lib/mockupStudioApi';
 import { imageDimensions, renderMockupComposite } from './lib/mockupCanvas';
 import './MockupStudio.css';
+import './MockupStudioWoo.css';
 
 const TABS = [
   ['project', '1. Project'],
@@ -71,6 +73,19 @@ function money(value) {
 
 function idText(value) {
   return value === null || value === undefined ? '' : String(value);
+}
+
+function optionList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function normalizedOption(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function variationImageKey(color, logo) {
+  return JSON.stringify([normalizedOption(color), normalizedOption(logo)]);
 }
 
 function artworkCandidateUrl(row) {
@@ -499,10 +514,171 @@ function PricingTab({ projectId, rows, refresh, setBusy, setMessage }) {
   return <><div className="sc-metric-grid"><MetricCard label="Estimated cost" value={money(totals.cost)} /><MetricCard label="Estimated sale" value={money(totals.sell)} /><MetricCard label="Estimated profit" value={money(totals.sell - totals.cost)} tone={totals.sell >= totals.cost ? 'success' : 'danger'} /><MetricCard label="Margin" value={totals.sell ? `${(((totals.sell - totals.cost) / totals.sell) * 100).toFixed(1)}%` : '0%'} /></div><SectionCard title="Add pricing component"><form onSubmit={save}><FieldGrid><FormField label="Label"><input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></FormField><FormField label="Quantity"><input type="number" step="0.01" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></FormField><FormField label="Unit cost"><input type="number" step="0.01" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></FormField><FormField label="Markup %"><input type="number" step="0.01" value={form.markup_percent} onChange={(e) => setForm({ ...form, markup_percent: e.target.value })} /></FormField><FormField label="Sell price per unit" help="Leave zero to calculate from cost and markup."><input type="number" step="0.01" value={form.sell_price} onChange={(e) => setForm({ ...form, sell_price: e.target.value })} /></FormField></FieldGrid><ActionButton type="submit" tone="primary">Add Pricing Item</ActionButton></form></SectionCard><SectionCard title="Pricing breakdown"><ResponsiveTable><thead><tr><th>Label</th><th>Qty</th><th>Cost</th><th>Sell</th><th>Profit</th><th /></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.label}</td><td>{row.quantity}</td><td>{money(Number(row.quantity) * Number(row.unit_cost))}</td><td>{money(Number(row.quantity) * Number(row.sell_price))}</td><td>{money(Number(row.quantity) * (Number(row.sell_price) - Number(row.unit_cost)))}</td><td><ActionButton tone="danger" size="sm" onClick={async () => { setBusy(true); try { await deletePricingItem(row.id); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete</ActionButton></td></tr>)}</tbody></ResponsiveTable></SectionCard></>;
 }
 
-function WooCommerceTab({ project, outputs, refresh, setBusy, setMessage }) {
-  const [form, setForm] = useState({ name: project.project_name, type: 'variable', status: 'draft', regular_price: '', description: '', short_description: '', sku: '', category_ids: '', tag_ids: '', colors: '', sizes: '', create_variations: true, update_existing_product_id: project.woo_product_id || '' });
-  async function publish(event) { event.preventDefault(); if (!outputs.some((row) => row.is_selected)) { setMessage('Select at least one output for the store first.'); return; } setBusy(true); try { const payload = await publishMockupToWooCommerce(project.id, form); setMessage(`WooCommerce ${payload.product?.status || 'draft'} created/updated: product ${payload.product?.id}.`); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }
-  return <SectionCard title="Prepare for WooCommerce" description="The recommended default creates a draft. WooCommerce remains authoritative for storefront pricing, variations, and publishing."><form onSubmit={publish}><FieldGrid><FormField label="Product name" required><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField><FormField label="Existing Woo product ID" help="Leave blank to create a new product."><input type="number" value={form.update_existing_product_id} onChange={(e) => setForm({ ...form, update_existing_product_id: e.target.value })} /></FormField><FormField label="Product type"><select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="simple">Simple</option><option value="variable">Variable</option></select></FormField><FormField label="Woo status"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="draft">Draft — recommended</option><option value="pending">Pending review</option><option value="private">Private</option><option value="publish">Publish now</option></select></FormField><FormField label="Base price"><input type="number" step="0.01" value={form.regular_price} onChange={(e) => setForm({ ...form, regular_price: e.target.value })} /></FormField><FormField label="Base SKU" help="Your existing SKU Builder can finalize variation SKUs."><input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></FormField><FormField label="Category IDs"><input value={form.category_ids} placeholder="12, 48" onChange={(e) => setForm({ ...form, category_ids: e.target.value })} /></FormField><FormField label="Tag IDs"><input value={form.tag_ids} placeholder="21, 22" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} /></FormField><FormField label="Colors"><input value={form.colors} placeholder="Black, Forest Green, White" onChange={(e) => setForm({ ...form, colors: e.target.value })} /></FormField><FormField label="Sizes"><input value={form.sizes} placeholder="YS, YM, YL, AS, AM, AL, AXL" onChange={(e) => setForm({ ...form, sizes: e.target.value })} /></FormField><FormField label="Short description"><textarea value={form.short_description} onChange={(e) => setForm({ ...form, short_description: e.target.value })} /></FormField><FormField label="Full description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></FormField><FormField label="Variations"><label className="mockup-check"><input type="checkbox" checked={form.create_variations} onChange={(e) => setForm({ ...form, create_variations: e.target.checked })} /> Create color × size variations when using a variable product</label></FormField></FieldGrid><p><strong>{outputs.filter((row) => row.is_selected).length}</strong> selected mockup image(s) will be uploaded to the WooCommerce product gallery.</p><ActionButton type="submit" tone="primary">{form.update_existing_product_id ? 'Update WooCommerce Product' : 'Create WooCommerce Draft'}</ActionButton></form></SectionCard>;
+function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage }) {
+  const selectedOutputs = useMemo(() => bundle.outputs.filter((row) => row.is_selected), [bundle.outputs]);
+  const saved = project.woo_config || {};
+  const inferredColors = [...new Set(bundle.blanks.map((row) => row.product_color).filter(Boolean))].join(', ');
+  const inferredBrand = bundle.blanks.find((row) => row.metadata?.catalog_brand)?.metadata?.catalog_brand || '';
+  const inferredStyle = bundle.blanks.find((row) => row.metadata?.catalog_style)?.metadata?.catalog_style || '';
+  const [wooOptions, setWooOptions] = useState({ brand: null, style: null, color: null, size: null, categories: [], shipping_classes: [] });
+  const [optionsMessage, setOptionsMessage] = useState('Loading WooCommerce attributes…');
+  const [form, setForm] = useState({
+    name: saved.name || project.project_name,
+    type: saved.type || 'variable',
+    status: saved.status || 'draft',
+    regular_price: saved.regular_price || '',
+    description: saved.description || '',
+    short_description: saved.short_description || '',
+    sku: saved.sku || '',
+    category_ids: saved.category_ids || '',
+    tag_ids: saved.tag_ids || '',
+    brand: saved.brand || inferredBrand,
+    style: saved.style || inferredStyle,
+    colors: saved.colors || inferredColors,
+    sizes: saved.sizes || '',
+    logo_options: optionList(saved.logo_options),
+    variation_image_map: saved.variation_image_map || {},
+    main_product_image_output_id: saved.main_product_image_output_id || selectedOutputs[0]?.id || '',
+    shipping_class: saved.shipping_class || '',
+    weight: saved.weight || '',
+    length: saved.length || '',
+    width: saved.width || '',
+    height: saved.height || '',
+    create_variations: saved.create_variations !== false,
+    update_existing_product_id: saved.update_existing_product_id || project.woo_product_id || '',
+  });
+
+  useEffect(() => {
+    let active = true;
+    getWooCommerceMockupOptions()
+      .then((attributes) => {
+        if (!active) return;
+        setWooOptions(attributes);
+        const missing = ['brand', 'style', 'color', 'size'].filter((key) => !attributes[key]);
+        setOptionsMessage(missing.length ? `Missing WooCommerce global attributes: ${missing.join(', ')}.` : 'WooCommerce Brand, Style, Color, and Size options loaded.');
+      })
+      .catch((error) => active && setOptionsMessage(error.message));
+    return () => { active = false; };
+  }, []);
+
+  const outputContextById = useMemo(() => Object.fromEntries(bundle.outputs.map((output) => {
+    const placement = bundle.placements.find((row) => row.id === output.placement_id);
+    const blank = bundle.blanks.find((row) => row.id === placement?.blank_asset_id);
+    const art = bundle.artwork.find((row) => row.id === placement?.artwork_asset_id);
+    return [output.id, { color: blank?.product_color || '', logo: art?.artwork_name || '' }];
+  })), [bundle.outputs, bundle.placements, bundle.blanks, bundle.artwork]);
+
+  function outputContext(output) {
+    return outputContextById[output.id] || { color: '', logo: '' };
+  }
+
+  useEffect(() => {
+    setForm((current) => {
+      const nextMap = { ...(current.variation_image_map || {}) };
+      let changed = false;
+      selectedOutputs.forEach((output) => {
+        const context = outputContextById[output.id] || { color: '', logo: '' };
+        const key = variationImageKey(context.color, context.logo);
+        if (!nextMap[key]) { nextMap[key] = output.id; changed = true; }
+      });
+      return changed ? { ...current, variation_image_map: nextMap } : current;
+    });
+  }, [selectedOutputs, outputContextById]);
+
+  useEffect(() => {
+    setForm((current) => selectedOutputs.some((output) => output.id === current.main_product_image_output_id)
+      ? current
+      : { ...current, main_product_image_output_id: selectedOutputs[0]?.id || '' });
+  }, [selectedOutputs]);
+
+  const colors = optionList(form.colors);
+  const sizes = optionList(form.sizes);
+  const logos = optionList(form.logo_options);
+  const imagePairs = form.type === 'variable' && form.create_variations
+    ? (colors.length ? colors : ['']).flatMap((color) => (logos.length ? logos : ['']).map((logo) => ({ color, logo, key: variationImageKey(color, logo) })))
+    : [];
+  const variationCount = form.type === 'variable' && form.create_variations
+    ? Math.max(colors.length, 1) * Math.max(sizes.length, 1) * Math.max(logos.length, 1)
+    : 0;
+  const missingMappings = imagePairs.filter((pair) => !form.variation_image_map?.[pair.key]);
+  const selectedCategoryIds = optionList(form.category_ids).map(String);
+
+  function toggleLogo(name, checked) {
+    const current = optionList(form.logo_options);
+    const next = checked
+      ? [...current, name].filter((value, index, rows) => rows.findIndex((item) => normalizedOption(item) === normalizedOption(value)) === index)
+      : current.filter((item) => normalizedOption(item) !== normalizedOption(name));
+    setForm({ ...form, logo_options: next });
+  }
+
+  function toggleCategory(id, checked) {
+    const value = String(id);
+    const next = checked
+      ? [...selectedCategoryIds, value].filter((item, index, rows) => rows.indexOf(item) === index)
+      : selectedCategoryIds.filter((item) => item !== value);
+    setForm({ ...form, category_ids: next.join(', ') });
+  }
+
+  async function publish(event) {
+    event.preventDefault();
+    if (!selectedOutputs.length) { setMessage('Select at least one output for the store first.'); return; }
+    if (!form.main_product_image_output_id) { setMessage('Choose the main product image.'); return; }
+    if (!form.brand) { setMessage('Select a Brand.'); return; }
+    if (!form.style) { setMessage('Select a Style.'); return; }
+    if (!selectedCategoryIds.length) { setMessage('Select at least one product category.'); return; }
+    if (!form.shipping_class) { setMessage('Select a shipping class.'); return; }
+    if (['weight', 'length', 'width', 'height'].some((key) => !(Number(form[key]) > 0))) { setMessage('Enter weight, length, width, and height greater than zero.'); return; }
+    if (variationCount > 500) { setMessage('Reduce the variation combinations to 500 or fewer.'); return; }
+    if (missingMappings.length) { setMessage('Choose a mockup for every Color and Logo combination.'); return; }
+    setBusy(true);
+    try {
+      const payload = await publishMockupToWooCommerce(project.id, form);
+      setMessage(`WooCommerce ${payload.product?.status || 'draft'} ${payload.product?.id}: ${payload.variations_created || 0} variations created and ${payload.variations_updated || 0} updated.`);
+      await refresh();
+    } catch (error) { setMessage(error.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <SectionCard title="Prepare for WooCommerce" description="Create a draft with Brand and Style assigned, then build Color × Size × Logo variations with the correct mockup image.">
+        <p className={/missing|could not|not configured/i.test(optionsMessage) ? 'mockup-woo-warning' : 'mockup-woo-ready'}>{optionsMessage}</p>
+        <form onSubmit={publish}>
+          <FieldGrid>
+            <FormField label="Product name" required><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
+            <FormField label="Existing Woo product ID" help="Leave blank to create a new product. Enter an existing draft ID to update its product and variations."><input type="number" value={form.update_existing_product_id} onChange={(e) => setForm({ ...form, update_existing_product_id: e.target.value })} /></FormField>
+            <FormField label="Product type"><select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="simple">Simple</option><option value="variable">Variable</option></select></FormField>
+            <FormField label="Woo status"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="draft">Draft — recommended</option><option value="pending">Pending review</option><option value="private">Private</option><option value="publish">Publish now</option></select></FormField>
+            <FormField label="Brand" required help="Uses the existing WooCommerce pa_brand attribute."><select value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })}><option value="">Select Brand</option>{form.brand && !wooOptions.brand?.terms?.some((row) => normalizedOption(row.name) === normalizedOption(form.brand)) ? <option value={form.brand}>{form.brand}</option> : null}{(wooOptions.brand?.terms || []).map((row) => <option key={row.id} value={row.name}>{row.name}</option>)}</select></FormField>
+            <FormField label="Style" required help="Uses the existing WooCommerce pa_style attribute."><select value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })}><option value="">Select Style</option>{form.style && !wooOptions.style?.terms?.some((row) => normalizedOption(row.name) === normalizedOption(form.style)) ? <option value={form.style}>{form.style}</option> : null}{(wooOptions.style?.terms || []).map((row) => <option key={row.id} value={row.name}>{row.name}</option>)}</select></FormField>
+            <FormField label="Base price" required><input type="number" min="0" step="0.01" value={form.regular_price} onChange={(e) => setForm({ ...form, regular_price: e.target.value })} /></FormField>
+            <FormField label="Base SKU" help="Variation SKUs add Color, Size, and Logo codes. If blank, Mockup Studio creates a product-based SKU."><input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></FormField>
+            <FormField label="Tag IDs"><input value={form.tag_ids} placeholder="21, 22" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} /></FormField>
+            <FormField label="Colors" help="Comma-separated existing WooCommerce Color terms."><input value={form.colors} list="mockup-woo-colors" placeholder="Black, Forest Green, White" onChange={(e) => setForm({ ...form, colors: e.target.value })} /><datalist id="mockup-woo-colors">{(wooOptions.color?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
+            <FormField label="Sizes" help="Comma-separated existing WooCommerce Size terms."><input value={form.sizes} list="mockup-woo-sizes" placeholder="YS, YM, YL, AS, AM, AL, AXL" onChange={(e) => setForm({ ...form, sizes: e.target.value })} /><datalist id="mockup-woo-sizes">{(wooOptions.size?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
+            <FormField label="Shipping class" required><select value={form.shipping_class} onChange={(e) => setForm({ ...form, shipping_class: e.target.value })}><option value="">Select Shipping Class</option>{(wooOptions.shipping_classes || []).map((row) => <option key={row.id} value={row.slug}>{row.name}</option>)}</select></FormField>
+            <FormField label="Weight" required help="Use the weight unit configured in WooCommerce."><input type="number" min="0.001" step="0.001" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></FormField>
+            <FormField label="Length" required help="Use the dimension unit configured in WooCommerce."><input type="number" min="0.01" step="0.01" value={form.length} onChange={(e) => setForm({ ...form, length: e.target.value })} /></FormField>
+            <FormField label="Width" required><input type="number" min="0.01" step="0.01" value={form.width} onChange={(e) => setForm({ ...form, width: e.target.value })} /></FormField>
+            <FormField label="Height" required><input type="number" min="0.01" step="0.01" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></FormField>
+            <FormField label="Short description"><textarea value={form.short_description} onChange={(e) => setForm({ ...form, short_description: e.target.value })} /></FormField>
+            <FormField label="Full description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></FormField>
+            <FormField label="Variations"><label className="mockup-check"><input type="checkbox" checked={form.create_variations} onChange={(e) => setForm({ ...form, create_variations: e.target.checked })} /> Create and update Color × Size × Logo variations</label></FormField>
+          </FieldGrid>
+
+          <SectionCard title="Product categories" description="Select every WooCommerce category that should contain this product."><div className="mockup-woo-category-options">{(wooOptions.categories || []).map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedCategoryIds.includes(String(row.id))} onChange={(e) => toggleCategory(row.id, e.target.checked)} /> {row.name}</label>)}</div>{!wooOptions.categories?.length ? <p className="mockup-woo-warning">No WooCommerce categories were returned. Confirm the API key has Read/Write access.</p> : null}</SectionCard>
+
+          {form.type === 'variable' ? <SectionCard title="Logo choices" description="Select the artwork choices customers may order. The order webhook will preserve the Logo Selection value for the pull sheet and production workflow."><div className="mockup-woo-logo-options">{bundle.artwork.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={logos.some((name) => normalizedOption(name) === normalizedOption(row.artwork_name))} onChange={(e) => toggleLogo(row.artwork_name, e.target.checked)} /> {row.artwork_name}</label>)}</div></SectionCard> : null}
+
+          {imagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose one mockup for each Color and Logo combination. All sizes in that combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{imagePairs.map((pair) => <tr key={pair.key}><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select value={form.variation_image_map?.[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...(form.variation_image_map || {}), [pair.key]: e.target.value } })}><option value="">Select mockup</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>)}</tbody></ResponsiveTable></SectionCard> : null}
+
+          <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
+          {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
+          <ActionButton type="submit" tone="primary">{form.update_existing_product_id ? 'Update WooCommerce Draft' : 'Create WooCommerce Draft'}</ActionButton>
+        </form>
+      </SectionCard>
+    </>
+  );
 }
 
 function ProductionTab({ project, bundle }) {
@@ -576,7 +752,7 @@ export default function MockupStudio() {
           {tab === 'captions' ? <CaptionsTab outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
           {tab === 'approval' ? <ApprovalTab project={bundle.project} outputs={bundle.outputs} reviews={bundle.reviews} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
           {tab === 'pricing' ? <PricingTab projectId={bundle.project.id} rows={bundle.pricing} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'woocommerce' ? <WooCommerceTab project={bundle.project} outputs={bundle.outputs} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+          {tab === 'woocommerce' ? <WooCommerceTab project={bundle.project} bundle={bundle} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
           {tab === 'production' ? <ProductionTab project={bundle.project} bundle={bundle} /> : null}
           <SectionCard tone="danger" title="Archive or delete project" description="Deleting a project removes its Mockup Studio records and private files. It does not change inventory or WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Delete mockup project “${bundle.project.project_name}” and its stored mockup files?`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>
         </>

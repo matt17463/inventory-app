@@ -47,13 +47,34 @@ test('customer approval uses hashed tokens and private signed images', async () 
   assert.match(sql, /sc_mockup_create_review_token/i);
 });
 
-test('WooCommerce export supports drafts, images, captions, and variations', async () => {
+test('WooCommerce export supports catalog attributes, logo variations, image mapping, and updates', async () => {
   const fn = await read('netlify/functions/mockup-publish-woocommerce.js');
+  const options = await read('netlify/functions/mockup-woo-options.js');
+  const studio = await read('src/MockupStudio.jsx');
   assert.match(fn, /allowedRoles: \['admin', 'manager'\]/);
   assert.match(fn, /createSignedUrl/);
   assert.match(fn, /_sc_mockup_captions/);
+  assert.match(fn, /pa_brand/);
+  assert.match(fn, /pa_style/);
+  assert.match(fn, /Logo Selection/);
+  assert.match(fn, /variation_image_map/);
+  assert.match(fn, /row\.image = \{ id: imageId \}/);
+  assert.match(fn, /main_product_image_output_id/);
+  assert.match(fn, /shipping_class/);
+  assert.match(fn, /dimensions:/);
+  assert.match(fn, /weight:/);
+  assert.match(fn, /listExistingVariations/);
+  assert.match(fn, /WOO_BATCH_SIZE = 100/);
   assert.match(fn, /variations\/batch/);
   assert.match(fn, /'draft'/);
+  assert.match(options, /mockup-woo-options/);
+  assert.match(options, /products\/attributes/);
+  assert.match(options, /products\/categories/);
+  assert.match(options, /products\/shipping_classes/);
+  assert.match(studio, /Color × Size × Logo/);
+  assert.match(studio, /Variation mockup mapping/);
+  assert.match(studio, /Main product image and gallery/);
+  assert.match(studio, /Product categories/);
 });
 
 test('project deletion is privileged and cleans private storage', async () => {
