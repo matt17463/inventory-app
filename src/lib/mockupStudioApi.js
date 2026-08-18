@@ -213,6 +213,7 @@ export async function addArtworkAsset({ projectId, file, values = {} }) {
     exact_artwork_locked: values.exact_artwork_locked !== false,
     preflight_status: values.preflight_status || 'pending',
     preflight_notes: values.preflight_notes || null,
+    metadata: values.metadata || {},
     ...location,
   };
   const { data, error } = await supabase.from('mockup_artwork_assets').insert(payload).select('*').single();
@@ -243,9 +244,15 @@ export async function saveMockupPlacement(values) {
     print_height_inches: values.print_height_inches ? Number(values.print_height_inches) : null,
     rotation_degrees: Number(values.rotation_degrees || 0),
     opacity: Number(values.opacity ?? 1),
-    blend_mode: values.blend_mode || 'multiply',
+    blend_mode: values.blend_mode || 'source-over',
     shadow_strength: Number(values.shadow_strength ?? 0.15),
     curvature: Number(values.curvature || 0),
+    perspective_config: {
+      ...(values.perspective_config || {}),
+      preserve_white_ink: values.preserve_white_ink
+        ?? values.perspective_config?.preserve_white_ink
+        ?? true,
+    },
     generation_instructions: values.generation_instructions || null,
     layer_order: Number(values.layer_order || 0),
   };
@@ -275,7 +282,7 @@ export async function copyPlacementToBlanks(placement, blankAssetIds = []) {
     print_height_inches: placement.print_height_inches ? Number(placement.print_height_inches) : null,
     rotation_degrees: Number(placement.rotation_degrees || 0),
     opacity: Number(placement.opacity ?? 1),
-    blend_mode: placement.blend_mode || 'multiply',
+    blend_mode: placement.blend_mode || 'source-over',
     shadow_strength: Number(placement.shadow_strength ?? 0.15),
     curvature: Number(placement.curvature || 0),
     perspective_config: placement.perspective_config || {},

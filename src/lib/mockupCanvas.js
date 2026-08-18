@@ -46,7 +46,12 @@ export async function renderMockupComposite({ blankUrl, artworkUrl, placement, c
   context.translate(centerX, centerY);
   context.rotate(rotation);
   context.globalAlpha = Number(placement.opacity ?? 1);
-  context.globalCompositeOperation = placement.blend_mode || 'multiply';
+  const preserveWhiteInk = placement.preserve_white_ink
+    ?? placement.perspective_config?.preserve_white_ink
+    ?? true;
+  // DTF and other opaque decoration methods print white ink. Normal compositing
+  // is required to keep those pixels visible; Multiply mathematically removes white.
+  context.globalCompositeOperation = preserveWhiteInk ? 'source-over' : (placement.blend_mode || 'source-over');
   const shadow = Number(placement.shadow_strength ?? 0.15);
   context.shadowColor = `rgba(0,0,0,${Math.min(0.6, shadow)})`;
   context.shadowBlur = baseWidth * 0.006 * shadow;
@@ -100,4 +105,42 @@ export async function imageDimensions(file) {
   const dimensions = { width: bitmap.width, height: bitmap.height };
   bitmap.close();
   return dimensions;
+}
+
+export async function inspectArtworkFile(file) {
+  if (!file || !String(file.type || '').startsWith('image/')) {
+    return { width: null, height: null, hasTransparency: null, hasOpaqueWhite: null };
+  }
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
+  if (!context) {
+    const dimensions = { width: bitmap.width, height: bitmap.height, hasTransparency: null, hasOpaqueWhite: null };
+    bitmap.close();
+    return dimensions;
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let transparentPixels = 0;
+  let opaqueWhitePixels = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blue = pixels[index + 2];
+    const alpha = pixels[index + 3];
+    if (alpha < 250) transparentPixels += 1;
+    if (alpha >= 230 && red >= 235 && green >= 235 && blue >= 235) opaqueWhitePixels += 1;
+  }
+  const result = {
+    width: bitmap.width,
+    height: bitmap.height,
+    hasTransparency: transparentPixels > 0,
+    hasOpaqueWhite: opaqueWhitePixels > 0,
+    transparencyRatio: pixels.length ? transparentPixels / (pixels.length / 4) : 0,
+  };
+  bitmap.close();
+  return result;
 }
