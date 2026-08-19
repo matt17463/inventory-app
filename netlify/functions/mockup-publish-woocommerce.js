@@ -2,7 +2,7 @@ import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { commaList, numericIdList, parseJsonBody, safePathSegment, wooCollection, wooRequest } from './_shared/mockupUtils.js';
 
 const MAX_VARIATIONS = 500;
-const WOO_BATCH_SIZE = 25;
+const WOO_BATCH_SIZE = 50;
 
 function listValue(value) {
   if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
