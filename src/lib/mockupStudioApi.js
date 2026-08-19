@@ -518,6 +518,8 @@ export async function publishMockupToWooCommerce(projectId, config, onProgress =
       const total = Number(progress.variations_total || 0);
       const message = progress.stage === 'variations' && total
         ? `Creating WooCommerce variations: ${processed} of ${total} operations completed.`
+        : progress.stage === 'images'
+          ? `Adding WooCommerce mockup images: ${Number(progress.images_processed || 0)} of ${Number(progress.images_total || 0)} completed.`
         : progress.stage === 'product_ready'
           ? `WooCommerce product ${progress.product_id} created. Preparing variations…`
           : 'Preparing the WooCommerce product…';

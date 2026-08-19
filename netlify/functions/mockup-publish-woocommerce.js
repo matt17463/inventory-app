@@ -3,6 +3,7 @@ import { commaList, numericIdList, parseJsonBody, safePathSegment, wooCollection
 
 const MAX_VARIATIONS = 500;
 const WOO_BATCH_SIZE = 50;
+const WOO_IMAGE_BATCH_SIZE = 5;
 
 function listValue(value) {
   if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
@@ -216,10 +217,70 @@ function mapWooImages(outputs, productImages) {
   outputs.forEach((output, index) => {
     const existing = output.woo_media_id ? productImages.find((image) => Number(image.id) === Number(output.woo_media_id)) : null;
     const byName = productImages.find((image) => String(image.name || '').includes(output.id));
-    const matched = existing || byName || productImages[index];
+    const samePosition = productImages.length === outputs.length ? productImages[index] : null;
+    const matched = existing || byName || samePosition;
     if (matched?.id) result.set(output.id, Number(matched.id));
+    else if (output.woo_media_id) result.set(output.id, Number(output.woo_media_id));
   });
   return result;
+}
+
+function projectMetaMatches(product, projectId) {
+  return product?.meta_data?.some((item) => item.key === '_sc_mockup_project_id' && String(item.value) === String(projectId));
+}
+
+async function findExistingProjectProduct(projectId, sku = '') {
+  const queries = [];
+  if (String(sku || '').trim()) {
+    queries.push(`products?sku=${encodeURIComponent(String(sku).trim())}&status=any&context=edit&per_page=100`);
+  }
+  queries.push('products?status=any&context=edit&per_page=100&orderby=date&order=desc');
+  for (const query of queries) {
+    const products = wooCollection(await wooRequest(query), 'project products');
+    const matched = products.find((product) => projectMetaMatches(product, projectId));
+    if (matched) return matched;
+  }
+  return null;
+}
+
+async function syncProductImages(supabase, product, outputs, onProgress = async () => {}) {
+  let currentProduct = product;
+  const imageIdByOutput = mapWooImages(outputs, product.images || []);
+  const pending = outputs.filter((output) => !imageIdByOutput.has(output.id));
+
+  for (let offset = 0; offset < pending.length; offset += WOO_IMAGE_BATCH_SIZE) {
+    const batch = pending.slice(offset, offset + WOO_IMAGE_BATCH_SIZE);
+    const batchIds = new Set(batch.map((output) => output.id));
+    const includedOutputs = outputs.filter((output) => imageIdByOutput.has(output.id) || batchIds.has(output.id));
+    const images = includedOutputs.map((output) => {
+      const mediaId = imageIdByOutput.get(output.id);
+      return mediaId
+        ? { id: mediaId, name: output.output_name, alt: output.caption_text || output.output_name }
+        : imageRowsFor([output])[0];
+    });
+    currentProduct = await wooRequest(`products/${product.id}`, { method: 'PUT', body: { images } });
+    const returnedImages = currentProduct.images || [];
+    includedOutputs.forEach((output, index) => {
+      const byName = returnedImages.find((image) => String(image.name || '').includes(output.id));
+      const matched = byName || returnedImages[index];
+      if (matched?.id) imageIdByOutput.set(output.id, Number(matched.id));
+    });
+    const unresolved = batch.filter((output) => !imageIdByOutput.has(output.id));
+    if (unresolved.length) throw new Error(`WooCommerce did not return media IDs for ${unresolved.length} mockup image${unresolved.length === 1 ? '' : 's'}.`);
+    await Promise.all(batch.map((output) => supabase
+      .from('mockup_outputs')
+      .update({ woo_media_id: imageIdByOutput.get(output.id) })
+      .eq('id', output.id)));
+    await onProgress({ processed: Math.min(offset + batch.length, pending.length), total: pending.length });
+  }
+
+  const orderedImages = outputs.map((output) => ({
+    id: imageIdByOutput.get(output.id),
+    name: output.output_name,
+    alt: output.caption_text || output.output_name,
+  }));
+  currentProduct = await wooRequest(`products/${product.id}`, { method: 'PUT', body: { images: orderedImages } });
+  return { product: currentProduct, imageIdByOutput };
 }
 
 export async function handler(event) {
@@ -277,7 +338,12 @@ export async function handler(event) {
     if (!mainOutput) throw new Error('Choose a selected mockup as the main product image.');
     const storeOutputs = [mainOutput, ...outputs.filter((row) => row.id !== mainOutput.id)];
 
-    const existingId = Number(config.update_existing_product_id || project.woo_product_id || exportRow?.woo_product_id || 0) || null;
+    let existingId = Number(config.update_existing_product_id || project.woo_product_id || exportRow?.woo_product_id || 0) || null;
+    let recoveredProduct = null;
+    if (!existingId) {
+      recoveredProduct = await findExistingProjectProduct(projectId, config.sku);
+      existingId = Number(recoveredProduct?.id || 0) || null;
+    }
     const operation = existingId ? (config.status === 'publish' ? 'update_published' : 'update_draft') : (config.status === 'publish' ? 'publish' : 'create_draft');
     if (exportRow) {
       const { error: exportError } = await auth.supabase.from('mockup_woo_exports').update({
@@ -321,7 +387,6 @@ export async function handler(event) {
       regular_price: config.type === 'simple' ? String(config.regular_price || '') : undefined,
       categories: categoryIds.map((id) => ({ id })),
       tags: numericIdList(config.tag_ids).map((id) => ({ id })),
-      images: imageRowsFor(storeOutputs),
       virtual: false,
       weight: String(shippingValues.weight),
       dimensions: {
@@ -344,7 +409,9 @@ export async function handler(event) {
     };
     Object.keys(productPayload).forEach((key) => productPayload[key] === undefined && delete productPayload[key]);
 
-    const product = await wooRequest(existingId ? `products/${existingId}` : 'products', { method: existingId ? 'PUT' : 'POST', body: productPayload });
+    let product = recoveredProduct
+      ? await wooRequest(`products/${existingId}`, { method: 'PUT', body: productPayload })
+      : await wooRequest(existingId ? `products/${existingId}` : 'products', { method: existingId ? 'PUT' : 'POST', body: productPayload });
     // Save the parent ID before starting variation batches. This makes a retry
     // resume the same product even if a later variation request is interrupted.
     await Promise.all([
@@ -358,13 +425,18 @@ export async function handler(event) {
         woo_config: config,
       }).eq('id', projectId),
     ]);
-    const imageIdByOutput = mapWooImages(storeOutputs, product.images || []);
-    await Promise.all(storeOutputs.map((output) => {
-      const mediaId = imageIdByOutput.get(output.id);
-      return mediaId && Number(mediaId) !== Number(output.woo_media_id)
-        ? auth.supabase.from('mockup_outputs').update({ woo_media_id: mediaId }).eq('id', output.id)
-        : Promise.resolve();
-    }));
+    const imageResult = await syncProductImages(auth.supabase, product, storeOutputs, async (progress) => {
+      await auth.supabase.from('mockup_woo_exports').update({
+        response_payload: {
+          stage: 'images',
+          product_id: product.id,
+          images_processed: progress.processed,
+          images_total: progress.total,
+        },
+      }).eq('id', exportId);
+    });
+    product = imageResult.product;
+    const imageIdByOutput = imageResult.imageIdByOutput;
 
     let variationResult = { created: 0, updated: 0, deactivated: 0, untouched: 0 };
     if (productPayload.type === 'variable' && config.create_variations !== false) {
