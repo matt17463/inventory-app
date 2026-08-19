@@ -94,6 +94,7 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
   const resource = String(path).replace(/^\//, '');
   const url = `${wooBaseUrl()}/wp-json/wc/v3/${resource}`;
   const maximumAttempts = 3;
+  const timeoutMilliseconds = requestMethod === 'GET' ? 60000 : 180000;
 
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
     let response;
@@ -102,7 +103,7 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
         method: requestMethod,
         headers: { Authorization: wooAuthHeader(), 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(timeoutMilliseconds),
       });
     } catch (error) {
       const code = connectionCode(error);
