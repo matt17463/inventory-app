@@ -15,5 +15,5 @@
 [functions."mockup-generate-background"]
   background = true
 
-[functions."mockup-publish-woocommerce"]
+[functions."mockup-publish-woocommerce-background"]
   background = true

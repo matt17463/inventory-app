@@ -448,15 +448,43 @@ export async function publishMockupToWooCommerce(projectId, config, onProgress =
   }).select('*').single();
   if (exportError) throw exportError;
 
-  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-publish-woocommerce', {
-    method: 'POST',
-    body: JSON.stringify({ project_id: projectId, export_id: exportRow.id, config }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.success === false) {
-    const message = payload?.error || payload?.message || 'WooCommerce export could not be started.';
-    await supabase.from('mockup_woo_exports').update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() }).eq('id', exportRow.id);
-    throw new Error(message);
+  let invocationMessage = '';
+  try {
+    const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-publish-woocommerce-background', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, export_id: exportRow.id, config }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success === false) {
+      invocationMessage = payload?.error || payload?.message || `WooCommerce export could not be started (HTTP ${response.status}).`;
+    }
+  } catch (error) {
+    invocationMessage = error?.message || 'WooCommerce export could not be started.';
+  }
+
+  // A gateway can end the browser request after the server has already started
+  // the export. Before reporting a false startup failure, check the durable job
+  // row for evidence that the background worker accepted it.
+  if (invocationMessage) {
+    let started = false;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { data: current, error } = await supabase
+        .from('mockup_woo_exports')
+        .select('status,woo_product_id,error_message')
+        .eq('id', exportRow.id)
+        .single();
+      if (error) throw error;
+      if (current.status === 'failed') throw new Error(current.error_message || invocationMessage);
+      if (current.status !== 'queued' || current.woo_product_id) {
+        started = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    if (!started) {
+      await supabase.from('mockup_woo_exports').update({ status: 'failed', error_message: invocationMessage, completed_at: new Date().toISOString() }).eq('id', exportRow.id);
+      throw new Error(invocationMessage);
+    }
   }
 
   onProgress({ stage: 'queued', message: 'WooCommerce export queued. You may keep this page open while variations are created.' });

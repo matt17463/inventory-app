@@ -49,6 +49,7 @@ test('customer approval uses hashed tokens and private signed images', async () 
 
 test('WooCommerce export supports catalog attributes, logo variations, image mapping, and updates', async () => {
   const fn = await read('netlify/functions/mockup-publish-woocommerce.js');
+  const backgroundFn = await read('netlify/functions/mockup-publish-woocommerce-background.js');
   const options = await read('netlify/functions/mockup-woo-options.js');
   const studio = await read('src/MockupStudio.jsx');
   const api = await read('src/lib/mockupStudioApi.js');
@@ -66,15 +67,18 @@ test('WooCommerce export supports catalog attributes, logo variations, image map
   assert.match(fn, /dimensions:/);
   assert.match(fn, /weight:/);
   assert.match(fn, /listExistingVariations/);
-  assert.match(fn, /WOO_BATCH_SIZE = 25/);
+  assert.match(fn, /WOO_BATCH_SIZE = 50/);
   assert.match(fn, /variations\/batch/);
   assert.match(fn, /const operations = \[\.\.\.creates, \.\.\.updates, \.\.\.deactivates\]/);
   assert.match(fn, /woo_product_id: product\.id[\s\S]*syncVariations/);
   assert.match(fn, /variations_processed/);
   assert.match(api, /status: 'queued'/);
   assert.match(api, /export_id: exportRow\.id/);
+  assert.match(api, /mockup-publish-woocommerce-background/);
+  assert.match(api, /current\.status !== 'queued' \|\| current\.woo_product_id/);
   assert.match(api, /Creating WooCommerce variations:/);
-  assert.match(netlify, /\[functions\."mockup-publish-woocommerce"\][\s\S]*background = true/);
+  assert.match(backgroundFn, /export \{ handler \} from '\.\/mockup-publish-woocommerce\.js'/);
+  assert.match(netlify, /\[functions\."mockup-publish-woocommerce-background"\][\s\S]*background = true/);
   assert.match(fn, /'draft'/);
   assert.match(options, /mockup-woo-options/);
   assert.match(options, /products\/attributes/);
