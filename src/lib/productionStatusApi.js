@@ -7,6 +7,29 @@ function unwrapRpcRows(data) {
   return [data];
 }
 
+function rpcErrorMessage(error, fallback) {
+  return [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(' — ') || fallback;
+}
+
+function isMissingFunctionError(error) {
+  const message = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(' ');
+
+  return error?.code === 'PGRST202'
+    || /function .* does not exist|could not find the function/i.test(message);
+}
+
+function unwrapStatusResult(data) {
+  const result = Array.isArray(data) ? data[0] : data;
+  if (result && result.success === false) {
+    throw new Error(result.message || result.error || 'The production status was not changed.');
+  }
+  return result;
+}
+
 export const PRODUCTION_BOARD_COLUMNS = [
   { key: 'new_order', label: 'New Orders', tone: 'neutral' },
   { key: 'needs_attention', label: 'Needs Attention', tone: 'danger' },
@@ -59,14 +82,37 @@ export async function recalculateProductionStatus(jobId) {
 }
 
 export async function updateProductionBoardStatus({ jobId, status, note = '' }) {
-  const { data, error } = await supabase.rpc('sc_set_production_board_status', {
-    p_job_id: Number(jobId),
+  const numericJobId = Number(jobId);
+  if (!Number.isFinite(numericJobId) || numericJobId <= 0) {
+    throw new Error('A valid production job is required before its status can be changed.');
+  }
+  if (!MANUAL_PRODUCTION_STATUSES.some((option) => option.value === status)) {
+    throw new Error(`Unsupported production status: ${status || 'blank'}`);
+  }
+
+  let { data, error } = await supabase.rpc('sc_set_production_board_status', {
+    p_job_id: numericJobId,
     p_status: status,
     p_note: note || null,
   });
 
-  if (error) throw error;
-  return Array.isArray(data) ? data[0] : data;
+  // Some older installs predate the reconciled Production Board RPC. Their
+  // Phase 2 status RPC writes the same jobs.status field and is a safe fallback.
+  if (error && isMissingFunctionError(error)) {
+    const fallback = await supabase.rpc('phase2_update_job_status', {
+      p_job_id: numericJobId,
+      p_status: status,
+      p_notes: note || null,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    throw new Error(rpcErrorMessage(error, 'Could not update production status.'));
+  }
+
+  return unwrapStatusResult(data);
 }
 
 export async function updateWooCommerceOrderStatus({ orderId, status, jobId = null, note = '' }) {

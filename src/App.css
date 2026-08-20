@@ -2295,6 +2295,24 @@ body.dark .manual-order-search-results-table {
   gap: 6px;
 }
 
+.sc-status-feedback {
+  display: block;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.sc-status-feedback--info {
+  color: #1d4ed8;
+}
+
+.sc-status-feedback--success {
+  color: #166534;
+}
+
+.sc-status-feedback--danger {
+  color: #b91c1c;
+}
+
 .sc-production-woo-update {
   display: grid;
   grid-template-columns: 1fr auto;
