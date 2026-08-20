@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
+import SupplierConfirmationReceiving from './SupplierConfirmationReceiving';
 
 const lineTemplate = {
   brand_id: '',
@@ -384,6 +385,12 @@ export default function AddItemToBin() {
           </label>
         </div>
       </section>
+
+      <SupplierConfirmationReceiving
+        lookups={lookups}
+        defaultBinId={defaults.bin_id}
+        resolveBlank={findOrCreateBlank}
+      />
 
       <section className="sc-panel">
         <div className="sc-panel-header"><div><h3>Paste Size Run</h3><p>Example: L 2, M 2, S 2, XL 2, XS 2. One line per size also works.</p></div><button className="sc-btn" onClick={parseSizeRun}>Parse Size Run</button></div>
