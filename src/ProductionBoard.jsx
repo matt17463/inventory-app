@@ -67,6 +67,8 @@ export default function ProductionBoard() {
   const [statusFilter, setStatusFilter] = useState('');
   const [busyKey, setBusyKey] = useState('');
   const [wooStatusByOrder, setWooStatusByOrder] = useState({});
+  const [selectedStatusByJob, setSelectedStatusByJob] = useState({});
+  const [statusFeedbackByJob, setStatusFeedbackByJob] = useState({});
 
   async function loadBoard(options = {}) {
     const nextSearch = options.search !== undefined ? options.search : search;
@@ -111,6 +113,11 @@ export default function ProductionBoard() {
     const key = `status-${row.job_id}`;
     setBusyKey(key);
     setMessage('');
+    setSelectedStatusByJob((current) => ({ ...current, [row.job_id]: nextStatus }));
+    setStatusFeedbackByJob((current) => ({
+      ...current,
+      [row.job_id]: { tone: 'info', text: `Moving to ${badgeText(nextStatus)}…` },
+    }));
 
     try {
       await updateProductionBoardStatus({
@@ -119,9 +126,21 @@ export default function ProductionBoard() {
         note: `Status changed from Production Board to ${nextStatus}`,
       });
       await loadBoard();
+      const label = MANUAL_PRODUCTION_STATUSES.find((option) => option.value === nextStatus)?.label || badgeText(nextStatus);
+      setStatusFeedbackByJob((current) => ({
+        ...current,
+        [row.job_id]: { tone: 'success', text: `Status changed to ${label}.` },
+      }));
+      setMessage(`${orderLabel(row)} production status changed to ${label}.`);
     } catch (err) {
-      setMessage(err.message || 'Could not update production status.');
+      const errorMessage = err.message || 'Could not update production status.';
+      setStatusFeedbackByJob((current) => ({
+        ...current,
+        [row.job_id]: { tone: 'danger', text: errorMessage },
+      }));
+      setMessage(errorMessage);
     } finally {
+      setSelectedStatusByJob((current) => ({ ...current, [row.job_id]: '' }));
       setBusyKey('');
     }
   }
@@ -242,6 +261,7 @@ export default function ProductionBoard() {
                   const isProductionComplete = row.production_status === 'production_complete' || row.board_column === 'completed';
                   const wooComplete = ['completed', 'cancelled', 'canceled', 'refunded'].includes(String(row.woo_status || '').toLowerCase());
                   const blockers = blockingMessage(row);
+                  const statusFeedback = statusFeedbackByJob[row.job_id];
 
                   return (
                     <article className="sc-job-card sc-production-card" key={key}>
@@ -276,15 +296,24 @@ export default function ProductionBoard() {
                         <label className="sc-field sc-production-status-select">
                           <span>Move Production Status</span>
                           <select
-                            value=""
-                            onChange={(event) => handleManualStatus(row, event.target.value)}
+                            value={selectedStatusByJob[row.job_id] || ''}
+                            onChange={(event) => {
+                              const nextStatus = event.target.value;
+                              setSelectedStatusByJob((current) => ({ ...current, [row.job_id]: nextStatus }));
+                              handleManualStatus(row, nextStatus);
+                            }}
                             disabled={busyKey === busyStatusKey}
                           >
-                            <option value="">Choose status…</option>
+                            <option value="">{busyKey === busyStatusKey ? 'Updating…' : 'Choose status…'}</option>
                             {MANUAL_PRODUCTION_STATUSES.map((status) => (
                               <option key={status.value} value={status.value}>{status.label}</option>
                             ))}
                           </select>
+                          {statusFeedback ? (
+                            <small className={`sc-status-feedback sc-status-feedback--${statusFeedback.tone}`} role="status">
+                              {statusFeedback.text}
+                            </small>
+                          ) : null}
                         </label>
                       ) : null}
 
