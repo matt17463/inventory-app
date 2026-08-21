@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { loadStoredAsset } from './mockupStorage.js';
 
 export function parseJsonBody(event) {
   try { return JSON.parse(event?.body || '{}'); }
@@ -37,19 +38,50 @@ export function assertSafeExternalAssetUrl(value) {
   return url.toString();
 }
 
-export async function loadMockupAsset(supabase, row) {
-  if (row?.storage_bucket && row?.storage_path) {
-    const { data, error } = await supabase.storage.from(row.storage_bucket).download(row.storage_path);
-    if (error) throw error;
-    return { bytes: Buffer.from(await data.arrayBuffer()), mimeType: row.mime_type || data.type || 'image/png', name: row.original_file_name || `${row.id}.png` };
-  }
-  if (row?.source_url) {
-    const url = assertSafeExternalAssetUrl(row.source_url);
-    const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+export async function fetchSafeExternalAsset(value, { timeoutMs = 30000, maxBytes = 52428800 } = {}) {
+  let currentUrl = assertSafeExternalAssetUrl(value);
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+    const response = await fetch(currentUrl, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { Accept: 'image/png,image/jpeg,image/webp,image/svg+xml,application/pdf;q=0.9,*/*;q=0.1' },
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('External asset redirect did not include a destination.');
+      if (redirectCount === 3) throw new Error('External asset exceeded the redirect limit.');
+      currentUrl = assertSafeExternalAssetUrl(new URL(location, currentUrl).toString());
+      continue;
+    }
     if (!response.ok) throw new Error(`External asset download failed (HTTP ${response.status}).`);
     const contentLength = Number(response.headers.get('content-length') || 0);
-    if (contentLength > 52428800) throw new Error('External asset is larger than 50 MB.');
-    return { bytes: Buffer.from(await response.arrayBuffer()), mimeType: row.mime_type || response.headers.get('content-type') || 'image/png', name: `${row.id}.png` };
+    if (contentLength > maxBytes) throw new Error('External asset is larger than 50 MB.');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length) throw new Error('External asset was empty.');
+    if (bytes.length > maxBytes) throw new Error('External asset is larger than 50 MB.');
+    let name = 'external-artwork';
+    try { name = decodeURIComponent(new URL(currentUrl).pathname.split('/').filter(Boolean).pop() || name); } catch { /* already validated */ }
+    return {
+      bytes,
+      mimeType: String(response.headers.get('content-type') || 'application/octet-stream').split(';')[0].toLowerCase(),
+      name,
+      finalUrl: currentUrl,
+    };
+  }
+  throw new Error('External asset could not be downloaded.');
+}
+
+export async function loadMockupAsset(supabase, row) {
+  if (row?.storage_bucket && row?.storage_path) {
+    return loadStoredAsset(supabase, row);
+  }
+  if (row?.source_url) {
+    const downloaded = await fetchSafeExternalAsset(row.source_url);
+    return {
+      bytes: downloaded.bytes,
+      mimeType: row.mime_type || downloaded.mimeType || 'image/png',
+      name: downloaded.name || `${row.id}.png`,
+    };
   }
   throw new Error('Mockup asset does not have a stored file or source URL.');
 }

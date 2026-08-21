@@ -1,5 +1,6 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { parseJsonBody } from './_shared/mockupUtils.js';
+import { deleteStoredAsset } from './_shared/mockupStorage.js';
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
@@ -11,27 +12,25 @@ export async function handler(event) {
     const projectId = String(parseJsonBody(event).project_id || '');
     if (!projectId) throw new Error('Missing mockup project ID.');
     const assetQueries = await Promise.all([
-      auth.supabase.from('mockup_blank_assets').select('storage_bucket,storage_path').eq('project_id', projectId),
-      auth.supabase.from('mockup_artwork_assets').select('storage_bucket,storage_path,prepared_storage_path').eq('project_id', projectId),
-      auth.supabase.from('mockup_outputs').select('storage_bucket,storage_path').eq('project_id', projectId),
-      auth.supabase.from('mockup_production_packets').select('storage_bucket,storage_path').eq('project_id', projectId),
+      auth.supabase.from('mockup_blank_assets').select('*').eq('project_id', projectId),
+      auth.supabase.from('mockup_artwork_assets').select('*').eq('project_id', projectId),
+      auth.supabase.from('mockup_outputs').select('*').eq('project_id', projectId),
+      auth.supabase.from('mockup_production_packets').select('*').eq('project_id', projectId),
     ]);
     const firstError = assetQueries.find((query) => query.error)?.error;
     if (firstError) throw firstError;
 
-    const grouped = new Map();
     for (const query of assetQueries) {
       for (const row of query.data || []) {
-        for (const path of [row.storage_path, row.prepared_storage_path].filter(Boolean)) {
-          if (!row.storage_bucket) continue;
-          if (!grouped.has(row.storage_bucket)) grouped.set(row.storage_bucket, []);
-          grouped.get(row.storage_bucket).push(path);
+        await deleteStoredAsset(auth.supabase, row);
+        if (row.prepared_storage_path) {
+          await deleteStoredAsset(auth.supabase, {
+            storage_provider: row.prepared_storage_provider || row.storage_provider,
+            storage_bucket: row.prepared_storage_bucket || row.storage_bucket,
+            storage_path: row.prepared_storage_path,
+          }, { includePreview: false });
         }
       }
-    }
-    for (const [bucket, paths] of grouped) {
-      const { error } = await auth.supabase.storage.from(bucket).remove([...new Set(paths)]);
-      if (error) throw error;
     }
     const { error: deleteError } = await auth.supabase.from('mockup_projects').delete().eq('id', projectId);
     if (deleteError) throw deleteError;

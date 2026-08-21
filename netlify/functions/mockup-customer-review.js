@@ -1,6 +1,7 @@
 import { jsonResponse } from './_shared/security.js';
 import { parseJsonBody, sha256 } from './_shared/mockupUtils.js';
 import { createServiceClient } from './_shared/security.js';
+import { signedStoredAssetUrl } from './_shared/mockupStorage.js';
 
 async function resolveToken(supabase, token, forWrite = false) {
   if (!token || String(token).length < 32) throw new Error('The mockup review token is invalid.');
@@ -27,13 +28,11 @@ export async function handler(event) {
     if (projectError) throw projectError;
 
     if (event.httpMethod === 'GET') {
-      const { data: outputs, error: outputsError } = await supabase.from('mockup_outputs').select('id,output_name,caption_text,storage_bucket,storage_path,approval_status').eq('project_id', project.id).eq('is_selected', true).order('woo_position');
+      const { data: outputs, error: outputsError } = await supabase.from('mockup_outputs').select('id,output_name,caption_text,storage_provider,storage_bucket,storage_path,preview_storage_provider,preview_storage_bucket,preview_storage_path,approval_status,mime_type').eq('project_id', project.id).eq('is_selected', true).order('woo_position');
       if (outputsError) throw outputsError;
       const signedOutputs = [];
       for (const output of outputs || []) {
-        const { data: signed, error: signedError } = await supabase.storage.from(output.storage_bucket).createSignedUrl(output.storage_path, 3600);
-        if (signedError) throw signedError;
-        signedOutputs.push({ ...output, signed_url: signed.signedUrl });
+        signedOutputs.push({ ...output, signed_url: await signedStoredAssetUrl(supabase, output, 3600, { preferPreview: true }) });
       }
       await supabase.from('mockup_review_tokens').update({ last_accessed_at: new Date().toISOString() }).eq('id', tokenRow.id);
       return jsonResponse(200, { success: true, project, outputs: signedOutputs }, event);

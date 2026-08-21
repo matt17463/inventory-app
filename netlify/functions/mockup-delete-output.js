@@ -1,5 +1,6 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { parseJsonBody } from './_shared/mockupUtils.js';
+import { deleteStoredAsset } from './_shared/mockupStorage.js';
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
@@ -17,7 +18,7 @@ export async function handler(event) {
 
     const { data: output, error: outputError } = await auth.supabase
       .from('mockup_outputs')
-      .select('id,project_id,output_name,storage_bucket,storage_path')
+      .select('*')
       .eq('id', outputId)
       .maybeSingle();
     if (outputError) throw outputError;
@@ -34,10 +35,9 @@ export async function handler(event) {
 
     let cleanupWarning = '';
     if (output.storage_bucket && output.storage_path) {
-      const { error: storageError } = await auth.supabase.storage
-        .from(output.storage_bucket)
-        .remove([output.storage_path]);
-      if (storageError) {
+      try {
+        await deleteStoredAsset(auth.supabase, output);
+      } catch (storageError) {
         cleanupWarning = storageError.message || 'The private image file could not be removed.';
         console.warn('Deleted mockup record but storage cleanup failed:', cleanupWarning);
       }

@@ -1,5 +1,6 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { commaList, numericIdList, parseJsonBody, safePathSegment, wooCollection, wooRequest } from './_shared/mockupUtils.js';
+import { signedStoredAssetUrl } from './_shared/mockupStorage.js';
 
 const MAX_VARIATIONS = 500;
 const WOO_BATCH_SIZE = 50;
@@ -370,9 +371,7 @@ export async function handler(event) {
 
     for (const output of storeOutputs) {
       if (output.woo_media_id) continue;
-      const { data: signed, error: signedError } = await auth.supabase.storage.from(output.storage_bucket).createSignedUrl(output.storage_path, 900);
-      if (signedError) throw signedError;
-      output.signed_url = signed.signedUrl;
+      output.signed_url = await signedStoredAssetUrl(auth.supabase, output, 3600);
     }
 
     const discovered = wooCollection(await wooRequest('products/attributes?per_page=100'), 'product attributes');

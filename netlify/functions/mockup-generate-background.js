@@ -1,5 +1,6 @@
 import { authorizeEmployee, createServiceClient, jsonResponse } from './_shared/security.js';
 import { loadMockupAsset, parseJsonBody, requiredEnv, safePathSegment } from './_shared/mockupUtils.js';
+import { putMockupObject } from './_shared/mockupStorage.js';
 
 function promptFor({ project, blank, artwork, placement, extra }) {
   const preserveWhiteInk = placement.perspective_config?.preserve_white_ink
@@ -95,9 +96,13 @@ export async function handler(event) {
     for (let index = 0; index < (payload.data || []).length; index += 1) {
       const item = payload.data[index];
       if (!item.b64_json) continue;
-      const path = `${auth.user.id}/${project.id}/ai/${job.id}-v${index + 1}.png`;
-      const { error: uploadError } = await auth.supabase.storage.from('sc-mockup-output').upload(path, Buffer.from(item.b64_json, 'base64'), { contentType: 'image/png', upsert: true });
-      if (uploadError) throw uploadError;
+      const path = `${auth.user.id}/${project.id}/outputs/ai/${job.id}-v${index + 1}.png`;
+      const location = await putMockupObject(auth.supabase, {
+        key: path,
+        bytes: Buffer.from(item.b64_json, 'base64'),
+        contentType: 'image/png',
+        makePreview: true,
+      });
       const { data: output, error: outputError } = await auth.supabase.from('mockup_outputs').insert({
         project_id: project.id,
         placement_id: placement.id,
@@ -105,8 +110,7 @@ export async function handler(event) {
         output_name: `${blank.asset_name} — AI assisted ${index + 1}`,
         output_kind: 'ai_enhanced',
         variant_number: index + 1,
-        storage_bucket: 'sc-mockup-output',
-        storage_path: path,
+        ...location,
         mime_type: 'image/png',
         metadata: { provider: 'openai', model, exact_artwork_requested: project.exact_artwork_required, usage: payload.usage || null },
       }).select('*').single();
