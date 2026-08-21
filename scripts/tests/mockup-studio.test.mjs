@@ -104,6 +104,33 @@ test('project deletion is privileged and cleans private storage', async () => {
   assert.match(fn, /storage\.from\(bucket\)\.remove/);
 });
 
+test('local archives verify files before batched Supabase cleanup and support restore', async () => {
+  const sql = await read('deployment/sql/22_MOCKUP_LOCAL_ARCHIVES.sql');
+  const studio = await read('src/MockupStudio.jsx');
+  const local = await read('src/lib/mockupLocalArchive.js');
+  const api = await read('src/lib/mockupStudioApi.js');
+  const fn = await read('netlify/functions/mockup-archive-project.js');
+  assert.match(sql, /create table if not exists public\.mockup_project_archives/i);
+  assert.match(sql, /previous_project_status/);
+  assert.match(sql, /deleted_file_keys/);
+  assert.match(local, /showDirectoryPicker/);
+  assert.match(local, /SHA-256/);
+  assert.match(local, /savedChecksum !== checksum/);
+  assert.match(local, /mockup-archive-manifest\.json/);
+  assert.match(local, /upsert: true/);
+  assert.match(api, /beginMockupLocalArchive/);
+  assert.match(api, /continueMockupLocalArchive/);
+  assert.match(api, /completeMockupLocalArchiveRestore/);
+  assert.match(fn, /allowedRoles: \['admin', 'manager'\]/);
+  assert.match(fn, /DELETE_BATCH_SIZE = 40/);
+  assert.match(fn, /missing\.length \|\| extra\.length/);
+  assert.match(fn, /status: completed \? 'active' : 'deleting'/);
+  assert.match(fn, /status: 'restored'/);
+  assert.match(studio, /Archive Project Images to My Computer/);
+  assert.match(studio, /Reconnect Local Folder/);
+  assert.match(studio, /Restore Files to Supabase/);
+});
+
 test('exact compositor preserves an AI-free rendering path with captions', async () => {
   const canvas = await read('src/lib/mockupCanvas.js');
   assert.match(canvas, /renderMockupComposite/);

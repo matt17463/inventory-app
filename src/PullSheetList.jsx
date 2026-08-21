@@ -391,6 +391,9 @@ export default function PullSheetList() {
                 <th>Order Placed</th>
                 <th>Customer</th>
                 <th>Status</th>
+                <th>Active Lines</th>
+                <th>Total Qty</th>
+                <th>History</th>
                 <th>Due</th>
                 <th></th>
               </tr>
@@ -411,6 +414,9 @@ export default function PullSheetList() {
                   <td>{formatDate(getOrderPlacedDate(job))}</td>
                   <td>{job.customer_name || ''}</td>
                   <td>{statusOptionLabel(job.status)}</td>
+                  <td>{Number(job.active_line_count ?? job.item_count ?? 0)}</td>
+                  <td>{Number(job.total_quantity ?? 0)}</td>
+                  <td>{Number(job.cancelled_history_count || 0) ? `${Number(job.cancelled_history_count)} cancelled` : '—'}</td>
                   <td>{formatDate(job.due_date)}</td>
                   <td><Link to={`/pullsheets/${job.id}`}>Open</Link></td>
                 </tr>

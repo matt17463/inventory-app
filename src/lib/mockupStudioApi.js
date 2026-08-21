@@ -111,7 +111,7 @@ export async function deleteMockupOutput(outputId) {
 }
 
 export async function getMockupProjectBundle(projectId) {
-  const [project, blanks, artwork, placements, jobs, outputs, pricing, reviews, exports, packets] = await Promise.all([
+  const [project, blanks, artwork, placements, jobs, outputs, pricing, reviews, exports, packets, archives] = await Promise.all([
     supabase.from('mockup_projects').select('*').eq('id', projectId).single(),
     supabase.from('mockup_blank_assets').select('*').eq('project_id', projectId).order('sort_order'),
     supabase.from('mockup_artwork_assets').select('*').eq('project_id', projectId).order('created_at'),
@@ -122,15 +122,56 @@ export async function getMockupProjectBundle(projectId) {
     supabase.from('mockup_reviews').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
     supabase.from('mockup_woo_exports').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
     supabase.from('mockup_production_packets').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+    supabase.from('mockup_project_archives').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
   ]);
   const result = { project: project.data };
-  const named = { blanks, artwork, placements, jobs, outputs, pricing, reviews, exports, packets };
+  const named = { blanks, artwork, placements, jobs, outputs, pricing, reviews, exports, packets, archives };
   if (project.error) throw project.error;
   Object.entries(named).forEach(([key, response]) => {
     if (response.error) throw response.error;
     result[key] = response.data || [];
   });
   return result;
+}
+
+async function archiveFunction(body) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-archive-project', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || payload?.message || 'The local archive operation failed.');
+  }
+  return payload;
+}
+
+export async function beginMockupLocalArchive(projectId, manifest) {
+  return archiveFunction({ action: 'begin', project_id: projectId, manifest });
+}
+
+export async function continueMockupLocalArchive(archiveId, onProgress = () => {}) {
+  let response;
+  do {
+    response = await archiveFunction({ action: 'continue', archive_id: archiveId });
+    onProgress({
+      stage: 'cleanup',
+      completed: Number(response.archive?.file_count || 0) - Number(response.remaining || 0),
+      total: Number(response.archive?.file_count || 0),
+      message: response.completed
+        ? 'Supabase cleanup completed. The project is now locally archived.'
+        : `Removing verified Supabase copies: ${response.remaining} file(s) remaining…`,
+    });
+  } while (!response.completed);
+  return response;
+}
+
+export async function completeMockupLocalArchiveRestore(archiveId, restoredFileKeys) {
+  return archiveFunction({
+    action: 'restore_complete',
+    archive_id: archiveId,
+    restored_file_keys: restoredFileKeys,
+  });
 }
 
 export async function searchMockupBlankCatalog(search = '') {
