@@ -15,6 +15,9 @@ import {
 import {
   addArtworkAsset,
   addBlankAsset,
+  beginMockupLocalArchive,
+  completeMockupLocalArchiveRestore,
+  continueMockupLocalArchive,
   copyPlacementToBlanks,
   createMockupProject,
   createMockupReviewLink,
@@ -38,6 +41,14 @@ import {
   updateMockupOutput,
   updateMockupProject,
 } from './lib/mockupStudioApi';
+import {
+  createLocalMockupArchive,
+  finalizeLocalArchiveManifest,
+  localMockupArchiveSupported,
+  reconnectLocalArchiveFolder,
+  restoreLocalMockupArchiveFiles,
+  verifyLinkedLocalMockupArchive,
+} from './lib/mockupLocalArchive';
 import { imageDimensions, inspectArtworkFile, renderMockupComposite } from './lib/mockupCanvas';
 import './MockupStudio.css';
 import './MockupStudioWoo.css';
@@ -826,6 +837,114 @@ function ProductionTab({ project, bundle }) {
   return <><SectionCard title="Production handoff" description="The production packet combines approved mockups, physical placement dimensions, decoration methods, and artwork references."><div className="sc-button-row"><Link className="sc-action-button sc-action-button--primary sc-action-button--md" to={`/mockup-studio/${project.id}/production-packet`} target="_blank">Open Production Packet</Link></div></SectionCard><SectionCard title="Readiness checks"><ul className="mockup-checklist"><li className={bundle.blanks.length ? 'pass' : 'stop'}>{bundle.blanks.length ? 'Blank photos attached' : 'No blank photos'}</li><li className={bundle.artwork.length ? 'pass' : 'stop'}>{bundle.artwork.length ? 'Artwork attached' : 'No artwork'}</li><li className={bundle.placements.length ? 'pass' : 'stop'}>{bundle.placements.length ? 'Physical placements recorded' : 'No placements'}</li><li className={selected.length ? 'pass' : 'stop'}>{selected.length ? `${selected.length} output(s) selected` : 'No selected outputs'}</li><li className={selected.some((row) => /approved/.test(row.approval_status)) ? 'pass' : 'stop'}>{selected.some((row) => /approved/.test(row.approval_status)) ? 'Approval recorded' : 'Approval not recorded'}</li></ul></SectionCard></>;
 }
 
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!bytes) return '0 bytes';
+  const units = ['bytes', 'KB', 'MB', 'GB'];
+  const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / (1024 ** unit)).toFixed(unit ? 1 : 0)} ${units[unit]}`;
+}
+
+function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
+  const project = bundle.project;
+  const archives = bundle.archives || [];
+  const current = archives.find((row) => ['active', 'deleting'].includes(row.status));
+  const supported = localMockupArchiveSupported();
+
+  async function archiveProject() {
+    if (!window.confirm('Archive this project’s Supabase images to a folder on this computer? The application will verify every local file before removing its Supabase copy.')) return;
+    setBusy(true);
+    try {
+      const local = await createLocalMockupArchive({ project, bundle, onProgress: ({ message }) => setMessage(message) });
+      const started = await beginMockupLocalArchive(project.id, local.manifest);
+      await finalizeLocalArchiveManifest(local.directory, local.manifest, started.archive.id);
+      await continueMockupLocalArchive(started.archive.id, ({ message }) => setMessage(message));
+      setMessage(`Project archived successfully in ${local.manifest.folder_hint}. Keep this folder backed up.`);
+      await refresh();
+    } catch (error) {
+      setMessage(`${error.message || 'Local archive failed.'} Supabase files are retained unless the project is shown as Archived.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resumeCleanup() {
+    setBusy(true);
+    try {
+      await verifyLinkedLocalMockupArchive({ projectId: project.id, archive: current, onProgress: ({ message }) => setMessage(message) });
+      await continueMockupLocalArchive(current.id, ({ message }) => setMessage(message));
+      setMessage('Local archive cleanup completed. The verified local files are now linked to this project.');
+      await refresh();
+    } catch (error) {
+      setMessage(error.message || 'Archive cleanup could not be resumed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reconnectFolder() {
+    setBusy(true);
+    try {
+      const result = await reconnectLocalArchiveFolder(project.id, current.id);
+      setMessage(`Local archive reconnected: ${result.directory.name}.`);
+    } catch (error) {
+      setMessage(error.message || 'The local archive folder could not be linked.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreProject() {
+    if (!window.confirm('Restore every archived file to Supabase so this project can be edited and rebuilt?')) return;
+    setBusy(true);
+    try {
+      const restored = await restoreLocalMockupArchiveFiles({
+        projectId: project.id,
+        archive: current,
+        onProgress: ({ message }) => setMessage(message),
+      });
+      await completeMockupLocalArchiveRestore(current.id, restored.restoredKeys);
+      setMessage('All archived files were verified and restored to Supabase. The project is active again.');
+      await refresh();
+    } catch (error) {
+      setMessage(`${error.message || 'Restore failed.'} The project remains archived until every file is restored.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Local image archive"
+      description="Keep the project and rebuild instructions in Supabase while moving its private image files to a verified folder on this computer."
+    >
+      {!supported ? <p className="mockup-archive-warning">Use Google Chrome or Microsoft Edge on the computer that will hold the archive.</p> : null}
+      {current ? (
+        <div className="mockup-archive-summary">
+          <StatusBadge status={current.status} />
+          <p><strong>Folder:</strong> {current.folder_hint || 'Choose the archive folder to reconnect it'}</p>
+          <p><strong>Files:</strong> {current.file_count} &nbsp; <strong>Space removed from Supabase:</strong> {formatBytes(current.total_bytes)}</p>
+          {current.status === 'deleting' ? (
+            <ActionButton onClick={resumeCleanup}>Verify Folder and Resume Cleanup</ActionButton>
+          ) : (
+            <div className="sc-button-row">
+              <ActionButton onClick={reconnectFolder} disabled={!supported}>Reconnect Local Folder</ActionButton>
+              <ActionButton tone="primary" onClick={restoreProject} disabled={!supported}>Restore Files to Supabase</ActionButton>
+            </div>
+          )}
+          <p className="mockup-archive-note">The saved folder link works only in this browser on this computer. If it is lost, use Reconnect Local Folder and select the folder containing mockup-archive-manifest.json.</p>
+        </div>
+      ) : (
+        <>
+          <p>The local folder will contain a manifest, project snapshot, original uploads, and generated outputs. Every saved file is checked against a SHA-256 checksum before Supabase cleanup begins.</p>
+          <ActionButton tone="primary" onClick={archiveProject} disabled={!supported}>Archive Project Images to My Computer</ActionButton>
+        </>
+      )}
+      {archives.length ? <p className="mockup-archive-history">Archive history: {archives.map((row) => `${row.status} ${new Date(row.created_at).toLocaleDateString()}`).join(' · ')}</p> : null}
+    </SectionCard>
+  );
+}
+
 export default function MockupStudio() {
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -870,6 +989,9 @@ export default function MockupStudio() {
   const metrics = bundle ? [
     ['Blank photos', bundle.blanks.length], ['Artwork', bundle.artwork.length], ['Placements', bundle.placements.length], ['Selected outputs', bundle.outputs.filter((row) => row.is_selected).length],
   ] : [];
+  const localArchiveLocked = bundle
+    ? bundle.project.status === 'archived' || (bundle.archives || []).some((row) => ['active', 'deleting'].includes(row.status))
+    : false;
 
   return (
     <main className="page mockup-studio-page">
@@ -883,18 +1005,25 @@ export default function MockupStudio() {
       {!bundle ? <ProjectDashboard projects={projects} onOpen={openProject} onCreated={async (project) => { await loadProjects(); await openProject(project.id); }} busy={busy} setBusy={setBusy} setMessage={setMessage} /> : (
         <>
           <div className="sc-metric-grid">{metrics.map(([label, value]) => <MetricCard key={label} label={label} value={value} />)}</div>
-          <nav className="mockup-tabs" aria-label="Mockup workflow stages">{TABS.map(([key, label]) => <button type="button" key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>)}</nav>
-          {tab === 'project' ? <ProjectTab project={bundle.project} customers={customers} onRefresh={() => loadProject()} setMessage={setMessage} setBusy={setBusy} /> : null}
-          {tab === 'blanks' ? <BlankAssetsTab projectId={bundle.project.id} rows={bundle.blanks} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'artwork' ? <ArtworkAssetsTab projectId={bundle.project.id} rows={bundle.artwork} urls={urls} vault={vault} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'placements' ? <PlacementsTab projectId={bundle.project.id} blanks={bundle.blanks} artwork={bundle.artwork} rows={bundle.placements} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'generate' ? <GenerateTab project={bundle.project} blanks={bundle.blanks} artwork={bundle.artwork} placements={bundle.placements} jobs={bundle.jobs} outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'captions' ? <CaptionsTab outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'approval' ? <ApprovalTab project={bundle.project} outputs={bundle.outputs} reviews={bundle.reviews} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'pricing' ? <PricingTab projectId={bundle.project.id} rows={bundle.pricing} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'woocommerce' ? <WooCommerceTab project={bundle.project} bundle={bundle} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-          {tab === 'production' ? <ProductionTab project={bundle.project} bundle={bundle} /> : null}
-          <SectionCard tone="danger" title="Archive or delete project" description="Deleting a project removes its Mockup Studio records and private files. It does not change inventory or WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Delete mockup project “${bundle.project.project_name}” and its stored mockup files?`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>
+          {localArchiveLocked ? (
+            <HelpPanel title="Project images are locally archived"><p>Reconnect or restore the linked archive below before editing placements, regenerating mockups, starting customer review, or exporting again.</p></HelpPanel>
+          ) : (
+            <>
+              <nav className="mockup-tabs" aria-label="Mockup workflow stages">{TABS.map(([key, label]) => <button type="button" key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>)}</nav>
+              {tab === 'project' ? <ProjectTab project={bundle.project} customers={customers} onRefresh={() => loadProject()} setMessage={setMessage} setBusy={setBusy} /> : null}
+              {tab === 'blanks' ? <BlankAssetsTab projectId={bundle.project.id} rows={bundle.blanks} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'artwork' ? <ArtworkAssetsTab projectId={bundle.project.id} rows={bundle.artwork} urls={urls} vault={vault} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'placements' ? <PlacementsTab projectId={bundle.project.id} blanks={bundle.blanks} artwork={bundle.artwork} rows={bundle.placements} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'generate' ? <GenerateTab project={bundle.project} blanks={bundle.blanks} artwork={bundle.artwork} placements={bundle.placements} jobs={bundle.jobs} outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'captions' ? <CaptionsTab outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'approval' ? <ApprovalTab project={bundle.project} outputs={bundle.outputs} reviews={bundle.reviews} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'pricing' ? <PricingTab projectId={bundle.project.id} rows={bundle.pricing} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'woocommerce' ? <WooCommerceTab project={bundle.project} bundle={bundle} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'production' ? <ProductionTab project={bundle.project} bundle={bundle} /> : null}
+            </>
+          )}
+          <LocalArchivePanel bundle={bundle} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} />
+          <SectionCard tone="danger" title="Delete project permanently" description="Deleting a project removes its Mockup Studio records and any Supabase files that remain. It does not delete a local archive folder or change WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Permanently delete mockup project “${bundle.project.project_name}”? Local archive folders on your computer will not be deleted.`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>
         </>
       )}
     </main>

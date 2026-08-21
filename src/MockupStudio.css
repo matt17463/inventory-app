@@ -40,6 +40,10 @@
 .mockup-checklist li { padding: .7rem .85rem; border-radius: 9px; }
 .mockup-checklist li.pass { color: #166534; background: #dcfce7; }
 .mockup-checklist li.stop { color: #991b1b; background: #fee2e2; }
+.mockup-archive-summary { display: grid; gap: .65rem; }
+.mockup-archive-summary p, .mockup-archive-history, .mockup-archive-note, .mockup-archive-warning { margin: 0; color: var(--sc-text, #172033); }
+.mockup-archive-note, .mockup-archive-history { font-size: .92rem; color: var(--sc-muted, #526078); }
+.mockup-archive-warning { padding: .8rem 1rem; border: 1px solid #d97706; border-radius: .75rem; background: #fffbeb; color: #78350f; }
 @media (max-width: 900px) { .mockup-editor-layout { grid-template-columns: 1fr; } .mockup-placement-preview { order: -1; } }
 @media print { .mockup-tabs, .mockup-busy, .sc-page-actions, .sc-help-panel { display: none !important; } }
 .mockup-review-page { max-width: 1120px; margin: 0 auto; padding: 2rem 1rem 4rem; font-family: Arial, sans-serif; color: #0f172a; }

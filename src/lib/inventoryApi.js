@@ -1309,10 +1309,15 @@ export async function receiveFinishedInventory({ binId, finishedProductId, quant
 
 
 export async function getPullSheets() {
-  // Use the final app-facing RPC created by pullsheet_visibility_fix.sql.
-  // This keeps WooCommerce, manual invoice, and other generated jobs visible
-  // even when older views/status filters would hide them.
-  const { data, error } = await supabase.rpc('sc_existing_pull_sheets');
+  // v2 keeps cancelled/voided rows as history without counting them as
+  // current pull-sheet lines or quantity.
+  let { data, error } = await supabase.rpc('sc_existing_pull_sheets_v2');
+
+  if (error && /function .* does not exist|could not find the function/i.test(error.message || '')) {
+    const fallback = await supabase.rpc('sc_existing_pull_sheets');
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
   return data || [];
@@ -1456,12 +1461,24 @@ export async function applyBulkPairingRepair(options = {}) {
 }
 
 export async function getPullSheetItems(jobId) {
-  const { data, error } = await supabase.rpc('sc_pull_sheet_items', {
+  let { data, error } = await supabase.rpc('sc_pull_sheet_items_active_v1', {
     p_job_id: Number(jobId),
   });
 
+  if (error && /function .* does not exist|could not find the function/i.test(error.message || '')) {
+    const fallback = await supabase.rpc('sc_pull_sheet_items', {
+      p_job_id: Number(jobId),
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) throw error;
-  return (data || []).filter((row) => row.job_item_id || row.id || row.blank_product_id || row.quantity);
+  return (data || []).filter((row) => {
+    const lineStatus = String(row.item_status || row.job_item_status || row.line_status || row.status || '').trim().toLowerCase();
+    const operational = !['cancelled', 'canceled', 'voided', 'void', 'deleted', 'removed'].includes(lineStatus);
+    return operational && (row.job_item_id || row.id || row.blank_product_id || row.quantity);
+  });
 }
 
 export async function addPullSheetItem({
