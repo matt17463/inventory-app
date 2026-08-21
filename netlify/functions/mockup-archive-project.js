@@ -1,35 +1,42 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { parseJsonBody } from './_shared/mockupUtils.js';
+import { deleteStoredReference, r2BucketName, r2Configured, SUPABASE_MOCKUP_BUCKETS } from './_shared/mockupStorage.js';
 
 const DELETE_BATCH_SIZE = 40;
-const ALLOWED_BUCKETS = new Set(['sc-mockup-source', 'sc-mockup-output', 'sc-mockup-production']);
-
-function fileKey(bucket, path) {
-  return `${bucket}/${path}`;
+function fileKey(provider, bucket, path) {
+  return `${provider}:${bucket}/${path}`;
 }
 
 async function expectedProjectFiles(supabase, projectId) {
   const queries = await Promise.all([
-    supabase.from('mockup_blank_assets').select('id,storage_bucket,storage_path').eq('project_id', projectId),
-    supabase.from('mockup_artwork_assets').select('id,storage_bucket,storage_path,prepared_storage_path').eq('project_id', projectId),
-    supabase.from('mockup_outputs').select('id,storage_bucket,storage_path').eq('project_id', projectId),
-    supabase.from('mockup_production_packets').select('id,storage_bucket,storage_path').eq('project_id', projectId),
+    supabase.from('mockup_blank_assets').select('*').eq('project_id', projectId),
+    supabase.from('mockup_artwork_assets').select('*').eq('project_id', projectId),
+    supabase.from('mockup_outputs').select('*').eq('project_id', projectId),
+    supabase.from('mockup_production_packets').select('*').eq('project_id', projectId),
   ]);
   const firstError = queries.find((query) => query.error)?.error;
   if (firstError) throw firstError;
   const files = new Map();
-  const add = (row, path) => {
-    if (!row.storage_bucket || !path) return;
-    if (!ALLOWED_BUCKETS.has(row.storage_bucket)) throw new Error(`Archive blocked: unsupported Storage bucket ${row.storage_bucket}.`);
-    files.set(fileKey(row.storage_bucket, path), { bucket: row.storage_bucket, path });
+  const add = (row, field = 'storage_path') => {
+    const path = row[field];
+    const preview = field === 'preview_storage_path';
+    const prepared = field === 'prepared_storage_path';
+    const provider = String(preview ? (row.preview_storage_provider || row.storage_provider || 'supabase') : prepared ? (row.prepared_storage_provider || row.storage_provider || 'supabase') : (row.storage_provider || 'supabase'));
+    const bucket = preview ? (row.preview_storage_bucket || row.storage_bucket) : prepared ? (row.prepared_storage_bucket || row.storage_bucket) : row.storage_bucket;
+    if (!bucket || !path) return;
+    if (provider === 'supabase' && !SUPABASE_MOCKUP_BUCKETS.has(bucket)) throw new Error(`Archive blocked: unsupported Supabase bucket ${bucket}.`);
+    if (provider === 'r2' && (!r2Configured() || bucket !== r2BucketName())) throw new Error(`Archive blocked: unsupported R2 bucket ${bucket}.`);
+    if (!['supabase', 'r2'].includes(provider)) throw new Error(`Archive blocked: unsupported storage provider ${provider}.`);
+    files.set(fileKey(provider, bucket, path), { provider, bucket, path });
   };
-  (queries[0].data || []).forEach((row) => add(row, row.storage_path));
+  const addMain = (row) => { add(row); add(row, 'preview_storage_path'); };
+  (queries[0].data || []).forEach(addMain);
   (queries[1].data || []).forEach((row) => {
-    add(row, row.storage_path);
-    add(row, row.prepared_storage_path);
+    addMain(row);
+    add(row, 'prepared_storage_path');
   });
-  (queries[2].data || []).forEach((row) => add(row, row.storage_path));
-  (queries[3].data || []).forEach((row) => add(row, row.storage_path));
+  (queries[2].data || []).forEach(addMain);
+  (queries[3].data || []).forEach(addMain);
   return files;
 }
 
@@ -41,17 +48,18 @@ function validatedManifestFiles(manifest, expected) {
   rows.forEach((row) => {
     const bucket = String(row?.bucket || '');
     const path = String(row?.path || '');
-    const key = fileKey(bucket, path);
-    if (!ALLOWED_BUCKETS.has(bucket) || !path || row?.key !== key) throw new Error('The local archive manifest contains an invalid Storage path.');
+    const provider = String(row?.provider || 'supabase');
+    const key = fileKey(provider, bucket, path);
+    if (!['supabase', 'r2'].includes(provider) || !bucket || !path || row?.key !== key) throw new Error('The local archive manifest contains an invalid Storage path.');
     if (!/^[a-f0-9]{64}$/.test(String(row?.sha256 || ''))) throw new Error(`The local archive checksum is invalid for ${path}.`);
     if (!Number.isSafeInteger(Number(row?.size)) || Number(row.size) < 0) throw new Error(`The local archive size is invalid for ${path}.`);
     if (supplied.has(key)) throw new Error(`The local archive contains a duplicate file: ${path}.`);
-    supplied.set(key, row);
+    supplied.set(key, { ...row, provider });
   });
   const missing = [...expected.keys()].filter((key) => !supplied.has(key));
   const extra = [...supplied.keys()].filter((key) => !expected.has(key));
   if (missing.length || extra.length) {
-    throw new Error(`Archive verification failed: ${missing.length} Supabase file(s) are missing locally and ${extra.length} unexpected file(s) were supplied. Nothing was removed.`);
+    throw new Error(`Archive verification failed: ${missing.length} cloud file(s) are missing locally and ${extra.length} unexpected file(s) were supplied. Nothing was removed.`);
   }
   return rows;
 }
@@ -79,7 +87,7 @@ async function beginArchive(supabase, user, body) {
   const archiveName = String(body.manifest?.project_name || project.project_name || 'Mockup project').slice(0, 200);
   const manifest = {
     format: 'skilled-crafting-mockup-archive',
-    archive_version: 1,
+    archive_version: Number(body.manifest?.archive_version || 2),
     project_id: projectId,
     project_name: archiveName,
     created_at: body.manifest?.created_at || new Date().toISOString(),
@@ -87,7 +95,7 @@ async function beginArchive(supabase, user, body) {
     file_count: files.length,
     total_bytes: totalBytes,
     files: files.map((row) => ({
-      key: row.key, bucket: row.bucket, path: row.path, local_file: row.local_file,
+      key: row.key, provider: row.provider, bucket: row.bucket, path: row.path, local_file: row.local_file,
       size: Number(row.size), sha256: row.sha256, mime_type: row.mime_type || null,
     })),
     external_references: Array.isArray(body.manifest?.external_references) ? body.manifest.external_references.slice(0, 1000) : [],
@@ -118,16 +126,10 @@ async function continueArchive(supabase, body) {
   const files = Array.isArray(archive.manifest?.files) ? archive.manifest.files : [];
   const deleted = new Set(Array.isArray(archive.deleted_file_keys) ? archive.deleted_file_keys : []);
   const batch = files.filter((row) => !deleted.has(row.key)).slice(0, DELETE_BATCH_SIZE);
-  const grouped = new Map();
-  batch.forEach((row) => {
-    if (!grouped.has(row.bucket)) grouped.set(row.bucket, []);
-    grouped.get(row.bucket).push(row);
-  });
-  for (const [bucket, rows] of grouped) {
-    const { error: removeError } = await supabase.storage.from(bucket).remove(rows.map((row) => row.path));
-    if (removeError) throw new Error(`Could not remove archived files from ${bucket}: ${removeError.message}`);
-    rows.forEach((row) => deleted.add(row.key));
-  }
+  await Promise.all(batch.map(async (row) => {
+    await deleteStoredReference(supabase, { provider: row.provider || 'supabase', bucket: row.bucket, path: row.path });
+    deleted.add(row.key);
+  }));
   const remaining = files.filter((row) => !deleted.has(row.key)).length;
   const completed = remaining === 0;
   const changes = {
@@ -139,7 +141,7 @@ async function continueArchive(supabase, body) {
   const { data: updated, error: updateError } = await supabase.from('mockup_project_archives').update(changes).eq('id', archive.id).select('*').single();
   if (updateError) throw updateError;
   if (completed) {
-    const { error: projectError } = await supabase.from('mockup_projects').update({ status: 'archived' }).eq('id', archive.project_id);
+    const { error: projectError } = await supabase.from('mockup_projects').update({ status: 'archived', storage_provider: 'local_archive' }).eq('id', archive.project_id);
     if (projectError) throw projectError;
   }
   return { archive: updated, completed, remaining };
@@ -158,7 +160,9 @@ async function completeRestore(supabase, body) {
   const restoreStatus = archive.previous_project_status && archive.previous_project_status !== 'archived'
     ? archive.previous_project_status
     : 'draft';
-  const { error: projectError } = await supabase.from('mockup_projects').update({ status: restoreStatus }).eq('id', archive.project_id);
+  const restoredProviders = new Set((archive.manifest?.files || []).map((row) => row.provider || 'supabase'));
+  const restoredProvider = restoredProviders.size === 1 ? [...restoredProviders][0] : 'mixed';
+  const { error: projectError } = await supabase.from('mockup_projects').update({ status: restoreStatus, storage_provider: restoredProvider }).eq('id', archive.project_id);
   if (projectError) throw projectError;
   const { data: updated, error: updateError } = await supabase.from('mockup_project_archives').update({
     status: 'restored',

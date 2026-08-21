@@ -5,6 +5,8 @@ export const MOCKUP_SOURCE_BUCKET = 'sc-mockup-source';
 export const MOCKUP_OUTPUT_BUCKET = 'sc-mockup-output';
 export const MOCKUP_PRODUCTION_BUCKET = 'sc-mockup-production';
 
+let storageStatusPromise;
+
 function cleanFileName(name = 'asset') {
   const parts = String(name).split('.');
   const extension = parts.length > 1 ? `.${parts.pop().toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
@@ -20,31 +22,98 @@ async function currentUserId() {
   return userId;
 }
 
+async function storageFunction(body) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-storage', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) throw new Error(payload?.error || 'Mockup storage request failed.');
+  return payload;
+}
+
+export function getMockupStorageStatus(refresh = false) {
+  if (refresh || !storageStatusPromise) storageStatusPromise = storageFunction({ action: 'status' });
+  return storageStatusPromise;
+}
+
+async function browserPreview(file, maxPixels = 800) {
+  if (!String(file?.type || '').startsWith('image/') || /svg|gif/i.test(file.type)) return null;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxPixels / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d', { alpha: true }).drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.78));
+  } catch {
+    return null;
+  } finally {
+    bitmap?.close?.();
+  }
+}
+
+async function putPresigned(url, blob, contentType) {
+  const response = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+  if (!response.ok) throw new Error(`R2 upload failed (HTTP ${response.status}). Confirm the R2 CORS configuration and Netlify environment variables.`);
+}
+
 async function uploadFile({ file, bucket, projectId, folder }) {
   if (!file) throw new Error('Choose a file to upload.');
+  const storage = await getMockupStorageStatus();
+  if (storage.default_provider === 'r2') {
+    const preview = await browserPreview(file);
+    const upload = await storageFunction({
+      action: 'create_upload', project_id: projectId, folder,
+      filename: file.name || 'asset', content_type: file.type || 'application/octet-stream', file_size: file.size,
+      preview_content_type: preview ? 'image/webp' : null,
+    });
+    await putPresigned(upload.upload_url, file, file.type || 'application/octet-stream');
+    if (preview && upload.preview_upload_url) await putPresigned(upload.preview_upload_url, preview, 'image/webp');
+    return {
+      storage_provider: 'r2', storage_bucket: upload.bucket, storage_path: upload.path, file_size_bytes: file.size,
+      preview_storage_provider: preview ? 'r2' : null,
+      preview_storage_bucket: preview ? upload.preview_bucket : null,
+      preview_storage_path: preview ? upload.preview_path : null,
+      preview_size_bytes: preview?.size || null,
+    };
+  }
   const userId = await currentUserId();
   const path = `${userId}/${projectId}/${folder}/${crypto.randomUUID()}-${cleanFileName(file.name)}`;
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    cacheControl: '3600',
+    cacheControl: '31536000',
     contentType: file.type || undefined,
     upsert: false,
   });
   if (error) throw error;
-  return { storage_bucket: bucket, storage_path: path };
+  return { storage_provider: 'supabase', storage_bucket: bucket, storage_path: path, file_size_bytes: file.size };
 }
 
-export async function signedAssetUrl(bucket, path, expiresIn = 3600) {
+export async function signedAssetUrl(bucket, path, expiresIn = 3600, provider = 'supabase', mimeType = '') {
   if (!bucket || !path) return '';
+  if (provider === 'r2') {
+    const payload = await storageFunction({ action: 'sign_download', provider, bucket, path, expires_in: expiresIn, mime_type: mimeType });
+    return payload.url || '';
+  }
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
   if (error) throw error;
   return data?.signedUrl || '';
 }
 
-export async function signedUrlsForAssets(rows = [], expiresIn = 3600) {
+export async function signedUrlsForAssets(rows = [], expiresIn = 3600, { preferPreview = true } = {}) {
   const entries = await Promise.all(rows.map(async (row) => {
-    if (row.source_url) return [row.id, row.source_url];
+    if (!row.storage_path && row.source_url) return [row.id, row.source_url];
     try {
-      return [row.id, await signedAssetUrl(row.storage_bucket, row.storage_path, expiresIn)];
+      const usePreview = preferPreview && row.preview_storage_path;
+      return [row.id, await signedAssetUrl(
+        usePreview ? (row.preview_storage_bucket || row.storage_bucket) : row.storage_bucket,
+        usePreview ? row.preview_storage_path : row.storage_path,
+        expiresIn,
+        usePreview ? (row.preview_storage_provider || row.storage_provider || 'supabase') : (row.storage_provider || 'supabase'),
+        usePreview ? 'image/webp' : row.mime_type,
+      )];
     } catch {
       return [row.id, ''];
     }
@@ -62,6 +131,7 @@ export async function listMockupProjects() {
 }
 
 export async function createMockupProject(values) {
+  const storage = await getMockupStorageStatus();
   const payload = {
     project_name: String(values.project_name || '').trim(),
     customer_id_text: values.customer_id_text || null,
@@ -72,6 +142,7 @@ export async function createMockupProject(values) {
     background_preference: values.background_preference || 'preserve_source',
     exact_artwork_required: values.exact_artwork_required !== false,
     notes: String(values.notes || '').trim() || null,
+    storage_provider: storage.default_provider,
   };
   if (!payload.project_name) throw new Error('Enter a project name.');
   const { data, error } = await supabase.from('mockup_projects').insert(payload).select('*').single();
@@ -159,8 +230,8 @@ export async function continueMockupLocalArchive(archiveId, onProgress = () => {
       completed: Number(response.archive?.file_count || 0) - Number(response.remaining || 0),
       total: Number(response.archive?.file_count || 0),
       message: response.completed
-        ? 'Supabase cleanup completed. The project is now locally archived.'
-        : `Removing verified Supabase copies: ${response.remaining} file(s) remaining…`,
+        ? 'Cloud cleanup completed. The project is now locally archived.'
+        : `Removing verified cloud copies: ${response.remaining} file(s) remaining…`,
     });
   } while (!response.completed);
   return response;
@@ -194,11 +265,37 @@ export async function listMockupCustomers() {
 
 export async function listArtworkVaultCandidates() {
   const candidates = [];
-  for (const table of ['sc_artwork_system_requests', 'phase5_artwork_requests']) {
+  for (const table of ['sc_artwork_system_requests', 'sc_artwork_system_reorders', 'phase5_artwork_requests']) {
     const { data, error } = await supabase.from(table).select('*').limit(200);
-    if (!error) candidates.push(...(data || []).map((row) => ({ ...row, _source_table: table })));
+    if (error) continue;
+    for (const row of data || []) {
+      candidates.push({ ...row, _source_table: table, _source_row_id: row.id });
+      if (table === 'sc_artwork_system_requests' && Array.isArray(row.mockups)) {
+        row.mockups.forEach((mockup, index) => {
+          if (!mockup?.file_url) return;
+          candidates.push({
+            ...row,
+            ...mockup,
+            id: `${row.id}-mockup-${index + 1}`,
+            title: mockup.title || `${row.organization || row.customer_name || 'Artwork request'} — Mockup ${index + 1}`,
+            _source_table: table,
+            _source_row_id: row.id,
+          });
+        });
+      }
+    }
   }
   return candidates;
+}
+
+async function importExternalArtwork({ projectId, sourceUrl, filename, artwork }) {
+  return storageFunction({
+    action: 'import_external_artwork',
+    project_id: projectId,
+    source_url: sourceUrl,
+    filename: filename || 'artwork',
+    artwork,
+  });
 }
 
 export async function addBlankAsset({ projectId, file, values = {}, catalogItem = null }) {
@@ -238,7 +335,25 @@ export async function addBlankAsset({ projectId, file, values = {}, catalogItem 
 export async function addArtworkAsset({ projectId, file, values = {} }) {
   let location = {};
   if (file) location = await uploadFile({ file, bucket: MOCKUP_SOURCE_BUCKET, projectId, folder: 'artwork' });
-  else if (values.source_url) location = { source_url: values.source_url };
+  else if (values.source_url) {
+    const imported = await importExternalArtwork({
+      projectId,
+      sourceUrl: values.source_url,
+      filename: values.original_file_name || values.artwork_name || 'artwork',
+      artwork: {
+        artwork_name: values.artwork_name,
+        artwork_request_id_text: values.artwork_request_id_text,
+        artwork_vault_reference: values.artwork_vault_reference,
+        has_transparency: values.has_transparency,
+        exact_artwork_locked: values.exact_artwork_locked,
+        preflight_status: values.preflight_status,
+        preflight_notes: values.preflight_notes,
+        metadata: values.metadata,
+      },
+    });
+    if (!imported.artwork?.id) throw new Error('The external artwork was copied to R2 but its project record was not returned.');
+    return imported.artwork;
+  }
   else throw new Error('Upload artwork or choose an artwork-vault item with a usable file URL.');
 
   const payload = {
@@ -247,7 +362,7 @@ export async function addArtworkAsset({ projectId, file, values = {} }) {
     artwork_request_id_text: values.artwork_request_id_text || null,
     artwork_vault_reference: values.artwork_vault_reference || null,
     mime_type: file?.type || values.mime_type || null,
-    original_file_name: file?.name || null,
+    original_file_name: file?.name || values.original_file_name || null,
     pixel_width: values.pixel_width || null,
     pixel_height: values.pixel_height || null,
     has_transparency: values.has_transparency ?? null,
@@ -263,12 +378,13 @@ export async function addArtworkAsset({ projectId, file, values = {} }) {
 }
 
 export async function removeMockupAsset(table, row) {
-  if (row?.storage_bucket && row?.storage_path) {
-    const { error: storageError } = await supabase.storage.from(row.storage_bucket).remove([row.storage_path]);
-    if (storageError) throw storageError;
-  }
-  const { error } = await supabase.from(table).delete().eq('id', row.id);
-  if (error) throw error;
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-delete-asset', {
+    method: 'POST',
+    body: JSON.stringify({ table, asset_id: row?.id }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) throw new Error(payload?.error || 'The Mockup Studio asset could not be removed.');
+  return payload;
 }
 
 export async function saveMockupPlacement(values) {
@@ -353,22 +469,16 @@ export async function copyPlacementToBlanks(placement, blankAssetIds = []) {
 }
 
 export async function saveExactCompositeOutput({ projectId, placementId, blob, caption = null, metadata = {} }) {
-  const userId = await currentUserId();
   const outputKind = caption ? 'captioned' : 'clean';
-  const path = `${userId}/${projectId}/outputs/${crypto.randomUUID()}-${outputKind}.png`;
-  const { error: uploadError } = await supabase.storage.from(MOCKUP_OUTPUT_BUCKET).upload(path, blob, {
-    contentType: 'image/png',
-    cacheControl: '3600',
-  });
-  if (uploadError) throw uploadError;
+  const file = new File([blob], `${outputKind}.png`, { type: 'image/png' });
+  const location = await uploadFile({ file, bucket: MOCKUP_OUTPUT_BUCKET, projectId, folder: 'outputs' });
 
   const { data, error } = await supabase.from('mockup_outputs').insert({
     project_id: projectId,
     placement_id: placementId,
     output_name: caption?.text || `Exact mockup ${new Date().toLocaleString()}`,
     output_kind: outputKind,
-    storage_bucket: MOCKUP_OUTPUT_BUCKET,
-    storage_path: path,
+    ...location,
     mime_type: 'image/png',
     caption_text: caption?.text || null,
     caption_font: caption?.font || 'Arial',
@@ -381,6 +491,54 @@ export async function saveExactCompositeOutput({ projectId, placementId, blob, c
   }).select('*').single();
   if (error) throw error;
   return data;
+}
+
+export async function downloadMockupStoredFile(reference) {
+  if (reference.provider === 'r2') {
+    const payload = await storageFunction({
+      action: 'sign_download', provider: 'r2', bucket: reference.bucket, path: reference.path,
+      mime_type: reference.mime_type, expires_in: 3600,
+    });
+    const response = await fetch(payload.url);
+    if (!response.ok) throw new Error(`R2 archive download failed (HTTP ${response.status}).`);
+    return response.blob();
+  }
+  const { data, error } = await supabase.storage.from(reference.bucket).download(reference.path);
+  if (error || !data) throw error || new Error('Supabase returned no archive file data.');
+  return data;
+}
+
+export async function restoreMockupStoredFile(reference, file) {
+  if (reference.provider === 'r2') {
+    const upload = await storageFunction({
+      action: 'create_restore_upload', provider: 'r2', bucket: reference.bucket, path: reference.path,
+      content_type: reference.mime_type || file.type || 'application/octet-stream', file_size: file.size,
+    });
+    await putPresigned(upload.upload_url, file, reference.mime_type || file.type || 'application/octet-stream');
+    return;
+  }
+  const { error } = await supabase.storage.from(reference.bucket).upload(reference.path, file, {
+    contentType: reference.mime_type || file.type || undefined,
+    cacheControl: '31536000',
+    upsert: true,
+  });
+  if (error) throw error;
+}
+
+export async function migrateMockupProjectStorage(projectId, onProgress = () => {}) {
+  let result;
+  let processed = 0;
+  do {
+    const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-migrate-storage', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, batch_size: 6 }),
+    });
+    result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.success === false) throw new Error(result?.error || 'The project storage migration failed.');
+    processed += Number(result.migrated || 0);
+    onProgress({ processed, remaining: Number(result.remaining || 0), warnings: result.warnings || [] });
+  } while (Number(result.remaining || 0) > 0);
+  return { ...result, processed };
 }
 
 export async function requestAiMockup({ projectId, placementId, variants = 1, quality = 'high', outputSize = '1024x1024', instructions = '' }) {

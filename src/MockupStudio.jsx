@@ -25,10 +25,12 @@ import {
   deleteMockupOutput,
   deletePricingItem,
   getMockupProjectBundle,
+  getMockupStorageStatus,
   getWooCommerceMockupOptions,
   listArtworkVaultCandidates,
   listMockupCustomers,
   listMockupProjects,
+  migrateMockupProjectStorage,
   publishMockupToWooCommerce,
   removeMockupAsset,
   requestAiMockup,
@@ -160,18 +162,20 @@ function artworkCandidateUrl(row) {
 }
 
 function artworkCandidateName(row) {
-  return row.request_title || row.title || row.artwork_name || row.customer_name || `Artwork ${row.id || ''}`;
+  return row.request_title || row.title || row.artwork_title || row.artwork_name || row.organization || row.customer_name || `Artwork ${row.id || ''}`;
 }
 
 function PlacementPreview({ blankUrl, artworkUrl, placement }) {
   if (!blankUrl || !artworkUrl) return <div className="mockup-missing-preview">Upload both images to preview this placement.</div>;
   return (
     <div className="mockup-placement-preview">
-      <img src={blankUrl} alt="Blank product preview" />
+      <img src={blankUrl} alt="Blank product preview" loading="lazy" decoding="async" />
       <img
         className="mockup-placement-artwork"
         src={artworkUrl}
         alt="Placed artwork preview"
+        loading="lazy"
+        decoding="async"
         style={{
           left: `${placement.x_pct ?? 50}%`,
           top: `${placement.y_pct ?? 45}%`,
@@ -403,7 +407,7 @@ function BlankAssetsTab({ projectId, rows, urls, refresh, setBusy, setMessage })
       <SectionCard title={`Blank photos (${rows.length})`}>
         {!rows.length ? <EmptyState title="No blank photos" description="Add at least one front, back, hat, or drinkware photo." /> : <div className="mockup-asset-grid">{rows.map((row) => (
           <article className="mockup-asset-card" key={row.id}>
-            {urls[row.id] ? <img src={urls[row.id]} alt={row.asset_name} /> : <div className="mockup-file-placeholder">No preview</div>}
+            {urls[row.id] ? <img src={urls[row.id]} alt={row.asset_name} loading="lazy" decoding="async" /> : <div className="mockup-file-placeholder">No preview</div>}
             <h3>{row.asset_name}</h3><p>{row.product_type} · {row.product_color || 'No color'} · {row.product_view}</p><StatusBadge status={row.preflight_status} />
             {row.preflight_notes ? <small>{row.preflight_notes}</small> : null}
             <ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm('Remove this blank photo and its placements?')) return; setBusy(true); try { await removeMockupAsset('mockup_blank_assets', row); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Remove</ActionButton>
@@ -446,7 +450,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
             ...form,
             artwork_name: item.artwork_name,
             source_url: item.file ? null : sourceUrl,
-            artwork_request_id_text: item.file ? null : String(selectedVault?.id || '') || null,
+            artwork_request_id_text: item.file ? null : String(selectedVault?._source_row_id || selectedVault?.id || '') || null,
             artwork_vault_reference: item.file ? null : selectedVault?._source_table || null,
             pixel_width: inspection.width,
             pixel_height: inspection.height,
@@ -460,7 +464,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
             },
           },
         });
-      }, (completed, total, item) => setMessage(`Uploading artwork: ${completed} of ${total} finished (${item.artwork_name}).`));
+      }, (completed, total, item) => setMessage(`${selectedVault ? 'Importing artwork to R2' : 'Uploading artwork'}: ${completed} of ${total} finished (${item.artwork_name}).`));
       const succeeded = results.filter((result) => result.ok);
       const failed = results.filter((result) => !result.ok);
       setUploadRows(failed.map((result) => result.item));
@@ -482,8 +486,8 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
 
   return (
     <>
-      <SectionCard title="Add artwork" description="Upload up to 50 logos or graphics at once, edit each name, and apply shared accuracy and white-ink settings.">
-        {vault.length ? <FormField label="Existing artwork vault / request"><select value={selectedVault?.id || ''} onChange={(e) => { setSelectedVault(vault.find((row) => idText(row.id) === e.target.value) || null); setUploadRows([]); setPickerKey((value) => value + 1); }}><option value="">Choose an existing artwork record</option>{vault.map((row) => <option key={`${row._source_table}-${row.id}`} value={row.id}>{artworkCandidateName(row)}{artworkCandidateUrl(row) ? '' : ' — upload file required'}</option>)}</select></FormField> : null}
+      <SectionCard title="Add artwork" description="Upload up to 50 logos or graphics, or import an Artwork Requests/Reorders/Vault file into private R2 storage for durable reuse.">
+        {vault.length ? <FormField label="Existing artwork request, reorder, or vault file"><select value={selectedVault?.id || ''} onChange={(e) => { setSelectedVault(vault.find((row) => idText(row.id) === e.target.value) || null); setUploadRows([]); setPickerKey((value) => value + 1); }}><option value="">Choose an existing artwork record</option>{vault.map((row) => <option key={`${row._source_table}-${row.id}`} value={row.id}>{artworkCandidateName(row)}{artworkCandidateUrl(row) ? '' : ' — upload file required'}</option>)}</select></FormField> : null}
         <form onSubmit={upload}>
           <FieldGrid>
             <FormField label="Logo / graphic files"><input key={pickerKey} type="file" multiple accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf" onChange={(e) => chooseArtworkFiles(e.target.files)} /></FormField>
@@ -492,13 +496,13 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
             <FormField label="White ink"><label className="mockup-check"><input type="checkbox" checked={form.preserve_white_ink} onChange={(e) => setForm({ ...form, preserve_white_ink: e.target.checked })} /> Protect visible white as opaque printed ink</label></FormField>
           </FieldGrid>
           {uploadRows.length ? <><div className="sc-button-row"><ActionButton type="button" tone="danger" size="sm" onClick={() => { setUploadRows([]); setPickerKey((value) => value + 1); }}>Clear queue</ActionButton></div><div className="mockup-upload-queue artwork">{uploadRows.map((row) => <article key={row.queue_id}><strong>{row.file.name}</strong><small>{(row.file.size / 1048576).toFixed(2)} MB</small><FormField label="Artwork name"><input value={row.artwork_name} onChange={(e) => setUploadRows((current) => current.map((item) => item.queue_id === row.queue_id ? { ...item, artwork_name: e.target.value } : item))} /></FormField><ActionButton type="button" tone="danger" size="sm" onClick={() => setUploadRows((current) => current.filter((item) => item.queue_id !== row.queue_id))}>Remove</ActionButton></article>)}</div></> : null}
-          <ActionButton type="submit" tone="primary">{uploadRows.length > 1 ? `Upload ${uploadRows.length} Artwork Files` : 'Add Artwork'}</ActionButton>
+          <ActionButton type="submit" tone="primary">{uploadRows.length > 1 ? `Upload ${uploadRows.length} Artwork Files` : selectedVault ? 'Import Artwork to R2' : 'Add Artwork'}</ActionButton>
         </form>
       </SectionCard>
       <SectionCard title={`Artwork (${rows.length})`}>
         {!rows.length ? <EmptyState title="No artwork" description="Add at least one logo or design file." /> : <div className="mockup-asset-grid">{rows.map((row) => (
           <article className="mockup-asset-card" key={row.id}>
-            {urls[row.id] && !/pdf/i.test(row.mime_type || '') ? <img className="mockup-artwork-image" src={urls[row.id]} alt={row.artwork_name} /> : <div className="mockup-file-placeholder">{row.mime_type || 'Artwork file'}</div>}
+            {urls[row.id] && !/pdf/i.test(row.mime_type || '') ? <img className="mockup-artwork-image" src={urls[row.id]} alt={row.artwork_name} loading="lazy" decoding="async" /> : <div className="mockup-file-placeholder">{row.mime_type || 'Artwork file'}</div>}
             <h3>{row.artwork_name}</h3><p>{row.exact_artwork_locked ? 'Exact artwork locked' : 'AI edits permitted'} · {row.metadata?.preserve_white_ink !== false ? 'White ink protected' : 'White ink protection off'}</p><StatusBadge status={row.preflight_status} />
             {row.preflight_notes ? <small>{row.preflight_notes}</small> : null}
             <ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm('Remove this artwork and its placements?')) return; setBusy(true); try { await removeMockupAsset('mockup_artwork_assets', row); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Remove</ActionButton>
@@ -606,7 +610,7 @@ function GenerateTab({ project, blanks, artwork, placements, jobs, outputs, urls
         })}</div>}
       </SectionCard>
       <SectionCard title={`Outputs (${outputs.length})`}>
-        {!outputs.length ? <EmptyState title="No outputs generated" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : <div className="mockup-file-placeholder">No preview</div>}<h3>{output.output_name}</h3><div><StatusBadge status={output.approval_status} /> <StatusBadge status={output.output_kind} /></div><div className="sc-button-row"><ActionButton tone={output.is_selected ? 'success' : 'secondary'} size="sm" onClick={async () => { setBusy(true); try { await selectMockupOutput(output.id, !output.is_selected); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>{output.is_selected ? 'Selected' : 'Select for Store'}</ActionButton><ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm(`Permanently delete “${output.output_name}”? It will no longer be available for captions, approval, the product gallery, or WooCommerce variation mapping.`)) return; setBusy(true); try { const result = await deleteMockupOutput(output.id); await refresh(); setMessage(result.cleanup_warning ? `Mockup deleted. Storage cleanup warning: ${result.cleanup_warning}` : 'Mockup deleted and removed from WooCommerce variation choices.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup</ActionButton></div></article>)}</div>}
+        {!outputs.length ? <EmptyState title="No outputs generated" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : <div className="mockup-file-placeholder">No preview</div>}<h3>{output.output_name}</h3><div><StatusBadge status={output.approval_status} /> <StatusBadge status={output.output_kind} /></div><div className="sc-button-row"><ActionButton tone={output.is_selected ? 'success' : 'secondary'} size="sm" onClick={async () => { setBusy(true); try { await selectMockupOutput(output.id, !output.is_selected); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>{output.is_selected ? 'Selected' : 'Select for Store'}</ActionButton><ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm(`Permanently delete “${output.output_name}”? It will no longer be available for captions, approval, the product gallery, or WooCommerce variation mapping.`)) return; setBusy(true); try { const result = await deleteMockupOutput(output.id); await refresh(); setMessage(result.cleanup_warning ? `Mockup deleted. Storage cleanup warning: ${result.cleanup_warning}` : 'Mockup deleted and removed from WooCommerce variation choices.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup</ActionButton></div></article>)}</div>}
       </SectionCard>
       {jobs.length ? <SectionCard title="Generation history"><ResponsiveTable><thead><tr><th>Date</th><th>Mode</th><th>Model</th><th>Status</th><th>Error</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.id}><td>{new Date(job.created_at).toLocaleString()}</td><td>{job.generation_mode}</td><td>{job.model_name || '—'}</td><td><StatusBadge status={job.status} /></td><td>{job.error_message || '—'}</td></tr>)}</tbody></ResponsiveTable></SectionCard> : null}
     </>
@@ -633,12 +637,12 @@ function CaptionsTab({ outputs, urls, refresh, setBusy, setMessage }) {
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
   }
-  return <SectionCard title="Caption and identification editor" description="Captions are stored as metadata. Captioned outputs also bake the text beneath the mockup so every WooCommerce theme displays it.">{!outputs.length ? <EmptyState title="Generate an output first" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className="mockup-output-card" key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}{editing === output.id ? <div className="mockup-caption-editor"><FormField label="Mockup name"><input value={form.output_name || ''} onChange={(e) => setForm({ ...form, output_name: e.target.value })} /></FormField><FormField label="Caption"><input value={form.caption_text || ''} onChange={(e) => setForm({ ...form, caption_text: e.target.value })} /></FormField><FormField label="Font"><input value={form.caption_font || 'Arial'} onChange={(e) => setForm({ ...form, caption_font: e.target.value })} /></FormField><FormField label="Size"><input type="number" value={form.caption_size || 36} onChange={(e) => setForm({ ...form, caption_size: e.target.value })} /></FormField><div className="mockup-color-pair"><input type="color" value={form.caption_color || '#111827'} onChange={(e) => setForm({ ...form, caption_color: e.target.value })} /><input type="color" value={form.caption_background || '#ffffff'} onChange={(e) => setForm({ ...form, caption_background: e.target.value })} /></div><div className="sc-button-row"><ActionButton tone="primary" size="sm" onClick={save}>Save</ActionButton><ActionButton size="sm" onClick={() => setEditing(null)}>Cancel</ActionButton></div></div> : <><h3>{output.output_name}</h3><p>{output.caption_text || 'No caption'}</p><ActionButton size="sm" onClick={() => edit(output)}>Edit Caption</ActionButton></>}</article>)}</div>}</SectionCard>;
+  return <SectionCard title="Caption and identification editor" description="Captions are stored as metadata. Captioned outputs also bake the text beneath the mockup so every WooCommerce theme displays it.">{!outputs.length ? <EmptyState title="Generate an output first" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className="mockup-output-card" key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}{editing === output.id ? <div className="mockup-caption-editor"><FormField label="Mockup name"><input value={form.output_name || ''} onChange={(e) => setForm({ ...form, output_name: e.target.value })} /></FormField><FormField label="Caption"><input value={form.caption_text || ''} onChange={(e) => setForm({ ...form, caption_text: e.target.value })} /></FormField><FormField label="Font"><input value={form.caption_font || 'Arial'} onChange={(e) => setForm({ ...form, caption_font: e.target.value })} /></FormField><FormField label="Size"><input type="number" value={form.caption_size || 36} onChange={(e) => setForm({ ...form, caption_size: e.target.value })} /></FormField><div className="mockup-color-pair"><input type="color" value={form.caption_color || '#111827'} onChange={(e) => setForm({ ...form, caption_color: e.target.value })} /><input type="color" value={form.caption_background || '#ffffff'} onChange={(e) => setForm({ ...form, caption_background: e.target.value })} /></div><div className="sc-button-row"><ActionButton tone="primary" size="sm" onClick={save}>Save</ActionButton><ActionButton size="sm" onClick={() => setEditing(null)}>Cancel</ActionButton></div></div> : <><h3>{output.output_name}</h3><p>{output.caption_text || 'No caption'}</p><ActionButton size="sm" onClick={() => edit(output)}>Edit Caption</ActionButton></>}</article>)}</div>}</SectionCard>;
 }
 
 function ApprovalTab({ project, outputs, reviews, urls, refresh, setBusy, setMessage }) {
   const [link, setLink] = useState('');
-  return <><SectionCard title="Internal approval"><div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<h3>{output.output_name}</h3><StatusBadge status={output.approval_status} /><ActionButton size="sm" tone="success" onClick={async () => { setBusy(true); try { await updateMockupOutput(output.id, { approval_status: 'internal_approved', approved_at: new Date().toISOString(), approved_by: 'employee' }); await selectMockupOutput(output.id, true); setMessage('Output internally approved and selected.'); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Approve</ActionButton></article>)}</div></SectionCard><SectionCard title="Customer review link" description="The private link expires and exposes only the selected project mockups."><div className="sc-button-row"><ActionButton tone="primary" onClick={async () => { setBusy(true); try { const url = await createMockupReviewLink(project.id, 14); setLink(url); await navigator.clipboard.writeText(url).catch(() => {}); setMessage('Customer review link created and copied.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Create 14-Day Review Link</ActionButton></div>{link ? <div className="mockup-share-link"><input readOnly value={link} /><ActionButton onClick={() => navigator.clipboard.writeText(link)}>Copy</ActionButton></div> : null}</SectionCard><SectionCard title={`Customer reviews (${reviews.length})`}>{!reviews.length ? <EmptyState title="No customer feedback yet" /> : <ResponsiveTable><thead><tr><th>Date</th><th>Reviewer</th><th>Decision</th><th>Notes</th></tr></thead><tbody>{reviews.map((review) => <tr key={review.id}><td>{new Date(review.created_at).toLocaleString()}</td><td>{review.reviewer_name || review.reviewer_email || 'Customer'}</td><td><StatusBadge status={review.decision} /></td><td>{review.notes || '—'}</td></tr>)}</tbody></ResponsiveTable>}</SectionCard></>;
+  return <><SectionCard title="Internal approval"><div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}<h3>{output.output_name}</h3><StatusBadge status={output.approval_status} /><ActionButton size="sm" tone="success" onClick={async () => { setBusy(true); try { await updateMockupOutput(output.id, { approval_status: 'internal_approved', approved_at: new Date().toISOString(), approved_by: 'employee' }); await selectMockupOutput(output.id, true); setMessage('Output internally approved and selected.'); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Approve</ActionButton></article>)}</div></SectionCard><SectionCard title="Customer review link" description="The private link expires and exposes only the selected project mockups."><div className="sc-button-row"><ActionButton tone="primary" onClick={async () => { setBusy(true); try { const url = await createMockupReviewLink(project.id, 14); setLink(url); await navigator.clipboard.writeText(url).catch(() => {}); setMessage('Customer review link created and copied.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Create 14-Day Review Link</ActionButton></div>{link ? <div className="mockup-share-link"><input readOnly value={link} /><ActionButton onClick={() => navigator.clipboard.writeText(link)}>Copy</ActionButton></div> : null}</SectionCard><SectionCard title={`Customer reviews (${reviews.length})`}>{!reviews.length ? <EmptyState title="No customer feedback yet" /> : <ResponsiveTable><thead><tr><th>Date</th><th>Reviewer</th><th>Decision</th><th>Notes</th></tr></thead><tbody>{reviews.map((review) => <tr key={review.id}><td>{new Date(review.created_at).toLocaleString()}</td><td>{review.reviewer_name || review.reviewer_email || 'Customer'}</td><td><StatusBadge status={review.decision} /></td><td>{review.notes || '—'}</td></tr>)}</tbody></ResponsiveTable>}</SectionCard></>;
 }
 
 function PricingTab({ projectId, rows, refresh, setBusy, setMessage }) {
@@ -824,7 +828,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
           {allImagePairs.length ? <SectionCard title="Variation mockup mapping" description="Choose which Color and Logo combinations customers may order, then assign the correct image. Excluded combinations are not created in WooCommerce. All sizes in an included combination reuse the same variation image."><ResponsiveTable><thead><tr><th>Include in product</th><th>Color</th><th>Logo selection</th><th>WooCommerce variation image</th></tr></thead><tbody>{allImagePairs.map((pair) => { const included = !excludedPairKeys.has(pair.key); return <tr key={pair.key}><td><label className="mockup-check"><input type="checkbox" checked={included} onChange={(e) => toggleVariationPair(pair.key, e.target.checked)} /> {included ? 'Included' : 'Excluded'}</label></td><td>{pair.color || 'All colors'}</td><td>{pair.logo || 'No logo option'}</td><td><select disabled={!included} value={objectValue(form.variation_image_map)[pair.key] || ''} onChange={(e) => setForm({ ...form, variation_image_map: { ...objectValue(form.variation_image_map), [pair.key]: e.target.value } })}><option value="">{included ? 'Select mockup' : 'Not offered'}</option>{selectedOutputs.map((output) => { const context = outputContext(output); return <option key={output.id} value={output.id}>{output.output_name} — {context.color || 'No color'} / {context.logo || 'No logo'}</option>; })}</select></td></tr>; })}</tbody></ResponsiveTable></SectionCard> : null}
 
           <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p><strong>{allImagePairs.length - imagePairs.length}</strong> excluded Color/Logo combination(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
-          {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
+          {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
           <ActionButton type="submit" tone="primary">{form.update_existing_product_id ? 'Update WooCommerce Draft' : 'Create WooCommerce Draft'}</ActionButton>
         </form>
       </SectionCard>
@@ -845,6 +849,45 @@ function formatBytes(value) {
   return `${(bytes / (1024 ** unit)).toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
+function StorageMigrationPanel({ bundle, refresh, setBusy, setMessage }) {
+  const [storage, setStorage] = useState(null);
+  useEffect(() => {
+    getMockupStorageStatus().then(setStorage).catch((error) => setStorage({ configured: false, error: error.message }));
+  }, []);
+  const cloudRows = [...bundle.blanks, ...bundle.artwork, ...bundle.outputs, ...bundle.packets];
+  const legacyCount = cloudRows.filter((row) => row.storage_path && (!row.storage_provider || row.storage_provider === 'supabase')).length
+    + bundle.artwork.filter((row) => row.prepared_storage_path && (!row.prepared_storage_provider || row.prepared_storage_provider === 'supabase')).length;
+  const r2Count = cloudRows.filter((row) => row.storage_provider === 'r2').length;
+
+  async function migrate() {
+    if (!window.confirm(`Move ${legacyCount} remaining Supabase file${legacyCount === 1 ? '' : 's'} to Cloudflare R2? Each Supabase file will be downloaded once, verified in R2, and then removed from Supabase.`)) return;
+    setBusy(true);
+    try {
+      const result = await migrateMockupProjectStorage(bundle.project.id, ({ processed, remaining, warnings }) => {
+        setMessage(`Moving project files to R2: ${processed} completed, ${remaining} remaining.${warnings.length ? ` ${warnings.at(-1)}` : ''}`);
+      });
+      setMessage(`${result.processed} Supabase file${result.processed === 1 ? '' : 's'} moved to R2. This project no longer uses Supabase Storage for active files.`);
+      await refresh();
+    } catch (error) {
+      setMessage(`${error.message || 'R2 migration failed.'} Successfully migrated files remain in R2; run the migration again to resume.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Cloud image storage"
+      description="New Mockup Studio files are stored in Cloudflare R2. Existing Supabase files can be moved once without changing project mappings or WooCommerce settings."
+    >
+      <p><strong>R2 configuration:</strong> {storage?.configured ? 'Ready' : storage?.error || 'Checking…'}</p>
+      <p><strong>R2 files:</strong> {r2Count} &nbsp; <strong>Supabase files remaining:</strong> {legacyCount}</p>
+      {legacyCount ? <ActionButton tone="primary" onClick={migrate} disabled={!storage?.configured || bundle.project.status === 'archived'}>Move This Project to R2</ActionButton> : <p className="mockup-woo-ready">This active project has no remaining Supabase originals to migrate.</p>}
+      {bundle.project.status === 'archived' && legacyCount ? <p className="mockup-archive-note">Restore the local archive before attempting a cloud-storage migration.</p> : null}
+    </SectionCard>
+  );
+}
+
 function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
   const project = bundle.project;
   const archives = bundle.archives || [];
@@ -852,7 +895,7 @@ function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
   const supported = localMockupArchiveSupported();
 
   async function archiveProject() {
-    if (!window.confirm('Archive this project’s Supabase images to a folder on this computer? The application will verify every local file before removing its Supabase copy.')) return;
+    if (!window.confirm('Archive this project’s cloud images to a folder on this computer? The application will verify every local file before removing its cloud copy.')) return;
     setBusy(true);
     try {
       const local = await createLocalMockupArchive({ project, bundle, onProgress: ({ message }) => setMessage(message) });
@@ -862,7 +905,7 @@ function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
       setMessage(`Project archived successfully in ${local.manifest.folder_hint}. Keep this folder backed up.`);
       await refresh();
     } catch (error) {
-      setMessage(`${error.message || 'Local archive failed.'} Supabase files are retained unless the project is shown as Archived.`);
+      setMessage(`${error.message || 'Local archive failed.'} Cloud files are retained unless the project is shown as Archived.`);
     } finally {
       setBusy(false);
     }
@@ -895,7 +938,7 @@ function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
   }
 
   async function restoreProject() {
-    if (!window.confirm('Restore every archived file to Supabase so this project can be edited and rebuilt?')) return;
+    if (!window.confirm('Restore every archived file to its original cloud-storage provider so this project can be edited and rebuilt?')) return;
     setBusy(true);
     try {
       const restored = await restoreLocalMockupArchiveFiles({
@@ -904,7 +947,7 @@ function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
         onProgress: ({ message }) => setMessage(message),
       });
       await completeMockupLocalArchiveRestore(current.id, restored.restoredKeys);
-      setMessage('All archived files were verified and restored to Supabase. The project is active again.');
+      setMessage('All archived files were verified and restored to cloud storage. The project is active again.');
       await refresh();
     } catch (error) {
       setMessage(`${error.message || 'Restore failed.'} The project remains archived until every file is restored.`);
@@ -916,20 +959,20 @@ function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
   return (
     <SectionCard
       title="Local image archive"
-      description="Keep the project and rebuild instructions in Supabase while moving its private image files to a verified folder on this computer."
+      description="Keep the project and rebuild instructions in Supabase while moving private image files from Supabase Storage or R2 to a verified folder on this computer."
     >
       {!supported ? <p className="mockup-archive-warning">Use Google Chrome or Microsoft Edge on the computer that will hold the archive.</p> : null}
       {current ? (
         <div className="mockup-archive-summary">
           <StatusBadge status={current.status} />
           <p><strong>Folder:</strong> {current.folder_hint || 'Choose the archive folder to reconnect it'}</p>
-          <p><strong>Files:</strong> {current.file_count} &nbsp; <strong>Space removed from Supabase:</strong> {formatBytes(current.total_bytes)}</p>
+          <p><strong>Files:</strong> {current.file_count} &nbsp; <strong>Cloud space archived:</strong> {formatBytes(current.total_bytes)}</p>
           {current.status === 'deleting' ? (
             <ActionButton onClick={resumeCleanup}>Verify Folder and Resume Cleanup</ActionButton>
           ) : (
             <div className="sc-button-row">
               <ActionButton onClick={reconnectFolder} disabled={!supported}>Reconnect Local Folder</ActionButton>
-              <ActionButton tone="primary" onClick={restoreProject} disabled={!supported}>Restore Files to Supabase</ActionButton>
+              <ActionButton tone="primary" onClick={restoreProject} disabled={!supported}>Restore Files to Cloud Storage</ActionButton>
             </div>
           )}
           <p className="mockup-archive-note">The saved folder link works only in this browser on this computer. If it is lost, use Reconnect Local Folder and select the folder containing mockup-archive-manifest.json.</p>
@@ -943,6 +986,24 @@ function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
       {archives.length ? <p className="mockup-archive-history">Archive history: {archives.map((row) => `${row.status} ${new Date(row.created_at).toLocaleDateString()}`).join(' · ')}</p> : null}
     </SectionCard>
   );
+}
+
+async function urlsForWorkflowTab(bundle, tab) {
+  if (!bundle) return {};
+  if (tab === 'blanks') return signedUrlsForAssets(bundle.blanks);
+  if (tab === 'artwork') return signedUrlsForAssets(bundle.artwork);
+  if (tab === 'placements') return {
+    ...await signedUrlsForAssets(bundle.blanks),
+    ...await signedUrlsForAssets(bundle.artwork),
+  };
+  if (tab === 'generate') return {
+    ...await signedUrlsForAssets(bundle.blanks, 3600, { preferPreview: false }),
+    ...await signedUrlsForAssets(bundle.artwork, 3600, { preferPreview: false }),
+    ...await signedUrlsForAssets(bundle.outputs),
+  };
+  if (['captions', 'approval'].includes(tab)) return signedUrlsForAssets(bundle.outputs);
+  if (tab === 'woocommerce') return signedUrlsForAssets(bundle.outputs.filter((row) => row.is_selected));
+  return {};
 }
 
 export default function MockupStudio() {
@@ -965,11 +1026,7 @@ export default function MockupStudio() {
     if (!id) return;
     const next = await getMockupProjectBundle(id);
     setBundle(next);
-    setUrls({
-      ...await signedUrlsForAssets(next.blanks),
-      ...await signedUrlsForAssets(next.artwork),
-      ...await signedUrlsForAssets(next.outputs),
-    });
+    setUrls({});
     await loadProjects();
   }
 
@@ -979,9 +1036,18 @@ export default function MockupStudio() {
     listArtworkVaultCandidates().then(setVault).catch(() => setVault([]));
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    setUrls({});
+    urlsForWorkflowTab(bundle, tab)
+      .then((nextUrls) => { if (active) setUrls(nextUrls); })
+      .catch((error) => { if (active) setMessage(error.message || 'Image previews could not be loaded.'); });
+    return () => { active = false; };
+  }, [bundle, tab]);
+
   async function openProject(id) {
     setBusy(true); setMessage(''); setSelectedId(id);
-    try { await loadProject(id); setTab('project'); }
+    try { setTab('project'); await loadProject(id); }
     catch (error) { setMessage(error.message || 'Could not open the project.'); }
     finally { setBusy(false); }
   }
@@ -1022,8 +1088,9 @@ export default function MockupStudio() {
               {tab === 'production' ? <ProductionTab project={bundle.project} bundle={bundle} /> : null}
             </>
           )}
+          <StorageMigrationPanel bundle={bundle} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} />
           <LocalArchivePanel bundle={bundle} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} />
-          <SectionCard tone="danger" title="Delete project permanently" description="Deleting a project removes its Mockup Studio records and any Supabase files that remain. It does not delete a local archive folder or change WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Permanently delete mockup project “${bundle.project.project_name}”? Local archive folders on your computer will not be deleted.`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>
+          <SectionCard tone="danger" title="Delete project permanently" description="Deleting a project removes its Mockup Studio records and any Supabase or R2 files that remain. It does not delete a local archive folder or change WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Permanently delete mockup project “${bundle.project.project_name}”? Local archive folders on your computer will not be deleted.`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>
         </>
       )}
     </main>

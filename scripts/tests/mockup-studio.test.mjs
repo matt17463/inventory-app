@@ -42,7 +42,7 @@ test('customer approval uses hashed tokens and private signed images', async () 
   const fn = await read('netlify/functions/mockup-customer-review.js');
   const sql = await read('deployment/sql/18_MOCKUP_STUDIO_ALL_PHASES.sql');
   assert.match(fn, /sha256\(token\)/);
-  assert.match(fn, /createSignedUrl/);
+  assert.match(fn, /signedStoredAssetUrl/);
   assert.match(sql, /public\s*=\s*false/i);
   assert.match(sql, /sc_mockup_create_review_token/i);
 });
@@ -55,7 +55,7 @@ test('WooCommerce export supports catalog attributes, logo variations, image map
   const api = await read('src/lib/mockupStudioApi.js');
   const netlify = await read('netlify.toml');
   assert.match(fn, /allowedRoles: \['admin', 'manager'\]/);
-  assert.match(fn, /createSignedUrl/);
+  assert.match(fn, /signedStoredAssetUrl/);
   assert.match(fn, /_sc_mockup_captions/);
   assert.match(fn, /pa_brand/);
   assert.match(fn, /pa_style/);
@@ -101,10 +101,10 @@ test('project deletion is privileged and cleans private storage', async () => {
   const fn = await read('netlify/functions/mockup-delete-project.js');
   assert.match(api, /mockup-delete-project/);
   assert.match(fn, /allowedRoles: \['admin', 'manager'\]/);
-  assert.match(fn, /storage\.from\(bucket\)\.remove/);
+  assert.match(fn, /deleteStoredAsset/);
 });
 
-test('local archives verify files before batched Supabase cleanup and support restore', async () => {
+test('local archives verify files before batched cloud cleanup and support restore', async () => {
   const sql = await read('deployment/sql/22_MOCKUP_LOCAL_ARCHIVES.sql');
   const studio = await read('src/MockupStudio.jsx');
   const local = await read('src/lib/mockupLocalArchive.js');
@@ -117,7 +117,7 @@ test('local archives verify files before batched Supabase cleanup and support re
   assert.match(local, /SHA-256/);
   assert.match(local, /savedChecksum !== checksum/);
   assert.match(local, /mockup-archive-manifest\.json/);
-  assert.match(local, /upsert: true/);
+  assert.match(local, /restoreMockupStoredFile/);
   assert.match(api, /beginMockupLocalArchive/);
   assert.match(api, /continueMockupLocalArchive/);
   assert.match(api, /completeMockupLocalArchiveRestore/);
@@ -128,7 +128,7 @@ test('local archives verify files before batched Supabase cleanup and support re
   assert.match(fn, /status: 'restored'/);
   assert.match(studio, /Archive Project Images to My Computer/);
   assert.match(studio, /Reconnect Local Folder/);
-  assert.match(studio, /Restore Files to Supabase/);
+  assert.match(studio, /Restore Files to Supabase|Restore Files/);
 });
 
 test('exact compositor preserves an AI-free rendering path with captions', async () => {
@@ -187,7 +187,62 @@ test('generated mockups can be permanently removed from store choices and storag
   assert.match(fn, /allowedRoles: \['admin', 'manager', 'operator'\]/);
   assert.match(fn, /from\('mockup_outputs'\)[\s\S]*\.delete\(\)/);
   assert.match(fn, /storage_bucket/);
-  assert.match(fn, /\.remove\(\[output\.storage_path\]\)/);
+  assert.match(fn, /deleteStoredAsset/);
+});
+
+test('Cloudflare R2 storage is private, resumable, and preserves Supabase compatibility', async () => {
+  const { cleanObjectName, createPreviewBuffer, safeObjectKey } = await import('../../netlify/functions/_shared/mockupStorage.js');
+  const sql = await read('deployment/sql/24_MOCKUP_R2_STORAGE.sql');
+  const shared = await read('netlify/functions/_shared/mockupStorage.js');
+  const storage = await read('netlify/functions/mockup-storage.js');
+  const migration = await read('netlify/functions/mockup-migrate-storage.js');
+  const api = await read('src/lib/mockupStudioApi.js');
+  const studio = await read('src/MockupStudio.jsx');
+  assert.match(sql, /storage_provider/);
+  assert.match(sql, /preview_storage_path/);
+  assert.match(sql, /mockup_storage_inventory/);
+  assert.match(shared, /S3Client/);
+  assert.match(shared, /GetObjectCommand/);
+  assert.match(shared, /PutObjectCommand/);
+  assert.match(shared, /createPreviewBuffer/);
+  assert.match(storage, /presignedR2Put/);
+  assert.match(storage, /allowedRoles: \['admin', 'manager', 'employee'\]/);
+  assert.match(migration, /verifiedR2Upload/);
+  assert.match(migration, /remaining/);
+  assert.match(migration, /deleteStoredReference/);
+  assert.match(api, /preview_content_type/);
+  assert.match(api, /migrateMockupProjectStorage/);
+  assert.match(studio, /Move This Project to R2/);
+  assert.match(studio, /urlsForWorkflowTab/);
+  assert.equal(cleanObjectName('Gildan 18500 Black FRONT.PNG'), 'gildan-18500-black-front.png');
+  assert.throws(() => safeObjectKey('../secret'), /Invalid mockup storage path/);
+  const sharp = (await import('sharp')).default;
+  const onePixelPng = await sharp({ create: { width: 1, height: 1, channels: 4, background: '#ffffff' } }).png().toBuffer();
+  const preview = await createPreviewBuffer(onePixelPng, 'image/png');
+  assert.ok(preview?.length > 0);
+});
+
+test('Artwork Requests, Reorders, and Vault files are imported once into private R2', async () => {
+  const api = await read('src/lib/mockupStudioApi.js');
+  const studio = await read('src/MockupStudio.jsx');
+  const storage = await read('netlify/functions/mockup-storage.js');
+  const utils = await read('netlify/functions/_shared/mockupUtils.js');
+  assert.match(api, /sc_artwork_system_reorders/);
+  assert.match(api, /import_external_artwork/);
+  assert.match(storage, /external_source_url/);
+  assert.match(api, /!row\.storage_path && row\.source_url/);
+  assert.match(studio, /Import Artwork to R2/);
+  assert.match(studio, /_source_row_id/);
+  assert.match(storage, /importExternalArtwork/);
+  assert.match(storage, /putMockupObject/);
+  assert.match(storage, /location\.storage_provider !== 'r2'/);
+  assert.match(storage, /source_url: sourceUrl/);
+  assert.match(storage, /deleteStoredAsset\(supabase, location\)/);
+  assert.match(storage, /mockup_artwork_assets'\)\.insert\(insert\)/);
+  assert.match(utils, /fetchSafeExternalAsset/);
+  assert.match(utils, /redirect: 'manual'/);
+  assert.match(utils, /assertSafeExternalAssetUrl\(new URL\(location, currentUrl\)\.toString\(\)\)/);
+  assert.match(utils, /bytes\.length > maxBytes/);
 });
 
 test('unwanted Color and Logo combinations are excluded from WooCommerce variations', async () => {

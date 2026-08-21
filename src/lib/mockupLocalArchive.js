@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient';
+import { downloadMockupStoredFile, restoreMockupStoredFile } from './mockupStudioApi';
 
 const DB_NAME = 'skilled-crafting-local-archives';
 const STORE_NAME = 'directory-handles';
@@ -84,22 +84,39 @@ function storageReferences(bundle) {
   const rows = [];
   const add = (recordType, row, field = 'storage_path') => {
     const path = row?.[field];
-    if (!row?.storage_bucket || !path) return;
+    const preview = field === 'preview_storage_path';
+    const prepared = field === 'prepared_storage_path';
+    const bucket = preview
+      ? (row.preview_storage_bucket || row.storage_bucket)
+      : prepared
+        ? (row.prepared_storage_bucket || row.storage_bucket)
+        : row.storage_bucket;
+    const provider = preview
+      ? (row.preview_storage_provider || row.storage_provider || 'supabase')
+      : prepared
+        ? (row.prepared_storage_provider || row.storage_provider || 'supabase')
+        : (row.storage_provider || 'supabase');
+    if (!bucket || !path) return;
     rows.push({
-      key: `${row.storage_bucket}/${path}`,
-      bucket: row.storage_bucket,
+      key: `${provider}:${bucket}/${path}`,
+      provider,
+      bucket,
       path,
-      mime_type: row.mime_type || null,
+      mime_type: preview ? 'image/webp' : (row.mime_type || null),
       references: [{ record_type: recordType, record_id: row.id, field }],
     });
   };
-  (bundle.blanks || []).forEach((row) => add('mockup_blank_assets', row));
+  const addPrimaryAndPreview = (recordType, row) => {
+    add(recordType, row);
+    add(recordType, row, 'preview_storage_path');
+  };
+  (bundle.blanks || []).forEach((row) => addPrimaryAndPreview('mockup_blank_assets', row));
   (bundle.artwork || []).forEach((row) => {
-    add('mockup_artwork_assets', row);
+    addPrimaryAndPreview('mockup_artwork_assets', row);
     add('mockup_artwork_assets', row, 'prepared_storage_path');
   });
-  (bundle.outputs || []).forEach((row) => add('mockup_outputs', row));
-  (bundle.packets || []).forEach((row) => add('mockup_production_packets', row));
+  (bundle.outputs || []).forEach((row) => addPrimaryAndPreview('mockup_outputs', row));
+  (bundle.packets || []).forEach((row) => addPrimaryAndPreview('mockup_production_packets', row));
 
   const unique = new Map();
   rows.forEach((row) => {
@@ -141,15 +158,15 @@ export async function createLocalMockupArchive({ project, bundle, onProgress = (
   const directory = await root.getDirectoryHandle(folderName, { create: true });
   const filesDirectory = await directory.getDirectoryHandle('files', { create: true });
   const references = storageReferences(bundle);
-  if (!references.length) throw new Error('This project does not currently have any Supabase files to archive.');
+  if (!references.length) throw new Error('This project does not currently have any cloud files to archive.');
 
   const files = [];
   let totalBytes = 0;
   for (let index = 0; index < references.length; index += 1) {
     const reference = references[index];
     onProgress({ stage: 'download', completed: index, total: references.length, message: `Archiving file ${index + 1} of ${references.length}…` });
-    const { data: blob, error } = await supabase.storage.from(reference.bucket).download(reference.path);
-    if (error || !blob) throw new Error(`Could not download ${reference.path}: ${error?.message || 'No file was returned.'}`);
+    const blob = await downloadMockupStoredFile(reference);
+    if (!blob) throw new Error(`Could not download ${reference.path}: no file was returned.`);
     const checksum = await sha256(blob);
     const originalName = reference.path.split('/').pop() || 'asset';
     const extension = extensionFor(reference.path, reference.mime_type);
@@ -159,7 +176,7 @@ export async function createLocalMockupArchive({ project, bundle, onProgress = (
     const savedFile = await fileHandle.getFile();
     const savedChecksum = await sha256(savedFile);
     if (savedFile.size !== blob.size || savedChecksum !== checksum) {
-      throw new Error(`Local verification failed for ${reference.path}. Nothing has been removed from Supabase.`);
+      throw new Error(`Local verification failed for ${reference.path}. Nothing has been removed from cloud storage.`);
     }
     totalBytes += blob.size;
     files.push({
@@ -173,7 +190,7 @@ export async function createLocalMockupArchive({ project, bundle, onProgress = (
 
   const manifest = {
     format: 'skilled-crafting-mockup-archive',
-    archive_version: 1,
+    archive_version: 2,
     archive_id: null,
     project_id: project.id,
     project_name: project.project_name,
@@ -188,9 +205,9 @@ export async function createLocalMockupArchive({ project, bundle, onProgress = (
   await writeFile(directory, MANIFEST_NAME, JSON.stringify(manifest, null, 2));
   const verifiedManifest = await readManifest(directory);
   if (verifiedManifest.project_id !== project.id || verifiedManifest.files?.length !== files.length) {
-    throw new Error('The local archive manifest could not be verified. Nothing has been removed from Supabase.');
+    throw new Error('The local archive manifest could not be verified. Nothing has been removed from cloud storage.');
   }
-  onProgress({ stage: 'verified', completed: files.length, total: files.length, message: `${files.length} local files verified. Supabase cleanup can now begin.` });
+  onProgress({ stage: 'verified', completed: files.length, total: files.length, message: `${files.length} local files verified. Cloud cleanup can now begin.` });
   return { directory, manifest };
 }
 
@@ -247,7 +264,7 @@ export async function verifyLinkedLocalMockupArchive({ projectId, archive, onPro
     onProgress({ stage: 'verify', completed: index, total: files.length, message: `Verifying local file ${index + 1} of ${files.length}…` });
     const file = await localFile(directory, entry.local_file);
     if (file.size !== Number(entry.size) || await sha256(file) !== entry.sha256) {
-      throw new Error(`Local archive verification failed for ${entry.local_file}. Nothing else will be removed from Supabase.`);
+      throw new Error(`Local archive verification failed for ${entry.local_file}. Nothing else will be removed from cloud storage.`);
     }
   }
   onProgress({ stage: 'verified', completed: files.length, total: files.length, message: `${files.length} local archive files verified.` });
@@ -273,14 +290,9 @@ export async function restoreLocalMockupArchiveFiles({ projectId, archive, onPro
     if (file.size !== Number(entry.size) || await sha256(file) !== entry.sha256) {
       throw new Error(`Local archive verification failed for ${entry.local_file}. Restore stopped before marking the project active.`);
     }
-    const { error } = await supabase.storage.from(entry.bucket).upload(entry.path, file, {
-      contentType: entry.mime_type || file.type || undefined,
-      cacheControl: '3600',
-      upsert: true,
-    });
-    if (error) throw new Error(`Could not restore ${entry.path}: ${error.message}`);
+    await restoreMockupStoredFile(entry, file);
     restoredKeys.push(entry.key);
   }
-  onProgress({ stage: 'restored', completed: files.length, total: files.length, message: `${files.length} files restored to Supabase.` });
+  onProgress({ stage: 'restored', completed: files.length, total: files.length, message: `${files.length} files restored to cloud storage.` });
   return { restoredKeys, manifest, directory };
 }
