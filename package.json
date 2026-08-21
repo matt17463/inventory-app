@@ -1,7 +1,7 @@
 {
   "name": "create-product-app",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.8.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,8 @@
     "test:calendar": "node --test scripts/tests/google-calendar.test.mjs",
     "test:mockups": "node --test scripts/tests/mockup-studio.test.mjs",
     "test:supplier-receiving": "node --test scripts/tests/supplier-confirmation-parser.test.mjs",
-    "test": "npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:supplier-receiving",
+    "test:production-board": "node --test scripts/tests/production-board-active-lines.test.mjs",
+    "test": "npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:supplier-receiving && npm run test:production-board",
     "functions:esm": "node scripts/validate_netlify_esm.mjs",
     "validate:steps6-14": "node scripts/validate_steps6_14.mjs",
     "check": "npm run functions:esm && npm run test && npm run lint && npm run build",
