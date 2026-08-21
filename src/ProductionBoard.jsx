@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import {
   MANUAL_PRODUCTION_STATUSES,
   PRODUCTION_BOARD_COLUMNS,
+  boardColumnForRow,
   listProductionStatusBoard,
+  productionStatusForRow,
   refreshProductionStatusBoard,
   updateProductionBoardStatus,
   updateWooCommerceOrderStatus,
@@ -176,7 +178,7 @@ export default function ProductionBoard() {
   const grouped = useMemo(() => {
     const map = Object.fromEntries(PRODUCTION_BOARD_COLUMNS.map((column) => [column.key, []]));
     rows.forEach((row) => {
-      const key = row.board_column || 'new_order';
+      const key = boardColumnForRow(row);
       if (!map[key]) map[key] = [];
       map[key].push(row);
     });
@@ -195,7 +197,7 @@ export default function ProductionBoard() {
           <div className="sc-kicker">Production</div>
           <h2>Production Status Board</h2>
           <p>
-            This board reconciles WooCommerce order status with pull sheet status. Pull sheet lines marked non-inventory no longer block completion.
+            This board reconciles WooCommerce order status with pull sheet status. A manually selected production status controls the card column while unresolved pull-sheet issues remain visible.
           </p>
         </div>
         <div className="sc-button-row">
@@ -239,7 +241,8 @@ export default function ProductionBoard() {
         </form>
         <div className="sc-production-legend">
           <span><strong>Woo Status</strong> = customer/order/payment state</span>
-          <span><strong>Production Status</strong> = calculated from pull sheet lines, reservations, and non-inventory rules</span>
+          <span><strong>Production Status</strong> = saved manual status when selected; otherwise calculated from the pull sheet</span>
+          <span><strong>Blocker warning</strong> = unresolved pairing or inventory work that still needs attention</span>
         </div>
       </section>
 
@@ -258,7 +261,11 @@ export default function ProductionBoard() {
                   const key = row.job_id || row.woocommerce_order_id || row.id;
                   const busyStatusKey = `status-${row.job_id}`;
                   const busyWooKey = `woo-${row.woocommerce_order_id}`;
-                  const isProductionComplete = row.production_status === 'production_complete' || row.board_column === 'completed';
+                  const effectiveProductionStatus = productionStatusForRow(row);
+                  const effectiveBoardColumn = boardColumnForRow(row);
+                  const hasManualOverride = Boolean(row.saved_job_status)
+                    && effectiveBoardColumn !== (row.board_column || 'new_order');
+                  const isProductionComplete = effectiveProductionStatus === 'production_complete' || effectiveBoardColumn === 'completed';
                   const wooComplete = ['completed', 'cancelled', 'canceled', 'refunded'].includes(String(row.woo_status || '').toLowerCase());
                   const blockers = blockingMessage(row);
                   const statusFeedback = statusFeedbackByJob[row.job_id];
@@ -272,7 +279,10 @@ export default function ProductionBoard() {
 
                       <div className="sc-status-pill-row">
                         <span className={`sc-status-pill sc-status-pill--${statusTone(row.woo_status)}`}>Woo: {badgeText(row.woo_status || 'not synced')}</span>
-                        <span className={`sc-status-pill sc-status-pill--${statusTone(row.production_status)}`}>Production: {row.production_status_label || badgeText(row.production_status)}</span>
+                        <span className={`sc-status-pill sc-status-pill--${statusTone(effectiveProductionStatus)}`}>Production: {badgeText(effectiveProductionStatus)}</span>
+                        {hasManualOverride ? (
+                          <span className="sc-status-pill sc-status-pill--warning">Blocker check: {row.production_status_label || badgeText(row.production_status)}</span>
+                        ) : null}
                       </div>
 
                       <div className="sc-job-meta sc-production-meta">

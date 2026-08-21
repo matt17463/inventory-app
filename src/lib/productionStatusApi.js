@@ -30,6 +30,48 @@ function unwrapStatusResult(data) {
   return result;
 }
 
+const JOB_STATUS_BOARD_COLUMNS = {
+  ready_to_produce: 'ready_to_produce',
+  in_production: 'in_production',
+  qc: 'qc',
+  ready_to_ship: 'ready_to_ship',
+  production_complete: 'completed',
+  completed: 'completed',
+  on_hold: 'on_hold',
+  cancelled: 'cancelled',
+  canceled: 'cancelled',
+};
+
+export function boardColumnForRow(row) {
+  const savedStatus = String(row?.saved_job_status || '').trim().toLowerCase();
+  return JOB_STATUS_BOARD_COLUMNS[savedStatus] || row?.board_column || 'new_order';
+}
+
+export function productionStatusForRow(row) {
+  const savedStatus = String(row?.saved_job_status || '').trim().toLowerCase();
+  return JOB_STATUS_BOARD_COLUMNS[savedStatus] ? savedStatus : row?.production_status;
+}
+
+async function addSavedJobStatuses(rows) {
+  const jobIds = [...new Set(rows.map((row) => Number(row.job_id)).filter(Number.isFinite))];
+  if (!jobIds.length) return rows;
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id,status')
+    .in('id', jobIds);
+
+  if (error) {
+    throw new Error(rpcErrorMessage(error, 'Could not load saved production statuses.'));
+  }
+
+  const statusByJob = new Map((data || []).map((job) => [String(job.id), job.status]));
+  return rows.map((row) => ({
+    ...row,
+    saved_job_status: statusByJob.get(String(row.job_id)) || null,
+  }));
+}
+
 export const PRODUCTION_BOARD_COLUMNS = [
   { key: 'new_order', label: 'New Orders', tone: 'neutral' },
   { key: 'needs_attention', label: 'Needs Attention', tone: 'danger' },
@@ -53,14 +95,27 @@ export const MANUAL_PRODUCTION_STATUSES = [
 ];
 
 export async function listProductionStatusBoard({ status = '', search = '', limit = 250 } = {}) {
-  const { data, error } = await supabase.rpc('sc_list_order_status_board', {
+  let { data, error } = await supabase.rpc('sc_list_order_status_board_v2', {
     p_status: status || null,
     p_search: search || null,
     p_limit: Number(limit || 250),
   });
 
+  // During a rolling deployment, keep the prior board readable until the
+  // v0.8.3 active-line SQL has been installed.
+  if (error && isMissingFunctionError(error)) {
+    const fallback = await supabase.rpc('sc_list_order_status_board', {
+      p_status: null,
+      p_search: search || null,
+      p_limit: Number(limit || 250),
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) throw error;
-  return unwrapRpcRows(data);
+  const rows = await addSavedJobStatuses(unwrapRpcRows(data));
+  return status ? rows.filter((row) => boardColumnForRow(row) === status) : rows;
 }
 
 export async function refreshProductionStatusBoard(limit = 500) {
