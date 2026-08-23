@@ -187,12 +187,12 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
                     <td><span className={`sc-badge ${row.match_status === 'matched' ? 'success' : row.match_status === 'review' ? 'warning' : 'danger'}`}>{row.match_status}</span><small>{statusText(row.match_method)}</small></td>
                     <td><strong>{row.supplier_sku}</strong><small>{row.description}</small></td>
                     <td>{select(row.brand_id, (value) => updateRow(index, { brand_id: value, blank_product_id: '' }), lookups.brands, row.brand || 'Choose brand')}{select(row.product_type_id, (value) => updateRow(index, { product_type_id: value, blank_product_id: '' }), lookups.product_types, row.style || 'Choose style')}</td>
-                    <td>{select(row.color_id, (value) => updateRow(index, { color_id: value, blank_product_id: '', color_match_method: value ? 'manually selected WooCommerce color' : 'choose existing WooCommerce color' }), lookups.colors, row.color || 'Choose color')}<small>{row.color_match_method || 'choose existing WooCommerce color'}</small>{select(row.size_id, (value) => updateRow(index, { size_id: value, blank_product_id: '' }), lookups.sizes, row.size || 'Choose size')}</td>
+                    <td>{select(row.color_id, (value) => updateRow(index, { color_id: value, blank_product_id: '', color_match_method: value ? 'manual pairing — will be remembered' : 'choose existing WooCommerce color' }), lookups.colors, row.color || 'Choose color')}<small>{row.color_match_method || 'choose existing WooCommerce color'}</small>{select(row.size_id, (value) => updateRow(index, { size_id: value, blank_product_id: '' }), lookups.sizes, row.size || 'Choose size')}</td>
                     <td>{row.ordered_quantity}</td><td>{row.previously_received || 0}</td>
                     <td><input type="number" min="0" max={remaining} value={row.receive_now} onChange={(event) => updateRow(index, { receive_now: Math.min(remaining, Math.max(0, Number(event.target.value))) })} /></td>
                     <td>{select(row.bin_id, (value) => updateRow(index, { bin_id: value }), lookups.bins, 'Choose bin', 'bin')}</td>
                     <td><input type="number" min="0" step="0.01" value={row.unit_cost} onChange={(event) => updateRow(index, { unit_cost: event.target.value })} /></td>
-                    <td><input type="checkbox" checked={row.remember_mapping !== false} onChange={(event) => updateRow(index, { remember_mapping: event.target.checked })} /></td>
+                    <td><input type="checkbox" checked={row.remember_mapping !== false} title="Remember the supplier SKU and supplier color pairing for future imports" onChange={(event) => updateRow(index, { remember_mapping: event.target.checked })} /></td>
                   </tr>
                 );
               })}</tbody>

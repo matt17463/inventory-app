@@ -5,6 +5,7 @@ import {
   importSupplierCatalogRowsControlled,
 } from './lib/supplierCatalogApi';
 import { extractSupplierFilesFromZip } from './lib/zipCsvExtract';
+import { resolveImportColors, saveImportColorAliases } from './lib/colorLifecycleApi';
 
 function clean(value) { return String(value ?? '').trim(); }
 function norm(value) { return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
@@ -82,6 +83,7 @@ export default function SupplierCatalogImport() {
   const [progress, setProgress] = useState(null);
   const [clearSupplier, setClearSupplier] = useState('');
   const [clearMode, setClearMode] = useState('all_imported');
+  const [colorReview, setColorReview] = useState(null);
 
   const brands = useMemo(() => parseList(brandFilter), [brandFilter]);
   const styles = useMemo(() => parseList(styleFilter), [styleFilter]);
@@ -107,16 +109,42 @@ export default function SupplierCatalogImport() {
     const chosen = files.filter((file) => selected.includes(file.fileName)).map((file) => ({ ...file, filteredRows: filterRows(file.rows, brands, styles) })).filter((file) => file.filteredRows.length > 0);
     if (!supplierName.trim()) { setMessage('Supplier name is required.'); return; }
     if (!chosen.length) { setMessage('Select at least one file with rows after filtering.'); return; }
-    if (!window.confirm(`Import ${fmt(stats.filteredRows)} selected row(s) from ${chosen.length} file(s)?`)) return;
-    setBusy(true); setResult(null); let total = { catalog_rows_upserted: 0, catalog_rows_inserted: 0, catalog_rows_updated: 0, blank_products_updated: 0, chunks_imported: 0, file_results: [] };
+    setBusy(true); setResult(null);
     try {
-      for (let i = 0; i < chosen.length; i += 1) {
-        const file = chosen[i];
+      setMessage('Matching supplier colors to active WooCommerce colors...');
+      const distinctColors = [...new Set(chosen.flatMap((file) => file.filteredRows.map((row) => row.color)).filter(Boolean))];
+      const colorResult = await resolveImportColors(supplierName, distinctColors);
+      const unresolved = (colorResult.resolved || []).filter((row) => !row.resolved);
+      if (unresolved.length) {
+        setColorReview({ sourceSystem: colorResult.source_system, rows: unresolved, activeColors: colorResult.active_colors || [] });
+        setMessage(`${unresolved.length} supplier color(s) need pairing before the import can continue.`);
+        return;
+      }
+      setColorReview(null);
+      const canonicalByKey = new Map((colorResult.resolved || []).map((row) => [norm(row.source_value), row.canonical_color_name]));
+      const canonicalChosen = chosen.map((file) => ({
+        ...file, filteredRows: file.filteredRows.map((row) => ({ ...row, color: canonicalByKey.get(norm(row.color)) || row.color })),
+      }));
+      if (!window.confirm(`Import ${fmt(stats.filteredRows)} selected row(s) from ${canonicalChosen.length} file(s) using the reviewed WooCommerce color pairings?`)) return;
+      const total = { catalog_rows_upserted: 0, catalog_rows_inserted: 0, catalog_rows_updated: 0, blank_products_updated: 0, chunks_imported: 0, file_results: [] };
+      for (let i = 0; i < canonicalChosen.length; i += 1) {
+        const file = canonicalChosen[i];
         const fileResult = await importInChunks({ supplierName, sourceFileName: file.fileName, rows: file.filteredRows, updateBlankProducts, createMissingLookups, keepLatestOnly, allowedBrands: brands, allowedStyles: styles, onProgress: ({ current, total: rowTotal }) => { setProgress({ file: file.fileName, fileIndex: i + 1, fileCount: chosen.length, current, total: rowTotal }); setMessage(`Importing ${file.fileName}: ${fmt(current)} of ${fmt(rowTotal)} row(s)...`); } });
         total.catalog_rows_upserted += fileResult.catalog_rows_upserted; total.catalog_rows_inserted += fileResult.catalog_rows_inserted; total.catalog_rows_updated += fileResult.catalog_rows_updated; total.blank_products_updated += fileResult.blank_products_updated; total.chunks_imported += fileResult.chunks_imported; total.file_results.push({ fileName: file.fileName, rows: file.filteredRows.length, ...fileResult });
       }
       setResult({ success: true, supplierName, ...total }); setMessage(`Import complete. Upserted ${fmt(total.catalog_rows_upserted)} supplier catalog row(s).`); setProgress(null);
     } catch (err) { setMessage(err.message || 'Supplier catalog import failed.'); }
+    finally { setBusy(false); }
+  }
+  async function saveColorReview() {
+    const incomplete = (colorReview?.rows || []).filter((row) => !row.color_id);
+    if (incomplete.length) { setMessage(`Choose a WooCommerce color for ${incomplete[0].source_value}.`); return; }
+    setBusy(true); setMessage('Saving supplier color pairings...');
+    try {
+      const saved = await saveImportColorAliases(colorReview.sourceSystem, colorReview.rows);
+      setColorReview(null);
+      setMessage(`Saved ${fmt(saved.saved_pairings)} color pairing(s). Click Import Selected Files again to continue.`);
+    } catch (err) { setMessage(err.message || 'Supplier color pairings could not be saved.'); }
     finally { setBusy(false); }
   }
   async function clearData() {
@@ -131,6 +159,7 @@ export default function SupplierCatalogImport() {
   return <main className="page supplier-import-page-only"><SupplierImportStyles />
     <section className="page-header"><div><p className="eyebrow">Supplier Catalog</p><h1>Supplier Catalog Import</h1><p>Preview massive supplier files, choose exactly what to keep, and import selected files/brands/styles without loading everything into active inventory.</p></div></section>
     {message && <p className="message">{message}</p>}
+    {colorReview && <section className="card elevated-card"><h2>Pair Unrecognized Supplier Colors</h2><p className="helper-text">Choose the existing WooCommerce color that each supplier value should use. These choices will be remembered for future imports from this supplier.</p><div className="responsive-table"><table className="data-table"><thead><tr><th>Supplier color</th><th>Pair to existing WooCommerce color</th></tr></thead><tbody>{colorReview.rows.map((row, index) => <tr key={row.source_key}><td><strong>{row.source_value}</strong><br /><small>{row.match_method}</small></td><td><select value={row.color_id || ''} onChange={(event) => setColorReview((current) => ({ ...current, rows: current.rows.map((item, rowIndex) => rowIndex === index ? { ...item, color_id: event.target.value } : item) }))}><option value="">Choose existing color...</option>{colorReview.activeColors.map((color) => <option key={color.id} value={color.id}>{color.name}{color.code && color.code !== color.name ? ` (${color.code})` : ''}</option>)}</select></td></tr>)}</tbody></table></div><div className="button-row"><button disabled={busy} onClick={saveColorReview}>Save Pairings</button><button disabled={busy} onClick={() => setColorReview(null)}>Cancel</button></div></section>}
     <section className="card elevated-card danger-panel"><h2>Clear Existing Supplier Catalog Imported Data</h2><p className="helper-text">Clears supplier catalog/reference rows only. It does not delete blank inventory, WooCommerce products, bins, jobs, orders, or finished inventory.</p><div className="form-grid"><label>Supplier Optional<input value={clearSupplier} onChange={(e) => setClearSupplier(e.target.value)} placeholder="Leave blank for all suppliers" /></label><label>Clear Mode<select value={clearMode} onChange={(e) => setClearMode(e.target.value)}><option value="all_imported">Clear supplier catalog items and imports</option><option value="catalog_items_only">Clear catalog items only</option><option value="archived_only">Clear archived catalog items only</option></select></label></div><button className="danger-button" disabled={busy} onClick={clearData}>Clear Supplier Catalog Imported Data</button></section>
     {progress && <section className="card"><h2>Import Progress</h2><p>File {progress.fileIndex} of {progress.fileCount}: {progress.file}</p><p>{fmt(progress.current)} of {fmt(progress.total)} row(s)</p></section>}
     <section className="card elevated-card"><h2>Manual Supplier ZIP Upload</h2><p className="helper-text">Download the supplier ZIP yourself, then upload it here. Nothing is saved until you select files and click Import.</p><div className="form-grid"><label>Supplier Name<input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} /></label><label>Supplier ZIP<input type="file" accept=".zip" onChange={(e) => { setZipFile(e.target.files?.[0] || null); setFiles([]); setSelected([]); }} /></label><label>Brand Filter Optional<textarea value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} placeholder="Gildan, Bella+Canvas, Adidas" /></label><label>Style Filter Optional<textarea value={styleFilter} onChange={(e) => setStyleFilter(e.target.value)} placeholder="18500, 6405, 3001" /></label></div><label className="checkbox-line"><input type="checkbox" checked={createMissingLookups} onChange={(e) => setCreateMissingLookups(e.target.checked)} /> Create missing lookup values</label><label className="checkbox-line"><input type="checkbox" checked={keepLatestOnly} onChange={(e) => setKeepLatestOnly(e.target.checked)} /> Keep only latest import per supplier</label><label className="checkbox-line warning"><input type="checkbox" checked={updateBlankProducts} onChange={(e) => setUpdateBlankProducts(e.target.checked)} /> Also update matched blank products with supplier data</label><div className="button-row"><button disabled={!zipFile || busy} onClick={readZip}>Read ZIP / Preview Files</button><button disabled={busy || !selected.length} onClick={doImport}>Import Selected Files ({selected.length})</button></div></section>

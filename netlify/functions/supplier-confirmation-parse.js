@@ -25,7 +25,7 @@ function lookupMatches(line, lookups) {
   )));
   const brand = line.brand ? matchOne(lookups.brands, [line.brand]) : [];
   const style = matchOne(lookups.productTypes, [line.style, line.description]);
-  const color = matchSupplierColor(line.color, lookups.colors, lookups.colorPairingRules);
+  const color = matchSupplierColor(line.color, lookups.colors, lookups.colorPairingRules, lookups.importColorAliases, lookups.supplierKey);
   const size = matchOne(lookups.sizes, supplierSizeCandidates(line.size, line.audience));
   return {
     brand_id: brand.length === 1 ? String(brand[0].id) : '',
@@ -38,7 +38,7 @@ function lookupMatches(line, lookups) {
 
 async function parseAndMatch(supabase, parsed) {
   const skus = parsed.lines.map((line) => line.supplier_sku).filter(Boolean);
-  const [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult, colorRulesResult] = await Promise.all([
+  const [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult, colorRulesResult, colorAliasesResult] = await Promise.all([
     supabase.from('sc_supplier_item_mappings').select('*').eq('supplier_key', parsed.supplier_key),
     skus.length ? supabase.from('supplier_catalog_review').select('*').in('supplier_sku', skus) : Promise.resolve({ data: [], error: null }),
     supabase.from('blank_products').select('id,sku_base,name,brand_id,product_type_id,color_id,size_id').limit(5000),
@@ -47,14 +47,17 @@ async function parseAndMatch(supabase, parsed) {
     supabase.from('colors').select('*'),
     supabase.from('sizes').select('id,name,code'),
     supabase.rpc('sc_get_color_pairing_rules', { p_status: 'active' }),
+    supabase.from('sc_import_color_aliases').select('*').eq('source_system', parsed.supplier_key),
   ]);
   // Color pairing is an enhancement over the canonical colors lookup. Older
   // installations without the RPC still receive exact color matching.
   const colorRulesUnavailable = colorRulesResult.error && /does not exist|not find|schema cache/i.test(colorRulesResult.error.message || '');
-  const errors = [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult]
+  const errors = [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult, colorAliasesResult]
     .concat(colorRulesUnavailable ? [] : [colorRulesResult])
     .map((result) => result.error).filter(Boolean);
   if (errors.length) {
+    const missingColorSql = errors.find((error) => /sc_import_color_aliases/i.test(error.message || ''));
+    if (missingColorSql) throw new Error('Color lifecycle SQL is not installed. Run deployment/sql/26_COLOR_LIFECYCLE_AND_IMPORT_ALIASES.sql in Supabase, then retry.');
     const missingSql = errors.find((error) => /sc_supplier_item_mappings|does not exist/i.test(error.message || ''));
     if (missingSql) throw new Error('Supplier receiving SQL is not installed. Run deployment/sql/19_SUPPLIER_CONFIRMATION_RECEIVING.sql in Supabase, then retry.');
     throw errors[0];
@@ -68,6 +71,7 @@ async function parseAndMatch(supabase, parsed) {
     brands: brandsResult.data || [], productTypes: stylesResult.data || [],
     colors: colorsResult.data || [], sizes: sizesResult.data || [],
     colorPairingRules: colorRulesUnavailable ? [] : (colorRulesResult.data || []),
+    importColorAliases: colorAliasesResult.data || [], supplierKey: parsed.supplier_key,
   };
 
   return parsed.lines.map((line) => {
