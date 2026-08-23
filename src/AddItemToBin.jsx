@@ -155,8 +155,8 @@ export default function AddItemToBin() {
 
   function buildBlankSku(line) {
     const parts = [
-      lookupCodeOrName(lookups.brands, line.brand_id),
-      lookupCodeOrName(lookups.product_types, line.product_type_id),
+      lookupCodeOrName(lookups.brands, line.brand_id) || line.brand,
+      lookupCodeOrName(lookups.product_types, line.product_type_id) || line.style,
       lookupCodeOrName(lookups.colors, line.color_id),
       lookupCodeOrName(lookups.sizes, line.size_id),
     ].map(skuPiece).filter(Boolean);
@@ -166,8 +166,8 @@ export default function AddItemToBin() {
 
   function buildBlankName(line) {
     return [
-      lookupName(lookups.brands, line.brand_id),
-      lookupName(lookups.product_types, line.product_type_id),
+      lookupName(lookups.brands, line.brand_id) || line.brand,
+      lookupName(lookups.product_types, line.product_type_id) || line.style,
       lookupName(lookups.colors, line.color_id),
       lookupName(lookups.sizes, line.size_id),
     ].filter(Boolean).join(' ');
@@ -390,6 +390,7 @@ export default function AddItemToBin() {
         lookups={lookups}
         defaultBinId={defaults.bin_id}
         resolveBlank={findOrCreateBlank}
+        refreshLookups={loadAllLookups}
       />
 
       <section className="sc-panel">

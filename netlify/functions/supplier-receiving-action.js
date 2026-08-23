@@ -1,10 +1,89 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
+import { supplierMatchKey } from './_shared/supplierConfirmationParser.js';
 
 const FUNCTION_NAME = 'supplier-receiving-action';
 const BUCKET = 'sc-receiving-documents';
 
 function clean(value) { return String(value ?? '').trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+
+function lookupCode(value) {
+  return clean(value)
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]+/g, '')
+    .slice(0, 80);
+}
+
+async function lookupRows(supabase, table) {
+  const result = await supabase.from(table).select('id,name,code').limit(5000);
+  if (result.error) throw result.error;
+  return result.data || [];
+}
+
+function matchingLookup(rows, value) {
+  const wanted = supplierMatchKey(value);
+  if (!wanted) return null;
+  return rows.find((row) => [row.name, row.code].some((candidate) => supplierMatchKey(candidate) === wanted)) || null;
+}
+
+async function ensureLookup(supabase, table, label, value, cache) {
+  const name = clean(value);
+  const key = `${table}:${supplierMatchKey(name)}`;
+  if (!name) return { row: null, created: false };
+  if (cache.has(key)) return cache.get(key);
+
+  let rows = await lookupRows(supabase, table);
+  const existing = matchingLookup(rows, name);
+  if (existing) {
+    const resolved = { row: existing, created: false };
+    cache.set(key, resolved);
+    return resolved;
+  }
+
+  const inserted = await supabase.from(table).insert({ name, code: lookupCode(name) || null }).select('id,name,code').single();
+  if (!inserted.error && inserted.data) {
+    const resolved = { row: inserted.data, created: true };
+    cache.set(key, resolved);
+    return resolved;
+  }
+
+  // A normalized-name or code constraint may have won a concurrent insert.
+  // Re-read before reporting an error so retries do not create duplicates.
+  rows = await lookupRows(supabase, table);
+  const retry = matchingLookup(rows, name);
+  if (retry) {
+    const resolved = { row: retry, created: false };
+    cache.set(key, resolved);
+    return resolved;
+  }
+  throw new Error(`Could not create ${label} "${name}": ${inserted.error?.message || 'database insert failed'}`);
+}
+
+async function ensureSupplierLookups(supabase, body) {
+  const rows = Array.isArray(body.rows) ? body.rows : [];
+  if (!rows.length) throw new Error('No supplier rows were supplied for lookup matching.');
+  const cache = new Map();
+  const created = [];
+  const resolvedRows = [];
+
+  for (const source of rows) {
+    const row = { ...source };
+    if (!clean(row.brand_id) && clean(row.brand)) {
+      const result = await ensureLookup(supabase, 'brands', 'Brand', row.brand, cache);
+      row.brand_id = String(result.row?.id || '');
+      if (result.created) created.push({ type: 'brand', id: row.brand_id, name: result.row.name, code: result.row.code });
+    }
+    if (!clean(row.product_type_id) && clean(row.style)) {
+      const result = await ensureLookup(supabase, 'product_types', 'Style', row.style, cache);
+      row.product_type_id = String(result.row?.id || '');
+      if (result.created) created.push({ type: 'style', id: row.product_type_id, name: result.row.name, code: result.row.code });
+    }
+    resolvedRows.push(row);
+  }
+
+  return { rows: resolvedRows, created_lookups: created };
+}
 
 async function requireTables(supabase) {
   const probe = await supabase.from('sc_supplier_receiving_imports').select('id').limit(1);
@@ -195,6 +274,7 @@ export async function handler(event) {
     const action = event.httpMethod === 'GET' ? 'history' : clean(body.action || 'history');
     let data;
     if (action === 'history') data = { history: await history(auth.supabase) };
+    else if (action === 'ensure_lookups') data = await ensureSupplierLookups(auth.supabase, body);
     else if (action === 'commit') data = await commitReceipt(auth.supabase, body, auth.user.id);
     else if (action === 'rollback') data = await rollbackReceipt(auth.supabase, body, auth.user.id);
     else if (action === 'document_url') {
