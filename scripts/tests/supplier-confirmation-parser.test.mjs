@@ -89,6 +89,42 @@ test('does not guess when WooCommerce color matches remain ambiguous', () => {
   assert.equal(result.color_match_method, 'ambiguous WooCommerce color');
 });
 
+test('prefers a remembered supplier pairing and ignores archived canonical colors', () => {
+  const colors = [
+    { id: 30, name: 'Forest', code: 'FOR', is_active: false },
+    { id: 31, name: 'Forest Green', code: 'FG', is_active: true },
+  ];
+  const aliases = [{
+    source_system: 'ss_activewear', source_value: 'Forest', source_key: 'forest',
+    canonical_color_id_text: '31',
+  }];
+  assert.deepEqual(matchSupplierColor('Forest', colors, [], aliases, 'ss_activewear'), {
+    color_id: '31',
+    color_match_method: 'remembered supplier color pairing',
+  });
+  assert.equal(matchSupplierColor('Forest', colors, [], [], 'ss_activewear').color_id, '');
+});
+
+test('color lifecycle archives unused choices and keeps canonical pairings protected', async () => {
+  const [sql, lifecycle, inventoryApi, catalogImport, feedSync] = await Promise.all([
+    fs.readFile(new URL('../../deployment/sql/26_COLOR_LIFECYCLE_AND_IMPORT_ALIASES.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/color-lifecycle.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/lib/inventoryApi.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/SupplierCatalogImport.jsx', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/supplier-catalog-feed-sync.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(sql, /create or replace view public\.sc_active_colors/i);
+  assert.match(sql, /create table if not exists public\.sc_import_color_aliases/i);
+  assert.match(sql, /sc_reactivate_referenced_color/i);
+  assert.match(lifecycle, /usageCount === 0 && !canonical/);
+  assert.match(lifecycle, /woo_product_count/);
+  assert.match(inventoryApi, /from\('sc_active_colors'\)/);
+  assert.match(catalogImport, /Pair Unrecognized Supplier Colors/);
+  assert.match(catalogImport, /saveImportColorAliases/);
+  assert.match(feedSync, /canonicalizeChunkColors/);
+  assert.match(feedSync, /Supplier feed stopped before import/);
+});
+
 test('parses a representative S&S confirmation row', () => {
   const pages = [{ pageNumber: 1, cells: [
     { x: 100, y: 760, str: 'S&S Activewear' },
