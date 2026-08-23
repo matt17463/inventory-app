@@ -7,13 +7,23 @@ async function responseBody(response) {
 }
 
 export async function getColorLifecyclePreview() {
-  return responseBody(await authenticatedFunctionFetch('/.netlify/functions/color-lifecycle'));
+  return responseBody(await authenticatedFunctionFetch('/.netlify/functions/color-lifecycle-fast'));
 }
 
-export async function archiveUnusedColors(keys) {
-  return responseBody(await authenticatedFunctionFetch('/.netlify/functions/color-lifecycle', {
-    method: 'POST', body: JSON.stringify({ action: 'archive_selected', keys }),
+export async function startColorLifecycleJob(action, keys = []) {
+  const jobId = globalThis.crypto?.randomUUID?.() || `color-job-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await responseBody(await authenticatedFunctionFetch('/.netlify/functions/color-lifecycle-fast', {
+    method: 'POST', body: JSON.stringify({ action, job_id: jobId, keys }),
   }));
+  const response = await authenticatedFunctionFetch('/.netlify/functions/color-lifecycle-background', {
+    method: 'POST', body: JSON.stringify({ action, job_id: jobId, keys }),
+  });
+  if (!response.ok && response.status !== 202) await responseBody(response);
+  return { job_id: jobId };
+}
+
+export async function getColorLifecycleJob(jobId) {
+  return responseBody(await authenticatedFunctionFetch(`/.netlify/functions/color-lifecycle-fast?job_id=${encodeURIComponent(jobId)}`));
 }
 
 export async function resolveImportColors(sourceSystem, values) {

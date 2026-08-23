@@ -125,6 +125,27 @@ test('color lifecycle archives unused choices and keeps canonical pairings prote
   assert.match(feedSync, /Supplier feed stopped before import/);
 });
 
+test('runs WooCommerce color scans and cleanup outside the synchronous request window', async () => {
+  const [sql, toml, fastFunction, backgroundFunction, clientApi, reviewPage] = await Promise.all([
+    fs.readFile(new URL('../../deployment/sql/27_COLOR_LIFECYCLE_BACKGROUND_JOBS.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify.toml', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/color-lifecycle-fast.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/color-lifecycle-background.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/lib/colorLifecycleApi.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/ColorAliasReview.jsx', import.meta.url), 'utf8'),
+  ]);
+  assert.match(sql, /create table if not exists public\.sc_color_lifecycle_jobs/i);
+  assert.match(sql, /create table if not exists public\.sc_color_woo_term_snapshot/i);
+  assert.match(sql, /sc_color_lifecycle_usage_counts/i);
+  assert.match(toml, /\[functions\."color-lifecycle-background"\]\s+background = true/);
+  assert.match(fastFunction, /status: 'queued'/);
+  assert.match(backgroundFunction, /terms\/batch/);
+  assert.match(backgroundFunction, /Number\(latest\?\.count \|\| 0\) !== 0/);
+  assert.match(clientApi, /color-lifecycle-fast/);
+  assert.match(clientApi, /color-lifecycle-background/);
+  assert.match(reviewPage, /WooCommerce color scan started in the background/);
+});
+
 test('parses a representative S&S confirmation row', () => {
   const pages = [{ pageNumber: 1, cells: [
     { x: 100, y: 760, str: 'S&S Activewear' },
