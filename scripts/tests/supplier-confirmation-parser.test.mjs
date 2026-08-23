@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { installPdfTextRuntimeCompatibility } from '../../netlify/functions/_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from '../../netlify/functions/_shared/supplierConfirmationParser.js';
 
@@ -15,6 +17,17 @@ test('initializes PDF.js without optional Node canvas polyfills', async () => {
     if (original) Object.defineProperty(process, 'getBuiltinModule', original);
     else delete process.getBuiltinModule;
   }
+});
+
+test('uses the Netlify-packaged PDF worker location', async () => {
+  installPdfTextRuntimeCompatibility();
+  const pdfJs = await import('../../netlify/functions/_vendor/pdfjs/pdf.mjs?worker-path-test');
+  const expected = pathToFileURL(path.join(
+    process.env.LAMBDA_TASK_ROOT || process.cwd(),
+    'netlify/functions/_vendor/pdfjs/pdf.worker.mjs',
+  )).href;
+  pdfJs.GlobalWorkerOptions.workerSrc = expected;
+  assert.equal(pdfJs.GlobalWorkerOptions.workerSrc, expected);
 });
 
 test('normalizes supplier matching aliases', () => {

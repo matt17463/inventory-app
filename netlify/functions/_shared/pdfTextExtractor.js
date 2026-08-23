@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 /*
  * PDF.js attempts to load optional canvas polyfills when it starts in Node.
  * Netlify's esbuild bundle does not preserve the `require` context PDF.js uses
@@ -129,7 +132,15 @@ async function pdfJs() {
 }
 
 export async function extractPdfTextPages(bytes) {
-  const { getDocument } = await pdfJs();
+  const { getDocument, GlobalWorkerOptions } = await pdfJs();
+  // PDF.js resolves worker strings relative to its own bundled module. Build an
+  // absolute file URL so the same path works both in Netlify (/var/task) and in
+  // local tests. netlify.toml includes this worker in the deployed function.
+  const taskRoot = process.env.LAMBDA_TASK_ROOT || process.cwd();
+  GlobalWorkerOptions.workerSrc = pathToFileURL(path.join(
+    taskRoot,
+    'netlify/functions/_vendor/pdfjs/pdf.worker.mjs',
+  )).href;
   const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
   const pages = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
