@@ -154,7 +154,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
       <div className="sc-panel-header">
         <div>
           <h3>Import Supplier Order Confirmation</h3>
-          <p>Upload an S&amp;S Activewear or Momentec PDF, review its matches, enter actual quantities received, and then add them to inventory.</p>
+          <p>Upload an S&amp;S Activewear or Momentec PDF, review its matches, enter actual quantities received, and then add them to inventory. Supplier colors are matched to the existing WooCommerce color list and active color-pairing rules.</p>
         </div>
       </div>
       <div className="supplier-upload-row">
@@ -187,7 +187,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
                     <td><span className={`sc-badge ${row.match_status === 'matched' ? 'success' : row.match_status === 'review' ? 'warning' : 'danger'}`}>{row.match_status}</span><small>{statusText(row.match_method)}</small></td>
                     <td><strong>{row.supplier_sku}</strong><small>{row.description}</small></td>
                     <td>{select(row.brand_id, (value) => updateRow(index, { brand_id: value, blank_product_id: '' }), lookups.brands, row.brand || 'Choose brand')}{select(row.product_type_id, (value) => updateRow(index, { product_type_id: value, blank_product_id: '' }), lookups.product_types, row.style || 'Choose style')}</td>
-                    <td>{select(row.color_id, (value) => updateRow(index, { color_id: value, blank_product_id: '' }), lookups.colors, row.color || 'Choose color')}{select(row.size_id, (value) => updateRow(index, { size_id: value, blank_product_id: '' }), lookups.sizes, row.size || 'Choose size')}</td>
+                    <td>{select(row.color_id, (value) => updateRow(index, { color_id: value, blank_product_id: '', color_match_method: value ? 'manually selected WooCommerce color' : 'choose existing WooCommerce color' }), lookups.colors, row.color || 'Choose color')}<small>{row.color_match_method || 'choose existing WooCommerce color'}</small>{select(row.size_id, (value) => updateRow(index, { size_id: value, blank_product_id: '' }), lookups.sizes, row.size || 'Choose size')}</td>
                     <td>{row.ordered_quantity}</td><td>{row.previously_received || 0}</td>
                     <td><input type="number" min="0" max={remaining} value={row.receive_now} onChange={(event) => updateRow(index, { receive_now: Math.min(remaining, Math.max(0, Number(event.target.value))) })} /></td>
                     <td>{select(row.bin_id, (value) => updateRow(index, { bin_id: value }), lookups.bins, 'Choose bin', 'bin')}</td>
