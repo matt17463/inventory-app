@@ -1,6 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { installPdfTextRuntimeCompatibility } from '../../netlify/functions/_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from '../../netlify/functions/_shared/supplierConfirmationParser.js';
+
+test('initializes PDF.js without optional Node canvas polyfills', async () => {
+  const original = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule');
+  Object.defineProperty(process, 'getBuiltinModule', { configurable: true, value: () => undefined });
+  try {
+    installPdfTextRuntimeCompatibility();
+    const pdfJs = await import('../../netlify/functions/_vendor/pdfjs/pdf.mjs?netlify-runtime-test');
+    assert.equal(typeof pdfJs.getDocument, 'function');
+    assert.equal(typeof globalThis.DOMMatrix, 'function');
+  } finally {
+    if (original) Object.defineProperty(process, 'getBuiltinModule', original);
+    else delete process.getBuiltinModule;
+  }
+});
 
 test('normalizes supplier matching aliases', () => {
   assert.equal(supplierMatchKey('Dark Heather Grey'), 'darkheathergray');
