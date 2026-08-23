@@ -1,13 +1,11 @@
 import { createHash } from 'node:crypto';
-import { getDocument, GlobalWorkerOptions } from './_vendor/pdfjs/pdf.mjs';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
+import { extractPdfTextPages } from './_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from './_shared/supplierConfirmationParser.js';
 
 const FUNCTION_NAME = 'supplier-confirmation-parse';
 const BUCKET = 'sc-receiving-documents';
 const MAX_BYTES = 12 * 1024 * 1024;
-
-GlobalWorkerOptions.workerSrc = new URL('./_vendor/pdfjs/pdf.worker.mjs', import.meta.url).href;
 
 function safeFileName(value) {
   return String(value || 'confirmation.pdf').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(-120);
@@ -34,24 +32,6 @@ function lookupMatches(line, lookups) {
     color_id: color.length === 1 ? String(color[0].id) : '',
     size_id: size.length === 1 ? String(size[0].id) : '',
   };
-}
-
-async function pdfPages(bytes) {
-  const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
-  const pages = [];
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    pages.push({
-      pageNumber,
-      cells: content.items.filter((item) => item.str).map((item) => ({
-        str: item.str,
-        x: item.transform[4],
-        y: item.transform[5],
-      })),
-    });
-  }
-  return pages;
 }
 
 async function parseAndMatch(supabase, parsed) {
@@ -143,7 +123,7 @@ export async function handler(event) {
     const bytes = Buffer.from(body.file_base64, 'base64');
     if (!bytes.length || bytes.length > MAX_BYTES) throw new Error('The PDF must be between 1 byte and 12 MB.');
     if (bytes.subarray(0, 4).toString() !== '%PDF') throw new Error('The selected file is not a valid PDF.');
-    const parsed = parseSupplierConfirmationPages(await pdfPages(bytes));
+    const parsed = parseSupplierConfirmationPages(await extractPdfTextPages(bytes));
     const hash = createHash('sha256').update(bytes).digest('hex');
     const objectPath = `${parsed.supplier_key}/${safeFileName(parsed.order_number)}/${hash.slice(0, 16)}-${safeFileName(body.file_name)}`;
     const upload = await auth.supabase.storage.from(BUCKET).upload(objectPath, bytes, {

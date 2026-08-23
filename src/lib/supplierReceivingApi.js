@@ -1,8 +1,18 @@
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 
 async function responseBody(response, fallback) {
-  const body = await response.json().catch(() => null);
-  if (!response.ok || body?.success === false) throw new Error(body?.message || fallback || `Request failed: HTTP ${response.status}`);
+  const responseText = await response.text().catch(() => '');
+  let body = null;
+  try {
+    body = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    body = null;
+  }
+  if (!response.ok || body?.success === false) {
+    const requestId = response.headers.get('x-nf-request-id');
+    const statusDetail = `HTTP ${response.status}${requestId ? `; request ${requestId}` : ''}`;
+    throw new Error(body?.message || `${fallback || 'The request failed.'} (${statusDetail})`);
+  }
   return body;
 }
 
