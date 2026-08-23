@@ -9,7 +9,7 @@ import {
   searchColorsForPairing,
   searchColorVariationsForPairing,
 } from './lib/inventoryApi';
-import { archiveUnusedColors, getColorLifecyclePreview } from './lib/colorLifecycleApi';
+import { getColorLifecycleJob, getColorLifecyclePreview, startColorLifecycleJob } from './lib/colorLifecycleApi';
 
 const DEFAULT_REVIEWER = 'Matthew';
 
@@ -123,6 +123,9 @@ export default function ColorAliasReview() {
   const [cleanupRows, setCleanupRows] = useState([]);
   const [cleanupSelection, setCleanupSelection] = useState([]);
   const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupScanRequired, setCleanupScanRequired] = useState(false);
+  const [cleanupScannedAt, setCleanupScannedAt] = useState('');
+  const [cleanupJobId, setCleanupJobId] = useState('');
 
   async function loadSuggestions(searchValue = suggestionSearch, scoreValue = minScore) {
     const rows = await getColorPairingSuggestions({
@@ -157,13 +160,17 @@ export default function ColorAliasReview() {
 
   async function loadCleanup() {
     setCleanupLoading(true);
-    setMessage('Checking Supabase and WooCommerce color usage...');
+    setMessage('Loading the saved color-usage scan...');
     try {
       const result = await getColorLifecyclePreview();
       const rows = result.rows || [];
       setCleanupRows(rows);
       setCleanupSelection(rows.filter((row) => row.eligible).map((row) => row.key));
-      setMessage(`Found ${rows.filter((row) => row.eligible).length} unused color record(s) eligible for cleanup.`);
+      setCleanupScanRequired(Boolean(result.scan_required));
+      setCleanupScannedAt(result.scanned_at || '');
+      setMessage(result.scan_required
+        ? 'Run the WooCommerce color scan before selecting unused colors.'
+        : `Found ${rows.filter((row) => row.eligible).length} unused color record(s) eligible for cleanup.`);
     } catch (err) {
       setMessage(err.message || 'Color cleanup preview failed.');
     } finally {
@@ -175,6 +182,33 @@ export default function ColorAliasReview() {
     if (activeTab === 'cleanup' && cleanupRows.length === 0) loadCleanup();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!cleanupJobId) return undefined;
+    const timer = window.setInterval(async () => {
+      try {
+        const result = await getColorLifecycleJob(cleanupJobId);
+        const job = result.job;
+        if (!job || ['queued', 'running'].includes(job.status)) {
+          setMessage('WooCommerce color job is still working in the background...');
+          return;
+        }
+        window.clearInterval(timer);
+        setCleanupJobId('');
+        setCleanupLoading(false);
+        if (job.status === 'failed') { setMessage(job.error_message || 'Background color job failed.'); return; }
+        const details = job.result || {};
+        setMessage(job.action === 'scan'
+          ? `WooCommerce scan completed: ${compactNumber(details.terms_scanned)} color term(s) checked.`
+          : `Cleanup completed: ${compactNumber(details.archived_colors)} color(s) archived and ${compactNumber(details.deleted_woo_terms)} WooCommerce term(s) deleted.`);
+        await loadCleanup();
+      } catch (err) {
+        window.clearInterval(timer); setCleanupJobId(''); setCleanupLoading(false);
+        setMessage(err.message || 'Could not check the background color job.');
+      }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [cleanupJobId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -425,17 +459,23 @@ export default function ColorAliasReview() {
       setMessage('Color cleanup cancelled.'); return;
     }
     setCleanupLoading(true);
-    setMessage('Archiving unused colors and removing eligible WooCommerce terms...');
+    setMessage('Starting unused-color cleanup in the background...');
     try {
-      const result = await archiveUnusedColors(cleanupSelection);
-      setMessage(`Archived ${compactNumber(result.archived_colors)} Supabase color(s) and deleted ${compactNumber(result.deleted_woo_terms)} unused WooCommerce term(s).`);
-      setCleanupRows([]); setCleanupSelection([]);
-      await loadCleanup();
+      const result = await startColorLifecycleJob('cleanup', cleanupSelection);
+      setCleanupJobId(result.job_id);
+      setMessage('Cleanup started in the background. You can leave this page and return later.');
     } catch (err) {
-      setMessage(err.message || 'Unused color cleanup failed.');
-    } finally {
-      setCleanupLoading(false);
+      setCleanupLoading(false); setMessage(err.message || 'Unused color cleanup failed.');
     }
+  }
+
+  async function startCleanupScan() {
+    setCleanupLoading(true); setMessage('Starting WooCommerce color scan...');
+    try {
+      const result = await startColorLifecycleJob('scan');
+      setCleanupJobId(result.job_id);
+      setMessage('WooCommerce color scan started in the background.');
+    } catch (err) { setCleanupLoading(false); setMessage(err.message || 'WooCommerce color scan could not be started.'); }
   }
 
   return (
@@ -776,10 +816,12 @@ export default function ColorAliasReview() {
               </p>
             </div>
             <div className="button-row">
-              <button type="button" className="secondary-action" onClick={loadCleanup} disabled={cleanupLoading}>Refresh Preview</button>
-              <button type="button" className="danger-button" onClick={runCleanup} disabled={cleanupLoading || cleanupSelection.length === 0}>Clean Up {cleanupSelection.length} Selected</button>
+              <button type="button" className="secondary-action" onClick={startCleanupScan} disabled={cleanupLoading}>{cleanupJobId ? 'Background Job Running…' : 'Scan WooCommerce Colors'}</button>
+              <button type="button" className="secondary-action" onClick={loadCleanup} disabled={cleanupLoading}>Refresh Saved Results</button>
+              <button type="button" className="danger-button" onClick={runCleanup} disabled={cleanupLoading || cleanupScanRequired || cleanupSelection.length === 0}>Clean Up {cleanupSelection.length} Selected</button>
             </div>
           </div>
+          <p className="muted-text">{cleanupScannedAt ? `WooCommerce usage last scanned ${new Date(cleanupScannedAt).toLocaleString()}.` : 'WooCommerce usage has not been scanned yet.'}</p>
           <div className="summary-grid">
             <div className="metric-card"><strong>{compactNumber(cleanupRows.filter((row) => row.is_active).length)}</strong><span>Active records reviewed</span></div>
             <div className="metric-card"><strong>{compactNumber(cleanupRows.filter((row) => row.eligible).length)}</strong><span>Eligible unused colors</span></div>
