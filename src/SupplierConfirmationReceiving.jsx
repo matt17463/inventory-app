@@ -14,7 +14,7 @@ function statusText(value) {
   return String(value || '').replaceAll('_', ' ');
 }
 
-export default function SupplierConfirmationReceiving({ lookups, defaultBinId, resolveBlank }) {
+export default function SupplierConfirmationReceiving({ lookups, defaultBinId, resolveBlank, refreshLookups }) {
   const [file, setFile] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [rows, setRows] = useState([]);
@@ -22,6 +22,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [notes, setNotes] = useState('');
+  const [autoCreateLookups, setAutoCreateLookups] = useState(true);
 
   async function loadHistory({ quiet = false } = {}) {
     try {
@@ -83,8 +84,23 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
     if (!confirmation) return;
     setBusy('receive'); setMessage('');
     try {
-      const prepared = [];
       for (const row of selected) {
+        if (!row.bin_id) throw new Error(`${row.supplier_sku}: choose a receiving bin.`);
+        if (!row.color_id || !row.size_id) throw new Error(`${row.supplier_sku}: choose an existing Color and Size.`);
+        if (!row.brand_id && !row.brand) throw new Error(`${row.supplier_sku}: the supplier did not provide a Brand.`);
+        if (!row.product_type_id && !row.style) throw new Error(`${row.supplier_sku}: the supplier did not provide a Style.`);
+      }
+      let rowsToPrepare = selected;
+      let createdLookups = [];
+      if (autoCreateLookups) {
+        const lookupResult = await supplierReceivingAction({ action: 'ensure_lookups', rows: selected });
+        rowsToPrepare = lookupResult.rows || selected;
+        createdLookups = lookupResult.created_lookups || [];
+        const resolvedByKey = new Map(rowsToPrepare.map((row) => [row.supplier_line_key, row]));
+        setRows((current) => current.map((row) => ({ ...row, ...(resolvedByKey.get(row.supplier_line_key) || {}) })));
+      }
+      const prepared = [];
+      for (const row of rowsToPrepare) {
         if (!row.bin_id) throw new Error(`${row.supplier_sku}: choose a receiving bin.`);
         let blankId = row.blank_product_id;
         let created = false;
@@ -103,8 +119,9 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
         action: 'commit', idempotency_key: idempotencyKey(), confirmation, rows: prepared, notes,
       });
       const received = Number(result.receipt?.received_units || 0);
-      setMessage(`${received} unit(s) received into inventory.${result.errors?.length ? ` Review: ${result.errors.join('; ')}` : ''}`);
+      setMessage(`${received} unit(s) received into inventory.${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}${result.errors?.length ? ` Review: ${result.errors.join('; ')}` : ''}`);
       await loadHistory({ quiet: true });
+      if (createdLookups.length && refreshLookups) await refreshLookups();
       if (file) await parseFile();
     } catch (error) {
       setMessage(error.message);
@@ -157,6 +174,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
             <button className="sc-btn sc-btn-small" onClick={() => setRows(rows.map((row) => ({ ...row, selected: Number(row.remaining_quantity) > 0 })))}>Select Remaining</button>
             <button className="sc-btn sc-btn-small" onClick={() => setRows(rows.map((row) => ({ ...row, selected: false })))}>Clear Selection</button>
             <button className="sc-btn sc-btn-small" disabled={!defaultBinId} onClick={() => setRows(rows.map((row) => ({ ...row, bin_id: defaultBinId })))}>Apply Default Bin to All</button>
+            <label className="supplier-auto-lookup-toggle"><input type="checkbox" checked={autoCreateLookups} onChange={(event) => setAutoCreateLookups(event.target.checked)} /> Create missing Brands and Styles when receiving</label>
           </div>
           <div className="supplier-receiving-table-wrap">
             <table className="supplier-receiving-table">

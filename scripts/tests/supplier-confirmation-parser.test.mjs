@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -28,6 +29,19 @@ test('uses the Netlify-packaged PDF worker location', async () => {
   )).href;
   pdfJs.GlobalWorkerOptions.workerSrc = expected;
   assert.equal(pdfJs.GlobalWorkerOptions.workerSrc, expected);
+});
+
+test('supplier receiving creates only missing brand and style lookups', async () => {
+  const [server, client] = await Promise.all([
+    fs.readFile(new URL('../../netlify/functions/supplier-receiving-action.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/SupplierConfirmationReceiving.jsx', import.meta.url), 'utf8'),
+  ]);
+  assert.match(server, /action === 'ensure_lookups'/);
+  assert.match(server, /ensureLookup\(supabase, 'brands'/);
+  assert.match(server, /ensureLookup\(supabase, 'product_types'/);
+  assert.doesNotMatch(server, /ensureLookup\(supabase, 'colors'/);
+  assert.doesNotMatch(server, /ensureLookup\(supabase, 'sizes'/);
+  assert.match(client, /Create missing Brands and Styles when receiving/);
 });
 
 test('normalizes supplier matching aliases', () => {
