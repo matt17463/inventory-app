@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { authorizeEmployee, createServiceClient, jsonResponse } from './_shared/security.js';
+import { supplierMatchKey } from './_shared/supplierConfirmationParser.js';
+import { matchSupplierColor } from './_shared/supplierColorMatcher.js';
 
 const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 50);
 const MAX_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_CHUNK_SIZE || 250);
@@ -14,6 +16,37 @@ function clean(value) {
 
 function normalize(value) {
   return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function supplierKey(value) {
+  const key = supplierMatchKey(value);
+  if (key.includes('sand') || key.includes('ssactivewear')) return 'ss_activewear';
+  if (key.includes('momentec') || key.includes('augusta')) return 'momentec';
+  return key;
+}
+
+async function canonicalizeChunkColors(supabase, supplierName, rows) {
+  const system = supplierKey(supplierName);
+  const [colorsResult, rulesResult, aliasesResult] = await Promise.all([
+    supabase.from('colors').select('*'),
+    supabase.rpc('sc_get_color_pairing_rules', { p_status: 'active' }),
+    supabase.from('sc_import_color_aliases').select('*').eq('source_system', system),
+  ]);
+  for (const result of [colorsResult, rulesResult, aliasesResult]) if (result.error) throw result.error;
+  const colors = colorsResult.data || [];
+  const activeById = new Map(colors.filter((color) => color.is_active !== false).map((color) => [String(color.id), color]));
+  const resolved = new Map();
+  const unresolved = [];
+  for (const value of [...new Set(rows.map((row) => clean(row.color)).filter(Boolean))]) {
+    const match = matchSupplierColor(value, colors, rulesResult.data || [], aliasesResult.data || [], system);
+    const canonical = activeById.get(String(match.color_id || ''));
+    if (canonical) resolved.set(supplierMatchKey(value), canonical.name);
+    else unresolved.push(value);
+  }
+  if (unresolved.length) {
+    throw new Error(`Supplier feed stopped before import: pair these colors to existing WooCommerce colors first: ${unresolved.slice(0, 12).join(', ')}${unresolved.length > 12 ? `, +${unresolved.length - 12} more` : ''}. Use Supplier Catalog Import to save the pairings, then restart this feed.`);
+  }
+  return rows.map((row) => ({ ...row, color: resolved.get(supplierMatchKey(row.color)) || row.color }));
 }
 
 function numberValue(value) {
@@ -571,10 +604,11 @@ export const handler = async (event) => {
       }, event);
     }
 
+    const canonicalRows = await canonicalizeChunkColors(supabase, feed.supplier_name, chunk.rows);
     const { data: result, error: importError } = await supabase.rpc('import_supplier_catalog_rows', {
       p_supplier_name: feed.supplier_name,
       p_source_file_name: feed.source_file_name || feed.feed_name || run.source_label || feed.feed_url,
-      p_rows: chunk.rows,
+      p_rows: canonicalRows,
       p_update_blank_products: Boolean(feed.update_blank_products),
       p_create_missing_lookups: Boolean(feed.create_missing_lookups),
     });

@@ -7,6 +7,22 @@ const BUCKET = 'sc-receiving-documents';
 function clean(value) { return String(value ?? '').trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 
+async function rememberColorAlias(supabase, confirmation, row, userId) {
+  const sourceValue = clean(row.color);
+  const canonicalId = clean(row.color_id);
+  if (!sourceValue || !canonicalId) return;
+  const color = await supabase.from('colors').select('id,name,is_active').eq('id', canonicalId).maybeSingle();
+  if (color.error) throw color.error;
+  if (!color.data || color.data.is_active === false) throw new Error(`${row.supplier_sku}: choose an active WooCommerce color.`);
+  const saved = await supabase.from('sc_import_color_aliases').upsert({
+    source_system: clean(confirmation.supplier_key), source_value: sourceValue,
+    source_key: supplierMatchKey(sourceValue), canonical_color_id_text: canonicalId,
+    canonical_color_name: color.data.name, notes: `Remembered while receiving ${confirmation.supplier_name || confirmation.supplier_key}`,
+    created_by: userId, updated_at: new Date().toISOString(),
+  }, { onConflict: 'source_system,source_key' });
+  if (saved.error) throw saved.error;
+}
+
 function lookupCode(value) {
   return clean(value)
     .toUpperCase()
@@ -213,6 +229,7 @@ async function commitReceipt(supabase, body, userId) {
         last_size: clean(item.row.size) || null, created_by: userId, updated_at: new Date().toISOString(),
       }, { onConflict: 'supplier_key,supplier_sku' });
     }
+    if (item.row.remember_mapping !== false) await rememberColorAlias(supabase, confirmation, item.row, userId);
     completedUnits += item.quantity;
   }
 

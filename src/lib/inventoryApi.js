@@ -245,7 +245,7 @@ export async function getBin(binId) {
 export async function getBlankProductLookups() {
   const [brandRes, colorRes, sizeRes, typeRes] = await Promise.all([
     supabase.from('brands').select('id, name, code').order('name', { ascending: true }),
-    supabase.from('colors').select('id, name, code').order('name', { ascending: true }),
+    supabase.from('sc_active_colors').select('id, name, code').order('name', { ascending: true }),
     supabase.from('sizes').select('id, name, code').order('name', { ascending: true }),
     supabase.from('product_types').select('id, name, code').order('name', { ascending: true }),
   ]);
@@ -3725,13 +3725,16 @@ export async function syncSupplierCatalogFeed(feedId) {
 // =========================================================
 
 export async function searchColorsForPairing(search = '', limit = 50) {
-  const { data, error } = await supabase.rpc('sc_search_colors_for_pairing', {
-    p_search: search || null,
-    p_limit: Number(limit || 50),
-  });
+  let query = supabase.from('sc_active_colors').select('id,name,code')
+    .order('name', { ascending: true }).limit(Number(limit || 50));
+  const term = String(search || '').trim().replace(/[%_,]/g, '');
+  if (term) query = query.or(`name.ilike.%${term}%,code.ilike.%${term}%`);
+  const { data, error } = await query;
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map((row) => ({
+    color_id: row.id, color_name: row.name, color_code: row.code, usage_count: 0,
+  }));
 }
 
 export async function searchColorVariationsForPairing(search = '', limit = 250) {

@@ -31,11 +31,20 @@ function activeRules(rules) {
  * The colors table is the lookup used by WooCommerce-synced products. Active
  * color-pairing rules collapse duplicate/alias records to that canonical row.
  */
-export function matchSupplierColor(value, colors = [], rules = []) {
+export function matchSupplierColor(value, colors = [], rules = [], aliases = [], sourceSystem = '') {
   const wanted = supplierMatchKey(value);
   if (!wanted) return { color_id: '', color_match_method: 'supplier color missing' };
 
-  const colorById = new Map((colors || []).map((color) => [rowId(color), color]));
+  const activeColorById = new Map((colors || []).filter((color) => color?.is_active !== false).map((color) => [rowId(color), color]));
+  const savedAlias = (aliases || []).find((alias) => (
+    (!sourceSystem || text(alias?.source_system) === text(sourceSystem))
+    && supplierMatchKey(alias?.source_key || alias?.source_value) === wanted
+  ));
+  const savedCanonicalId = text(savedAlias?.canonical_color_id_text);
+  if (savedCanonicalId && activeColorById.has(savedCanonicalId)) {
+    return { color_id: savedCanonicalId, color_match_method: 'remembered supplier color pairing' };
+  }
+
   const exactRows = (colors || []).filter((color) => colorKeys(color).includes(wanted));
   const enabledRules = activeRules(rules);
   const sourceRuleMatches = enabledRules.filter((rule) => (
@@ -54,7 +63,7 @@ export function matchSupplierColor(value, colors = [], rules = []) {
     if (canonicalId) resolvedIds.add(canonicalId);
   }
 
-  const existingIds = [...resolvedIds].filter((id) => colorById.has(id));
+  const existingIds = [...resolvedIds].filter((resolvedId) => activeColorById.has(resolvedId));
   if (existingIds.length === 1) {
     const usedPairing = sourceRuleMatches.length > 0
       || exactRows.some((color) => {

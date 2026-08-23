@@ -9,6 +9,7 @@ import {
   searchColorsForPairing,
   searchColorVariationsForPairing,
 } from './lib/inventoryApi';
+import { archiveUnusedColors, getColorLifecyclePreview } from './lib/colorLifecycleApi';
 
 const DEFAULT_REVIEWER = 'Matthew';
 
@@ -119,6 +120,9 @@ export default function ColorAliasReview() {
   const [busyRule, setBusyRule] = useState('');
   const [activeTab, setActiveTab] = useState('variations');
   const [minScore, setMinScore] = useState(35);
+  const [cleanupRows, setCleanupRows] = useState([]);
+  const [cleanupSelection, setCleanupSelection] = useState([]);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   async function loadSuggestions(searchValue = suggestionSearch, scoreValue = minScore) {
     const rows = await getColorPairingSuggestions({
@@ -150,6 +154,27 @@ export default function ColorAliasReview() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadCleanup() {
+    setCleanupLoading(true);
+    setMessage('Checking Supabase and WooCommerce color usage...');
+    try {
+      const result = await getColorLifecyclePreview();
+      const rows = result.rows || [];
+      setCleanupRows(rows);
+      setCleanupSelection(rows.filter((row) => row.eligible).map((row) => row.key));
+      setMessage(`Found ${rows.filter((row) => row.eligible).length} unused color record(s) eligible for cleanup.`);
+    } catch (err) {
+      setMessage(err.message || 'Color cleanup preview failed.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'cleanup' && cleanupRows.length === 0) loadCleanup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -389,6 +414,30 @@ export default function ColorAliasReview() {
     }
   }
 
+  function toggleCleanup(key) {
+    setCleanupSelection((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  }
+
+  async function runCleanup() {
+    if (!cleanupSelection.length) { setMessage('Select at least one unused color.'); return; }
+    if (!window.confirm(`Archive ${cleanupSelection.length} selected unused color(s)? Zero-use WooCommerce terms will also be deleted.`)) return;
+    if (window.prompt('Type ARCHIVE UNUSED COLORS to continue.') !== 'ARCHIVE UNUSED COLORS') {
+      setMessage('Color cleanup cancelled.'); return;
+    }
+    setCleanupLoading(true);
+    setMessage('Archiving unused colors and removing eligible WooCommerce terms...');
+    try {
+      const result = await archiveUnusedColors(cleanupSelection);
+      setMessage(`Archived ${compactNumber(result.archived_colors)} Supabase color(s) and deleted ${compactNumber(result.deleted_woo_terms)} unused WooCommerce term(s).`);
+      setCleanupRows([]); setCleanupSelection([]);
+      await loadCleanup();
+    } catch (err) {
+      setMessage(err.message || 'Unused color cleanup failed.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  }
+
   return (
     <main className="page color-pairing-page">
       <section className="page-header">
@@ -418,6 +467,7 @@ export default function ColorAliasReview() {
         <button type="button" className={activeTab === 'suggestions' ? 'active' : ''} onClick={() => setActiveTab('suggestions')}>Auto Suggestions</button>
         <button type="button" className={activeTab === 'manual' ? 'active' : ''} onClick={() => setActiveTab('manual')}>Single Pairing</button>
         <button type="button" className={activeTab === 'rules' ? 'active' : ''} onClick={() => setActiveTab('rules')}>Active Rules</button>
+        <button type="button" className={activeTab === 'cleanup' ? 'active' : ''} onClick={() => setActiveTab('cleanup')}>Unused Color Cleanup</button>
       </section>
 
       {activeTab === 'variations' && (
@@ -709,6 +759,51 @@ export default function ColorAliasReview() {
                 {rules.length === 0 && (
                   <tr><td colSpan="8">No color pairing rules saved yet.</td></tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'cleanup' && (
+        <section className="card elevated-card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Unused Color Cleanup</h2>
+              <p className="muted-text">
+                A color is eligible only when no Supabase product or blank uses it and it is not the canonical target of an active pairing rule.
+                Source aliases are archived but their pairing rules remain available for future imports. WooCommerce terms are deleted only when their product count is zero.
+              </p>
+            </div>
+            <div className="button-row">
+              <button type="button" className="secondary-action" onClick={loadCleanup} disabled={cleanupLoading}>Refresh Preview</button>
+              <button type="button" className="danger-button" onClick={runCleanup} disabled={cleanupLoading || cleanupSelection.length === 0}>Clean Up {cleanupSelection.length} Selected</button>
+            </div>
+          </div>
+          <div className="summary-grid">
+            <div className="metric-card"><strong>{compactNumber(cleanupRows.filter((row) => row.is_active).length)}</strong><span>Active records reviewed</span></div>
+            <div className="metric-card"><strong>{compactNumber(cleanupRows.filter((row) => row.eligible).length)}</strong><span>Eligible unused colors</span></div>
+            <div className="metric-card"><strong>{compactNumber(cleanupRows.filter((row) => row.active_pairing_canonical).length)}</strong><span>Protected canonical colors</span></div>
+          </div>
+          <div className="button-row compact-row">
+            <button type="button" className="secondary-action" onClick={() => setCleanupSelection(cleanupRows.filter((row) => row.eligible).map((row) => row.key))}>Select All Eligible</button>
+            <button type="button" className="secondary-action" onClick={() => setCleanupSelection([])}>Clear Selection</button>
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Remove</th><th>Color</th><th>Supabase use</th><th>WooCommerce use</th><th>Pairing protection</th><th>Decision</th></tr></thead>
+              <tbody>
+                {cleanupRows.map((row) => (
+                  <tr key={row.key}>
+                    <td><input type="checkbox" checked={cleanupSelection.includes(row.key)} disabled={!row.eligible || cleanupLoading} onChange={() => toggleCleanup(row.key)} /></td>
+                    <td><strong>{row.color_name}</strong><small>{row.color_code || ''}</small></td>
+                    <td>{compactNumber(row.product_count)} products / {compactNumber(row.blank_count)} blanks</td>
+                    <td>{row.woo_term_id ? `${compactNumber(row.woo_product_count)} products` : 'No linked term'}</td>
+                    <td>{row.active_pairing_canonical ? 'Canonical target' : row.active_pairing_source ? 'Source alias (rule retained)' : 'None'}</td>
+                    <td><span className={`alias-status ${row.eligible ? 'alias-status-not_reviewed' : 'alias-status-approved'}`}>{row.reason}</span></td>
+                  </tr>
+                ))}
+                {!cleanupRows.length && <tr><td colSpan="6">{cleanupLoading ? 'Loading color usage...' : 'No color usage results loaded.'}</td></tr>}
               </tbody>
             </table>
           </div>
