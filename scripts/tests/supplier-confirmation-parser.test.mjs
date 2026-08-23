@@ -5,6 +5,7 @@ import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { installPdfTextRuntimeCompatibility } from '../../netlify/functions/_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from '../../netlify/functions/_shared/supplierConfirmationParser.js';
+import { matchSupplierColor } from '../../netlify/functions/_shared/supplierColorMatcher.js';
 
 test('initializes PDF.js without optional Node canvas polyfills', async () => {
   const original = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule');
@@ -48,6 +49,44 @@ test('normalizes supplier matching aliases', () => {
   assert.equal(supplierMatchKey('Dark Heather Grey'), 'darkheathergray');
   assert.equal(supplierMatchKey('S&S Activewear'), 'sandsactivewear');
   assert.deepEqual(supplierSizeCandidates('M', 'youth'), ['M', 'YM']);
+});
+
+test('matches supplier colors to an existing WooCommerce color', () => {
+  const colors = [
+    { id: 10, name: 'Dark Heather Gray', code: 'DHG' },
+    { id: 20, name: 'Black', code: 'BLK' },
+  ];
+  assert.deepEqual(matchSupplierColor('Dark Heather Grey', colors, []), {
+    color_id: '10',
+    color_match_method: 'WooCommerce color exact match',
+  });
+});
+
+test('uses active color pairing rules to choose the canonical WooCommerce color', () => {
+  const colors = [
+    { id: 10, name: 'Dark Heather Grey', code: 'DHG-OLD' },
+    { id: 11, name: 'Dark Heather Gray', code: 'DHG' },
+  ];
+  const rules = [{
+    source_color_id: 10,
+    source_color_name: 'Dark Heather Grey',
+    canonical_color_id: 11,
+    canonical_color_name: 'Dark Heather Gray',
+    status: 'active',
+  }];
+  assert.deepEqual(matchSupplierColor('Dark Heather Grey', colors, rules), {
+    color_id: '11',
+    color_match_method: 'WooCommerce color pairing rule',
+  });
+});
+
+test('does not guess when WooCommerce color matches remain ambiguous', () => {
+  const result = matchSupplierColor('Black', [
+    { id: 20, name: 'Black', code: 'BLK' },
+    { id: 21, name: 'Black', code: 'BLACK' },
+  ], []);
+  assert.equal(result.color_id, '');
+  assert.equal(result.color_match_method, 'ambiguous WooCommerce color');
 });
 
 test('parses a representative S&S confirmation row', () => {

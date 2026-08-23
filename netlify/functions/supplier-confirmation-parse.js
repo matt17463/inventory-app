@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { extractPdfTextPages } from './_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from './_shared/supplierConfirmationParser.js';
+import { matchSupplierColor } from './_shared/supplierColorMatcher.js';
 
 const FUNCTION_NAME = 'supplier-confirmation-parse';
 const BUCKET = 'sc-receiving-documents';
@@ -24,28 +25,35 @@ function lookupMatches(line, lookups) {
   )));
   const brand = line.brand ? matchOne(lookups.brands, [line.brand]) : [];
   const style = matchOne(lookups.productTypes, [line.style, line.description]);
-  const color = matchOne(lookups.colors, [line.color]);
+  const color = matchSupplierColor(line.color, lookups.colors, lookups.colorPairingRules);
   const size = matchOne(lookups.sizes, supplierSizeCandidates(line.size, line.audience));
   return {
     brand_id: brand.length === 1 ? String(brand[0].id) : '',
     product_type_id: style.length === 1 ? String(style[0].id) : '',
-    color_id: color.length === 1 ? String(color[0].id) : '',
+    color_id: color.color_id,
+    color_match_method: color.color_match_method,
     size_id: size.length === 1 ? String(size[0].id) : '',
   };
 }
 
 async function parseAndMatch(supabase, parsed) {
   const skus = parsed.lines.map((line) => line.supplier_sku).filter(Boolean);
-  const [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult] = await Promise.all([
+  const [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult, colorRulesResult] = await Promise.all([
     supabase.from('sc_supplier_item_mappings').select('*').eq('supplier_key', parsed.supplier_key),
     skus.length ? supabase.from('supplier_catalog_review').select('*').in('supplier_sku', skus) : Promise.resolve({ data: [], error: null }),
     supabase.from('blank_products').select('id,sku_base,name,brand_id,product_type_id,color_id,size_id').limit(5000),
     supabase.from('brands').select('id,name,code'),
     supabase.from('product_types').select('id,name,code'),
-    supabase.from('colors').select('id,name,code'),
+    supabase.from('colors').select('*'),
     supabase.from('sizes').select('id,name,code'),
+    supabase.rpc('sc_get_color_pairing_rules', { p_status: 'active' }),
   ]);
-  const errors = [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult].map((result) => result.error).filter(Boolean);
+  // Color pairing is an enhancement over the canonical colors lookup. Older
+  // installations without the RPC still receive exact color matching.
+  const colorRulesUnavailable = colorRulesResult.error && /does not exist|not find|schema cache/i.test(colorRulesResult.error.message || '');
+  const errors = [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult]
+    .concat(colorRulesUnavailable ? [] : [colorRulesResult])
+    .map((result) => result.error).filter(Boolean);
   if (errors.length) {
     const missingSql = errors.find((error) => /sc_supplier_item_mappings|does not exist/i.test(error.message || ''));
     if (missingSql) throw new Error('Supplier receiving SQL is not installed. Run deployment/sql/19_SUPPLIER_CONFIRMATION_RECEIVING.sql in Supabase, then retry.');
@@ -59,6 +67,7 @@ async function parseAndMatch(supabase, parsed) {
   const lookups = {
     brands: brandsResult.data || [], productTypes: stylesResult.data || [],
     colors: colorsResult.data || [], sizes: sizesResult.data || [],
+    colorPairingRules: colorRulesUnavailable ? [] : (colorRulesResult.data || []),
   };
 
   return parsed.lines.map((line) => {
@@ -84,7 +93,7 @@ async function parseAndMatch(supabase, parsed) {
       color: line.color || catalogRow?.color || '',
       size: line.size || catalogRow?.size || '',
     }, lookups);
-    if (!blankId && Object.values(suggested).every(Boolean)) {
+    if (!blankId && ['brand_id', 'product_type_id', 'color_id', 'size_id'].every((field) => suggested[field])) {
       const candidates = blanks.filter((blank) => (
         String(blank.brand_id) === suggested.brand_id
         && String(blank.product_type_id) === suggested.product_type_id
@@ -100,13 +109,18 @@ async function parseAndMatch(supabase, parsed) {
     const ids = blank ? {
       brand_id: String(blank.brand_id || ''), product_type_id: String(blank.product_type_id || ''),
       color_id: String(blank.color_id || ''), size_id: String(blank.size_id || ''),
-    } : suggested;
+    } : {
+      brand_id: suggested.brand_id, product_type_id: suggested.product_type_id,
+      color_id: suggested.color_id, size_id: suggested.size_id,
+    };
+    const matchedLookupCount = ['brand_id', 'product_type_id', 'color_id', 'size_id'].filter((field) => ids[field]).length;
     return {
       ...line,
       ...ids,
       blank_product_id: blankId,
-      match_status: blankId ? 'matched' : (Object.values(ids).filter(Boolean).length >= 3 ? 'review' : 'unmatched'),
+      match_status: blankId ? 'matched' : (matchedLookupCount >= 3 ? 'review' : 'unmatched'),
       match_method: method || 'manual_review',
+      color_match_method: blankId ? 'matched blank WooCommerce color' : suggested.color_match_method,
     };
   });
 }
