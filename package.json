@@ -1,7 +1,7 @@
 {
   "name": "create-product-app",
   "private": true,
-  "version": "0.8.14",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,11 +20,13 @@
     "test:mockups": "node --test scripts/tests/mockup-studio.test.mjs",
     "test:supplier-receiving": "node --test scripts/tests/supplier-confirmation-parser.test.mjs",
     "test:production-board": "node --test scripts/tests/production-board-active-lines.test.mjs",
-    "test": "npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:supplier-receiving && npm run test:production-board",
+    "test:imports": "node --test scripts/tests/spreadsheet-import-safety.test.mjs",
+    "test:integrity": "node --test scripts/tests/application-integrity.test.mjs",
+    "test": "npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:supplier-receiving && npm run test:production-board && npm run test:imports && npm run test:integrity",
     "functions:esm": "node scripts/validate_netlify_esm.mjs",
     "validate:steps6-14": "node scripts/validate_steps6_14.mjs",
     "check": "npm run functions:esm && npm run test && npm run lint && npm run build",
-    "build:vite": "vite build",
+    "build:vite": "node scripts/build_vite.mjs",
     "build:verify": "node scripts/verify_build_features.mjs"
   },
   "dependencies": {
@@ -33,9 +35,9 @@
     "@supabase/supabase-js": "^2.106.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.1",
-    "sharp": "^0.34.3",
-    "xlsx": "^0.18.5"
+    "react-router-dom": "^7.18.2",
+    "read-excel-file": "^9.3.10",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -46,6 +48,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "vite": "^8.0.12"
+    "vite": "^8.2.2"
   }
 }

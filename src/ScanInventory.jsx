@@ -9,6 +9,7 @@ import {
   receiveBlankInventory,
   reserveInventory,
 } from './lib/inventoryApi';
+import { previewBlankProduct } from './lib/applicationIntegrityApi';
 
 function supportsBarcodeDetector() {
   return typeof window !== 'undefined' && 'BarcodeDetector' in window && navigator.mediaDevices?.getUserMedia;
@@ -196,6 +197,30 @@ export default function ScanInventory() {
     setCreating(true);
 
     try {
+      const brand = brands.find((item) => String(item.id) === String(newItem.brand_id));
+      const type = productTypes.find((item) => String(item.id) === String(newItem.product_type_id));
+      const color = colors.find((item) => String(item.id) === String(newItem.color_id));
+      const size = sizes.find((item) => String(item.id) === String(newItem.size_id));
+      const preview = await previewBlankProduct({
+        ...newItem,
+        brand: brand?.name || brand?.code || '', style: type?.name || type?.code || '',
+        color: color?.name || color?.code || '', size: size?.name || size?.code || '',
+      });
+      if (preview.decision === 'ambiguous') {
+        throw new Error(`Creation blocked: ${preview.exact_candidate_count} exact existing records conflict with this item. Open Operations Integrity > Duplicate Workbench.`);
+      }
+      if (preview.decision === 'use_existing') {
+        const candidate = preview.candidates?.[0];
+        const matches = await findBlankProductsByScannedValue(candidate?.sku_base || newItem.sku_base);
+        const product = matches.find((row) => String(row.id) === String(candidate?.blank_product_id_text)) || matches[0];
+        if (!product) throw new Error('An existing match was found but could not be loaded. Open Operations Integrity > Product Identity.');
+        setFoundProduct(product);
+        setMatchingProducts([product]);
+        setManualValue(product.sku_base || manualValue);
+        setShowCreate(false);
+        setMessage(`Used existing product instead of creating a duplicate: ${formatBlankProductLabel(product)}`);
+        return;
+      }
       const product = await createBlankProduct(newItem);
       setFoundProduct(product);
       setMatchingProducts([product]);

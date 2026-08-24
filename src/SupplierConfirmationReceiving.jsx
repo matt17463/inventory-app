@@ -33,6 +33,9 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   const [message, setMessage] = useState('');
   const [notes, setNotes] = useState('');
   const [autoCreateLookups, setAutoCreateLookups] = useState(true);
+  const [rowFilter, setRowFilter] = useState('');
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [bulkChoice, setBulkChoice] = useState({ bin_id: '', color_id: '', size_id: '' });
 
   async function loadHistory({ quiet = false } = {}) {
     try {
@@ -57,6 +60,15 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   const readySelected = useMemo(() => selected.filter((row) => missingReceivingFields(row).length === 0), [selected]);
   const selectedUnits = selected.reduce((sum, row) => sum + Number(row.receive_now || 0), 0);
   const readyUnits = readySelected.reduce((sum, row) => sum + Number(row.receive_now || 0), 0);
+  const visibleRows = useMemo(() => {
+    const term = rowFilter.trim().toLowerCase();
+    return rows.map((row, index) => ({ row, index })).filter(({ row }) => {
+      if (reviewOnly && missingReceivingFields(row).length === 0) return false;
+      if (!term) return true;
+      return [row.supplier_sku, row.description, row.brand, row.style, row.color, row.size]
+        .filter(Boolean).join(' ').toLowerCase().includes(term);
+    });
+  }, [rows, rowFilter, reviewOnly]);
 
   function updateRow(index, patch) {
     setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
@@ -85,6 +97,10 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
         bin_id: defaultBinId || '',
         remember_mapping: true,
       })));
+      await supplierReceivingAction({
+        action: 'save_draft', confirmation: parsed,
+        rows: (parsed.lines || []).map((row) => ({ ...row, receive_now: Number(row.remaining_quantity || 0) })),
+      });
       setMessage(parsed.duplicate_order
         ? `Order ${parsed.order_number} was imported before. Previously received quantities are shown; only remaining units can be received.`
         : `${parsed.total_lines} lines and ${parsed.total_units} units were read. Review yellow/red rows before receiving.`);
@@ -93,6 +109,13 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
     } finally {
       setBusy('');
     }
+  }
+
+  function applyBulkChoice() {
+    const patch = Object.fromEntries(Object.entries(bulkChoice).filter(([, value]) => value));
+    if (!Object.keys(patch).length) { setMessage('Choose a bin, color, or size to apply.'); return; }
+    setRows((current) => current.map((row) => row.selected ? { ...row, ...patch, blank_product_id: '' } : row));
+    setMessage(`Bulk choices applied to ${rows.filter((row) => row.selected).length} selected row(s).`);
   }
 
   async function receiveSelected() {
@@ -192,10 +215,18 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
             <button className="sc-btn sc-btn-small" disabled={!defaultBinId} onClick={() => setRows(rows.map((row) => ({ ...row, bin_id: defaultBinId })))}>Apply Default Bin to All</button>
             <label className="supplier-auto-lookup-toggle"><input type="checkbox" checked={autoCreateLookups} onChange={(event) => setAutoCreateLookups(event.target.checked)} /> Create missing Brands and Styles when receiving</label>
           </div>
+          <div className="sc-toolbar supplier-review-toolbar">
+            <input className="sc-search-input" value={rowFilter} onChange={(event) => setRowFilter(event.target.value)} placeholder="Filter supplier SKU, product, color, or size…" />
+            <label><input type="checkbox" checked={reviewOnly} onChange={(event) => setReviewOnly(event.target.checked)} /> Show review rows only</label>
+            {select(bulkChoice.bin_id, (value) => setBulkChoice((current) => ({ ...current, bin_id: value })), lookups.bins, 'Bulk bin', 'bin')}
+            {select(bulkChoice.color_id, (value) => setBulkChoice((current) => ({ ...current, color_id: value })), lookups.colors, 'Bulk color')}
+            {select(bulkChoice.size_id, (value) => setBulkChoice((current) => ({ ...current, size_id: value })), lookups.sizes, 'Bulk size')}
+            <button type="button" className="sc-btn sc-btn-small" onClick={applyBulkChoice}>Apply to Selected</button>
+          </div>
           <div className="supplier-receiving-table-wrap">
             <table className="supplier-receiving-table">
               <thead><tr><th>Use</th><th>Match</th><th>Supplier item</th><th>Brand / Style</th><th>Color / Size</th><th>Ordered</th><th>Received</th><th>Receive now</th><th>Bin</th><th>Cost</th><th>Remember</th></tr></thead>
-              <tbody>{rows.map((row, index) => {
+              <tbody>{visibleRows.map(({ row, index }) => {
                 const remaining = Number(row.remaining_quantity || 0);
                 const missingFields = missingReceivingFields(row);
                 const ready = remaining > 0 && missingFields.length === 0;
@@ -213,7 +244,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
                     <td><input type="checkbox" checked={row.remember_mapping !== false} title="Remember the supplier SKU and supplier color pairing for future imports" onChange={(event) => updateRow(index, { remember_mapping: event.target.checked })} /></td>
                   </tr>
                 );
-              })}</tbody>
+              })}{visibleRows.length === 0 && <tr><td colSpan="11" className="sc-empty-cell">No supplier lines match this filter.</td></tr>}</tbody>
             </table>
           </div>
           <div className="supplier-receive-footer">

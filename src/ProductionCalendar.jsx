@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   listCapacityWindows,
   listWindowAssignments,
@@ -19,7 +19,7 @@ export default function ProductionCalendar() {
   const [form, setForm] = useState({ window_id: '', job_id: '', assigned_minutes: 60, assignment_title: '', notes: '' });
   const [message, setMessage] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     setMessage('');
     try {
       const [w, a, j] = await Promise.all([
@@ -28,11 +28,14 @@ export default function ProductionCalendar() {
         listSchedulableJobs(),
       ]);
       setWindows(w); setAssignments(a); setJobs(j);
-      if (!form.window_id && w[0]) setForm((f) => ({ ...f, window_id: w[0].id }));
-      if (!form.job_id && j[0]) setForm((f) => ({ ...f, job_id: j[0].job_id }));
+      setForm((current) => ({
+        ...current,
+        window_id: current.window_id || w[0]?.id || '',
+        job_id: current.job_id || j[0]?.job_id || '',
+      }));
     } catch (e) { setMessage(e.message || String(e)); }
-  }
-  useEffect(() => { load(); }, [startDate, endDate]);
+  }, [startDate, endDate]);
+  useEffect(() => { load(); }, [load]);
 
   const byDate = useMemo(() => {
     const m = new Map();

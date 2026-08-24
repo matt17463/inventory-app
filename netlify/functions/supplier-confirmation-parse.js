@@ -36,12 +36,31 @@ function lookupMatches(line, lookups) {
   };
 }
 
+function identityKey(ids = {}) {
+  return ['brand_id', 'product_type_id', 'color_id', 'size_id']
+    .map((field) => String(ids[field] || ''))
+    .join('|');
+}
+
+async function mapWithConcurrency(values, concurrency, task) {
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await task(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+  return results;
+}
+
 async function parseAndMatch(supabase, parsed) {
   const skus = parsed.lines.map((line) => line.supplier_sku).filter(Boolean);
-  const [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult, colorRulesResult, colorAliasesResult] = await Promise.all([
+  const [mappingResult, catalogResult, brandsResult, stylesResult, colorsResult, sizesResult, colorRulesResult, colorAliasesResult] = await Promise.all([
     supabase.from('sc_supplier_item_mappings').select('*').eq('supplier_key', parsed.supplier_key),
     skus.length ? supabase.from('supplier_catalog_review').select('*').in('supplier_sku', skus) : Promise.resolve({ data: [], error: null }),
-    supabase.from('blank_products').select('id,sku_base,name,brand_id,product_type_id,color_id,size_id').limit(5000),
     supabase.from('brands').select('id,name,code'),
     supabase.from('product_types').select('id,name,code'),
     supabase.from('sc_active_colors').select('*'),
@@ -52,7 +71,7 @@ async function parseAndMatch(supabase, parsed) {
   // Color pairing is an enhancement over the canonical colors lookup. Older
   // installations without the RPC still receive exact color matching.
   const colorRulesUnavailable = colorRulesResult.error && /does not exist|not find|schema cache/i.test(colorRulesResult.error.message || '');
-  const errors = [mappingResult, catalogResult, blankResult, brandsResult, stylesResult, colorsResult, sizesResult, colorAliasesResult]
+  const errors = [mappingResult, catalogResult, brandsResult, stylesResult, colorsResult, sizesResult, colorAliasesResult]
     .concat(colorRulesUnavailable ? [] : [colorRulesResult])
     .map((result) => result.error).filter(Boolean);
   if (errors.length) {
@@ -65,8 +84,6 @@ async function parseAndMatch(supabase, parsed) {
 
   const mappings = mappingResult.data || [];
   const catalog = catalogResult.data || [];
-  const blanks = blankResult.data || [];
-  const blankById = new Map(blanks.map((blank) => [String(blank.id), blank]));
   const lookups = {
     brands: brandsResult.data || [], productTypes: stylesResult.data || [],
     colors: colorsResult.data || [], sizes: sizesResult.data || [],
@@ -79,7 +96,7 @@ async function parseAndMatch(supabase, parsed) {
     String(rule.canonical_color_id ?? rule.canonical_color_id_text ?? ''),
   ]).filter(([sourceId, canonicalId]) => sourceId && canonicalId));
 
-  return parsed.lines.map((line) => {
+  const preparedLines = parsed.lines.map((line) => {
     const mapping = mappings.find((row) => supplierMatchKey(row.supplier_sku) === supplierMatchKey(line.supplier_sku));
     let blankId = mapping?.blank_product_id_text || '';
     let method = blankId ? 'saved_vendor_sku' : '';
@@ -102,16 +119,51 @@ async function parseAndMatch(supabase, parsed) {
       color: line.color || catalogRow?.color || '',
       size: line.size || catalogRow?.size || '',
     }, lookups);
-    if (!blankId && ['brand_id', 'product_type_id', 'color_id', 'size_id'].every((field) => suggested[field])) {
-      const candidates = blanks.filter((blank) => (
-        String(blank.brand_id) === suggested.brand_id
-        && String(blank.product_type_id) === suggested.product_type_id
-        && String(blank.color_id) === suggested.color_id
-        && String(blank.size_id) === suggested.size_id
-      ));
+    return { line, blankId, method, suggested };
+  });
+
+  const mappedIds = [...new Set(preparedLines.map((entry) => entry.blankId).filter(Boolean))];
+  const blankById = new Map();
+  if (mappedIds.length) {
+    const mappedResult = await supabase.from('blank_products')
+      .select('id,sku_base,name,brand_id,product_type_id,color_id,size_id')
+      .in('id', mappedIds);
+    if (mappedResult.error) throw mappedResult.error;
+    (mappedResult.data || []).forEach((blank) => blankById.set(String(blank.id), blank));
+  }
+  preparedLines.forEach((entry) => {
+    if (entry.blankId && !blankById.has(String(entry.blankId))) {
+      entry.method = `${entry.method || 'saved_vendor_sku'}_missing_blank_review`;
+      entry.blankId = '';
+    }
+  });
+
+  const identityEntries = [...new Map(preparedLines
+    .filter((entry) => !entry.blankId && ['brand_id', 'product_type_id', 'color_id', 'size_id'].every((field) => entry.suggested[field]))
+    .map((entry) => [identityKey(entry.suggested), entry.suggested])).entries()];
+  const identityMatches = new Map();
+  const candidateResults = await mapWithConcurrency(identityEntries, 8, async ([key, ids]) => {
+    const result = await supabase.from('blank_products')
+      .select('id,sku_base,name,brand_id,product_type_id,color_id,size_id')
+      .eq('brand_id', ids.brand_id)
+      .eq('product_type_id', ids.product_type_id)
+      .eq('color_id', ids.color_id)
+      .eq('size_id', ids.size_id)
+      .limit(2);
+    if (result.error) throw result.error;
+    return [key, result.data || []];
+  });
+  candidateResults.forEach(([key, candidates]) => identityMatches.set(key, candidates));
+
+  return preparedLines.map(({ line, blankId: initialBlankId, method: initialMethod, suggested }) => {
+    let blankId = initialBlankId;
+    let method = initialMethod;
+    if (!blankId) {
+      const candidates = identityMatches.get(identityKey(suggested)) || [];
       if (candidates.length === 1) {
         blankId = String(candidates[0].id);
         method = 'brand_style_color_size';
+        blankById.set(blankId, candidates[0]);
       }
     }
     const blank = blankById.get(blankId);

@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { patchPullSheetLinesGuarded } from './applicationIntegrityApi';
 
 export const NON_INVENTORY_RULE_TYPES = [
   { value: 'exact_sku', label: 'Exact SKU' },
@@ -127,23 +128,12 @@ export async function setJobItemPurchasingReportInclusion({
   jobItemId,
   includeOnPurchasingReport,
 }) {
-  const { data, error } = await supabase
-    .from('job_items')
-    .update({
-      include_on_purchasing_report: includeOnPurchasingReport !== false,
-    })
-    .eq('id', Number(jobItemId))
-    .select('id, include_on_purchasing_report')
-    .single();
-
-  if (error) {
-    throw new Error(buildSupabaseErrorMessage(
-      error,
-      'Could not update purchasing-report inclusion. Run 07_NON_INVENTORY_PURCHASING_TOGGLE.sql in Supabase.'
-    ));
-  }
-
-  return data;
+  const rows = await patchPullSheetLinesGuarded(
+    [jobItemId],
+    { include_on_purchasing_report: includeOnPurchasingReport !== false },
+    'Purchasing-report inclusion changed from pull sheet',
+  );
+  return rows[0] || null;
 }
 
 export async function applyNonInventoryRulesToJob(jobId) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import {
@@ -23,6 +23,10 @@ import {
 import {
   completePullSheetItemDeductBlankSafe,
 } from './lib/pullSheetCompletionApi';
+import {
+  updatePullSheetItemStatus,
+  updatePullSheetStatus,
+} from './lib/inventoryApi';
 
 function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
@@ -81,66 +85,6 @@ function toRpcBinId(binId) {
   return text;
 }
 
-function normalizeCatalogPullSheetRows(rows = []) {
-  return rows.map((row, index) => ({
-    ...row,
-    line_number: row.line_number || index + 1,
-    ordered_product_name: row.ordered_product_name || row.item_name || row.order_sku || row.ordered_sku,
-    ordered_sku: row.ordered_sku || row.order_sku || row.sku,
-    ordered_brand: row.ordered_brand || row.brand,
-    ordered_style: row.ordered_style || row.product_type || row.style,
-    ordered_color: row.ordered_color || row.color,
-    ordered_size: row.ordered_size || row.size,
-    blank_name: row.blank_name || row.paired_blank_name,
-    blank_sku: row.blank_sku || row.blank_sku_base || row.paired_blank_sku_base,
-    blank_color: row.blank_color || row.color,
-    blank_size: row.blank_size || row.size,
-    inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
-    include_on_purchasing_report: row.include_on_purchasing_report !== undefined
-      ? row.include_on_purchasing_report
-      : true,
-    non_inventory_reason: row.non_inventory_reason || '',
-    non_inventory_rule_id: row.non_inventory_rule_id || null,
-    pairing_status: row.pairing_status || (row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing')),
-  }));
-}
-
-function mergePullSheetRows(primaryRows = [], fallbackRows = []) {
-  const map = new Map();
-  [...primaryRows, ...fallbackRows].forEach((row, index) => {
-    const key = String(row.job_item_id || row.id || row.order_sku || row.ordered_sku || index);
-    if (!map.has(key)) map.set(key, row);
-    else map.set(key, { ...map.get(key), ...row });
-  });
-  return Array.from(map.values()).map((row, index) => ({ ...row, line_number: row.line_number || index + 1 }));
-}
-
-function normalizeFallbackPullSheetRows(rows = []) {
-  return rows
-    .filter((row) => row?.job_item_id || row?.id || row?.blank_product_id || Number(row?.quantity || 0) > 0)
-    .map((row, index) => ({
-      ...row,
-      line_number: row.line_number || index + 1,
-      ordered_product_name: row.ordered_product_name || row.ordered_name || row.item_name || row.product_name || row.blank_name || row.blank_sku_base,
-      ordered_sku: row.ordered_sku || row.order_sku || row.sku || row.blank_sku_base,
-      ordered_brand: row.ordered_brand || row.brand,
-      ordered_style: row.ordered_style || row.product_type || row.style,
-      ordered_color: row.ordered_color || row.color,
-      ordered_size: row.ordered_size || row.size,
-      blank_name: row.blank_name || row.paired_blank_name,
-      blank_sku: row.blank_sku || row.blank_sku_base || row.paired_blank_sku_base,
-      blank_color: row.blank_color || row.color,
-      blank_size: row.blank_size || row.size,
-      inventory_required: row.inventory_required !== undefined ? row.inventory_required : true,
-    include_on_purchasing_report: row.include_on_purchasing_report !== undefined
-      ? row.include_on_purchasing_report
-      : true,
-    non_inventory_reason: row.non_inventory_reason || '',
-    non_inventory_rule_id: row.non_inventory_rule_id || null,
-    pairing_status: row.pairing_status || (row.inventory_required === false ? 'non_inventory' : (row.blank_product_id ? 'paired' : 'needs_blank_pairing')),
-    }));
-}
-
 export default function PullSheetView() {
   const { jobId, id } = useParams();
   const resolvedJobId = jobId || id;
@@ -162,7 +106,7 @@ export default function PullSheetView() {
   const [nonInventoryDialog, setNonInventoryDialog] = useState(null);
   const [nonInventorySaving, setNonInventorySaving] = useState(false);
 
-  async function fetchJobItemsDirect() {
+  const fetchJobItemsDirect = useCallback(async () => {
     const direct = await supabase
       .from('job_items')
       .select(`
@@ -255,9 +199,9 @@ export default function PullSheetView() {
               ),
       };
     });
-  }
+  }, [resolvedJobId]);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     setBulkMessage('');
@@ -291,9 +235,9 @@ export default function PullSheetView() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [resolvedJobId, fetchJobItemsDirect]);
 
-  useEffect(() => { if (resolvedJobId) load(); }, [resolvedJobId]);
+  useEffect(() => { if (resolvedJobId) load(); }, [resolvedJobId, load]);
 
   useEffect(() => {
     let active = true;
@@ -468,8 +412,9 @@ export default function PullSheetView() {
       return;
     }
 
-    const { error } = await supabase.from('job_items').update({ status: 'pulled' }).eq('id', Number(jobItemId));
-    if (error) {
+    try {
+      await updatePullSheetItemStatus({ jobItemId, status: 'pulled' });
+    } catch (error) {
       setLineMessages((messages) => ({ ...messages, [key]: error.message || 'Could not mark line as pulled.' }));
       return;
     }
@@ -793,12 +738,9 @@ export default function PullSheetView() {
     setJobStatusBusy(nextStatus);
     setBulkMessage('');
 
-    const { error } = await supabase
-      .from('jobs')
-      .update({ status: nextStatus })
-      .eq('id', Number(resolvedJobId));
-
-    if (error) {
+    try {
+      await updatePullSheetStatus({ jobId: resolvedJobId, status: nextStatus });
+    } catch (error) {
       setBulkMessage(error.message || 'Could not update pull sheet status.');
       setJobStatusBusy('');
       return;

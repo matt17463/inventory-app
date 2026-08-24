@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { downloadCsv, getAuditTrail } from './lib/phase6Api';
 
 export default function AuditTrail() {
@@ -7,13 +7,13 @@ export default function AuditTrail() {
   const [actionType, setActionType] = useState('');
   const [error, setError] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     setError('');
     try { setRows(await getAuditTrail({ search, actionType })); }
     catch (err) { setError(err.message || 'Failed to load audit trail.'); }
-  }
+  }, [search, actionType]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <main className="page phase6-page">

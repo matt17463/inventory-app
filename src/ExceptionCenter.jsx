@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getExceptionCenter, getProductDataHealthReport } from './lib/phase6Api';
 
@@ -25,7 +25,24 @@ export default function ExceptionCenter() {
     .filter((item) => item.severity === 'high')
     .reduce((sum, item) => sum + Number(item.count || 0), 0), [items]);
 
-  async function load() {
+  const loadDetails = useCallback(async (item, key, options = {}) => {
+    if (!isProductDataException(item)) return;
+    if (detailRows[key]?.length) return;
+
+    setDetailLoading(key);
+    if (!options.silent) setDetailError('');
+
+    try {
+      const rows = await getProductDataHealthReport('all');
+      setDetailRows((current) => ({ ...current, [key]: rows.slice(0, 100) }));
+    } catch (err) {
+      setDetailError(err.message || 'Failed to load product data health details.');
+    } finally {
+      setDetailLoading('');
+    }
+  }, [detailRows]);
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     setDetailError('');
@@ -45,24 +62,7 @@ export default function ExceptionCenter() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function loadDetails(item, key, options = {}) {
-    if (!isProductDataException(item)) return;
-    if (detailRows[key]?.length) return;
-
-    setDetailLoading(key);
-    if (!options.silent) setDetailError('');
-
-    try {
-      const rows = await getProductDataHealthReport('all');
-      setDetailRows((current) => ({ ...current, [key]: rows.slice(0, 100) }));
-    } catch (err) {
-      setDetailError(err.message || 'Failed to load product data health details.');
-    } finally {
-      setDetailLoading('');
-    }
-  }
+  }, [loadDetails]);
 
   async function toggleDetails(item) {
     const key = `${item.category}-${item.title}`;
@@ -72,7 +72,7 @@ export default function ExceptionCenter() {
     if (!isExpanded) await loadDetails(item, key);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <main className="page phase6-page">

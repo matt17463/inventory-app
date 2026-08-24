@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getPurchaseOrders, money } from './lib/inventoryApi';
 
@@ -12,7 +12,7 @@ export default function PurchaseOrders() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  async function loadRows() {
+  const loadRows = useCallback(async () => {
     setLoading(true);
     setMessage('');
     try {
@@ -22,9 +22,9 @@ export default function PurchaseOrders() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [status]);
 
-  useEffect(() => { loadRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [status]);
+  useEffect(() => { loadRows(); }, [loadRows]);
 
   const totals = useMemo(() => rows.reduce((acc, row) => {
     acc.orders += 1;

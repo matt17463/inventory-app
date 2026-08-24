@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { patchPullSheetLinesGuarded } from './applicationIntegrityApi';
 
 function normalizeText(value) {
   return String(value ?? '')
@@ -117,17 +118,12 @@ export async function saveJobItemSelectedBin({ jobItemId, binId }) {
     throw new Error('A valid pull-sheet line ID is required.');
   }
 
-  const { data, error } = await supabase
-    .from('job_items')
-    .update({
-      selected_bin_id: databaseId(binId),
-    })
-    .eq('id', resolvedJobItemId)
-    .select('id, selected_bin_id')
-    .single();
-
-  if (error) throw error;
-  return data;
+  const rows = await patchPullSheetLinesGuarded(
+    [resolvedJobItemId],
+    { selected_bin_id: databaseId(binId) },
+    'Selected source bin changed from pull sheet',
+  );
+  return rows[0] || null;
 }
 
 function groupPhysicalStockRows(stockedRows, pendingStockIds) {
@@ -266,12 +262,7 @@ export async function assignOutOfStockJobItemsToPendingStock(jobId) {
     });
 
     if (assignToPendingIds.length) {
-      const { error: pendingError } = await supabase
-        .from('job_items')
-        .update({ selected_bin_id: pendingStockBin.bin_id })
-        .in('id', assignToPendingIds);
-
-      if (pendingError) throw pendingError;
+      await patchPullSheetLinesGuarded(assignToPendingIds, { selected_bin_id: pendingStockBin.bin_id }, 'Assign out-of-stock pull sheet lines to Pending Stock');
     }
 
     for (const repair of reassignments) {
@@ -282,12 +273,7 @@ export async function assignOutOfStockJobItemsToPendingStock(jobId) {
     }
 
     if (clearSelections.length) {
-      const { error: clearError } = await supabase
-        .from('job_items')
-        .update({ selected_bin_id: null })
-        .in('id', clearSelections);
-
-      if (clearError) throw clearError;
+      await patchPullSheetLinesGuarded(clearSelections, { selected_bin_id: null }, 'Clear stale Pending Stock selection for manual bin review');
     }
 
     return {

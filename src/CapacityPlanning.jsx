@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   listProductionEmployees,
   saveProductionEmployee,
@@ -19,7 +19,7 @@ export default function CapacityPlanning() {
   const [employeeForm, setEmployeeForm] = useState({ display_name: '', role: 'Production', email: '', active: true });
   const [windowForm, setWindowForm] = useState({ employee_id: '', window_date: today(), start_time: '09:00', end_time: '13:00', title: 'Production Block', work_area: 'General Production', notes: '' });
 
-  async function load() {
+  const load = useCallback(async () => {
     setMessage('');
     try {
       const [emp, win] = await Promise.all([
@@ -28,13 +28,13 @@ export default function CapacityPlanning() {
       ]);
       setEmployees(emp);
       setWindows(win);
-      if (!windowForm.employee_id && emp[0]) setWindowForm((f) => ({ ...f, employee_id: emp[0].id }));
+      if (emp[0]) setWindowForm((f) => f.employee_id ? f : ({ ...f, employee_id: emp[0].id }));
     } catch (e) {
       setMessage(e.message || String(e));
     }
-  }
+  }, [rangeStart, rangeEnd]);
 
-  useEffect(() => { load(); }, [rangeStart, rangeEnd]);
+  useEffect(() => { load(); }, [load]);
 
   const totals = useMemo(() => windows.reduce((acc, w) => {
     acc.capacity += Number(w.capacity_minutes || 0);

@@ -1,81 +1,89 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import AddItemToBin from './AddItemToBin';
-import AuditMode from './AuditMode';
-import BinContents from './BinContents';
-import BinsDashboard from './BinsDashboard';
-import BlankInventory from './BlankInventory';
-import EditBlankItems from './EditBlankItems';
-import Home from './Home';
-import InventoryImport from './InventoryImport';
-import InventoryValuation from './InventoryValuation';
-import LowStock from './LowStock';
-import NfcWriter from './NfcWriter';
-import PullSheetList from './PullSheetList';
-import Purchasing from './Purchasing';
-import PurchaseOrderGenerator from './PurchaseOrderGenerator';
-import PurchaseOrders from './PurchaseOrders';
-import ReceivePurchaseOrder from './ReceivePurchaseOrder';
-import WaitingOn from './WaitingOn';
-import SupplierCatalogImport from './SupplierCatalogImport';
-import SupplierCatalogReview from './SupplierCatalogReview';
-import BarcodeLabelGenerator from './BarcodeLabelGenerator';
-import PullSheetView from './PullSheetView';
-import Reservations from './Reservations';
-import ReturnFinishedInventory from './ReturnFinishedInventory';
-import SampleInventory from './SampleInventory';
-import ScanInventory from './ScanInventory';
-import TestTag from './TestTag';
-import TransferInventory from './TransferInventory';
-import WooSync from './WooSync';
-import ActivityPage from './ActivityPage';
-import ColorAliasReview from './ColorAliasReview';
-import CampaignForecast from './CampaignForecast';
-import CustomerReorderIntelligence from './CustomerReorderIntelligence';
-import JobCosting from './JobCosting';
-import SpoilageTracking from './SpoilageTracking';
-import FinishedMatchSuggestions from './FinishedMatchSuggestions';
-import ProductionBoard from './ProductionBoard';
-import ArtworkRequests from './ArtworkRequests';
-import ShopTvMode from './ShopTvMode';
-import PullSheetDueDateEditor from './PullSheetDueDateEditor';
-import VendorPriceComparison from './VendorPriceComparison';
-import CapacityPlanning from './CapacityPlanning';
-import ProductionCalendar from './ProductionCalendar';
-import ProductionEstimator from './ProductionEstimator';
-import PricingRules from './PricingRules';
-import QuoteBuilder from './QuoteBuilder';
-import QcChecklist from './QcChecklist';
-import EmployeeTasks from './EmployeeTasks';
-import OrderRiskDashboard from './OrderRiskDashboard';
-import DailyCommandCenter from './DailyCommandCenter';
-import ProductMappingRepair from './ProductMappingRepair';
-import BulkPairingRepair from './BulkPairingRepair';
-import NonInventoryRules from './NonInventoryRules';
-import ExceptionCenter from './ExceptionCenter';
-import CustomerPortalAdmin from './CustomerPortalAdmin';
-import CustomerPortal from './CustomerPortal';
-import CustomerPortalPreview from './CustomerPortalPreview';
-import ArtworkPluginBridge from './ArtworkPluginBridge';
-import TestingMode from './TestingMode';
-import ThemeSettings from './ThemeSettings';
-import ApprovalAutomation from './ApprovalAutomation';
-import AuditTrail from './AuditTrail';
-import QuoteToOrder from './QuoteToOrder';
-import ProductDataHealth from './ProductDataHealth';
-import InventoryAudit from './InventoryAudit';
-import ProductionPhotoProof from './ProductionPhotoProof';
-import ManualInvoicedOrders from './ManualInvoicedOrders';
 import AppShell from './components/AppShell';
 import './App.css';
 import AuthGate from './AuthGate';
-import CreateFinishedFromBlank from './CreateFinishedFromBlank';
-import WarehouseAuditReport from './WarehouseAuditReport';
-import DeploymentHealth from './DeploymentHealth';
-import GoogleCalendarIntegration from './GoogleCalendarIntegration';
-import MockupStudio from './MockupStudio';
-import MockupCustomerReview from './MockupCustomerReview';
-import MockupProductionPacket from './MockupProductionPacket';
-import NotFound from './NotFound';
+
+const ActivityPage = lazy(() => import('./ActivityPage'));
+const AddItemToBin = lazy(() => import('./AddItemToBin'));
+const ApprovalAutomation = lazy(() => import('./ApprovalAutomation'));
+const ArtworkPluginBridge = lazy(() => import('./ArtworkPluginBridge'));
+const ArtworkRequests = lazy(() => import('./ArtworkRequests'));
+const AuditMode = lazy(() => import('./AuditMode'));
+const AuditTrail = lazy(() => import('./AuditTrail'));
+const BarcodeLabelGenerator = lazy(() => import('./BarcodeLabelGenerator'));
+const BinContents = lazy(() => import('./BinContents'));
+const BinsDashboard = lazy(() => import('./BinsDashboard'));
+const BlankInventory = lazy(() => import('./BlankInventory'));
+const BulkPairingRepair = lazy(() => import('./BulkPairingRepair'));
+const CampaignForecast = lazy(() => import('./CampaignForecast'));
+const CapacityPlanning = lazy(() => import('./CapacityPlanning'));
+const ColorAliasReview = lazy(() => import('./ColorAliasReview'));
+const CreateFinishedFromBlank = lazy(() => import('./CreateFinishedFromBlank'));
+const CustomerPortal = lazy(() => import('./CustomerPortal'));
+const CustomerPortalAdmin = lazy(() => import('./CustomerPortalAdmin'));
+const CustomerPortalPreview = lazy(() => import('./CustomerPortalPreview'));
+const CustomerReorderIntelligence = lazy(() => import('./CustomerReorderIntelligence'));
+const DailyCommandCenter = lazy(() => import('./DailyCommandCenter'));
+const DeploymentHealth = lazy(() => import('./DeploymentHealth'));
+const EditBlankItems = lazy(() => import('./EditBlankItems'));
+const EmployeeTasks = lazy(() => import('./EmployeeTasks'));
+const ExceptionCenter = lazy(() => import('./ExceptionCenter'));
+const FinishedMatchSuggestions = lazy(() => import('./FinishedMatchSuggestions'));
+const GoogleCalendarIntegration = lazy(() => import('./GoogleCalendarIntegration'));
+const Home = lazy(() => import('./Home'));
+const InventoryAudit = lazy(() => import('./InventoryAudit'));
+const InventoryImport = lazy(() => import('./InventoryImport'));
+const InventoryValuation = lazy(() => import('./InventoryValuation'));
+const JobCosting = lazy(() => import('./JobCosting'));
+const LowStock = lazy(() => import('./LowStock'));
+const ManualInvoicedOrders = lazy(() => import('./ManualInvoicedOrders'));
+const MockupCustomerReview = lazy(() => import('./MockupCustomerReview'));
+const MockupProductionPacket = lazy(() => import('./MockupProductionPacket'));
+const MockupStudio = lazy(() => import('./MockupStudio'));
+const NfcWriter = lazy(() => import('./NfcWriter'));
+const NonInventoryRules = lazy(() => import('./NonInventoryRules'));
+const NotFound = lazy(() => import('./NotFound'));
+const OrderRiskDashboard = lazy(() => import('./OrderRiskDashboard'));
+const ApplicationIntegrityCenter = lazy(() => import('./ApplicationIntegrityCenter'));
+const PricingRules = lazy(() => import('./PricingRules'));
+const ProductDataHealth = lazy(() => import('./ProductDataHealth'));
+const ProductIntegrityCenter = lazy(() => import('./ProductIntegrityCenter'));
+const ProductMappingRepair = lazy(() => import('./ProductMappingRepair'));
+const ProductionBoard = lazy(() => import('./ProductionBoard'));
+const ProductionCalendar = lazy(() => import('./ProductionCalendar'));
+const ProductionEstimator = lazy(() => import('./ProductionEstimator'));
+const ProductionPhotoProof = lazy(() => import('./ProductionPhotoProof'));
+const PullSheetDueDateEditor = lazy(() => import('./PullSheetDueDateEditor'));
+const PullSheetList = lazy(() => import('./PullSheetList'));
+const PullSheetView = lazy(() => import('./PullSheetView'));
+const PurchaseOrderGenerator = lazy(() => import('./PurchaseOrderGenerator'));
+const PurchaseOrders = lazy(() => import('./PurchaseOrders'));
+const Purchasing = lazy(() => import('./Purchasing'));
+const QcChecklist = lazy(() => import('./QcChecklist'));
+const QuoteBuilder = lazy(() => import('./QuoteBuilder'));
+const QuoteToOrder = lazy(() => import('./QuoteToOrder'));
+const ReceivePurchaseOrder = lazy(() => import('./ReceivePurchaseOrder'));
+const Reservations = lazy(() => import('./Reservations'));
+const ReturnFinishedInventory = lazy(() => import('./ReturnFinishedInventory'));
+const SampleInventory = lazy(() => import('./SampleInventory'));
+const ScanInventory = lazy(() => import('./ScanInventory'));
+const ShopTvMode = lazy(() => import('./ShopTvMode'));
+const SpoilageTracking = lazy(() => import('./SpoilageTracking'));
+const SupplierCatalogImport = lazy(() => import('./SupplierCatalogImport'));
+const SupplierCatalogReview = lazy(() => import('./SupplierCatalogReview'));
+const TestTag = lazy(() => import('./TestTag'));
+const TestingMode = lazy(() => import('./TestingMode'));
+const ThemeSettings = lazy(() => import('./ThemeSettings'));
+const TransferInventory = lazy(() => import('./TransferInventory'));
+const VendorPriceComparison = lazy(() => import('./VendorPriceComparison'));
+const WaitingOn = lazy(() => import('./WaitingOn'));
+const WarehouseAuditReport = lazy(() => import('./WarehouseAuditReport'));
+const WooSync = lazy(() => import('./WooSync'));
+
+function RouteLoading() {
+  return <div className="sc-route-loading" role="status" aria-live="polite">Loading page…</div>;
+}
 
 function EmployeeRoutes() {
   return (
@@ -144,6 +152,8 @@ function EmployeeRoutes() {
       <Route path="/quote-to-order" element={<QuoteToOrder />} />
       <Route path="/manual-orders" element={<ManualInvoicedOrders />} />
       <Route path="/product-data-health" element={<ProductDataHealth />} />
+      <Route path="/product-integrity" element={<ProductIntegrityCenter />} />
+      <Route path="/operations-integrity" element={<ApplicationIntegrityCenter />} />
       <Route path="/inventory-audit" element={<InventoryAudit />} />
       <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />
       <Route path="/nfc-writer" element={<NfcWriter />} />
@@ -165,20 +175,22 @@ function EmployeeRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/customer-portal" element={<CustomerPortal />} />
-        <Route path="/mockup-review" element={<MockupCustomerReview />} />
-        <Route
-          path="*"
-          element={(
-            <AuthGate>
-              <AppShell>
-                <EmployeeRoutes />
-              </AppShell>
-            </AuthGate>
-          )}
-        />
-      </Routes>
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          <Route path="/customer-portal" element={<CustomerPortal />} />
+          <Route path="/mockup-review" element={<MockupCustomerReview />} />
+          <Route
+            path="*"
+            element={(
+              <AuthGate>
+                <AppShell>
+                  <EmployeeRoutes />
+                </AppShell>
+              </AuthGate>
+            )}
+          />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

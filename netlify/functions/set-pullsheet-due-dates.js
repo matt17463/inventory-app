@@ -17,12 +17,6 @@ function json(statusCode, payload) {
   };
 }
 
-function getHeader(headers, name) {
-  const lower = name.toLowerCase();
-  const found = Object.entries(headers || {}).find(([key]) => key.toLowerCase() === lower);
-  return found ? found[1] : null;
-}
-
 function normalizeDate(value) {
   if (!value) return null;
   const text = String(value).trim();

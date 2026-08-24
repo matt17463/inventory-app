@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getArtworkSystemRequests,
   getArtworkSystemReorders,
@@ -39,7 +39,7 @@ export default function ArtworkRequests() {
   const [message, setMessage] = useState('');
   const [savingId, setSavingId] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       setMessage('');
       const [requestRows, reorderRows, handoffRows] = await Promise.all([
@@ -50,17 +50,18 @@ export default function ArtworkRequests() {
       setRequests(requestRows);
       setReorders(reorderRows);
       setHandoffs(handoffRows);
-      if (selected) {
-        const source = selected.kind === 'reorder' ? reorderRows : requestRows;
-        const updated = source.find((row) => row.id === selected.id);
-        if (updated) setSelected({ ...updated, kind: selected.kind });
-      }
+      setSelected((current) => {
+        if (!current) return current;
+        const source = current.kind === 'reorder' ? reorderRows : requestRows;
+        const updated = source.find((row) => row.id === current.id);
+        return updated ? { ...updated, kind: current.kind } : current;
+      });
     } catch (err) {
       setMessage(err.message || 'Failed to load artwork system records.');
     }
-  }
+  }, [status]);
 
-  useEffect(() => { load(); }, [status]);
+  useEffect(() => { load(); }, [load]);
 
   const rows = tab === 'reorders' ? reorders : requests;
 

@@ -118,23 +118,6 @@ async function searchBlankProductsForPairing(term, limit = 100) {
     .slice(0, limit);
 }
 
-function candidateSearchText(row) {
-  return [
-    row.job_id,
-    row.woocommerce_order_id,
-    row.job_name,
-    row.customer_name,
-    row.order_sku,
-    row.item_name,
-    row.current_blank_sku,
-    row.current_blank_name,
-    row.job_status,
-  ]
-    .filter((part) => part !== undefined && part !== null)
-    .join(' ')
-    .toLowerCase();
-}
-
 export default function BulkPairingRepair() {
   const [filters, setFilters] = useState({
     search: '',

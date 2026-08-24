@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import SupplierConfirmationReceiving from './SupplierConfirmationReceiving';
+import { createBlankProduct, updateBlankProduct } from './lib/inventoryApi';
 
 const lineTemplate = {
   brand_id: '',
@@ -237,15 +238,7 @@ export default function AddItemToBin() {
       if (patch[key] === null || patch[key] === '') delete patch[key];
     });
 
-    const { data, error } = await supabase
-      .from('blank_products')
-      .update(patch)
-      .eq('id', blank.id)
-      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
-      .single();
-
-    if (error) throw error;
-    return data;
+    return updateBlankProduct(blank.id, patch);
   }
 
   async function createMissingBlank(line) {
@@ -274,21 +267,14 @@ export default function AddItemToBin() {
       if (payload[key] === null || payload[key] === '') delete payload[key];
     });
 
-    const { data, error } = await supabase
-      .from('blank_products')
-      .insert(payload)
-      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
-      .single();
-
-    if (!error) return data;
-
-    // If another process created the SKU between our lookup and insert, retry by SKU.
-    const retry = await findBlankBySku(skuBase);
-    if (retry?.id) {
-      return updateBlankAttributes(retry, line, skuBase, name);
+    try {
+      return await createBlankProduct(payload);
+    } catch (error) {
+      // Guarded creation may report a concurrent or pre-existing product.
+      const retry = await findBlankBySku(skuBase);
+      if (retry?.id) return updateBlankAttributes(retry, line, skuBase, name);
+      throw error;
     }
-
-    throw error;
   }
 
   async function findOrCreateBlank(line) {

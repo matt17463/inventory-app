@@ -567,7 +567,7 @@ async function existingJobItem(jobId, lineItemId, sku) {
   return Array.isArray(data) && data.length ? data[0] : null;
 }
 
-async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProductId, logoId, parsed, site, placement, decorationSize, lookupSource, pairingWarning, inventoryRequired = true, nonInventoryReason = null, nonInventoryRuleId = null }) {
+async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProductId, logoId, parsed: _parsed, site, placement, decorationSize, lookupSource, pairingWarning, inventoryRequired = true, nonInventoryReason = null, nonInventoryRuleId = null }) {
   const lineItem = enrichedLineItem(rawLineItem);
   const lineItemId = lineItem.line_item_id || lineItem.id || null;
   const sku = normalizeSku(lineItem.sku);

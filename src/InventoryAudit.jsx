@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { addInventoryAuditCount, closeInventoryAuditSession, createInventoryAuditSession, getInventoryAuditCounts, getInventoryAuditSessions } from './lib/phase6Api';
 
 export default function InventoryAudit() {
   const [sessions,setSessions]=useState([]); const [active,setActive]=useState(null); const [counts,setCounts]=useState([]); const [error,setError]=useState('');
   const [sessionForm,setSessionForm]=useState({started_by:'',bin_code:'',audit_type:'cycle_count',notes:''});
   const [countForm,setCountForm]=useState({sku:'',product_name:'',expected_quantity:'',counted_quantity:'',adjustment_reason:'',counted_by:'',notes:''});
-  async function load(){ setError(''); try{ setSessions(await getInventoryAuditSessions()); if(active) setCounts(await getInventoryAuditCounts(active.id)); }catch(e){setError(e.message);} }
-  useEffect(()=>{load();},[]);
+  const load = useCallback(async () => { setError(''); try{ setSessions(await getInventoryAuditSessions()); if(active) setCounts(await getInventoryAuditCounts(active.id)); }catch(e){setError(e.message);} }, [active]);
+  useEffect(()=>{load();},[load]);
   async function createSession(e){e.preventDefault(); const s=await createInventoryAuditSession(sessionForm); setActive(s); setSessionForm({started_by:'',bin_code:'',audit_type:'cycle_count',notes:''}); setSessions(await getInventoryAuditSessions());}
   async function selectSession(s){setActive(s); setCounts(await getInventoryAuditCounts(s.id));}
   async function addCount(e){e.preventDefault(); await addInventoryAuditCount({...countForm, session_id:active.id}); setCountForm({sku:'',product_name:'',expected_quantity:'',counted_quantity:'',adjustment_reason:'',counted_by:'',notes:''}); setCounts(await getInventoryAuditCounts(active.id));}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import logo from './assets/logo.png';
+import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 
 export default function AuthGate({ children }) {
   const [session, setSession] = useState(null);
@@ -9,6 +10,8 @@ export default function AuthGate({ children }) {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [access, setAccess] = useState(null);
+  const [accessLoading, setAccessLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -22,6 +25,7 @@ export default function AuthGate({ children }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession || null);
+      setAccess(null);
       setLoading(false);
     });
 
@@ -30,6 +34,23 @@ export default function AuthGate({ children }) {
       listener?.subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let current = true;
+    if (!session) { setAccess(null); setAccessLoading(false); return () => { current = false; }; }
+    setAccessLoading(true);
+    authenticatedFunctionFetch('/.netlify/functions/application-integrity', {
+      method: 'POST', body: JSON.stringify({ action: 'health' }),
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || body.success === false) throw new Error(body.message || 'Employee access could not be verified.');
+        if (current) setAccess({ allowed: true, role: body.data?.role || 'employee' });
+      })
+      .catch((error) => { if (current) setAccess({ allowed: false, message: error.message }); })
+      .finally(() => { if (current) setAccessLoading(false); });
+    return () => { current = false; };
+  }, [session]);
 
   async function signIn(event) {
     event.preventDefault();
@@ -55,7 +76,7 @@ export default function AuthGate({ children }) {
     await supabase.auth.signOut();
   }
 
-  if (loading) {
+  if (loading || accessLoading || (session && access === null)) {
     return (
       <main className="auth-page">
         <section className="auth-card">
@@ -111,10 +132,24 @@ export default function AuthGate({ children }) {
     );
   }
 
+  if (!access?.allowed) {
+    return (
+      <main className="auth-page">
+        <section className="auth-card">
+          <img src={logo} alt="Skilled Crafting" />
+          <p className="eyebrow">Employee Access</p>
+          <h1>Account access is not active</h1>
+          <p className="helper-text">{access?.message || 'This signed-in account does not have an active application role.'}</p>
+          <button type="button" onClick={signOut}>Sign out</button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <>
       <button type="button" className="employee-signout" onClick={signOut}>
-        Sign out
+        {access.role} · Sign out
       </button>
       {children}
     </>
