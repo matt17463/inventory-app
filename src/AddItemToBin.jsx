@@ -201,6 +201,7 @@ export default function AddItemToBin() {
     const { data, error } = await supabase
       .from('blank_products')
       .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('sc_is_archived', false)
       .eq('brand_id', dbId(line.brand_id))
       .eq('product_type_id', dbId(line.product_type_id))
       .eq('color_id', dbId(line.color_id))
@@ -217,6 +218,7 @@ export default function AddItemToBin() {
     const { data, error } = await supabase
       .from('blank_products')
       .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('sc_is_archived', false)
       .eq('sku_base', skuBase)
       .limit(1);
 

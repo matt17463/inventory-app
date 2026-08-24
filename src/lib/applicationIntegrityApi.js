@@ -20,6 +20,13 @@ export const bulkUpdateBlankProductsGuarded = (ids, payload) => action({ action:
 export const rememberProductIdentity = (payload) => action({ action: 'identity.remember', ...payload });
 export const getDuplicateReviewCases = (options = {}) => action({ action: 'review.list', ...options });
 export const createDuplicateReviewCase = (payload) => action({ action: 'review.create', ...payload });
+export const previewDuplicateReviewResolution = (caseId) => action({ action: 'review.preview_resolution', case_id: caseId });
+export const applyDuplicateReviewResolution = (resolutionId, confirmation) => action({
+  action: 'review.apply_resolution', resolution_id: resolutionId, confirmation,
+});
+export const updateDuplicateReviewCaseStatus = (caseId, status, notes = '') => action({
+  action: 'review.status', case_id: caseId, status, notes,
+});
 export const getIntegrationJobs = (options = {}) => action({ action: 'jobs.list', ...options });
 export const updateIntegrationJob = (id, mode) => action({ action: 'jobs.update', id, mode });
 export const getInventoryReconciliation = (options = {}) => action({ action: 'reconciliation', ...options });

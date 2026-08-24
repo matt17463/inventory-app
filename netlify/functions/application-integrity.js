@@ -24,7 +24,7 @@ async function productSnapshot(supabase, id) {
     id,sku_base,barcode,name,brand_id,product_type_id,color_id,size_id,unit_cost,low_stock_threshold,image_url,
     brands:brand_id(id,name,code),product_types:product_type_id(id,name,code),
     colors:color_id(id,name,code),sizes:size_id(id,name,code)
-  `).eq('id', id).maybeSingle();
+  `).eq('id', id).eq('sc_is_archived', false).maybeSingle();
   if (result.error) throw result.error;
   return result.data;
 }
@@ -83,6 +83,43 @@ async function createReviewCase(supabase, body, userId) {
   const inserted = await supabase.from('sc_product_review_case_items').insert(caseItems);
   if (inserted.error) throw inserted.error;
   return { ...created.data, items: caseItems };
+}
+
+async function reviewAction(supabase, action, body, userId) {
+  const caseId = clean(body.case_id);
+  if (action === 'review.preview_resolution') {
+    if (!caseId) throw new Error('Choose a duplicate review case.');
+    const result = await supabase.rpc('sc_preview_product_resolution_v1', {
+      p_case_id: caseId,
+      p_actor: userId,
+    });
+    if (result.error) throw result.error;
+    return result.data;
+  }
+  if (action === 'review.apply_resolution') {
+    const resolutionId = clean(body.resolution_id);
+    const confirmation = clean(body.confirmation);
+    if (!resolutionId || !confirmation) throw new Error('Resolution preview and confirmation phrase are required.');
+    const result = await supabase.rpc('sc_apply_product_resolution_v1', {
+      p_resolution_id: resolutionId,
+      p_confirmation: confirmation,
+      p_actor: userId,
+    });
+    if (result.error) throw result.error;
+    return result.data;
+  }
+  if (action === 'review.status') {
+    if (!caseId) throw new Error('Choose a duplicate review case.');
+    const result = await supabase.rpc('sc_update_product_review_case_status_v1', {
+      p_case_id: caseId,
+      p_status: clean(body.status),
+      p_notes: clean(body.notes),
+      p_actor: userId,
+    });
+    if (result.error) throw result.error;
+    return result.data;
+  }
+  throw new Error(`Unsupported review action: ${action}`);
 }
 
 async function rememberIdentity(supabase, body, userId) {
@@ -213,13 +250,15 @@ async function coreMutation(supabase, action, body, userId) {
     return result.data;
   }
   if (action === 'product.update') {
-    const result = await supabase.rpc('sc_update_blank_product_safe_v1', { p_blank_product_id: Number(body.id), p_payload: body.payload || {}, p_actor: userId });
+    const blankProductId = clean(body.id);
+    if (!blankProductId) throw new Error('Choose a blank product to update.');
+    const result = await supabase.rpc('sc_update_blank_product_safe_v1', { p_blank_product_id: blankProductId, p_payload: body.payload || {}, p_actor: userId });
     if (result.error) throw result.error;
     if (result.data?.blocked) throw new Error(result.data.message || 'Update blocked because it would create a duplicate.');
     return result.data;
   }
   if (action === 'product.bulk_update') {
-    const ids = Array.from(new Set((body.ids || []).map(Number).filter(Number.isFinite)));
+    const ids = Array.from(new Set((body.ids || []).map(clean).filter(Boolean)));
     if (!ids.length) throw new Error('Choose at least one blank product.');
     const results = [];
     for (const id of ids) {
@@ -297,7 +336,7 @@ export async function handler(event) {
 
   try {
     let data;
-    if (action === 'health') data = { version: '1.0.0', platform: 'application_integrity', role: auth.role };
+    if (action === 'health') data = { version: '1.0.2', platform: 'application_integrity', role: auth.role };
     else if (action === 'identity.resolve') {
       const result = await auth.supabase.rpc('sc_blank_product_candidates_v1', {
         p_source_system: clean(body.source_system), p_supplier_sku: clean(body.supplier_sku),
@@ -313,6 +352,7 @@ export async function handler(event) {
     } else if (action === 'identity.remember') data = await rememberIdentity(auth.supabase, body, auth.user.id);
     else if (action === 'review.list') data = await listReviewCases(auth.supabase, body);
     else if (action === 'review.create') data = await createReviewCase(auth.supabase, body, auth.user.id);
+    else if (action.startsWith('review.')) data = await reviewAction(auth.supabase, action, body, auth.user.id);
     else if (action === 'jobs.list') data = await listIntegrationJobs(auth.supabase, body);
     else if (action === 'jobs.update') data = await updateOwnedJob(auth.supabase, body, auth.user.id);
     else if (action === 'reconciliation') data = await reconciliation(auth.supabase, body);
@@ -325,7 +365,9 @@ export async function handler(event) {
     const missing = isMissing(error);
     return jsonResponse(missing ? 409 : 500, {
       success: false,
-      message: missing ? 'Application Integrity SQL is not installed. Run deployment/sql/28_APPLICATION_INTEGRITY_PLATFORM.sql, then retry.' : (error.message || 'Application integrity action failed.'),
+      message: missing
+        ? 'Application Integrity SQL is incomplete. Run deployment/sql/28_APPLICATION_INTEGRITY_PLATFORM.sql and deployment/sql/30_RESOLVE_PRODUCT_REVIEW_CASES.sql, then retry.'
+        : (error.message || 'Application integrity action failed.'),
     }, event);
   }
 }

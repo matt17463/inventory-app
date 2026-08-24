@@ -372,7 +372,7 @@ export default function PullSheetView() {
 
   async function searchBlanks() {
     const term = String(blankSearch || '').trim();
-    let query = supabase.from('blank_products').select('id, sku_base, name, brand_id, product_type_id, color_id, size_id').limit(25);
+    let query = supabase.from('blank_products').select('id, sku_base, name, brand_id, product_type_id, color_id, size_id').eq('sc_is_archived', false).limit(25);
     if (term) query = query.or(`sku_base.ilike.%${term.replace(/[%_,]/g, '')}%,name.ilike.%${term.replace(/[%_,]/g, '')}%`);
     const { data, error } = await query;
     if (error) alert(error.message);

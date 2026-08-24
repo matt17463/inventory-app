@@ -3,16 +3,19 @@ import { Link } from 'react-router-dom';
 import { getProductIntegrityIssues } from './lib/productIntegrityApi';
 import { getSupplierReceivingHistory } from './lib/supplierReceivingApi';
 import {
+  applyDuplicateReviewResolution,
   createDuplicateReviewCase,
   getDuplicateReviewCases,
   getIntegrationJobs,
   getInventoryReconciliation,
   getTeamStoreWorkflows,
   previewBlankProduct,
+  previewDuplicateReviewResolution,
   rememberProductIdentity,
   resolveProductIdentity,
   saveTeamStoreWorkflow,
   updateIntegrationJob,
+  updateDuplicateReviewCaseStatus,
 } from './lib/applicationIntegrityApi';
 
 const tabs = [
@@ -100,6 +103,7 @@ function IdentityResolver() {
 function DuplicateWorkbench() {
   const [issues, setIssues] = useState([]); const [cases, setCases] = useState([]); const [selected, setSelected] = useState([]);
   const [survivor, setSurvivor] = useState(''); const [reason, setReason] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+  const [resolution, setResolution] = useState(null); const [confirmation, setConfirmation] = useState(''); const [acknowledged, setAcknowledged] = useState(false);
   const load = useCallback(async () => {
     setBusy(true); setMessage('');
     try {
@@ -116,6 +120,36 @@ function DuplicateWorkbench() {
     try { await createDuplicateReviewCase({ entity_ids: selected, proposed_survivor_id: survivor, reason }); setSelected([]); setSurvivor(''); setReason(''); setMessage('Review case created. No product or inventory record was changed.'); await load(); }
     catch (error) { setMessage(messageFor(error)); } finally { setBusy(false); }
   }
+  async function previewResolution(caseRow) {
+    setBusy(true); setMessage(''); setResolution(null); setConfirmation(''); setAcknowledged(false);
+    try {
+      const preview = await previewDuplicateReviewResolution(caseRow.id);
+      setResolution({ ...preview, caseTitle: caseRow.title });
+      setMessage('Resolution preview created. Review every dependency and warning before applying it.');
+    } catch (error) { setMessage(messageFor(error)); } finally { setBusy(false); }
+  }
+  async function applyResolution() {
+    if (!resolution || confirmation !== resolution.confirmation_phrase || !acknowledged) {
+      setMessage('Type the exact confirmation phrase and acknowledge the inventory safeguards.'); return;
+    }
+    setBusy(true); setMessage('');
+    try {
+      const result = await applyDuplicateReviewResolution(resolution.resolution_id, confirmation);
+      setResolution(null); setConfirmation(''); setAcknowledged(false);
+      setMessage(`Resolution completed. ${result.archived_products?.length || 0} duplicate product(s) archived; inventory quantities were not rewritten.`);
+      await load();
+    } catch (error) { setMessage(messageFor(error)); } finally { setBusy(false); }
+  }
+  async function changeCaseStatus(caseRow, nextStatus) {
+    setBusy(true); setMessage('');
+    try {
+      await updateDuplicateReviewCaseStatus(caseRow.id, nextStatus, reason || `Case marked ${nextStatus} from Duplicate Workbench.`);
+      if (resolution?.evidence?.case_id === caseRow.id) setResolution(null);
+      setMessage(`Review case marked ${status(nextStatus)}.`); await load();
+    } catch (error) { setMessage(messageFor(error)); } finally { setBusy(false); }
+  }
+  const evidence = resolution?.evidence || {};
+  const referenceTotal = (evidence.references || []).filter((row) => row.role === 'duplicate').reduce((sum, row) => sum + Number(row.row_count || 0), 0);
   return <>
     <section className="sc-panel"><div className="sc-panel-header"><div><h2>Duplicate candidates</h2><p>Choose records that represent the same physical blank. Creating a case preserves evidence; it does not merge or delete anything.</p></div><button className="sc-btn" onClick={load} disabled={busy}>Refresh</button></div>
       {message && <div className="sc-alert">{message}</div>}
@@ -126,10 +160,22 @@ function DuplicateWorkbench() {
       <label className="sc-field"><span>Review reason</span><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why these records appear to be the same product" /></label>
       <button className="sc-btn sc-btn-primary" disabled={busy || selected.length < 2 || !survivor} onClick={createCase}>Create Review Case ({selected.length})</button>
     </section>
-    <section className="sc-panel"><h2>Open and completed cases</h2><div className="sc-responsive-table-wrap"><table className="sc-table"><thead><tr><th>Status</th><th>Case</th><th>Proposed survivor</th><th>Records</th><th>Updated</th></tr></thead><tbody>
-      {cases.map((row) => <tr key={row.id}><td><span className="sc-badge">{status(row.status)}</span></td><td><strong>{row.title}</strong><br /><small>{row.reason}</small></td><td>{row.proposed_survivor_id_text || 'Not chosen'}</td><td>{row.items?.length || 0}</td><td>{date(row.updated_at)}</td></tr>)}
-      {!cases.length && <tr><td colSpan="5" className="sc-empty-cell">No review cases have been created.</td></tr>}
+    <section className="sc-panel"><h2>Review cases</h2><p>Previewing is read-only. Applying a resolution atomically repoints references and archives duplicates; it never changes quantity values.</p><div className="sc-responsive-table-wrap"><table className="sc-table"><thead><tr><th>Status</th><th>Case</th><th>Proposed survivor</th><th>Records</th><th>Updated</th><th>Action</th></tr></thead><tbody>
+      {cases.map((row) => <tr key={row.id}><td><span className="sc-badge">{status(row.status)}</span></td><td><strong>{row.title}</strong><br /><small>{row.reason}</small></td><td>{row.resolved_survivor_id_text || row.proposed_survivor_id_text || 'Not chosen'}</td><td>{row.items?.length || 0}</td><td>{date(row.updated_at)}</td><td><div className="sc-button-row">{['open','reviewing','approved'].includes(row.status) && <button className="sc-btn sc-btn-small sc-btn-primary" disabled={busy} onClick={() => previewResolution(row)}>Preview Resolve</button>}{['open','reviewing','approved'].includes(row.status) && <button className="sc-btn sc-btn-small" disabled={busy} onClick={() => changeCaseStatus(row, 'rejected')}>Reject</button>}{['rejected','cancelled'].includes(row.status) && <button className="sc-btn sc-btn-small" disabled={busy} onClick={() => changeCaseStatus(row, 'open')}>Reopen</button>}{row.status === 'completed' && <small>Resolved {date(row.resolution_completed_at || row.completed_at)}</small>}</div></td></tr>)}
+      {!cases.length && <tr><td colSpan="6" className="sc-empty-cell">No review cases have been created.</td></tr>}
     </tbody></table></div></section>
+    {resolution && <section className="sc-panel sc-resolution-panel">
+      <div className="sc-panel-header"><div><div className="sc-kicker">Guarded atomic resolution</div><h2>{resolution.caseTitle}</h2><p>Preview expires {date(resolution.expires_at)}. If any dependency changes, application is blocked until you preview again.</p></div><button className="sc-btn" onClick={() => setResolution(null)} disabled={busy}>Close Preview</button></div>
+      {(evidence.blockers || []).map((value) => <div className="sc-alert danger" key={value}>{value}</div>)}
+      {(evidence.warnings || []).map((value) => <div className="sc-alert warning" key={value}>{value}</div>)}
+      <div className="sc-stat-grid compact"><article className="sc-stat-card"><span>Survivor</span><strong>{evidence.survivor_id || '—'}</strong></article><article className="sc-stat-card"><span>Duplicates archived</span><strong>{count(evidence.duplicate_ids?.length)}</strong></article><article className="sc-stat-card"><span>References moved</span><strong>{count(referenceTotal)}</strong></article><article className="sc-stat-card"><span>Quantity rewrites</span><strong>0</strong></article></div>
+      <h3>Products and inventory ledger</h3><div className="sc-responsive-table-wrap"><table className="sc-table"><thead><tr><th>Role</th><th>ID</th><th>SKU</th><th>Name</th><th>Net ledger quantity</th><th>Movements</th></tr></thead><tbody>{(evidence.products || []).map((product) => { const inventory = (evidence.inventory || []).find((row) => String(row.blank_product_id) === String(product.id)); return <tr key={product.id}><td><span className="sc-badge">{String(product.id) === String(evidence.survivor_id) ? 'survivor' : 'archive'}</span></td><td>{product.id}</td><td>{product.sku_base}</td><td>{product.name}</td><td>{count(inventory?.net_quantity)}</td><td>{count(inventory?.movement_count)}</td></tr>; })}</tbody></table></div>
+      <h3>References that will be repointed</h3><div className="sc-responsive-table-wrap"><table className="sc-table"><thead><tr><th>Role</th><th>Table</th><th>Column</th><th>Product ID</th><th>Rows</th></tr></thead><tbody>{(evidence.references || []).map((row, index) => <tr key={`${row.table}-${row.column}-${row.blank_product_id}-${index}`}><td>{row.role}</td><td>{row.schema}.{row.table}</td><td>{row.column}</td><td>{row.blank_product_id}</td><td>{count(row.row_count)}</td></tr>)}{!evidence.references?.length && <tr><td colSpan="5" className="sc-empty-cell">No dependent records were found.</td></tr>}</tbody></table></div>
+      <div className="sc-alert warning"><strong>This cannot be undone from the screen.</strong> Duplicate rows are retained as archived records with their original SKU, barcode, and name preserved. Any database constraint conflict rolls back the entire operation.</div>
+      <label className="sc-field"><span>Type this exact phrase: <code>{resolution.confirmation_phrase}</code></span><input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label>
+      <label className="sc-checkbox-row"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>I reviewed the survivor, products, inventory ledger totals, and every dependent table shown above.</span></label>
+      <button className="sc-btn sc-btn-danger" disabled={busy || !acknowledged || confirmation !== resolution.confirmation_phrase || evidence.blockers?.length > 0} onClick={applyResolution}>{busy ? 'Applying atomically…' : 'Resolve Case and Archive Duplicates'}</button>
+    </section>}
   </>;
 }
 

@@ -399,6 +399,7 @@ export async function getBlankProducts(search = '') {
       sizes:size_id(name, code),
       product_types:product_type_id(name, code)
     `)
+    .eq('sc_is_archived', false)
     .order('name', { ascending: true })
     .limit(5000);
 
@@ -1828,6 +1829,7 @@ async function getPendingStockPurchasingContext() {
           colors:color_id(name, code),
           sizes:size_id(name, code)
         `)
+        .eq('sc_is_archived', false)
         .in('id', missingIds);
 
       if (fallback.error) throw fallback.error;
@@ -1946,6 +1948,7 @@ async function getNonInventoryPurchasingContext() {
           colors:color_id(name, code),
           sizes:size_id(name, code)
         `)
+        .eq('sc_is_archived', false)
         .in('id', missingIds);
 
       if (fallback.error) throw fallback.error;

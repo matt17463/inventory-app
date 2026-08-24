@@ -331,7 +331,7 @@ begin
 end;
 $$;
 
-create or replace function public.sc_update_blank_product_safe_v1(p_blank_product_id bigint, p_payload jsonb, p_actor uuid)
+create or replace function public.sc_update_blank_product_safe_v1(p_blank_product_id uuid, p_payload jsonb, p_actor uuid)
 returns jsonb
 language plpgsql
 security definer
@@ -340,7 +340,7 @@ as $$
 declare
   v_before public.blank_products%rowtype;
   v_after public.blank_products%rowtype;
-  v_conflict bigint;
+  v_conflict uuid;
 begin
   select * into v_before from public.blank_products where id = p_blank_product_id for update;
   if not found then raise exception 'Blank product % was not found.', p_blank_product_id; end if;
@@ -418,14 +418,14 @@ end; $$;
 revoke all on function public.sc_blank_product_candidates_v1(text,text,text,text,text,text,text,text,integer) from public, anon, authenticated;
 revoke all on function public.sc_preview_blank_product_v1(jsonb) from public, anon, authenticated;
 revoke all on function public.sc_create_blank_product_safe_v1(jsonb,uuid) from public, anon, authenticated;
-revoke all on function public.sc_update_blank_product_safe_v1(bigint,jsonb,uuid) from public, anon, authenticated;
+revoke all on function public.sc_update_blank_product_safe_v1(uuid,jsonb,uuid) from public, anon, authenticated;
 revoke all on function public.sc_set_job_status_safe_v1(bigint,text,uuid,text) from public, anon, authenticated;
 revoke all on function public.sc_set_job_item_status_safe_v1(bigint,text,uuid,text) from public, anon, authenticated;
 
 grant execute on function public.sc_blank_product_candidates_v1(text,text,text,text,text,text,text,text,integer) to service_role;
 grant execute on function public.sc_preview_blank_product_v1(jsonb) to service_role;
 grant execute on function public.sc_create_blank_product_safe_v1(jsonb,uuid) to service_role;
-grant execute on function public.sc_update_blank_product_safe_v1(bigint,jsonb,uuid) to service_role;
+grant execute on function public.sc_update_blank_product_safe_v1(uuid,jsonb,uuid) to service_role;
 grant execute on function public.sc_set_job_status_safe_v1(bigint,text,uuid,text) to service_role;
 grant execute on function public.sc_set_job_item_status_safe_v1(bigint,text,uuid,text) to service_role;
 

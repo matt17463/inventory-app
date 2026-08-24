@@ -250,6 +250,7 @@ export async function searchMockupBlankCatalog(search = '') {
   let query = supabase
     .from('blank_products')
     .select('id,sku_base,name,image_url,unit_cost,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)')
+    .eq('sc_is_archived', false)
     .limit(60);
   if (term) query = query.or(`sku_base.ilike.%${term}%,name.ilike.%${term}%`);
   const { data, error } = await query.order('name');

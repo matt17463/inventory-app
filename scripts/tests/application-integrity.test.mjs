@@ -61,3 +61,56 @@ test('AuthGate verifies an active application role through the server', () => {
   assert.match(fn, /authorizeEmployee/);
   assert.match(fn, /allowedRoles/);
 });
+
+test('duplicate resolution is previewed, confirmed, atomic, archived, and audited', () => {
+  const sql = read('deployment/sql/30_RESOLVE_PRODUCT_REVIEW_CASES.sql');
+  const fn = read('netlify/functions/application-integrity.js');
+  assert.match(sql, /sc_preview_product_resolution_v1/);
+  assert.match(sql, /sc_apply_product_resolution_v1/);
+  assert.match(sql, /confirmation_phrase/);
+  assert.match(sql, /preview_hash/);
+  assert.match(sql, /pg_advisory_xact_lock/);
+  assert.match(sql, /sc_is_archived = true/);
+  assert.match(sql, /sc_archived_original_sku/);
+  assert.match(sql, /sc_core_mutation_audit/);
+  assert.match(sql, /quantity_values_rewritten', false/);
+  assert.match(sql, /add column sc_canonical_blank_product_id uuid/);
+  assert.match(sql, /p_blank_product_id uuid/);
+  assert.match(sql, /v_members uuid\[\]/);
+  assert.match(sql, /entity_id_text::uuid/);
+  assert.match(sql, /sc_update_blank_product_safe_v1\(uuid,jsonb,uuid\)/);
+  assert.doesNotMatch(sql, /v_members bigint|v_survivor bigint|entity_id_text::bigint/);
+  assert.doesNotMatch(fn, /p_blank_product_id: Number\(body\.id\)/);
+  assert.doesNotMatch(fn, /\(body\.ids \|\| \[\]\)\.map\(Number\)/);
+  assert.doesNotMatch(sql, /delete\s+from\s+public\.blank_products/i);
+  assert.doesNotMatch(sql, /update\s+public\.blank_inventory_movements\s+set\s+quantity_change/i);
+});
+
+test('duplicate workbench requires dependency review and exact confirmation', () => {
+  const page = read('src/ApplicationIntegrityCenter.jsx');
+  const api = read('src/lib/applicationIntegrityApi.js');
+  const fn = read('netlify/functions/application-integrity.js');
+  assert.match(page, /Preview Resolve/);
+  assert.match(page, /References that will be repointed/);
+  assert.match(page, /confirmation_phrase/);
+  assert.match(page, /Resolve Case and Archive Duplicates/);
+  assert.match(api, /previewDuplicateReviewResolution/);
+  assert.match(api, /applyDuplicateReviewResolution/);
+  assert.match(fn, /review\.preview_resolution/);
+  assert.match(fn, /review\.apply_resolution/);
+});
+
+test('archived blank products are excluded from primary direct searches', () => {
+  for (const path of [
+    'src/AddItemToBin.jsx',
+    'src/EditBlankItems.jsx',
+    'src/PullSheetView.jsx',
+    'src/lib/inventoryApi.js',
+    'src/lib/mockupStudioApi.js',
+    'netlify/functions/manual-pullsheet.js',
+    'netlify/functions/woocommerce-webhook.js',
+    'netlify/functions/supplier-confirmation-parse.js',
+  ]) {
+    assert.match(read(path), /sc_is_archived/);
+  }
+});
