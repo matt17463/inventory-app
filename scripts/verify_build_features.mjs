@@ -40,6 +40,9 @@ const requiredMarkers = [
   '/.netlify/functions/google-calendar-oauth',
   'Rebuild Calendar Sync',
   'Skilled Crafting remains the source of truth',
+  '/product-integrity',
+  'Product Integrity Center',
+  'Run Diagnostics',
 ];
 
 function walkFiles(directory) {
