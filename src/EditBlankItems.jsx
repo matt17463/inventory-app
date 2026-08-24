@@ -57,23 +57,20 @@ export default function EditBlankItems() {
     let data = [];
     let error = null;
     const trimmedSearch = search.trim();
-    const rpc = await supabase.rpc('search_blank_products_for_edit', { p_search: trimmedSearch });
-    if (!rpc.error) {
-      data = rpc.data || [];
-    } else {
-      const query = supabase
-        .from('blank_products')
-        .select('id,sku_base,name,barcode,brand_id,product_type_id,color_id,size_id,unit_cost,low_stock_threshold,image_url,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)')
-        .limit(500);
+    const query = supabase
+      .from('blank_products')
+      .select('id,sku_base,name,barcode,brand_id,product_type_id,color_id,size_id,unit_cost,low_stock_threshold,image_url,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)')
+      .eq('sc_is_archived', false)
+      .limit(500);
 
-      if (trimmedSearch) {
-        query.or(`sku_base.ilike.%${trimmedSearch}%,name.ilike.%${trimmedSearch}%,barcode.ilike.%${trimmedSearch}%`);
-      }
-
-      const res = await query;
-      data = res.data || [];
-      error = res.error;
+    if (trimmedSearch) {
+      const safeSearch = trimmedSearch.replace(/[%_,]/g, '');
+      query.or(`sku_base.ilike.%${safeSearch}%,name.ilike.%${safeSearch}%,barcode.ilike.%${safeSearch}%`);
     }
+
+    const res = await query;
+    data = res.data || [];
+    error = res.error;
     if (error) setMessage(error.message);
     setRows(data);
     setSelectedIds((current) => current.filter((id) => data.some((row) => normalizeRowId(row.id) === id)));

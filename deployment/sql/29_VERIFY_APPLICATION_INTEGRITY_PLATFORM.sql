@@ -14,7 +14,7 @@ from (values
   ('candidate resolver', to_regprocedure('public.sc_blank_product_candidates_v1(text,text,text,text,text,text,text,text,integer)') is not null),
   ('creation preview', to_regprocedure('public.sc_preview_blank_product_v1(jsonb)') is not null),
   ('guarded blank creation', to_regprocedure('public.sc_create_blank_product_safe_v1(jsonb,uuid)') is not null),
-  ('guarded blank update', to_regprocedure('public.sc_update_blank_product_safe_v1(bigint,jsonb,uuid)') is not null),
+  ('guarded blank update', to_regprocedure('public.sc_update_blank_product_safe_v1(uuid,jsonb,uuid)') is not null),
   ('guarded job status', to_regprocedure('public.sc_set_job_status_safe_v1(bigint,text,uuid,text)') is not null),
   ('guarded line status', to_regprocedure('public.sc_set_job_item_status_safe_v1(bigint,text,uuid,text)') is not null)
 ) as checks(object_name, installed)

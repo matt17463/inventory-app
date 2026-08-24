@@ -978,6 +978,18 @@ tr:hover td { background: rgba(14,165,233,.035); }
 .error-card,
 .error-message { background: #fee2e2 !important; color: #991b1b !important; border-color: rgba(239,68,68,.25) !important; }
 
+.sc-resolution-panel { border: 2px solid rgba(37,99,235,.28); }
+.sc-resolution-panel h3 { margin: 22px 0 10px; }
+.sc-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0;
+  font-weight: 750;
+  line-height: 1.4;
+}
+.sc-checkbox-row input { width: 20px; height: 20px; margin-top: 1px; flex: 0 0 auto; }
+
 /* Operational page improvements */
 .search-row,
 .filter-row,

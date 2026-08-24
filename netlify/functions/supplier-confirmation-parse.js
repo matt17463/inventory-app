@@ -127,6 +127,7 @@ async function parseAndMatch(supabase, parsed) {
   if (mappedIds.length) {
     const mappedResult = await supabase.from('blank_products')
       .select('id,sku_base,name,brand_id,product_type_id,color_id,size_id')
+      .eq('sc_is_archived', false)
       .in('id', mappedIds);
     if (mappedResult.error) throw mappedResult.error;
     (mappedResult.data || []).forEach((blank) => blankById.set(String(blank.id), blank));
@@ -145,6 +146,7 @@ async function parseAndMatch(supabase, parsed) {
   const candidateResults = await mapWithConcurrency(identityEntries, 8, async ([key, ids]) => {
     const result = await supabase.from('blank_products')
       .select('id,sku_base,name,brand_id,product_type_id,color_id,size_id')
+      .eq('sc_is_archived', false)
       .eq('brand_id', ids.brand_id)
       .eq('product_type_id', ids.product_type_id)
       .eq('color_id', ids.color_id)

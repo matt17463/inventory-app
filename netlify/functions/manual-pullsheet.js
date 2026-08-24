@@ -467,6 +467,7 @@ async function findBlankProductForLineItem(rawLineItem) {
   const { data: fallbackBlank, error: fallbackError } = await supabase
     .from('blank_products')
     .select('id, sku_base, name')
+    .eq('sc_is_archived', false)
     .eq('sku_base', parsed.blankSkuBase)
     .maybeSingle();
 
