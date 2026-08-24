@@ -73,6 +73,29 @@ async function loadLookupTable(tableName) {
   return (res.data || []).map(normalizeLookup).filter((x) => x?.id).sort((a, b) => String(a.name).localeCompare(String(b.name)));
 }
 
+function pairingRuleId(rule, prefix) {
+  return normalizeId(rule?.[`${prefix}_color_id`] ?? rule?.[`${prefix}_color_id_text`]);
+}
+
+async function loadReceivingColors() {
+  const [colorResult, pairingResult] = await Promise.all([
+    supabase.from('sc_active_colors').select('id,name,code').order('name'),
+    supabase.rpc('sc_get_color_pairing_rules', { p_status: 'active' }),
+  ]);
+  if (colorResult.error) {
+    throw new Error(`Could not load active colors: ${colorResult.error.message}. Run the color lifecycle SQL migrations, then retry.`);
+  }
+  const rulesUnavailable = pairingResult.error && /does not exist|not find|schema cache/i.test(pairingResult.error.message || '');
+  if (pairingResult.error && !rulesUnavailable) throw pairingResult.error;
+  const sourceIds = new Set((pairingResult.data || [])
+    .filter((rule) => pairingRuleId(rule, 'source') !== pairingRuleId(rule, 'canonical'))
+    .map((rule) => pairingRuleId(rule, 'source')).filter(Boolean));
+  return (colorResult.data || [])
+    .filter((color) => !sourceIds.has(normalizeId(color.id)))
+    .map(normalizeLookup).filter((color) => color?.id)
+    .sort((left, right) => String(left.name).localeCompare(String(right.name)));
+}
+
 export default function AddItemToBin() {
   const [lookups, setLookups] = useState({ brands: [], product_types: [], colors: [], sizes: [], bins: [] });
   const [defaults, setDefaults] = useState({
@@ -98,7 +121,7 @@ export default function AddItemToBin() {
       const [brands, productTypes, colors, sizes, bins] = await Promise.all([
         loadLookupTable('brands'),
         loadLookupTable('product_types'),
-        loadLookupTable('colors'),
+        loadReceivingColors(),
         loadLookupTable('sizes'),
         loadBins(),
       ]);

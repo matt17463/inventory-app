@@ -14,6 +14,16 @@ function statusText(value) {
   return String(value || '').replaceAll('_', ' ');
 }
 
+function missingReceivingFields(row) {
+  const missing = [];
+  if (!row.bin_id) missing.push('Bin');
+  if (!row.brand_id && !row.brand) missing.push('Brand');
+  if (!row.product_type_id && !row.style) missing.push('Style');
+  if (!row.color_id) missing.push('Color');
+  if (!row.size_id) missing.push('Size');
+  return missing;
+}
+
 export default function SupplierConfirmationReceiving({ lookups, defaultBinId, resolveBlank, refreshLookups }) {
   const [file, setFile] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -41,7 +51,12 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   }, [defaultBinId]);
 
   const selected = useMemo(() => rows.filter((row) => row.selected && Number(row.receive_now) > 0), [rows]);
+  const selectedIssues = useMemo(() => selected
+    .map((row) => ({ row, missing: missingReceivingFields(row) }))
+    .filter((item) => item.missing.length), [selected]);
+  const readySelected = useMemo(() => selected.filter((row) => missingReceivingFields(row).length === 0), [selected]);
   const selectedUnits = selected.reduce((sum, row) => sum + Number(row.receive_now || 0), 0);
+  const readyUnits = readySelected.reduce((sum, row) => sum + Number(row.receive_now || 0), 0);
 
   function updateRow(index, patch) {
     setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
@@ -84,11 +99,11 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
     if (!confirmation) return;
     setBusy('receive'); setMessage('');
     try {
-      for (const row of selected) {
-        if (!row.bin_id) throw new Error(`${row.supplier_sku}: choose a receiving bin.`);
-        if (!row.color_id || !row.size_id) throw new Error(`${row.supplier_sku}: choose an existing Color and Size.`);
-        if (!row.brand_id && !row.brand) throw new Error(`${row.supplier_sku}: the supplier did not provide a Brand.`);
-        if (!row.product_type_id && !row.style) throw new Error(`${row.supplier_sku}: the supplier did not provide a Style.`);
+      if (selectedIssues.length) {
+        const examples = selectedIssues.slice(0, 5)
+          .map(({ row, missing }) => `${row.supplier_sku || 'Supplier line'}: ${missing.join(', ')}`)
+          .join('; ');
+        throw new Error(`${selectedIssues.length} selected line(s) still need review. ${examples}${selectedIssues.length > 5 ? `; plus ${selectedIssues.length - 5} more` : ''}. Correct those fields or use “Select Ready Rows” to receive only completed lines.`);
       }
       let rowsToPrepare = selected;
       let createdLookups = [];
@@ -172,6 +187,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
           </div>
           <div className="supplier-bulk-actions">
             <button className="sc-btn sc-btn-small" onClick={() => setRows(rows.map((row) => ({ ...row, selected: Number(row.remaining_quantity) > 0 })))}>Select Remaining</button>
+            <button className="sc-btn sc-btn-small" onClick={() => setRows(rows.map((row) => ({ ...row, selected: Number(row.remaining_quantity) > 0 && missingReceivingFields(row).length === 0 })))}>Select Ready Rows</button>
             <button className="sc-btn sc-btn-small" onClick={() => setRows(rows.map((row) => ({ ...row, selected: false })))}>Clear Selection</button>
             <button className="sc-btn sc-btn-small" disabled={!defaultBinId} onClick={() => setRows(rows.map((row) => ({ ...row, bin_id: defaultBinId })))}>Apply Default Bin to All</button>
             <label className="supplier-auto-lookup-toggle"><input type="checkbox" checked={autoCreateLookups} onChange={(event) => setAutoCreateLookups(event.target.checked)} /> Create missing Brands and Styles when receiving</label>
@@ -181,10 +197,12 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
               <thead><tr><th>Use</th><th>Match</th><th>Supplier item</th><th>Brand / Style</th><th>Color / Size</th><th>Ordered</th><th>Received</th><th>Receive now</th><th>Bin</th><th>Cost</th><th>Remember</th></tr></thead>
               <tbody>{rows.map((row, index) => {
                 const remaining = Number(row.remaining_quantity || 0);
+                const missingFields = missingReceivingFields(row);
+                const ready = remaining > 0 && missingFields.length === 0;
                 return (
-                  <tr key={`${row.supplier_line_key}-${index}`} className={`supplier-match-${row.match_status}`}>
+                  <tr key={`${row.supplier_line_key}-${index}`} className={`supplier-match-${ready ? 'matched' : row.match_status}`}>
                     <td><input type="checkbox" checked={Boolean(row.selected)} disabled={remaining <= 0} onChange={(event) => updateRow(index, { selected: event.target.checked })} /></td>
-                    <td><span className={`sc-badge ${row.match_status === 'matched' ? 'success' : row.match_status === 'review' ? 'warning' : 'danger'}`}>{row.match_status}</span><small>{statusText(row.match_method)}</small></td>
+                    <td><span className={`sc-badge ${ready ? 'success' : row.match_status === 'review' ? 'warning' : 'danger'}`}>{ready ? 'ready' : row.match_status}</span><small>{ready ? 'ready to receive' : `Missing: ${missingFields.join(', ') || statusText(row.match_method)}`}</small></td>
                     <td><strong>{row.supplier_sku}</strong><small>{row.description}</small></td>
                     <td>{select(row.brand_id, (value) => updateRow(index, { brand_id: value, blank_product_id: '' }), lookups.brands, row.brand || 'Choose brand')}{select(row.product_type_id, (value) => updateRow(index, { product_type_id: value, blank_product_id: '' }), lookups.product_types, row.style || 'Choose style')}</td>
                     <td>{select(row.color_id, (value) => updateRow(index, { color_id: value, blank_product_id: '', color_match_method: value ? 'manual pairing — will be remembered' : 'choose existing WooCommerce color' }), lookups.colors, row.color || 'Choose color')}<small>{row.color_match_method || 'choose existing WooCommerce color'}</small>{select(row.size_id, (value) => updateRow(index, { size_id: value, blank_product_id: '' }), lookups.sizes, row.size || 'Choose size')}</td>
@@ -200,6 +218,10 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
           </div>
           <div className="supplier-receive-footer">
             <label className="sc-field"><span>Receipt note</span><input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Packing slip, shortage, or receiving note" /></label>
+            <div className="supplier-readiness-summary">
+              <strong>{readySelected.length} selected row(s) ready · {readyUnits} unit(s)</strong>
+              {selectedIssues.length > 0 && <small>{selectedIssues.length} selected row(s) still need review</small>}
+            </div>
             <button className="sc-btn sc-btn-primary" onClick={receiveSelected} disabled={!selected.length || Boolean(busy)}>{busy === 'receive' ? 'Receiving…' : `Receive ${selectedUnits} Selected Unit(s)`}</button>
           </div>
         </>
