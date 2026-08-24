@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   clearSupplierCatalogImportedData,
   importSupplierCatalogRowsControlled,
 } from './lib/supplierCatalogApi';
 import { extractSupplierFilesFromZip } from './lib/zipCsvExtract';
 import { resolveImportColors, saveImportColorAliases } from './lib/colorLifecycleApi';
+import { matrixToObjects, readSpreadsheetSheets } from './lib/spreadsheetFiles';
 
 function clean(value) { return String(value ?? '').trim(); }
 function norm(value) { return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
@@ -22,9 +22,8 @@ function columnValue(row, names) {
   }
   return '';
 }
-function parseWorkbook(workbook) {
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+function parseMatrix(matrix) {
+  const rows = matrixToObjects(matrix);
   return rows.map((row, index) => ({
     source_row: index + 2,
     brand: clean(columnValue(row, ['Brand', 'Manufacturer', 'Mfg', 'Vendor Brand'])),
@@ -39,10 +38,10 @@ function parseWorkbook(workbook) {
     notes: clean(columnValue(row, ['Notes', 'Note'])),
   })).filter((row) => row.brand || row.style || row.color || row.size || row.supplier_sku || row.upc || row.unit_cost !== null);
 }
-function parseEntry(entry) {
-  const kind = String(entry.kind || '').toLowerCase();
-  if (kind === 'csv' || kind === 'txt') return parseWorkbook(XLSX.read(entry.text, { type: 'string' }));
-  return parseWorkbook(XLSX.read(entry.arrayBuffer, { type: 'array' }));
+async function parseEntry(entry) {
+  const input = entry.text || entry.arrayBuffer;
+  const sheets = await readSpreadsheetSheets(input, entry.originalFileName || entry.fileName, entry.size);
+  return parseMatrix(sheets[0]?.data || []);
 }
 function parseList(value) { return String(value || '').split(/[\n,]+/).map((x) => x.trim()).filter(Boolean); }
 function rowAllowed(row, brands, styles) {
@@ -99,7 +98,7 @@ export default function SupplierCatalogImport() {
     setBusy(true); setFiles([]); setSelected([]); setMessage('Reading ZIP and previewing files...');
     try {
       const extracted = await extractSupplierFilesFromZip(zipFile);
-      const parsed = extracted.map((entry) => ({ ...entry, rows: parseEntry(entry) })).filter((entry) => entry.rows.length > 0);
+      const parsed = (await Promise.all(extracted.map(async (entry) => ({ ...entry, rows: await parseEntry(entry) })))).filter((entry) => entry.rows.length > 0);
       if (!parsed.length) throw new Error('Files were found, but no usable supplier rows were parsed.');
       setFiles(parsed); setMessage(`Preview ready. Found ${parsed.length} supported file(s). Select only the files you want to import.`);
     } catch (err) { setMessage(err.message || 'Failed to read ZIP.'); }

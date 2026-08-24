@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { appendBlankProductsFromSpreadsheet } from './lib/inventoryApi';
+import { downloadCsvTemplate, matrixToObjects, readSpreadsheetSheets } from './lib/spreadsheetFiles';
 
 const MASTER_SHEET_NAMES = [
   'Blank Products',
@@ -49,9 +49,9 @@ function integerValue(value, fallback = null) {
   return Number.isFinite(parsed) ? Math.round(parsed) : NaN;
 }
 
-function findSheetName(workbook, names) {
+function findSheetName(sheets, names) {
   const normalizedNames = names.map(normalize);
-  return workbook.SheetNames.find((sheetName) => normalizedNames.includes(normalize(sheetName))) || workbook.SheetNames[0];
+  return sheets.find((sheet) => normalizedNames.includes(normalize(sheet.sheet)))?.sheet || sheets[0]?.sheet;
 }
 
 function columnValue(row, possibleNames) {
@@ -70,9 +70,9 @@ function buildSkuBase(row) {
   return parts.join('-');
 }
 
-function parseMasterSheet(workbook, sheetName) {
-  const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+function parseMasterSheet(sheets, sheetName) {
+  const sheet = sheets.find((item) => item.sheet === sheetName);
+  const rows = matrixToObjects(sheet?.data || []);
 
   return rows
     .map((row, index) => {
@@ -193,9 +193,7 @@ function downloadBrowserTemplate() {
     },
   ];
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows, { header: MASTER_COLUMNS }), 'Blank Products');
-  XLSX.writeFile(wb, 'skilled-crafting-blank-inventory-import-template.xlsx');
+  downloadCsvTemplate('skilled-crafting-blank-inventory-import-template.csv', MASTER_COLUMNS, rows);
 }
 
 function resultNumber(result, key) {
@@ -239,12 +237,11 @@ export default function InventoryImport() {
     setMessage('Reading blank inventory import workbook...');
 
     try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = findSheetName(workbook, MASTER_SHEET_NAMES);
+      const sheets = await readSpreadsheetSheets(file, file.name, file.size);
+      const sheetName = findSheetName(sheets, MASTER_SHEET_NAMES);
       if (!sheetName) throw new Error('Workbook does not contain a readable sheet.');
 
-      const parsed = parseMasterSheet(workbook, sheetName);
+      const parsed = parseMasterSheet(sheets, sheetName);
       if (!parsed.length) throw new Error('No blank inventory rows were found.');
 
       const validated = validateRows(parsed);
@@ -324,7 +321,7 @@ export default function InventoryImport() {
 
         <label>
           Upload blank inventory workbook
-          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} disabled={loading || importing} />
+          <input type="file" accept=".xlsx,.xlsm,.csv,.tsv,.txt" onChange={handleFileChange} disabled={loading || importing} />
         </label>
 
         {message && <p className="message">{message}</p>}

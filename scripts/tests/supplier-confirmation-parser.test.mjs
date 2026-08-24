@@ -164,6 +164,16 @@ test('supplier receiving offers only active canonical colors and identifies read
   assert.match(action, /from\('sc_active_colors'\)/);
 });
 
+test('supplier confirmation matching does not truncate the blank catalog at 5,000 rows', async () => {
+  const parser = await fs.readFile(new URL('../../netlify/functions/supplier-confirmation-parse.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(parser, /from\('blank_products'\)[\s\S]{0,180}limit\(5000\)/);
+  assert.match(parser, /\.eq\('brand_id', ids\.brand_id\)/);
+  assert.match(parser, /\.eq\('product_type_id', ids\.product_type_id\)/);
+  assert.match(parser, /\.eq\('color_id', ids\.color_id\)/);
+  assert.match(parser, /\.eq\('size_id', ids\.size_id\)/);
+  assert.match(parser, /\.limit\(2\)/);
+});
+
 test('parses a representative S&S confirmation row', () => {
   const pages = [{ pageNumber: 1, cells: [
     { x: 100, y: 760, str: 'S&S Activewear' },
