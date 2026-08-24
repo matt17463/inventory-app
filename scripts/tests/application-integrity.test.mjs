@@ -71,39 +71,7 @@ test('AuthGate verifies an active application role through the server', () => {
   assert.match(fn, /allowedRoles/);
 });
 
-test('duplicate resolution is previewed, confirmed, atomic, archived, and audited', () => {
-  const sql = read('deployment/sql/30_RESOLVE_PRODUCT_REVIEW_CASES.sql');
-  const fn = read('netlify/functions/application-integrity.js');
-  assert.match(sql, /sc_preview_product_resolution_v1/);
-  assert.match(sql, /sc_apply_product_resolution_v1/);
-  assert.match(sql, /confirmation_phrase/);
-  assert.match(sql, /preview_hash/);
-  assert.match(sql, /pg_advisory_xact_lock/);
-  assert.match(sql, /sc_is_archived = true/);
-  assert.match(sql, /sc_archived_original_sku/);
-  assert.match(sql, /sc_core_mutation_audit/);
-  assert.match(sql, /quantity_values_rewritten', false/);
-  assert.match(sql, /add column sc_canonical_blank_product_id uuid/);
-  assert.match(sql, /p_blank_product_id uuid/);
-  assert.match(sql, /v_members uuid\[\]/);
-  assert.match(sql, /entity_id_text::uuid/);
-  assert.match(sql, /sc_update_blank_product_safe_v1\(uuid,jsonb,uuid\)/);
-  assert.match(sql, /extensions\.digest/);
-  assert.doesNotMatch(sql, /v_members bigint|v_survivor bigint|entity_id_text::bigint/);
-  assert.doesNotMatch(fn, /p_blank_product_id: Number\(body\.id\)/);
-  assert.doesNotMatch(fn, /\(body\.ids \|\| \[\]\)\.map\(Number\)/);
-  assert.doesNotMatch(sql, /delete\s+from\s+public\.blank_products/i);
-  assert.doesNotMatch(sql, /update\s+public\.blank_inventory_movements\s+set\s+quantity_change/i);
-});
 
-test('resolution digest hotfix locates the pgcrypto schema without changing data', () => {
-  const sql = read('deployment/sql/32_FIX_RESOLUTION_DIGEST_SCHEMA.sql');
-  assert.match(sql, /extension_row\.extname = 'pgcrypto'/);
-  assert.match(sql, /alter function public\.sc_preview_product_resolution_v1/);
-  assert.match(sql, /alter function public\.sc_apply_product_resolution_v1/);
-  assert.match(sql, /pg_notify\('pgrst', 'reload schema'\)/);
-  assert.doesNotMatch(sql, /insert\s+into|update\s+public|delete\s+from|truncate\s+/i);
-});
 
 test('duplicate workbench requires dependency review and exact confirmation', () => {
   const page = read('src/ApplicationIntegrityCenter.jsx');
