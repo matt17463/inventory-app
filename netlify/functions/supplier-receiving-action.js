@@ -11,9 +11,9 @@ async function rememberColorAlias(supabase, confirmation, row, userId) {
   const sourceValue = clean(row.color);
   const canonicalId = clean(row.color_id);
   if (!sourceValue || !canonicalId) return;
-  const color = await supabase.from('colors').select('id,name,is_active').eq('id', canonicalId).maybeSingle();
+  const color = await supabase.from('sc_active_colors').select('id,name').eq('id', canonicalId).maybeSingle();
   if (color.error) throw color.error;
-  if (!color.data || color.data.is_active === false) throw new Error(`${row.supplier_sku}: choose an active WooCommerce color.`);
+  if (!color.data) throw new Error(`${row.supplier_sku}: choose an active WooCommerce color.`);
   const saved = await supabase.from('sc_import_color_aliases').upsert({
     source_system: clean(confirmation.supplier_key), source_value: sourceValue,
     source_key: supplierMatchKey(sourceValue), canonical_color_id_text: canonicalId,

@@ -146,6 +146,24 @@ test('runs WooCommerce color scans and cleanup outside the synchronous request w
   assert.match(reviewPage, /WooCommerce color scan started in the background/);
 });
 
+test('supplier receiving offers only active canonical colors and identifies ready rows', async () => {
+  const [receivingPage, confirmationPage, parser, action] = await Promise.all([
+    fs.readFile(new URL('../../src/AddItemToBin.jsx', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/SupplierConfirmationReceiving.jsx', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/supplier-confirmation-parse.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/supplier-receiving-action.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(receivingPage, /from\('sc_active_colors'\)/);
+  assert.match(receivingPage, /sourceIds\.has/);
+  assert.doesNotMatch(receivingPage, /loadLookupTable\('colors'\)/);
+  assert.match(confirmationPage, /Select Ready Rows/);
+  assert.match(confirmationPage, /selected line\(s\) still need review/);
+  assert.match(confirmationPage, /missingReceivingFields/);
+  assert.match(parser, /from\('sc_active_colors'\)/);
+  assert.match(parser, /canonical_color_review/);
+  assert.match(action, /from\('sc_active_colors'\)/);
+});
+
 test('parses a representative S&S confirmation row', () => {
   const pages = [{ pageNumber: 1, cells: [
     { x: 100, y: 760, str: 'S&S Activewear' },

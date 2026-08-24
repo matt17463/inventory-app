@@ -44,7 +44,7 @@ async function parseAndMatch(supabase, parsed) {
     supabase.from('blank_products').select('id,sku_base,name,brand_id,product_type_id,color_id,size_id').limit(5000),
     supabase.from('brands').select('id,name,code'),
     supabase.from('product_types').select('id,name,code'),
-    supabase.from('colors').select('*'),
+    supabase.from('sc_active_colors').select('*'),
     supabase.from('sizes').select('id,name,code'),
     supabase.rpc('sc_get_color_pairing_rules', { p_status: 'active' }),
     supabase.from('sc_import_color_aliases').select('*').eq('source_system', parsed.supplier_key),
@@ -73,6 +73,11 @@ async function parseAndMatch(supabase, parsed) {
     colorPairingRules: colorRulesUnavailable ? [] : (colorRulesResult.data || []),
     importColorAliases: colorAliasesResult.data || [], supplierKey: parsed.supplier_key,
   };
+  const activeColorIds = new Set(lookups.colors.map((color) => String(color.id)));
+  const canonicalColorBySource = new Map(lookups.colorPairingRules.map((rule) => [
+    String(rule.source_color_id ?? rule.source_color_id_text ?? ''),
+    String(rule.canonical_color_id ?? rule.canonical_color_id_text ?? ''),
+  ]).filter(([sourceId, canonicalId]) => sourceId && canonicalId));
 
   return parsed.lines.map((line) => {
     const mapping = mappings.find((row) => supplierMatchKey(row.supplier_sku) === supplierMatchKey(line.supplier_sku));
@@ -110,9 +115,19 @@ async function parseAndMatch(supabase, parsed) {
       }
     }
     const blank = blankById.get(blankId);
+    const blankColorId = String(blank?.color_id || '');
+    const mappedBlankColorId = canonicalColorBySource.get(blankColorId) || blankColorId;
+    const usableBlankColorId = activeColorIds.has(mappedBlankColorId) ? mappedBlankColorId : suggested.color_id;
+    if (blank && usableBlankColorId !== blankColorId) {
+      // The saved supplier SKU points to a blank that uses an archived/source
+      // color. Keep its other attributes, but force resolution to the active
+      // canonical-color blank before inventory is received.
+      blankId = '';
+      method = `${method || 'saved_vendor_sku'}_canonical_color_review`;
+    }
     const ids = blank ? {
       brand_id: String(blank.brand_id || ''), product_type_id: String(blank.product_type_id || ''),
-      color_id: String(blank.color_id || ''), size_id: String(blank.size_id || ''),
+      color_id: usableBlankColorId, size_id: String(blank.size_id || ''),
     } : {
       brand_id: suggested.brand_id, product_type_id: suggested.product_type_id,
       color_id: suggested.color_id, size_id: suggested.size_id,
