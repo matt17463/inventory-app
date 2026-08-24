@@ -55,9 +55,18 @@ test('supplier receiving persists parsed drafts and supports focused bulk review
 
 test('AuthGate verifies an active application role through the server', () => {
   const gate = read('src/AuthGate.jsx');
+  const client = read('src/lib/netlifyFunctionClient.js');
   const fn = read('netlify/functions/application-integrity.js');
   assert.match(gate, /application-integrity/);
   assert.match(gate, /Account access is not active/);
+  assert.match(gate, /TOKEN_REFRESHED/);
+  assert.match(gate, /Preserve the mounted application/);
+  assert.match(gate, /Access verification is temporarily unavailable/);
+  assert.match(gate, /employee-access-notice/);
+  assert.match(gate, /ACCESS_CHECK_TIMEOUT_MS/);
+  assert.match(client, /AuthenticatedFunctionError/);
+  assert.match(client, /status: 401/);
+  assert.match(client, /status: 403/);
   assert.match(fn, /authorizeEmployee/);
   assert.match(fn, /allowedRoles/);
 });
@@ -79,11 +88,21 @@ test('duplicate resolution is previewed, confirmed, atomic, archived, and audite
   assert.match(sql, /v_members uuid\[\]/);
   assert.match(sql, /entity_id_text::uuid/);
   assert.match(sql, /sc_update_blank_product_safe_v1\(uuid,jsonb,uuid\)/);
+  assert.match(sql, /extensions\.digest/);
   assert.doesNotMatch(sql, /v_members bigint|v_survivor bigint|entity_id_text::bigint/);
   assert.doesNotMatch(fn, /p_blank_product_id: Number\(body\.id\)/);
   assert.doesNotMatch(fn, /\(body\.ids \|\| \[\]\)\.map\(Number\)/);
   assert.doesNotMatch(sql, /delete\s+from\s+public\.blank_products/i);
   assert.doesNotMatch(sql, /update\s+public\.blank_inventory_movements\s+set\s+quantity_change/i);
+});
+
+test('resolution digest hotfix locates the pgcrypto schema without changing data', () => {
+  const sql = read('deployment/sql/32_FIX_RESOLUTION_DIGEST_SCHEMA.sql');
+  assert.match(sql, /extension_row\.extname = 'pgcrypto'/);
+  assert.match(sql, /alter function public\.sc_preview_product_resolution_v1/);
+  assert.match(sql, /alter function public\.sc_apply_product_resolution_v1/);
+  assert.match(sql, /pg_notify\('pgrst', 'reload schema'\)/);
+  assert.doesNotMatch(sql, /insert\s+into|update\s+public|delete\s+from|truncate\s+/i);
 });
 
 test('duplicate workbench requires dependency review and exact confirmation', () => {

@@ -336,7 +336,7 @@ export async function handler(event) {
 
   try {
     let data;
-    if (action === 'health') data = { version: '1.0.2', platform: 'application_integrity', role: auth.role };
+    if (action === 'health') data = { version: '1.0.4', platform: 'application_integrity', role: auth.role };
     else if (action === 'identity.resolve') {
       const result = await auth.supabase.rpc('sc_blank_product_candidates_v1', {
         p_source_system: clean(body.source_system), p_supplier_sku: clean(body.supplier_sku),
