@@ -142,7 +142,7 @@ export default function BlankInventory() {
 
   useEffect(() => {
     load({ nextMode: mode, nextSearch: '' });
-  }, [mode]);
+  }, [mode, load]);
 
   function rowKey(row, index) {
     return (

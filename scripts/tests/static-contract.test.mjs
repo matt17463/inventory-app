@@ -21,6 +21,30 @@ test('all navigation paths have active routes', () => {
   assert.deepEqual(missing, []);
 });
 
+test('application pages are route-lazy-loaded to keep the first screen responsive', () => {
+  assert.match(app, /import \{ lazy, Suspense \} from 'react'/);
+  assert.match(app, /const AddItemToBin = lazy\(\(\) => import\('\.\/AddItemToBin'\)\)/);
+  assert.match(app, /const MockupStudio = lazy\(\(\) => import\('\.\/MockupStudio'\)\)/);
+  assert.match(app, /<Suspense fallback=\{<RouteLoading \/>\}>/);
+  assert.doesNotMatch(app, /import MockupStudio from '\.\/MockupStudio'/);
+});
+
+test('product integrity diagnostics are read-only and navigable', () => {
+  const page = fs.readFileSync(path.join(root, 'src/ProductIntegrityCenter.jsx'), 'utf8');
+  const api = fs.readFileSync(path.join(root, 'src/lib/productIntegrityApi.js'), 'utf8');
+  const sql = fs.readFileSync(path.join(root, 'deployment/sql/27_PRODUCT_INTEGRITY_DIAGNOSTICS.sql'), 'utf8');
+  assert.match(app, /path="\/product-integrity"/);
+  assert.match(nav, /path: '\/product-integrity'/);
+  assert.match(page, /This page never merges, deletes, or changes data/);
+  assert.match(api, /sc_product_integrity_summary_v1/);
+  assert.match(api, /sc_product_integrity_issues_v1/);
+  assert.match(sql, /Read-only product integrity diagnostics/i);
+  assert.match(sql, /duplicate_identity/);
+  assert.match(sql, /duplicate_barcode/);
+  assert.doesNotMatch(sql, /\b(delete|truncate)\s+from\b/i);
+  assert.doesNotMatch(sql, /\bupdate\s+public\./i);
+});
+
 test('employee routes use a real not-found page', () => {
   assert.match(app, /<Route path="\*" element=\{<NotFound \/>\}/);
   assert.doesNotMatch(app, /<Route path="\*" element=\{<Home \/>\}/);
@@ -211,7 +235,9 @@ test('opening a pull sheet is database read-only', () => {
   );
 
   const loadFunction =
-    pullSheet.match(/async function load\(\)[\s\S]*?\n {2}\}/)?.[0] || '';
+    pullSheet.match(/const load = useCallback\(async \(\) => \{[\s\S]*?\n {2}\}, \[[^\]]*\]\);/)?.[0]
+    || pullSheet.match(/async function load\(\)[\s\S]*?\n {2}\}/)?.[0]
+    || '';
 
   assert.match(loadFunction, /fetchJobItemsDirect/);
   assert.match(loadFunction, /Viewing a pull sheet must be read-only/);

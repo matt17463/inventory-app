@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getPhase5Employees, getPhase5Tasks, savePhase5Employee, savePhase5Task } from './lib/inventoryApi';
 
 const TASK_TYPES = ['pull_blanks', 'print_transfers', 'press_garments', 'qc', 'pack_order', 'receive_shipment', 'count_bin', 'reprint', 'artwork', 'general'];
@@ -12,8 +12,8 @@ export default function EmployeeTasks() {
   const [employee, setEmployee] = useState({ name: '', role: '', hourlyCost: 0 });
   const [task, setTask] = useState({ title: '', taskType: 'general', assignedToEmployeeId: '', priority: 0, dueAt: '', notes: '' });
 
-  async function load() { try { const [e,t]=await Promise.all([getPhase5Employees(), getPhase5Tasks(filter)]); setEmployees(e); setTasks(t); setMessage(''); } catch(err){ setMessage(err.message || 'Failed to load tasks.'); } }
-  useEffect(()=>{ load(); }, [filter]);
+  const load = useCallback(async () => { try { const [e,t]=await Promise.all([getPhase5Employees(), getPhase5Tasks(filter)]); setEmployees(e); setTasks(t); setMessage(''); } catch(err){ setMessage(err.message || 'Failed to load tasks.'); } }, [filter]);
+  useEffect(()=>{ load(); }, [load]);
   async function addEmployee(e){ e.preventDefault(); try { await savePhase5Employee(employee); setEmployee({ name:'', role:'', hourlyCost:0 }); await load(); } catch(err){ setMessage(err.message || 'Failed to save employee.'); } }
   async function addTask(e){ e.preventDefault(); try { await savePhase5Task(task); setTask({ title:'', taskType:'general', assignedToEmployeeId:'', priority:0, dueAt:'', notes:'' }); await load(); } catch(err){ setMessage(err.message || 'Failed to save task.'); } }
   async function updateStatus(id, status){ try { await savePhase5Task({ id, title: tasks.find(t=>t.id===id)?.title, taskType: tasks.find(t=>t.id===id)?.task_type, assignedToEmployeeId: tasks.find(t=>t.id===id)?.assigned_to_employee_id, priority: tasks.find(t=>t.id===id)?.priority, dueAt: tasks.find(t=>t.id===id)?.due_at, notes: tasks.find(t=>t.id===id)?.notes, status }); await load(); } catch(err){ setMessage(err.message || 'Failed to update task.'); } }

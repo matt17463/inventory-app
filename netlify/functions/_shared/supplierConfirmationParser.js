@@ -97,7 +97,7 @@ function parseSsActivewear(pages) {
       .filter((cell) => cell.x < 65 && /^[0-9A-F]{8}$/i.test(cell.str))
       .sort((left, right) => right.y - left.y);
 
-    anchors.forEach((anchor, index) => {
+    anchors.forEach((anchor) => {
       // S&S prints each item on one visual row. Keeping the region tight prevents
       // page headers/footers from being attached to the first or last item.
       const region = cells.filter((cell) => near(cell.y, anchor.y, 8));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getFinishedMatchSuggestions, applyFinishedInventoryToJobItem } from './lib/inventoryApi';
 
@@ -8,15 +8,15 @@ export default function FinishedMatchSuggestions() {
   const [message, setMessage] = useState('');
   const [busyKey, setBusyKey] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       setRows(await getFinishedMatchSuggestions(search));
     } catch (err) {
       setMessage(err.message || 'Failed to load finished inventory suggestions.');
     }
-  }
+  }, [search]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   async function apply(row) {
     const qty = Number(row.recommended_use_quantity || 0);

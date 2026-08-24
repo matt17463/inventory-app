@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createManualInvoiceOrder,
   generateManualInvoiceJob,
@@ -11,7 +11,6 @@ import {
   updateManualInvoiceOrder,
   updateManualInvoicePaymentStatus,
   receiveManualInvoiceBlankLine,
-  receiveManualInvoiceOrderBlanks,
   getManualInvoiceBlankReceiptSummary,
   setManualInvoiceLineReceivedQuantity,
   previewVoidManualInvoiceOrder,
@@ -129,8 +128,8 @@ function parseSizeRunRows(text = '', sizes = []) {
       let sizeText = '';
       let quantityText = '';
 
-      const trailingQty = row.match(/^(.+?)[\s,:;xX*\-]+(\d+(?:\.\d+)?)$/);
-      const leadingQty = row.match(/^(\d+(?:\.\d+)?)[\s,:;xX*\-]+(.+)$/);
+      const trailingQty = row.match(/^(.+?)[\s,:;xX*-]+(\d+(?:\.\d+)?)$/);
+      const leadingQty = row.match(/^(\d+(?:\.\d+)?)[\s,:;xX*-]+(.+)$/);
 
       if (trailingQty) {
         sizeText = trailingQty[1].trim();
@@ -524,20 +523,37 @@ export default function ManualInvoicedOrders() {
   const [voidingOrderId, setVoidingOrderId] = useState(null);
   const [syncingOrderId, setSyncingOrderId] = useState(null);
 
-  async function loadOrders() {
+  const loadOrders = useCallback(async () => {
     const rows = await getManualInvoiceOrders();
     setOrders(rows || []);
-  }
+  }, []);
 
-  async function loadQuickLookups() {
+  const loadQuickLookups = useCallback(async () => {
     const rows = await getManualInvoiceReceivingLookups();
     setQuickLookups(rows || { brands: [], product_types: [], colors: [], sizes: [], bins: [] });
-  }
+  }, []);
+
+  const loadReceiptSummaryForCurrentOrder = useCallback(async () => {
+    if (!editingOrderId) return;
+    setReceiptSummaryBusy(true);
+    try {
+      const rows = await getManualInvoiceBlankReceiptSummary(editingOrderId, receiveDefaults.bin_id || '');
+      const next = {};
+      (rows || []).forEach((row) => {
+        if (row.manual_order_item_id !== null && row.manual_order_item_id !== undefined) {
+          next[String(row.manual_order_item_id)] = row;
+        }
+      });
+      setReceiptSummary(next);
+    } finally {
+      setReceiptSummaryBusy(false);
+    }
+  }, [editingOrderId, receiveDefaults.bin_id]);
 
   useEffect(() => {
     loadOrders().catch((err) => setError(err.message));
     loadQuickLookups().catch((err) => setError(err.message || String(err)));
-  }, []);
+  }, [loadOrders, loadQuickLookups]);
 
   useEffect(() => {
     setReceiveQuantities((current) => {
@@ -563,7 +579,7 @@ export default function ManualInvoicedOrders() {
     }
 
     loadReceiptSummaryForCurrentOrder().catch((err) => setError(err.message || String(err)));
-  }, [editingOrderId, receiveDefaults.bin_id]);
+  }, [editingOrderId, receiveDefaults.bin_id, loadReceiptSummaryForCurrentOrder]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.price_per_item || 0)), 0), [items]);
   const calculatedTotal = subtotal + Number(order.tax_amount || 0) + Number(order.shipping_amount || 0);
@@ -881,23 +897,6 @@ export default function ManualInvoicedOrders() {
         delta_quantity: Number(result?.delta_quantity ?? result?.quantity ?? requestedQuantity ?? 0),
       },
     }));
-  }
-
-  async function loadReceiptSummaryForCurrentOrder() {
-    if (!editingOrderId) return;
-    setReceiptSummaryBusy(true);
-    try {
-      const rows = await getManualInvoiceBlankReceiptSummary(editingOrderId, receiveDefaults.bin_id || '');
-      const next = {};
-      (rows || []).forEach((row) => {
-        if (row.manual_order_item_id !== null && row.manual_order_item_id !== undefined) {
-          next[String(row.manual_order_item_id)] = row;
-        }
-      });
-      setReceiptSummary(next);
-    } finally {
-      setReceiptSummaryBusy(false);
-    }
   }
 
   function receiveBinSelect() {
@@ -1587,4 +1586,3 @@ export default function ManualInvoicedOrders() {
     </div>
   );
 }
-

@@ -1,6 +1,15 @@
 import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { getPendingStockBins } from './pullSheetBinAssignmentApi';
+import {
+  addPullSheetLineGuarded,
+  bulkUpdateBlankProductsGuarded,
+  createBlankProductGuarded,
+  createPullSheetGuarded,
+  updateBlankProductGuarded,
+  updatePullSheetLineStatusGuarded,
+  updatePullSheetStatusGuarded,
+} from './applicationIntegrityApi';
 
 function normalizeSearchValue(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -287,30 +296,8 @@ export async function createBlankProduct(input) {
     if (payload[key] === null || Number.isNaN(payload[key])) delete payload[key];
   });
 
-  const { data, error } = await supabase
-    .from('blank_products')
-    .upsert(payload, { onConflict: 'sku_base' })
-    .select(`
-      id,
-      sku_base,
-      barcode,
-      name,
-      image_url,
-      unit_cost,
-      low_stock_threshold,
-      brand_id,
-      color_id,
-      size_id,
-      product_type_id,
-      brands:brand_id(name, code),
-      colors:color_id(name, code),
-      sizes:size_id(name, code),
-      product_types:product_type_id(name, code)
-    `)
-    .single();
-
-  if (error) throw error;
-  return data;
+  const result = await createBlankProductGuarded(payload);
+  return result.blank;
 }
 
 
@@ -340,31 +327,8 @@ export async function updateBlankProduct(blankProductId, input) {
     if (Number.isNaN(payload[key])) delete payload[key];
   });
 
-  const { data, error } = await supabase
-    .from('blank_products')
-    .update(payload)
-    .eq('id', blankProductId)
-    .select(`
-      id,
-      sku_base,
-      barcode,
-      name,
-      image_url,
-      unit_cost,
-      low_stock_threshold,
-      brand_id,
-      color_id,
-      size_id,
-      product_type_id,
-      brands:brand_id(name, code),
-      colors:color_id(name, code),
-      sizes:size_id(name, code),
-      product_types:product_type_id(name, code)
-    `)
-    .single();
-
-  if (error) throw error;
-  return data;
+  const result = await updateBlankProductGuarded(blankProductId, payload);
+  return result.blank;
 }
 
 
@@ -412,14 +376,7 @@ export async function bulkUpdateBlankProducts(blankProductIds, input) {
     throw new Error('Choose at least one bulk edit field to apply.');
   }
 
-  const { data, error } = await supabase
-    .from('blank_products')
-    .update(payload)
-    .in('id', ids)
-    .select('id');
-
-  if (error) throw error;
-  return data || [];
+  return bulkUpdateBlankProductsGuarded(ids, payload);
 }
 
 export async function getBlankProducts(search = '') {
@@ -1327,30 +1284,17 @@ export async function createPullSheet({ jobName, customerName, orderNumber, dueD
   const name = String(jobName || '').trim();
   if (!name) throw new Error('Enter a job name.');
 
-  const { data, error } = await supabase
-    .from('jobs')
-    .insert({
-      job_name: name,
-      customer_name: String(customerName || '').trim() || null,
-      woocommerce_order_id: String(orderNumber || '').trim() || null,
-      due_date: dueDate || null,
-      notes: String(notes || '').trim() || null,
-      status: 'ready_to_pull',
-    })
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return data;
+  return createPullSheetGuarded({
+    job_name: name,
+    customer_name: String(customerName || '').trim() || null,
+    woocommerce_order_id: String(orderNumber || '').trim() || null,
+    due_date: dueDate || null,
+    notes: String(notes || '').trim() || null,
+  });
 }
 
 export async function updatePullSheetStatus({ jobId, status }) {
-  const { error } = await supabase
-    .from('jobs')
-    .update({ status })
-    .eq('id', jobId);
-
-  if (error) throw error;
+  await updatePullSheetStatusGuarded(jobId, status, 'Pull sheet status changed from application');
 }
 
 export async function updatePullSheetStatuses({ jobIds, status }) {
@@ -1360,14 +1304,11 @@ export async function updatePullSheetStatuses({ jobIds, status }) {
   if (!ids.length) throw new Error('Choose at least one pull sheet.');
   if (!nextStatus) throw new Error('Choose a status.');
 
-  const { data, error } = await supabase
-    .from('jobs')
-    .update({ status: nextStatus })
-    .in('id', ids)
-    .select('id, status');
-
-  if (error) throw error;
-  return data || [];
+  const updated = [];
+  for (const id of ids) {
+    updated.push(await updatePullSheetStatusGuarded(id, nextStatus, 'Bulk pull sheet status change'));
+  }
+  return updated;
 }
 
 
@@ -1493,40 +1434,22 @@ export async function addPullSheetItem({
   if (!blankProductId) throw new Error('Choose a blank item.');
   if (!quantity || Number(quantity) <= 0) throw new Error('Quantity must be greater than zero.');
 
-  const { data, error } = await supabase
-    .from('job_items')
-    .insert({
-      job_id: jobId,
-      blank_product_id: blankProductId,
-      quantity: Number(quantity),
-      logo: String(logo || '').trim() || null,
-      placement: String(placement || '').trim() || null,
-      notes: String(notes || '').trim() || null,
-      status: 'ready_to_pull',
-    })
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return data;
+  return addPullSheetLineGuarded({
+    job_id: jobId,
+    blank_product_id: blankProductId,
+    quantity: Number(quantity),
+    logo: String(logo || '').trim() || null,
+    placement: String(placement || '').trim() || null,
+    notes: String(notes || '').trim() || null,
+  });
 }
 
 export async function updatePullSheetItemStatus({ jobItemId, status }) {
-  const { error } = await supabase
-    .from('job_items')
-    .update({ status })
-    .eq('id', Number(jobItemId));
-
-  if (error) throw error;
+  await updatePullSheetLineStatusGuarded(jobItemId, status, 'Pull sheet line status changed from application');
 }
 
 export async function deletePullSheetItem(jobItemId) {
-  const { error } = await supabase
-    .from('job_items')
-    .delete()
-    .eq('id', Number(jobItemId));
-
-  if (error) throw error;
+  await updatePullSheetLineStatusGuarded(jobItemId, 'cancelled', 'Line removed from active pull sheet; row preserved for traceability');
 }
 
 export async function completeJobItem({ jobItemId, binId, notes }) {

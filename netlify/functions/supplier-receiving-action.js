@@ -7,6 +7,14 @@ const BUCKET = 'sc-receiving-documents';
 function clean(value) { return String(value ?? '').trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 
+async function trackIntegrationJob(supabase, payload) {
+  const result = payload.idempotency_key
+    ? await supabase.from('sc_integration_jobs').upsert(payload, { onConflict: 'idempotency_key' }).select('id').maybeSingle()
+    : await supabase.from('sc_integration_jobs').insert(payload).select('id').maybeSingle();
+  if (result.error && !/does not exist|schema cache|could not find/i.test(result.error.message || '')) throw result.error;
+  return result.data?.id || null;
+}
+
 async function rememberColorAlias(supabase, confirmation, row, userId) {
   const sourceValue = clean(row.color);
   const canonicalId = clean(row.color_id);
@@ -21,6 +29,23 @@ async function rememberColorAlias(supabase, confirmation, row, userId) {
     created_by: userId, updated_at: new Date().toISOString(),
   }, { onConflict: 'source_system,source_key' });
   if (saved.error) throw saved.error;
+}
+
+async function rememberProductIdentityAlias(supabase, confirmation, row, userId) {
+  const supplierSku = clean(row.supplier_sku);
+  const blankProductId = clean(row.blank_product_id);
+  if (!supplierSku || !blankProductId) return;
+  const normalize = (value) => clean(value).toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  const saved = await supabase.from('sc_product_identity_aliases').upsert({
+    source_system: clean(confirmation.supplier_key).toLowerCase(), alias_type: 'supplier_sku',
+    source_value: supplierSku, source_value_norm: normalize(supplierSku),
+    context_brand_norm: normalize(row.brand), context_style_norm: normalize(row.style),
+    canonical_blank_product_id_text: blankProductId, canonical_label: clean(row.description) || supplierSku,
+    confidence: 100, status: 'active', created_by: userId, reviewed_by: userId,
+    notes: `Remembered while receiving order ${clean(confirmation.order_number)}`,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'source_system,alias_type,source_value_norm,context_brand_norm,context_style_norm' });
+  if (saved.error && !/does not exist|schema cache|could not find/i.test(saved.error.message || '')) throw saved.error;
 }
 
 function lookupCode(value) {
@@ -166,6 +191,18 @@ async function refreshImportTotals(supabase, importId) {
   return updated.data;
 }
 
+async function saveDraft(supabase, body, userId) {
+  const confirmation = body.confirmation || {};
+  const rows = Array.isArray(body.rows) ? body.rows : [];
+  if (!clean(confirmation.supplier_key) || !clean(confirmation.order_number)) {
+    throw new Error('The parsed supplier and order number are required to save a receiving draft.');
+  }
+  const receivingImport = await upsertImport(supabase, confirmation, userId);
+  for (const row of rows) await ensureImportLine(supabase, receivingImport.id, row);
+  const updated = await refreshImportTotals(supabase, receivingImport.id);
+  return { receiving_import: updated, saved_lines: rows.length };
+}
+
 async function commitReceipt(supabase, body, userId) {
   const confirmation = body.confirmation || {};
   const rows = Array.isArray(body.rows) ? body.rows.filter((row) => number(row.receive_now) > 0) : [];
@@ -176,6 +213,14 @@ async function commitReceipt(supabase, body, userId) {
   const duplicate = await supabase.from('sc_supplier_receiving_receipts').select('*').eq('idempotency_key', key).maybeSingle();
   if (duplicate.error) throw duplicate.error;
   if (duplicate.data) return { receipt: duplicate.data, duplicate_request: true };
+
+  const trackedJobId = await trackIntegrationJob(supabase, {
+    job_type: 'supplier_receiving', source_system: clean(confirmation.supplier_key),
+    external_reference: clean(confirmation.order_number), status: 'running',
+    progress_current: 0, progress_total: rows.length, attempt_count: 1,
+    idempotency_key: `supplier-receiving:${key}`, input_summary: { ordered_rows: rows.length },
+    created_by: userId, started_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  });
 
   const receivingImport = await upsertImport(supabase, confirmation, userId);
   const prepared = [];
@@ -230,6 +275,7 @@ async function commitReceipt(supabase, body, userId) {
       }, { onConflict: 'supplier_key,supplier_sku' });
     }
     if (item.row.remember_mapping !== false) await rememberColorAlias(supabase, confirmation, item.row, userId);
+    if (item.row.remember_mapping !== false) await rememberProductIdentityAlias(supabase, confirmation, item.row, userId);
     completedUnits += item.quantity;
   }
 
@@ -239,6 +285,12 @@ async function commitReceipt(supabase, body, userId) {
   }).eq('id', receipt.id).select('*').single();
   if (completed.error) throw completed.error;
   const updatedImport = await refreshImportTotals(supabase, receivingImport.id);
+  if (trackedJobId) await supabase.from('sc_integration_jobs').update({
+    status: errors.length ? 'failed' : 'completed', progress_current: prepared.length,
+    result_summary: { completed_units: completedUnits, error_count: errors.length },
+    last_error: errors.length ? errors.join('; ').slice(0, 4000) : null,
+    completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }).eq('id', trackedJobId);
   return { receipt: completed.data, receiving_import: updatedImport, errors };
 }
 
@@ -292,6 +344,7 @@ export async function handler(event) {
     let data;
     if (action === 'history') data = { history: await history(auth.supabase) };
     else if (action === 'ensure_lookups') data = await ensureSupplierLookups(auth.supabase, body);
+    else if (action === 'save_draft') data = await saveDraft(auth.supabase, body, auth.user.id);
     else if (action === 'commit') data = await commitReceipt(auth.supabase, body, auth.user.id);
     else if (action === 'rollback') data = await rollbackReceipt(auth.supabase, body, auth.user.id);
     else if (action === 'document_url') {

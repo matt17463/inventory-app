@@ -196,8 +196,8 @@ export default function ShopTvMode() {
   const searchInputRef = useRef(null);
 
   const metrics = data.metrics || {};
-  const jobs = Array.isArray(data.jobs) ? data.jobs : [];
-  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const jobs = useMemo(() => Array.isArray(data.jobs) ? data.jobs : [], [data.jobs]);
+  const tasks = useMemo(() => Array.isArray(data.tasks) ? data.tasks : [], [data.tasks]);
   const updatedAt = lastUpdated || data.generated_at;
 
   async function load(options = {}) {

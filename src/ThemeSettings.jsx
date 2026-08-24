@@ -10,7 +10,7 @@ import {
 } from './components/UIPrimitives';
 import DarkModeToggle from './components/DarkModeToggle';
 import { THEME_PRESETS, getThemePreset } from './themePresets';
-import { useTheme } from './ui/ThemeProvider';
+import { useTheme } from './ui/themeContext';
 
 function ThemePreviewCard({ preset, selected, onSelect }) {
   const previewStyle = {

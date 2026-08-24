@@ -1,6 +1,6 @@
 import React, { Fragment, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
-import { bulkUpdateBlankProducts } from './inventoryApi';
+import { bulkUpdateBlankProducts, updateBlankProduct } from './inventoryApi';
 import { TableInlineEditorRow } from './components/UIPrimitives';
 
 const empty = { sku_base: '', name: '', barcode: '', brand_id: '', product_type_id: '', color_id: '', size_id: '', unit_cost: '', low_stock_threshold: '', image_url: '' };
@@ -105,13 +105,14 @@ export default function EditBlankItems() {
       low_stock_threshold: form.low_stock_threshold === '' ? null : Number(form.low_stock_threshold),
       image_url: form.image_url || null,
     };
-    const { error } = await supabase.from('blank_products').update(payload).eq('id', selected.id);
-    if (error) setMessage(error.message);
-    else {
+    try {
+      await updateBlankProduct(selected.id, payload);
       setMessage('Blank item saved.');
       setSelected(null);
       setForm(empty);
       await loadRows();
+    } catch (error) {
+      setMessage(error.message || 'Blank item could not be saved.');
     }
     setLoading(false);
   }

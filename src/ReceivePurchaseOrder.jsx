@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getBins,
@@ -22,7 +22,7 @@ export default function ReceivePurchaseOrder() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setMessage('');
     try {
@@ -47,9 +47,9 @@ export default function ReceivePurchaseOrder() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [poId]);
 
-  useEffect(() => { loadData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [poId]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const totals = useMemo(() => items.reduce((acc, item) => {
     acc.ordered += Number(item.quantity_ordered || 0);

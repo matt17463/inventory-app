@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   listProductionTimeRules,
   saveProductionTimeRule,
@@ -26,21 +26,21 @@ export default function ProductionTimeEstimator() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setMessage('');
     try {
       const rows = await listProductionTimeRules();
       setRules(rows);
-      if (!selectedRuleId && rows[0]) setSelectedRuleId(rows[0].id);
+      if (rows[0]) setSelectedRuleId((current) => current || rows[0].id);
     } catch (e) {
       setMessage(e.message || String(e));
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const selectedRule = useMemo(() => rules.find((r) => r.id === selectedRuleId), [rules, selectedRuleId]);
 

@@ -50,13 +50,6 @@ async function supabaseRequest(path, method, body, extraHeaders = {}) {
   return parsed;
 }
 
-function getHeader(event, name) {
-  const wanted = name.toLowerCase();
-  const headers = event.headers || {};
-  const key = Object.keys(headers).find((k) => k.toLowerCase() === wanted);
-  return key ? headers[key] : '';
-}
-
 function nullableText(value) {
   if (value == null) return null;
   const text = String(value).trim();
@@ -158,7 +151,7 @@ export const handler = async (event) => {
   let payload;
   try {
     payload = JSON.parse(event.body || '{}');
-  } catch (err) {
+  } catch (_err) {
     return response(400, { success: false, message: 'Invalid JSON body.' });
   }
 

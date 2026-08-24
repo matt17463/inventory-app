@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getWaitingOnItems } from './lib/inventoryApi';
 
@@ -12,7 +12,7 @@ export default function WaitingOn() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  async function loadRows() {
+  const loadRows = useCallback(async () => {
     setLoading(true);
     setMessage('');
     try {
@@ -22,9 +22,9 @@ export default function WaitingOn() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [search]);
 
-  useEffect(() => { loadRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { loadRows(); }, [loadRows]);
 
   const totals = useMemo(() => rows.reduce((acc, row) => {
     acc.lines += 1;

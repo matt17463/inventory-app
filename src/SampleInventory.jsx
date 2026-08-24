@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import './standalone_samples_manual.css';
 
@@ -170,7 +170,7 @@ export default function SampleInventory() {
 
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.map(String).includes(String(id)));
 
-  async function loadProductTypes() {
+  const loadProductTypes = useCallback(async () => {
     const { data, error } = await supabase
       .from('sample_product_types')
       .select('name')
@@ -183,9 +183,9 @@ export default function SampleInventory() {
 
     const merged = Array.from(new Set([...DEFAULT_PRODUCT_TYPES, ...(data || []).map((row) => row.name).filter(Boolean)]));
     setProductTypes(merged.sort((a, b) => a.localeCompare(b)));
-  }
+  }, []);
 
-  async function loadBins() {
+  const loadBins = useCallback(async () => {
     const { data, error } = await supabase
       .from('bins')
       .select('id, bin_code, label, location')
@@ -193,9 +193,9 @@ export default function SampleInventory() {
 
     if (error) throw error;
     setBins(data || []);
-  }
+  }, []);
 
-  async function loadSamples() {
+  const loadSamples = useCallback(async () => {
     const { data, error } = await supabase
       .from('sample_products_with_bins')
       .select('*')
@@ -215,21 +215,21 @@ export default function SampleInventory() {
     }
 
     setRows(data || []);
-  }
+  }, []);
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     await Promise.all([
       loadProductTypes(),
       loadBins(),
       loadSamples(),
     ]);
-  }
+  }, [loadProductTypes, loadBins, loadSamples]);
 
   useEffect(() => {
     loadAll().catch((err) => {
       setMessage(err.message || 'Failed to load samples.');
     });
-  }, []);
+  }, [loadAll]);
 
   function updateField(field, value) {
     setForm((current) => ({

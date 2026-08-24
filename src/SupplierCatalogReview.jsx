@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   clearSupplierCatalogImportedData,
   getSupplierCatalogDistinctOptions,
@@ -40,7 +40,7 @@ export default function SupplierCatalogReview() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const pageCount = Math.max(1, Math.ceil(count / pageSize));
-  async function load() {
+  const load = useCallback(async () => {
     setBusy(true);
     try {
       const [paged, statRows, opts] = await Promise.all([
@@ -52,8 +52,8 @@ export default function SupplierCatalogReview() {
       setMessage(`Showing ${fmt(paged.rows?.length || 0)} of ${fmt(paged.count || 0)} matching row(s).`);
     } catch (err) { setMessage(err.message || 'Failed to load supplier catalog.'); }
     finally { setBusy(false); }
-  }
-  useEffect(() => { load(); }, [page, pageSize]);
+  }, [filters, page, pageSize]);
+  useEffect(() => { load(); }, [load]);
   function setFilter(key, value) { setFilters((current) => ({ ...current, [key]: value })); }
   function applyFilters(event) { event.preventDefault(); setPage(1); setTimeout(load, 0); }
   function beginEdit(row) { setEditing((current) => ({ ...current, [row.id]: nextState(row, {}) })); }

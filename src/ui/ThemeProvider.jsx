@@ -1,11 +1,10 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
 } from 'react';
+import { ThemeContext } from './themeContext';
 import {
   DEFAULT_THEME_PRESET,
   normalizeThemePreset,
@@ -20,25 +19,6 @@ const DEFAULT_PREFERENCES = Object.freeze({
   density: 'comfortable',
   showHelp: true,
   reduceMotion: false,
-});
-
-const ThemeContext = createContext({
-  theme: DEFAULT_PREFERENCES,
-  preset: DEFAULT_PREFERENCES.preset,
-  mode: DEFAULT_PREFERENCES.mode,
-  effectiveMode: 'light',
-  density: DEFAULT_PREFERENCES.density,
-  showHelp: DEFAULT_PREFERENCES.showHelp,
-  reduceMotion: DEFAULT_PREFERENCES.reduceMotion,
-  setTheme: () => {},
-  setPreset: () => {},
-  setMode: () => {},
-  setDensity: () => {},
-  setShowHelp: () => {},
-  setReduceMotion: () => {},
-  toggleTheme: () => {},
-  resetTheme: () => {},
-  isDark: false,
 });
 
 function normalizeMode(value) {
@@ -234,10 +214,6 @@ export function ThemeProvider({ children }) {
   ]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme() {
-  return useContext(ThemeContext);
 }
 
 export default ThemeProvider;

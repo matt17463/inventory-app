@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPhase5Quote, getPhase5Quotes, money } from './lib/inventoryApi';
 import { supabase } from './supabaseClient';
 
@@ -31,7 +31,7 @@ export default function QuoteBuilder() {
   const [form, setForm] = useState(emptyForm);
   const [item, setItem] = useState(emptyItem);
 
-  async function loadRules() {
+  const loadRules = useCallback(async () => {
     const rpc = await supabase.rpc('sc_quote_builder_pricing_rules');
     if (!rpc.error) return (rpc.data || []).map(normalizeRule).filter((r) => r.active !== false);
 
@@ -42,9 +42,9 @@ export default function QuoteBuilder() {
     if (!legacy.error) return (legacy.data || []).map(normalizeRule).filter((r) => r.active !== false);
 
     throw rpc.error || current.error || legacy.error;
-  }
+  }, []);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const [q, r] = await Promise.all([getPhase5Quotes('open'), loadRules()]);
       setQuotes(q);
@@ -53,9 +53,9 @@ export default function QuoteBuilder() {
     } catch (err) {
       setMessage(err.message || 'Failed to load quote data.');
     }
-  }
+  }, [loadRules]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const selectedRule = useMemo(() => rules.find((rule) => String(rule.id) === String(selectedRuleId)), [rules, selectedRuleId]);
   const costEach = Number(item.blankCost || 0) + Number(item.decorationCost || 0) + Number(item.laborCost || 0);

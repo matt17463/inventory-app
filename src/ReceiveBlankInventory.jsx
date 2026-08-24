@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getBlankProducts, getBins, receiveBlankInventory } from './lib/inventoryApi';
 
 export default function ReceiveBlankInventory() {
@@ -11,18 +11,18 @@ export default function ReceiveBlankInventory() {
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     const [productRows, binRows] = await Promise.all([
       getBlankProducts(search),
       getBins(),
     ]);
     setProducts(productRows);
     setBins(binRows);
-  }
+  }, [search]);
 
   useEffect(() => {
     load().catch((err) => setMessage(err.message));
-  }, []);
+  }, [load]);
 
   async function handleSearch(e) {
     e.preventDefault();
