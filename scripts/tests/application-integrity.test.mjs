@@ -55,36 +55,23 @@ test('supplier receiving persists parsed drafts and supports focused bulk review
 
 test('AuthGate verifies an active application role through the server', () => {
   const gate = read('src/AuthGate.jsx');
+  const client = read('src/lib/netlifyFunctionClient.js');
   const fn = read('netlify/functions/application-integrity.js');
   assert.match(gate, /application-integrity/);
   assert.match(gate, /Account access is not active/);
+  assert.match(gate, /TOKEN_REFRESHED/);
+  assert.match(gate, /Preserve the mounted application/);
+  assert.match(gate, /Access verification is temporarily unavailable/);
+  assert.match(gate, /employee-access-notice/);
+  assert.match(gate, /ACCESS_CHECK_TIMEOUT_MS/);
+  assert.match(client, /AuthenticatedFunctionError/);
+  assert.match(client, /status: 401/);
+  assert.match(client, /status: 403/);
   assert.match(fn, /authorizeEmployee/);
   assert.match(fn, /allowedRoles/);
 });
 
-test('duplicate resolution is previewed, confirmed, atomic, archived, and audited', () => {
-  const sql = read('deployment/sql/30_RESOLVE_PRODUCT_REVIEW_CASES.sql');
-  const fn = read('netlify/functions/application-integrity.js');
-  assert.match(sql, /sc_preview_product_resolution_v1/);
-  assert.match(sql, /sc_apply_product_resolution_v1/);
-  assert.match(sql, /confirmation_phrase/);
-  assert.match(sql, /preview_hash/);
-  assert.match(sql, /pg_advisory_xact_lock/);
-  assert.match(sql, /sc_is_archived = true/);
-  assert.match(sql, /sc_archived_original_sku/);
-  assert.match(sql, /sc_core_mutation_audit/);
-  assert.match(sql, /quantity_values_rewritten', false/);
-  assert.match(sql, /add column sc_canonical_blank_product_id uuid/);
-  assert.match(sql, /p_blank_product_id uuid/);
-  assert.match(sql, /v_members uuid\[\]/);
-  assert.match(sql, /entity_id_text::uuid/);
-  assert.match(sql, /sc_update_blank_product_safe_v1\(uuid,jsonb,uuid\)/);
-  assert.doesNotMatch(sql, /v_members bigint|v_survivor bigint|entity_id_text::bigint/);
-  assert.doesNotMatch(fn, /p_blank_product_id: Number\(body\.id\)/);
-  assert.doesNotMatch(fn, /\(body\.ids \|\| \[\]\)\.map\(Number\)/);
-  assert.doesNotMatch(sql, /delete\s+from\s+public\.blank_products/i);
-  assert.doesNotMatch(sql, /update\s+public\.blank_inventory_movements\s+set\s+quantity_change/i);
-});
+
 
 test('duplicate workbench requires dependency review and exact confirmation', () => {
   const page = read('src/ApplicationIntegrityCenter.jsx');

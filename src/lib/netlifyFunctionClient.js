@@ -1,12 +1,24 @@
 import { supabase } from '../supabaseClient';
 
+export class AuthenticatedFunctionError extends Error {
+  constructor(message, { status = 0, code = '' } = {}) {
+    super(message);
+    this.name = 'AuthenticatedFunctionError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function employeeAccessToken() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
 
   const token = data?.session?.access_token || '';
   if (!token) {
-    throw new Error('Your employee session has expired. Sign in again and retry.');
+    throw new AuthenticatedFunctionError(
+      'Your employee session has expired. Sign in again and retry.',
+      { status: 401, code: 'session_missing' },
+    );
   }
   return token;
 }
@@ -21,11 +33,18 @@ export async function authenticatedFunctionFetch(path, options = {}) {
 
   const response = await fetch(path, { ...options, headers });
   if (response.status === 401) {
-    throw new Error('Your employee session is no longer authorized. Sign in again and retry.');
+    const payload = await response.clone().json().catch(() => ({}));
+    throw new AuthenticatedFunctionError(
+      payload?.error || payload?.message || 'Your employee session is no longer authorized. Sign in again and retry.',
+      { status: 401, code: 'session_unauthorized' },
+    );
   }
   if (response.status === 403) {
     const payload = await response.clone().json().catch(() => ({}));
-    throw new Error(payload?.error || payload?.message || 'Your employee role does not permit this action.');
+    throw new AuthenticatedFunctionError(
+      payload?.error || payload?.message || 'Your employee role does not permit this action.',
+      { status: 403, code: 'role_forbidden' },
+    );
   }
   return response;
 }
