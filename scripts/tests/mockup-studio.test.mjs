@@ -163,6 +163,21 @@ test('server exact compositor preserves dimensions and creates caption space', a
   assert.ok(captioned.height > clean.height);
 });
 
+test('server exact compositor bounds large 300-DPI sources before compositing', async () => {
+  const sharp = (await import('sharp')).default;
+  const { renderExactMockup } = await import('../../netlify/functions/_shared/exactMockupRenderer.js');
+  const blank = await sharp({ create: { width: 4200, height: 5400, channels: 4, background: '#202020' } }).jpeg({ quality: 85 }).toBuffer();
+  const artwork = await sharp({ create: { width: 6000, height: 6000, channels: 4, background: '#ffffff' } }).png({ compressionLevel: 9 }).toBuffer();
+  const rendered = await renderExactMockup({
+    blankBytes: blank,
+    artworkBytes: artwork,
+    placement: { width_pct: 40, x_pct: 50, y_pct: 45, perspective_config: { preserve_white_ink: true } },
+  });
+  assert.ok(rendered.width <= 2400);
+  assert.ok(rendered.height <= 2400);
+  assert.ok(rendered.data.length > 0);
+});
+
 test('white artwork is protected as opaque print in exact and AI mockups', async () => {
   const studio = await read('src/MockupStudio.jsx');
   const api = await read('src/lib/mockupStudioApi.js');
