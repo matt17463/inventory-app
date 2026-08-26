@@ -34,7 +34,7 @@ import {
   publishMockupToWooCommerce,
   removeMockupAsset,
   requestAiMockup,
-  saveExactCompositeOutput,
+  requestExactMockup,
   saveMockupPlacement,
   savePricingItem,
   searchMockupBlankCatalog,
@@ -51,7 +51,7 @@ import {
   restoreLocalMockupArchiveFiles,
   verifyLinkedLocalMockupArchive,
 } from './lib/mockupLocalArchive';
-import { imageDimensions, inspectArtworkFile, renderMockupComposite } from './lib/mockupCanvas';
+import { imageDimensions, inspectArtworkFile } from './lib/mockupCanvas';
 import './MockupStudio.css';
 import './MockupStudioWoo.css';
 
@@ -569,12 +569,9 @@ function GenerateTab({ project, blanks, artwork, placements, jobs, outputs, urls
   const [caption, setCaption] = useState({ text: '', font: project.default_caption_font || 'Arial', size: project.default_caption_size || 36, color: project.default_caption_color || '#111827', background: project.default_caption_background || '#ffffff', alignment: 'center', padding: 32 });
 
   async function exact(placement, withCaption) {
-    const blank = blanks.find((row) => row.id === placement.blank_asset_id);
-    const art = artwork.find((row) => row.id === placement.artwork_asset_id);
     setBusy(true);
     try {
-      const rendered = await renderMockupComposite({ blankUrl: urls[blank?.id], artworkUrl: urls[art?.id], placement, caption: withCaption ? caption : null });
-      await saveExactCompositeOutput({ projectId: project.id, placementId: placement.id, blob: rendered.blob, caption: withCaption ? caption : null, metadata: { pixel_width: rendered.width, pixel_height: rendered.height } });
+      await requestExactMockup({ projectId: project.id, placementId: placement.id, caption: withCaption ? caption : null });
       setMessage(withCaption ? 'Captioned exact-artwork mockup created.' : 'Clean exact-artwork mockup created.');
       await refresh();
     } catch (error) { setMessage(error.message || 'Exact mockup rendering failed.'); }

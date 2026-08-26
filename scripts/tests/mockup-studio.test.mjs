@@ -133,12 +133,34 @@ test('local archives verify files before batched cloud cleanup and support resto
 
 test('exact compositor preserves an AI-free rendering path with captions', async () => {
   const canvas = await read('src/lib/mockupCanvas.js');
+  const studio = await read('src/MockupStudio.jsx');
+  const api = await read('src/lib/mockupStudioApi.js');
+  const server = await read('netlify/functions/mockup-generate-exact.js');
   assert.match(canvas, /renderMockupComposite/);
   assert.match(canvas, /caption/);
   assert.match(canvas, /font/);
   assert.match(canvas, /fillText/);
   assert.match(canvas, /preserveWhiteInk \? 'source-over'/);
   assert.match(canvas, /inspectArtworkFile/);
+  assert.match(studio, /requestExactMockup/);
+  assert.doesNotMatch(studio, /renderMockupComposite\(\{ blankUrl/);
+  assert.match(api, /mockup-generate-exact/);
+  assert.match(server, /loadMockupAsset/);
+  assert.match(server, /renderExactMockup/);
+  assert.match(server, /cors_independent: true/);
+});
+
+test('server exact compositor preserves dimensions and creates caption space', async () => {
+  const sharp = (await import('sharp')).default;
+  const { renderExactMockup } = await import('../../netlify/functions/_shared/exactMockupRenderer.js');
+  const blank = await sharp({ create: { width: 500, height: 600, channels: 4, background: '#202020' } }).png().toBuffer();
+  const artwork = await sharp({ create: { width: 200, height: 100, channels: 4, background: '#ffffff' } }).png().toBuffer();
+  const clean = await renderExactMockup({ blankBytes: blank, artworkBytes: artwork, placement: { width_pct: 40, x_pct: 50, y_pct: 45, perspective_config: { preserve_white_ink: true } } });
+  assert.equal(clean.width, 500);
+  assert.equal(clean.height, 600);
+  assert.ok(clean.data.length > 0);
+  const captioned = await renderExactMockup({ blankBytes: blank, artworkBytes: artwork, placement: { width_pct: 40 }, caption: { text: 'Test mockup', size: 36, padding: 32 } });
+  assert.ok(captioned.height > clean.height);
 });
 
 test('white artwork is protected as opaque print in exact and AI mockups', async () => {
