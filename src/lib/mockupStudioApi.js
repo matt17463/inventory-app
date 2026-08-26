@@ -494,6 +494,18 @@ export async function saveExactCompositeOutput({ projectId, placementId, blob, c
   return data;
 }
 
+export async function requestExactMockup({ projectId, placementId, caption = null }) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-generate-exact', {
+    method: 'POST',
+    body: JSON.stringify({ project_id: projectId, placement_id: placementId, caption }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || 'Exact Clean generation failed.');
+  }
+  return payload;
+}
+
 export async function downloadMockupStoredFile(reference) {
   if (reference.provider === 'r2') {
     const payload = await storageFunction({
