@@ -499,9 +499,11 @@ export async function requestExactMockup({ projectId, placementId, caption = nul
     method: 'POST',
     body: JSON.stringify({ project_id: projectId, placement_id: placementId, caption }),
   });
-  const payload = await response.json().catch(() => ({}));
+  const responseText = await response.text();
+  let payload = {};
+  try { payload = responseText ? JSON.parse(responseText) : {}; } catch { /* Netlify runtime failures may return plain text. */ }
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || 'Exact Clean generation failed.');
+    throw new Error(payload?.error || `Exact Clean generation failed (HTTP ${response.status}). Check the mockup-generate-exact Netlify log.`);
   }
   return payload;
 }
