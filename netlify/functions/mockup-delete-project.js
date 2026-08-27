@@ -1,6 +1,6 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { parseJsonBody } from './_shared/mockupUtils.js';
-import { deleteStoredAsset } from './_shared/mockupStorage.js';
+import { deleteStoredAsset, queueStoredAssetCleanup } from './_shared/mockupStorage.js';
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
@@ -20,21 +20,21 @@ export async function handler(event) {
     const firstError = assetQueries.find((query) => query.error)?.error;
     if (firstError) throw firstError;
 
+    const { error: deleteError } = await auth.supabase.from('mockup_projects').delete().eq('id', projectId);
+    if (deleteError) throw deleteError;
+    const warnings = [];
     for (const query of assetQueries) {
       for (const row of query.data || []) {
-        await deleteStoredAsset(auth.supabase, row);
+        try { await deleteStoredAsset(auth.supabase, row); }
+        catch (storageError) { warnings.push(storageError.message); await queueStoredAssetCleanup(auth.supabase, row, `project_deleted: ${storageError.message}`); }
         if (row.prepared_storage_path) {
-          await deleteStoredAsset(auth.supabase, {
-            storage_provider: row.prepared_storage_provider || row.storage_provider,
-            storage_bucket: row.prepared_storage_bucket || row.storage_bucket,
-            storage_path: row.prepared_storage_path,
-          }, { includePreview: false });
+          const prepared = { project_id: projectId, storage_provider: row.prepared_storage_provider || row.storage_provider, storage_bucket: row.prepared_storage_bucket || row.storage_bucket, storage_path: row.prepared_storage_path };
+          try { await deleteStoredAsset(auth.supabase, prepared, { includePreview: false }); }
+          catch (storageError) { warnings.push(storageError.message); await queueStoredAssetCleanup(auth.supabase, prepared, `project_prepared_asset_deleted: ${storageError.message}`, { includePreview: false }); }
         }
       }
     }
-    const { error: deleteError } = await auth.supabase.from('mockup_projects').delete().eq('id', projectId);
-    if (deleteError) throw deleteError;
-    return jsonResponse(200, { success: true, deleted_project_id: projectId }, event);
+    return jsonResponse(200, { success: true, deleted_project_id: projectId, cleanup_warning: warnings.length ? warnings.join(' | ') : null }, event);
   } catch (error) {
     console.error('Mockup project deletion failed:', error);
     return jsonResponse(500, { success: false, error: error.message || 'Mockup project deletion failed.' }, event);

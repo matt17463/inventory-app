@@ -67,10 +67,12 @@ test('WooCommerce export supports catalog attributes, logo variations, image map
   assert.match(fn, /dimensions:/);
   assert.match(fn, /weight:/);
   assert.match(fn, /listExistingVariations/);
-  assert.match(fn, /WOO_BATCH_SIZE = 50/);
-  assert.match(fn, /WOO_IMAGE_BATCH_SIZE = 5/);
+  assert.match(fn, /WOO_BATCH_SIZE = 25/);
+  assert.match(fn, /WOO_IMAGE_BATCH_SIZE = 1/);
   assert.match(fn, /variations\/batch/);
-  assert.match(fn, /const operations = \[\.\.\.creates, \.\.\.updates, \.\.\.deactivates\]/);
+  assert.match(fn, /incomplete variation batch response/);
+  assert.match(fn, /variation reconciliation failed/);
+  assert.match(fn, /createHash\('sha256'\)/);
   assert.match(fn, /woo_product_id: product\.id[\s\S]*syncVariations/);
   assert.match(fn, /findExistingProjectProduct/);
   assert.match(fn, /syncProductImages/);
@@ -90,6 +92,13 @@ test('WooCommerce export supports catalog attributes, logo variations, image map
   assert.match(options, /products\/attributes/);
   assert.match(options, /products\/categories/);
   assert.match(options, /products\/shipping_classes/);
+  assert.match(options, /products\/tags/);
+  assert.match(options, /checked_at/);
+  assert.match(options, /optionalWooRows/);
+  assert.match(options, /warnings/);
+  assert.match(studio, /WooCommerce category IDs/);
+  assert.match(studio, /Existing shipping-class slug/);
+  assert.match(studio, /Retry WooCommerce Connection/);
   assert.match(studio, /Color × Size × Logo/);
   assert.match(studio, /Variation mockup mapping/);
   assert.match(studio, /Main product image and gallery/);
@@ -144,10 +153,15 @@ test('exact compositor preserves an AI-free rendering path with captions', async
   assert.match(canvas, /inspectArtworkFile/);
   assert.match(studio, /requestExactMockup/);
   assert.doesNotMatch(studio, /renderMockupComposite\(\{ blankUrl/);
-  assert.match(api, /mockup-generate-exact/);
+  assert.match(api, /mockup-generate-exact-background/);
+  assert.match(api, /generation_mode: 'exact_composite'/);
   assert.match(server, /loadMockupAsset/);
   assert.match(server, /renderExactMockup/);
   assert.match(server, /cors_independent: true/);
+  const background = await read('netlify/functions/mockup-generate-exact-background.js');
+  const netlify = await read('netlify.toml');
+  assert.match(background, /mockup-generate-exact\.js/);
+  assert.match(netlify, /\[functions\."mockup-generate-exact-background"\][\s\S]*background = true/);
 });
 
 test('server exact compositor preserves dimensions and creates caption space', async () => {
@@ -251,6 +265,11 @@ test('Cloudflare R2 storage is private, resumable, and preserves Supabase compat
   assert.match(api, /migrateMockupProjectStorage/);
   assert.match(studio, /Move This Project to R2/);
   assert.match(studio, /urlsForWorkflowTab/);
+  assert.match(storage, /record_type/);
+  assert.match(storage, /record_id/);
+  assert.match(storage, /storage_field/);
+  assert.match(storage, /cancel_upload/);
+  assert.match(api, /_pending_upload_cleanup/);
   assert.equal(cleanObjectName('Gildan 18500 Black FRONT.PNG'), 'gildan-18500-black-front.png');
   assert.throws(() => safeObjectKey('../secret'), /Invalid mockup storage path/);
   const sharp = (await import('sharp')).default;
@@ -302,6 +321,43 @@ test('WooCommerce reads retry transient connection failures without duplicating 
   assert.match(utils, /requestMethod === 'GET'/);
   assert.match(utils, /requestMethod === 'GET' \? 60000 : 180000/);
   assert.match(utils, /WooCommerce connection failed after \$\{attempt\} attempt/);
+  assert.match(utils, /Accept: 'application\/json'/);
+  assert.match(utils, /Cache-Control': 'no-cache, no-store, max-age=0'/);
+  assert.match(utils, /returned invalid JSON on attempt/);
+});
+
+test('Mockup reliability migration separates selection from approval and enforces production readiness', async () => {
+  const sql = await read('deployment/sql/34_MOCKUP_STUDIO_RELIABILITY_SECURITY.sql');
+  const verify = await read('deployment/sql/35_VERIFY_MOCKUP_STUDIO_RELIABILITY_SECURITY.sql');
+  const api = await read('src/lib/mockupStudioApi.js');
+  const studio = await read('src/MockupStudio.jsx');
+  const production = await read('src/MockupProductionPacket.jsx');
+  assert.match(sql, /sc_mockup_active_employee/);
+  assert.match(sql, /sc_mockup_internal_review/);
+  assert.match(sql, /sc_mockup_apply_customer_review/);
+  assert.match(sql, /sc_mockup_mark_production_ready/);
+  assert.doesNotMatch(sql, /create policy sc_mockup_authenticated_all/i);
+  assert.match(sql, /Every active placement requires a selected approved mockup/);
+  assert.match(verify, /active_employee_policy_count/);
+  assert.match(api, /rpc\('sc_mockup_internal_review'/);
+  assert.match(api, /rpc\('sc_mockup_mark_production_ready'/);
+  assert.match(studio, /Approve & Select/);
+  assert.match(production, /Validate & Mark Production Ready/);
+});
+
+test('Mockup cleanup is durable and caption changes cannot silently export stale pixels', async () => {
+  const sql = await read('deployment/sql/34_MOCKUP_STUDIO_RELIABILITY_SECURITY.sql');
+  const cleanup = await read('netlify/functions/mockup-storage-cleanup.js');
+  const shared = await read('netlify/functions/_shared/mockupStorage.js');
+  const publish = await read('netlify/functions/mockup-publish-woocommerce.js');
+  const studio = await read('src/MockupStudio.jsx');
+  assert.match(sql, /mockup_storage_cleanup_queue/);
+  assert.match(shared, /queueStoredAssetCleanup/);
+  assert.match(cleanup, /in\('status', \['pending', 'failed'\]\)/);
+  assert.match(cleanup, /deleteStoredReference/);
+  assert.match(studio, /Retry Deferred File Cleanup/);
+  assert.match(studio, /caption_render_state: captionChanged \? 'stale'/);
+  assert.match(publish, /caption_render_state === 'stale'/);
 });
 
 test('WooCommerce list responses and legacy saved settings are normalized before spreading', async () => {

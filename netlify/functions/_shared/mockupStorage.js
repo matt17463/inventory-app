@@ -34,11 +34,16 @@ export function r2Configured() {
 }
 
 export function defaultMockupStorageProvider() {
-  const requested = env('MOCKUP_STORAGE_PROVIDER').toLowerCase() || 'supabase';
-  if (requested === 'r2' && !r2Configured()) {
+  const requested = env('MOCKUP_STORAGE_PROVIDER').toLowerCase();
+  if (!requested) {
+    throw new Error('MOCKUP_STORAGE_PROVIDER is not configured. Storage is fail-closed to prevent an accidental Supabase fallback.');
+  }
+  if (requested !== 'r2') {
+    throw new Error(`MOCKUP_STORAGE_PROVIDER must be r2; received ${requested}. Legacy Supabase objects remain readable only during migration.`);
+  }
+  if (!r2Configured()) {
     throw new Error('MOCKUP_STORAGE_PROVIDER is r2, but one or more R2 environment variables are missing.');
   }
-  if (!['r2', 'supabase'].includes(requested)) throw new Error(`Unsupported MOCKUP_STORAGE_PROVIDER: ${requested}.`);
   return requested;
 }
 
@@ -231,6 +236,24 @@ export async function deleteStoredAsset(supabase, row, { includePreview = true, 
   const references = [storedReference(row, { prefix })];
   if (includePreview && row?.preview_storage_path) references.push(storedReference(row, { prefix, preferPreview: true }));
   for (const reference of references) await deleteStoredReference(supabase, reference);
+}
+
+export async function queueStoredAssetCleanup(supabase, row, reason, { includePreview = true, prefix = '' } = {}) {
+  const references = [storedReference(row, { prefix })];
+  if (includePreview && row?.preview_storage_path) references.push(storedReference(row, { prefix, preferPreview: true }));
+  for (const reference of references) {
+    if (!reference.provider || !reference.bucket || !reference.path) continue;
+    const { error } = await supabase.from('mockup_storage_cleanup_queue').upsert({
+      project_id: row.project_id || null,
+      storage_provider: reference.provider,
+      storage_bucket: reference.bucket,
+      storage_path: reference.path,
+      reason: String(reason || 'deferred_cleanup').slice(0, 500),
+      status: 'pending',
+      last_error: null,
+    }, { onConflict: 'storage_provider,storage_bucket,storage_path' });
+    if (error) console.error('Could not queue mockup storage cleanup:', error);
+  }
 }
 
 export async function verifiedR2Upload({ key, bytes, contentType }) {

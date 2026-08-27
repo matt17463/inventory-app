@@ -290,7 +290,7 @@ export async function restoreLocalMockupArchiveFiles({ projectId, archive, onPro
     if (file.size !== Number(entry.size) || await sha256(file) !== entry.sha256) {
       throw new Error(`Local archive verification failed for ${entry.local_file}. Restore stopped before marking the project active.`);
     }
-    await restoreMockupStoredFile(entry, file);
+    await restoreMockupStoredFile(entry, file, archive.id);
     restoredKeys.push(entry.key);
   }
   onProgress({ stage: 'restored', completed: files.length, total: files.length, message: `${files.length} files restored to cloud storage.` });

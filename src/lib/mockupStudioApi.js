@@ -37,6 +37,13 @@ export function getMockupStorageStatus(refresh = false) {
   return storageStatusPromise;
 }
 
+export async function retryMockupStorageCleanup() {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-storage-cleanup', { method: 'POST', body: '{}' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) throw new Error(payload?.error || 'Deferred mockup file cleanup failed.');
+  return payload;
+}
+
 async function browserPreview(file, maxPixels = 800) {
   if (!String(file?.type || '').startsWith('image/') || /svg|gif/i.test(file.type)) return null;
   let bitmap;
@@ -78,6 +85,7 @@ async function uploadFile({ file, bucket, projectId, folder }) {
       preview_storage_bucket: preview ? upload.preview_bucket : null,
       preview_storage_path: preview ? upload.preview_path : null,
       preview_size_bytes: preview?.size || null,
+      _pending_upload_cleanup: { project_id: projectId, path: upload.path, preview_path: preview ? upload.preview_path : null },
     };
   }
   const userId = await currentUserId();
@@ -91,10 +99,27 @@ async function uploadFile({ file, bucket, projectId, folder }) {
   return { storage_provider: 'supabase', storage_bucket: bucket, storage_path: path, file_size_bytes: file.size };
 }
 
-export async function signedAssetUrl(bucket, path, expiresIn = 3600, provider = 'supabase', mimeType = '') {
+function mockupRecordType(row) {
+  if (row?.asset_name !== undefined) return 'mockup_blank_assets';
+  if (row?.artwork_name !== undefined) return 'mockup_artwork_assets';
+  if (row?.output_name !== undefined) return 'mockup_outputs';
+  if (row?.packet_number !== undefined) return 'mockup_production_packets';
+  return '';
+}
+
+export async function signedAssetUrl(row, expiresIn = 3600, { preferPreview = true } = {}) {
+  const usePreview = preferPreview && row?.preview_storage_path;
+  const bucket = usePreview ? (row.preview_storage_bucket || row.storage_bucket) : row?.storage_bucket;
+  const path = usePreview ? row.preview_storage_path : row?.storage_path;
+  const provider = usePreview ? (row.preview_storage_provider || row.storage_provider || 'supabase') : (row?.storage_provider || 'supabase');
   if (!bucket || !path) return '';
   if (provider === 'r2') {
-    const payload = await storageFunction({ action: 'sign_download', provider, bucket, path, expires_in: expiresIn, mime_type: mimeType });
+    const recordType = mockupRecordType(row);
+    if (!recordType || !row?.id) throw new Error('Mockup image record information is missing. Refresh the project and retry.');
+    const payload = await storageFunction({
+      action: 'sign_download', record_type: recordType, record_id: row.id,
+      storage_field: usePreview ? 'preview_storage_path' : 'storage_path', expires_in: expiresIn,
+    });
     return payload.url || '';
   }
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
@@ -103,22 +128,23 @@ export async function signedAssetUrl(bucket, path, expiresIn = 3600, provider = 
 }
 
 export async function signedUrlsForAssets(rows = [], expiresIn = 3600, { preferPreview = true } = {}) {
+  const failures = [];
   const entries = await Promise.all(rows.map(async (row) => {
     if (!row.storage_path && row.source_url) return [row.id, row.source_url];
     try {
-      const usePreview = preferPreview && row.preview_storage_path;
-      return [row.id, await signedAssetUrl(
-        usePreview ? (row.preview_storage_bucket || row.storage_bucket) : row.storage_bucket,
-        usePreview ? row.preview_storage_path : row.storage_path,
-        expiresIn,
-        usePreview ? (row.preview_storage_provider || row.storage_provider || 'supabase') : (row.storage_provider || 'supabase'),
-        usePreview ? 'image/webp' : row.mime_type,
-      )];
-    } catch {
+      return [row.id, await signedAssetUrl(row, expiresIn, { preferPreview })];
+    } catch (error) {
+      failures.push(`${row.asset_name || row.artwork_name || row.output_name || row.id}: ${error.message}`);
       return [row.id, ''];
     }
   }));
+  if (failures.length) throw new Error(`Could not load ${failures.length} Mockup Studio image${failures.length === 1 ? '' : 's'}: ${failures.slice(0, 3).join(' | ')}`);
   return Object.fromEntries(entries);
+}
+
+async function cancelPendingUpload(cleanup) {
+  if (!cleanup?.path) return;
+  await storageFunction({ action: 'cancel_upload', ...cleanup }).catch((error) => console.warn('Abandoned R2 upload cleanup failed:', error));
 }
 
 export async function listMockupProjects() {
@@ -187,13 +213,13 @@ export async function getMockupProjectBundle(projectId) {
     supabase.from('mockup_blank_assets').select('*').eq('project_id', projectId).order('sort_order'),
     supabase.from('mockup_artwork_assets').select('*').eq('project_id', projectId).order('created_at'),
     supabase.from('mockup_placements').select('*').eq('project_id', projectId).order('layer_order'),
-    supabase.from('mockup_generation_jobs').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+    supabase.from('mockup_generation_jobs').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(50),
     supabase.from('mockup_outputs').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
     supabase.from('mockup_pricing_items').select('*').eq('project_id', projectId).order('sort_order'),
-    supabase.from('mockup_reviews').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-    supabase.from('mockup_woo_exports').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-    supabase.from('mockup_production_packets').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-    supabase.from('mockup_project_archives').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+    supabase.from('mockup_reviews').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
+    supabase.from('mockup_woo_exports').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(50),
+    supabase.from('mockup_production_packets').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(20),
+    supabase.from('mockup_project_archives').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(20),
   ]);
   const result = { project: project.data };
   const named = { blanks, artwork, placements, jobs, outputs, pricing, reviews, exports, packets, archives };
@@ -305,6 +331,8 @@ export async function addBlankAsset({ projectId, file, values = {}, catalogItem 
   else if (values.source_url || catalogItem?.image_url) location = { source_url: values.source_url || catalogItem.image_url };
   else throw new Error('Upload a blank-product image or choose a catalog item with an image.');
 
+  const cleanup = location._pending_upload_cleanup;
+  delete location._pending_upload_cleanup;
   const payload = {
     project_id: projectId,
     blank_product_id_text: catalogItem?.id ? String(catalogItem.id) : values.blank_product_id_text || null,
@@ -329,7 +357,7 @@ export async function addBlankAsset({ projectId, file, values = {}, catalogItem 
     ...location,
   };
   const { data, error } = await supabase.from('mockup_blank_assets').insert(payload).select('*').single();
-  if (error) throw error;
+  if (error) { await cancelPendingUpload(cleanup); throw error; }
   return data;
 }
 
@@ -357,6 +385,8 @@ export async function addArtworkAsset({ projectId, file, values = {} }) {
   }
   else throw new Error('Upload artwork or choose an artwork-vault item with a usable file URL.');
 
+  const cleanup = location._pending_upload_cleanup;
+  delete location._pending_upload_cleanup;
   const payload = {
     project_id: projectId,
     artwork_name: values.artwork_name || file?.name || 'Artwork',
@@ -374,7 +404,7 @@ export async function addArtworkAsset({ projectId, file, values = {} }) {
     ...location,
   };
   const { data, error } = await supabase.from('mockup_artwork_assets').insert(payload).select('*').single();
-  if (error) throw error;
+  if (error) { await cancelPendingUpload(cleanup); throw error; }
   return data;
 }
 
@@ -495,24 +525,61 @@ export async function saveExactCompositeOutput({ projectId, placementId, blob, c
 }
 
 export async function requestExactMockup({ projectId, placementId, caption = null }) {
-  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-generate-exact', {
-    method: 'POST',
-    body: JSON.stringify({ project_id: projectId, placement_id: placementId, caption }),
-  });
-  const responseText = await response.text();
-  let payload = {};
-  try { payload = responseText ? JSON.parse(responseText) : {}; } catch { /* Netlify runtime failures may return plain text. */ }
-  if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || `Exact Clean generation failed (HTTP ${response.status}). Check the mockup-generate-exact Netlify log.`);
+  const { data: job, error } = await supabase.from('mockup_generation_jobs').insert({
+    project_id: projectId, placement_id: placementId, generation_mode: 'exact_composite',
+    status: 'queued', model_name: 'server-sharp', requested_variants: 1,
+    request_metadata: { caption: caption || null, renderer: 'exact_server_sharp', background: true },
+  }).select('*').single();
+  if (error) throw error;
+
+  let invocationError = '';
+  try {
+    const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-generate-exact-background', {
+      method: 'POST', body: JSON.stringify({ generation_job_id: job.id, caption }),
+    });
+    const responseText = await response.text();
+    let payload = {};
+    try { payload = responseText ? JSON.parse(responseText) : {}; } catch { /* background acknowledgements may be empty */ }
+    if (!response.ok || payload?.success === false) invocationError = payload?.error || `Exact Clean generation could not be started (HTTP ${response.status}).`;
+  } catch (errorValue) { invocationError = errorValue?.message || 'Exact Clean generation could not be started.'; }
+
+  if (invocationError) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { data: current } = await supabase.from('mockup_generation_jobs').select('status,error_message').eq('id', job.id).single();
+      if (current?.status === 'failed') throw new Error(current.error_message || invocationError);
+      if (current?.status !== 'queued') { invocationError = ''; break; }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    if (invocationError) {
+      await supabase.from('mockup_generation_jobs').update({
+        status: 'failed', error_message: invocationError.slice(0, 2000), completed_at: new Date().toISOString(),
+      }).eq('id', job.id).eq('status', 'queued');
+      throw new Error(invocationError);
+    }
   }
-  return payload;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 14 * 60 * 1000) {
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const { data: current, error: currentError } = await supabase.from('mockup_generation_jobs').select('*').eq('id', job.id).single();
+    if (currentError) throw currentError;
+    if (current.status === 'failed') throw new Error(current.error_message || 'Exact Clean generation failed.');
+    if (current.status === 'completed') {
+      const { data: outputs, error: outputsError } = await supabase.from('mockup_outputs').select('*').eq('generation_job_id', job.id).order('variant_number');
+      if (outputsError) throw outputsError;
+      return { success: true, job: current, output: outputs?.[0] || null, outputs: outputs || [] };
+    }
+  }
+  throw new Error('Exact Clean is still running. Refresh this project in a few minutes to see the result.');
 }
 
 export async function downloadMockupStoredFile(reference) {
   if (reference.provider === 'r2') {
+    const record = reference.references?.[0];
+    if (!record?.record_type || !record?.record_id || !record?.field) throw new Error('The archive file is missing its database reference.');
     const payload = await storageFunction({
-      action: 'sign_download', provider: 'r2', bucket: reference.bucket, path: reference.path,
-      mime_type: reference.mime_type, expires_in: 3600,
+      action: 'sign_download', record_type: record.record_type, record_id: record.record_id,
+      storage_field: record.field, expires_in: 3600,
     });
     const response = await fetch(payload.url);
     if (!response.ok) throw new Error(`R2 archive download failed (HTTP ${response.status}).`);
@@ -523,10 +590,11 @@ export async function downloadMockupStoredFile(reference) {
   return data;
 }
 
-export async function restoreMockupStoredFile(reference, file) {
+export async function restoreMockupStoredFile(reference, file, archiveId) {
   if (reference.provider === 'r2') {
     const upload = await storageFunction({
       action: 'create_restore_upload', provider: 'r2', bucket: reference.bucket, path: reference.path,
+      archive_id: archiveId, file_key: reference.key,
       content_type: reference.mime_type || file.type || 'application/octet-stream', file_size: file.size,
     });
     await putPresigned(upload.upload_url, file, reference.mime_type || file.type || 'application/octet-stream');
@@ -568,12 +636,31 @@ export async function requestAiMockup({ projectId, placementId, variants = 1, qu
   }).select('*').single();
   if (error) throw error;
 
-  const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-generate-background', {
-    method: 'POST',
-    body: JSON.stringify({ generation_job_id: job.id }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'AI mockup generation failed.');
+  let invocationError = '';
+  try {
+    const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-generate-background', {
+      method: 'POST',
+      body: JSON.stringify({ generation_job_id: job.id }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success === false) invocationError = payload?.error || payload?.message || `AI mockup generation could not be started (HTTP ${response.status}).`;
+  } catch (error) {
+    invocationError = error?.message || 'AI mockup generation could not be started.';
+  }
+  if (invocationError) {
+    let accepted = false;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { data: current, error: currentError } = await supabase.from('mockup_generation_jobs').select('status,error_message').eq('id', job.id).single();
+      if (currentError) throw currentError;
+      if (current.status === 'failed') throw new Error(current.error_message || invocationError);
+      if (current.status !== 'queued') { accepted = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    if (!accepted) {
+      await supabase.from('mockup_generation_jobs').update({ status: 'failed', error_message: invocationError, completed_at: new Date().toISOString() }).eq('id', job.id);
+      throw new Error(invocationError);
+    }
+  }
 
   const startedAt = Date.now();
   const timeoutMs = 14 * 60 * 1000;
@@ -610,6 +697,16 @@ export async function updateMockupOutput(outputId, changes) {
 export async function selectMockupOutput(outputId, selected = true) {
   const { data, error } = await supabase.rpc('sc_mockup_select_output', {
     p_output_id: outputId,
+    p_selected: selected,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function approveMockupOutput(outputId, status = 'internal_approved', selected = null) {
+  const { data, error } = await supabase.rpc('sc_mockup_internal_review', {
+    p_output_id: outputId,
+    p_status: status,
     p_selected: selected,
   });
   if (error) throw error;
@@ -751,19 +848,19 @@ export async function getWooCommerceMockupOptions() {
   if (!response.ok || payload?.success === false) throw new Error(payload?.error || payload?.message || 'WooCommerce attributes could not be loaded.');
   return {
     ...(payload.attributes || {}),
+    checked_at: payload.checked_at || null,
+    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
     categories: payload.categories || [],
     shipping_classes: payload.shipping_classes || [],
+    tags: payload.tags || [],
   };
 }
 
 export async function saveProductionPacket(projectId, packetData) {
-  const packetNumber = `MS-${String(projectId).slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}`;
-  const { data, error } = await supabase.from('mockup_production_packets').insert({
-    project_id: projectId,
-    packet_number: packetNumber,
-    status: 'ready',
-    packet_data: packetData || {},
-  }).select('*').single();
+  const { data, error } = await supabase.rpc('sc_mockup_mark_production_ready', {
+    p_project_id: projectId,
+    p_packet_data: packetData || {},
+  });
   if (error) throw error;
   return data;
 }

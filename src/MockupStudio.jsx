@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ActionButton,
@@ -15,6 +15,7 @@ import {
 import {
   addArtworkAsset,
   addBlankAsset,
+  approveMockupOutput,
   beginMockupLocalArchive,
   completeMockupLocalArchiveRestore,
   continueMockupLocalArchive,
@@ -35,6 +36,7 @@ import {
   removeMockupAsset,
   requestAiMockup,
   requestExactMockup,
+  retryMockupStorageCleanup,
   saveMockupPlacement,
   savePricingItem,
   searchMockupBlankCatalog,
@@ -621,6 +623,9 @@ function CaptionsTab({ outputs, urls, refresh, setBusy, setMessage }) {
   async function save() {
     setBusy(true);
     try {
+      const original = outputs.find((output) => output.id === editing) || {};
+      const captionChanged = ['caption_text', 'caption_font', 'caption_size', 'caption_color', 'caption_background', 'caption_alignment']
+        .some((key) => String(original[key] ?? '') !== String(form[key] ?? ''));
       await updateMockupOutput(editing, {
         output_name: form.output_name,
         caption_text: form.caption_text || null,
@@ -629,6 +634,7 @@ function CaptionsTab({ outputs, urls, refresh, setBusy, setMessage }) {
         caption_color: form.caption_color,
         caption_background: form.caption_background,
         caption_alignment: form.caption_alignment,
+        metadata: { ...(original.metadata || {}), caption_render_state: captionChanged ? 'stale' : (original.metadata?.caption_render_state || 'current') },
       });
       setMessage('Caption settings saved. Regenerate a captioned output to bake the updated caption into the store image.'); setEditing(null); await refresh();
     } catch (error) { setMessage(error.message); }
@@ -639,7 +645,7 @@ function CaptionsTab({ outputs, urls, refresh, setBusy, setMessage }) {
 
 function ApprovalTab({ project, outputs, reviews, urls, refresh, setBusy, setMessage }) {
   const [link, setLink] = useState('');
-  return <><SectionCard title="Internal approval"><div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}<h3>{output.output_name}</h3><StatusBadge status={output.approval_status} /><ActionButton size="sm" tone="success" onClick={async () => { setBusy(true); try { await updateMockupOutput(output.id, { approval_status: 'internal_approved', approved_at: new Date().toISOString(), approved_by: 'employee' }); await selectMockupOutput(output.id, true); setMessage('Output internally approved and selected.'); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Approve</ActionButton></article>)}</div></SectionCard><SectionCard title="Customer review link" description="The private link expires and exposes only the selected project mockups."><div className="sc-button-row"><ActionButton tone="primary" onClick={async () => { setBusy(true); try { const url = await createMockupReviewLink(project.id, 14); setLink(url); await navigator.clipboard.writeText(url).catch(() => {}); setMessage('Customer review link created and copied.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Create 14-Day Review Link</ActionButton></div>{link ? <div className="mockup-share-link"><input readOnly value={link} /><ActionButton onClick={() => navigator.clipboard.writeText(link)}>Copy</ActionButton></div> : null}</SectionCard><SectionCard title={`Customer reviews (${reviews.length})`}>{!reviews.length ? <EmptyState title="No customer feedback yet" /> : <ResponsiveTable><thead><tr><th>Date</th><th>Reviewer</th><th>Decision</th><th>Notes</th></tr></thead><tbody>{reviews.map((review) => <tr key={review.id}><td>{new Date(review.created_at).toLocaleString()}</td><td>{review.reviewer_name || review.reviewer_email || 'Customer'}</td><td><StatusBadge status={review.decision} /></td><td>{review.notes || '—'}</td></tr>)}</tbody></ResponsiveTable>}</SectionCard></>;
+  return <><SectionCard title="Internal approval" description="Store selection and approval are separate decisions. Approving can also select the mockup for its placement."><div className="mockup-output-grid">{outputs.map((output) => <article className={`mockup-output-card ${output.is_selected ? 'selected' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}<h3>{output.output_name}</h3><StatusBadge status={output.approval_status} /><div className="sc-button-row"><ActionButton size="sm" tone="success" onClick={async () => { setBusy(true); try { await approveMockupOutput(output.id, 'internal_approved', true); setMessage('Output internally approved and selected.'); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Approve & Select</ActionButton><ActionButton size="sm" tone="secondary" onClick={async () => { setBusy(true); try { await approveMockupOutput(output.id, 'changes_requested', false); setMessage('Output marked as needing changes.'); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Needs Changes</ActionButton><ActionButton size="sm" tone="danger" onClick={async () => { setBusy(true); try { await approveMockupOutput(output.id, 'rejected', false); setMessage('Output rejected and removed from store selection.'); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Reject</ActionButton></div></article>)}</div></SectionCard><SectionCard title="Customer review link" description="The private link expires and exposes only the selected project mockups."><div className="sc-button-row"><ActionButton tone="primary" onClick={async () => { setBusy(true); try { const url = await createMockupReviewLink(project.id, 14); setLink(url); await navigator.clipboard.writeText(url).catch(() => {}); setMessage('Customer review link created and copied.'); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Create 14-Day Review Link</ActionButton></div>{link ? <div className="mockup-share-link"><input readOnly value={link} /><ActionButton onClick={() => navigator.clipboard.writeText(link)}>Copy</ActionButton></div> : null}</SectionCard><SectionCard title={`Customer reviews (${reviews.length})`}>{!reviews.length ? <EmptyState title="No customer feedback yet" /> : <ResponsiveTable><thead><tr><th>Date</th><th>Reviewer</th><th>Decision</th><th>Notes</th></tr></thead><tbody>{reviews.map((review) => <tr key={review.id}><td>{new Date(review.created_at).toLocaleString()}</td><td>{review.reviewer_name || review.reviewer_email || 'Customer'}</td><td><StatusBadge status={review.decision} /></td><td>{review.notes || '—'}</td></tr>)}</tbody></ResponsiveTable>}</SectionCard></>;
 }
 
 function PricingTab({ projectId, rows, refresh, setBusy, setMessage }) {
@@ -659,8 +665,9 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   const inferredColors = [...new Set(bundle.blanks.map((row) => row.product_color).filter(Boolean))].join(', ');
   const inferredBrand = bundle.blanks.find((row) => row.metadata?.catalog_brand)?.metadata?.catalog_brand || '';
   const inferredStyle = bundle.blanks.find((row) => row.metadata?.catalog_style)?.metadata?.catalog_style || '';
-  const [wooOptions, setWooOptions] = useState({ brand: null, style: null, color: null, size: null, categories: [], shipping_classes: [] });
+  const [wooOptions, setWooOptions] = useState({ brand: null, style: null, color: null, size: null, categories: [], shipping_classes: [], tags: [], warnings: [] });
   const [optionsMessage, setOptionsMessage] = useState('Loading WooCommerce attributes…');
+  const [optionsReady, setOptionsReady] = useState(false);
   const [form, setForm] = useState({
     name: saved.name || project.project_name,
     type: saved.type || 'variable',
@@ -688,18 +695,26 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     update_existing_product_id: saved.update_existing_product_id || project.woo_product_id || '',
   });
 
-  useEffect(() => {
-    let active = true;
-    getWooCommerceMockupOptions()
-      .then((attributes) => {
-        if (!active) return;
-        setWooOptions(attributes);
-        const missing = ['brand', 'style', 'color', 'size'].filter((key) => !attributes[key]);
-        setOptionsMessage(missing.length ? `Missing WooCommerce global attributes: ${missing.join(', ')}.` : 'WooCommerce Brand, Style, Color, and Size options loaded.');
-      })
-      .catch((error) => active && setOptionsMessage(error.message));
-    return () => { active = false; };
+  const loadOptions = useCallback(async () => {
+    setOptionsReady(false);
+    setOptionsMessage('Loading WooCommerce attributes…');
+    try {
+      const attributes = await getWooCommerceMockupOptions();
+      setWooOptions(attributes);
+      const missing = ['brand', 'style', 'color', 'size'].filter((key) => !attributes[key]);
+      setOptionsReady(!missing.length);
+      const optionalWarnings = attributes.warnings || [];
+      setOptionsMessage(missing.length
+        ? `Missing WooCommerce global attributes: ${missing.join(', ')}.`
+        : optionalWarnings.length
+          ? `WooCommerce core attributes verified. ${optionalWarnings.join(' ')} Use the manual fields below or retry the connection.`
+          : `WooCommerce connection verified${attributes.checked_at ? ` at ${new Date(attributes.checked_at).toLocaleTimeString()}` : ''}. Brand, Style, Color, Size, categories, tags, and shipping classes loaded.`);
+    } catch (error) {
+      setOptionsMessage(error.message);
+    }
   }, []);
+
+  useEffect(() => { loadOptions(); }, [loadOptions]);
 
   const outputContextById = useMemo(() => Object.fromEntries(bundle.outputs.map((output) => {
     const placement = bundle.placements.find((row) => row.id === output.placement_id);
@@ -744,6 +759,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     : 0;
   const missingMappings = imagePairs.filter((pair) => !form.variation_image_map?.[pair.key]);
   const selectedCategoryIds = optionList(form.category_ids).map(String);
+  const selectedTagIds = optionList(form.tag_ids).map(String);
 
   function toggleLogo(name, checked) {
     const current = optionList(form.logo_options);
@@ -770,6 +786,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
   async function publish(event) {
     event.preventDefault();
+    if (!optionsReady) { setMessage('Verify the WooCommerce connection before starting an export.'); return; }
     if (!selectedOutputs.length) { setMessage('Select at least one output for the store first.'); return; }
     if (!form.main_product_image_output_id) { setMessage('Choose the main product image.'); return; }
     if (!form.brand) { setMessage('Select a Brand.'); return; }
@@ -794,7 +811,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   return (
     <>
       <SectionCard title="Prepare for WooCommerce" description="Create a draft with Brand and Style assigned, then build Color × Size × Logo variations with the correct mockup image.">
-        <p className={/missing|could not|not configured/i.test(optionsMessage) ? 'mockup-woo-warning' : 'mockup-woo-ready'}>{optionsMessage}</p>
+        <div className="sc-button-row"><p className={!optionsReady ? 'mockup-woo-warning' : 'mockup-woo-ready'}>{optionsMessage}</p><ActionButton type="button" tone="secondary" onClick={loadOptions}>Retry WooCommerce Connection</ActionButton></div>
         <form onSubmit={publish}>
           <FieldGrid>
             <FormField label="Product name" required><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
@@ -805,10 +822,10 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
             <FormField label="Style" required help="Uses the existing WooCommerce pa_style attribute."><select value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })}><option value="">Select Style</option>{form.style && !wooOptions.style?.terms?.some((row) => normalizedOption(row.name) === normalizedOption(form.style)) ? <option value={form.style}>{form.style}</option> : null}{(wooOptions.style?.terms || []).map((row) => <option key={row.id} value={row.name}>{row.name}</option>)}</select></FormField>
             <FormField label="Base price" required><input type="number" min="0" step="0.01" value={form.regular_price} onChange={(e) => setForm({ ...form, regular_price: e.target.value })} /></FormField>
             <FormField label="Base SKU" help="Variation SKUs add Color, Size, and Logo codes. If blank, Mockup Studio creates a product-based SKU."><input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></FormField>
-            <FormField label="Tag IDs"><input value={form.tag_ids} placeholder="21, 22" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} /></FormField>
+            <FormField label="Product tags" help={wooOptions.tags?.length ? 'Select WooCommerce tags.' : 'Optional: enter comma-separated WooCommerce tag IDs because tag discovery was unavailable.'}>{wooOptions.tags?.length ? <select multiple value={selectedTagIds} onChange={(e) => setForm({ ...form, tag_ids: [...e.target.selectedOptions].map((option) => option.value).join(',') })}>{wooOptions.tags.map((row) => <option key={row.id} value={String(row.id)}>{row.name}</option>)}</select> : <input value={form.tag_ids} placeholder="Optional tag IDs, such as 12, 18" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} />}</FormField>
             <FormField label="Colors" help="Comma-separated existing WooCommerce Color terms."><input value={form.colors} list="mockup-woo-colors" placeholder="Black, Forest Green, White" onChange={(e) => setForm({ ...form, colors: e.target.value })} /><datalist id="mockup-woo-colors">{(wooOptions.color?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
             <FormField label="Sizes" help="Comma-separated existing WooCommerce Size terms."><input value={form.sizes} list="mockup-woo-sizes" placeholder="YS, YM, YL, AS, AM, AL, AXL" onChange={(e) => setForm({ ...form, sizes: e.target.value })} /><datalist id="mockup-woo-sizes">{(wooOptions.size?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
-            <FormField label="Shipping class" required><select value={form.shipping_class} onChange={(e) => setForm({ ...form, shipping_class: e.target.value })}><option value="">Select Shipping Class</option>{(wooOptions.shipping_classes || []).map((row) => <option key={row.id} value={row.slug}>{row.name}</option>)}</select></FormField>
+            <FormField label="Shipping class" required help={wooOptions.shipping_classes?.length ? 'Select the WooCommerce shipping class.' : 'Enter the existing WooCommerce shipping-class slug because discovery was unavailable.'}>{wooOptions.shipping_classes?.length ? <select value={form.shipping_class} onChange={(e) => setForm({ ...form, shipping_class: e.target.value })}><option value="">Select Shipping Class</option>{wooOptions.shipping_classes.map((row) => <option key={row.id} value={row.slug}>{row.name}</option>)}</select> : <input value={form.shipping_class} placeholder="Existing shipping-class slug" onChange={(e) => setForm({ ...form, shipping_class: e.target.value })} />}</FormField>
             <FormField label="Weight" required help="Use the weight unit configured in WooCommerce."><input type="number" min="0.001" step="0.001" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></FormField>
             <FormField label="Length" required help="Use the dimension unit configured in WooCommerce."><input type="number" min="0.01" step="0.01" value={form.length} onChange={(e) => setForm({ ...form, length: e.target.value })} /></FormField>
             <FormField label="Width" required><input type="number" min="0.01" step="0.01" value={form.width} onChange={(e) => setForm({ ...form, width: e.target.value })} /></FormField>
@@ -818,7 +835,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
             <FormField label="Variations"><label className="mockup-check"><input type="checkbox" checked={form.create_variations} onChange={(e) => setForm({ ...form, create_variations: e.target.checked })} /> Create and update Color × Size × Logo variations</label></FormField>
           </FieldGrid>
 
-          <SectionCard title="Product categories" description="Select every WooCommerce category that should contain this product."><div className="mockup-woo-category-options">{(wooOptions.categories || []).map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedCategoryIds.includes(String(row.id))} onChange={(e) => toggleCategory(row.id, e.target.checked)} /> {row.name}</label>)}</div>{!wooOptions.categories?.length ? <p className="mockup-woo-warning">No WooCommerce categories were returned. Confirm the API key has Read/Write access.</p> : null}</SectionCard>
+          <SectionCard title="Product categories" description="Select every WooCommerce category that should contain this product."><div className="mockup-woo-category-options">{(wooOptions.categories || []).map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedCategoryIds.includes(String(row.id))} onChange={(e) => toggleCategory(row.id, e.target.checked)} /> {row.name}</label>)}</div>{!wooOptions.categories?.length ? <FormField label="WooCommerce category IDs" required help="Category discovery was unavailable. Enter one or more existing numeric category IDs separated by commas, then retry discovery later."><input value={form.category_ids} placeholder="For example: 15, 27" onChange={(e) => setForm({ ...form, category_ids: e.target.value })} /></FormField> : null}</SectionCard>
 
           {form.type === 'variable' ? <SectionCard title="Logo choices" description="Select the artwork choices customers may order. The order webhook will preserve the Logo Selection value for the pull sheet and production workflow."><div className="mockup-woo-logo-options">{bundle.artwork.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={logos.some((name) => normalizedOption(name) === normalizedOption(row.artwork_name))} onChange={(e) => toggleLogo(row.artwork_name, e.target.checked)} /> {row.artwork_name}</label>)}</div></SectionCard> : null}
 
@@ -826,7 +843,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
           <div className="mockup-woo-summary"><p><strong>{selectedOutputs.length}</strong> selected gallery image(s)</p><p><strong>{variationCount}</strong> planned variation(s)</p><p><strong>{allImagePairs.length - imagePairs.length}</strong> excluded Color/Logo combination(s)</p><p className={missingMappings.length ? 'mockup-woo-warning' : 'mockup-woo-ready'}><strong>{missingMappings.length}</strong> missing image mapping(s)</p></div>
           {selectedOutputs.length ? <SectionCard title="Main product image and gallery" description="All selected mockups go into the product gallery. Choose the image that should appear first as the main product image."><div className="mockup-woo-preview">{selectedOutputs.map((output) => <figure className={form.main_product_image_output_id === output.id ? 'is-main' : ''} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}<figcaption>{output.output_name}</figcaption><label className="mockup-check"><input type="radio" name="main-product-image" checked={form.main_product_image_output_id === output.id} onChange={() => setForm({ ...form, main_product_image_output_id: output.id })} /> Main product image</label></figure>)}</div></SectionCard> : null}
-          <ActionButton type="submit" tone="primary">{form.update_existing_product_id ? 'Update WooCommerce Draft' : 'Create WooCommerce Draft'}</ActionButton>
+          <ActionButton type="submit" tone="primary" disabled={!optionsReady}>{form.update_existing_product_id ? 'Update WooCommerce Draft' : 'Create WooCommerce Draft'}</ActionButton>
         </form>
       </SectionCard>
     </>
@@ -835,7 +852,11 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
 function ProductionTab({ project, bundle }) {
   const selected = bundle.outputs.filter((row) => row.is_selected);
-  return <><SectionCard title="Production handoff" description="The production packet combines approved mockups, physical placement dimensions, decoration methods, and artwork references."><div className="sc-button-row"><Link className="sc-action-button sc-action-button--primary sc-action-button--md" to={`/mockup-studio/${project.id}/production-packet`} target="_blank">Open Production Packet</Link></div></SectionCard><SectionCard title="Readiness checks"><ul className="mockup-checklist"><li className={bundle.blanks.length ? 'pass' : 'stop'}>{bundle.blanks.length ? 'Blank photos attached' : 'No blank photos'}</li><li className={bundle.artwork.length ? 'pass' : 'stop'}>{bundle.artwork.length ? 'Artwork attached' : 'No artwork'}</li><li className={bundle.placements.length ? 'pass' : 'stop'}>{bundle.placements.length ? 'Physical placements recorded' : 'No placements'}</li><li className={selected.length ? 'pass' : 'stop'}>{selected.length ? `${selected.length} output(s) selected` : 'No selected outputs'}</li><li className={selected.some((row) => /approved/.test(row.approval_status)) ? 'pass' : 'stop'}>{selected.some((row) => /approved/.test(row.approval_status)) ? 'Approval recorded' : 'Approval not recorded'}</li></ul></SectionCard></>;
+  const activePlacements = bundle.placements.filter((row) => row.is_active !== false);
+  const artworkReady = bundle.artwork.length > 0 && bundle.artwork.every((row) => ['passed', 'warning'].includes(row.preflight_status));
+  const dimensionsReady = activePlacements.length > 0 && activePlacements.every((row) => Number(row.print_width_inches) > 0);
+  const approvalsReady = selected.length > 0 && selected.every((row) => ['internal_approved', 'customer_approved'].includes(row.approval_status));
+  return <><SectionCard title="Production handoff" description="The production packet combines approved mockups, physical placement dimensions, decoration methods, and artwork references."><div className="sc-button-row"><Link className="sc-action-button sc-action-button--primary sc-action-button--md" to={`/mockup-studio/${project.id}/production-packet`} target="_blank">Open Production Packet</Link></div></SectionCard><SectionCard title="Readiness checks"><ul className="mockup-checklist"><li className={bundle.blanks.length ? 'pass' : 'stop'}>{bundle.blanks.length ? 'Blank photos attached' : 'No blank photos'}</li><li className={artworkReady ? 'pass' : 'stop'}>{artworkReady ? 'Artwork preflight reviewed' : 'Artwork preflight is pending or failed'}</li><li className={dimensionsReady ? 'pass' : 'stop'}>{dimensionsReady ? 'Every active placement has a physical print width' : 'Physical placement width is missing'}</li><li className={selected.length ? 'pass' : 'stop'}>{selected.length ? `${selected.length} output(s) selected` : 'No selected outputs'}</li><li className={approvalsReady ? 'pass' : 'stop'}>{approvalsReady ? 'Every selected output is approved' : 'One or more selected outputs are not approved'}</li></ul></SectionCard></>;
 }
 
 function formatBytes(value) {
@@ -872,6 +893,15 @@ function StorageMigrationPanel({ bundle, refresh, setBusy, setMessage }) {
     }
   }
 
+  async function retryCleanup() {
+    setBusy(true);
+    try {
+      const result = await retryMockupStorageCleanup();
+      setMessage(`Deferred storage cleanup processed ${result.processed} file(s); ${result.remaining} remain.`);
+    } catch (error) { setMessage(error.message); }
+    finally { setBusy(false); }
+  }
+
   return (
     <SectionCard
       title="Cloud image storage"
@@ -879,7 +909,7 @@ function StorageMigrationPanel({ bundle, refresh, setBusy, setMessage }) {
     >
       <p><strong>R2 configuration:</strong> {storage?.configured ? 'Ready' : storage?.error || 'Checking…'}</p>
       <p><strong>R2 files:</strong> {r2Count} &nbsp; <strong>Supabase files remaining:</strong> {legacyCount}</p>
-      {legacyCount ? <ActionButton tone="primary" onClick={migrate} disabled={!storage?.configured || bundle.project.status === 'archived'}>Move This Project to R2</ActionButton> : <p className="mockup-woo-ready">This active project has no remaining Supabase originals to migrate.</p>}
+      <div className="sc-button-row">{legacyCount ? <ActionButton tone="primary" onClick={migrate} disabled={!storage?.configured || bundle.project.status === 'archived'}>Move This Project to R2</ActionButton> : <p className="mockup-woo-ready">This active project has no remaining Supabase originals to migrate.</p>}<ActionButton tone="secondary" onClick={retryCleanup}>Retry Deferred File Cleanup</ActionButton></div>
       {bundle.project.status === 'archived' && legacyCount ? <p className="mockup-archive-note">Restore the local archive before attempting a cloud-storage migration.</p> : null}
     </SectionCard>
   );
@@ -994,8 +1024,8 @@ async function urlsForWorkflowTab(bundle, tab) {
     ...await signedUrlsForAssets(bundle.artwork),
   };
   if (tab === 'generate') return {
-    ...await signedUrlsForAssets(bundle.blanks, 3600, { preferPreview: false }),
-    ...await signedUrlsForAssets(bundle.artwork, 3600, { preferPreview: false }),
+    ...await signedUrlsForAssets(bundle.blanks),
+    ...await signedUrlsForAssets(bundle.artwork),
     ...await signedUrlsForAssets(bundle.outputs),
   };
   if (['captions', 'approval'].includes(tab)) return signedUrlsForAssets(bundle.outputs);
@@ -1030,16 +1060,24 @@ export default function MockupStudio() {
   useEffect(() => {
     loadProjects();
     listMockupCustomers().then(setCustomers).catch(() => setCustomers([]));
-    listArtworkVaultCandidates().then(setVault).catch(() => setVault([]));
   }, []);
 
   useEffect(() => {
+    if (tab === 'artwork' && !vault.length) listArtworkVaultCandidates().then(setVault).catch(() => setVault([]));
+  }, [tab, vault.length]);
+
+  useEffect(() => {
     let active = true;
-    setUrls({});
-    urlsForWorkflowTab(bundle, tab)
-      .then((nextUrls) => { if (active) setUrls(nextUrls); })
-      .catch((error) => { if (active) setMessage(error.message || 'Image previews could not be loaded.'); });
-    return () => { active = false; };
+    let refreshTimer;
+    const loadUrls = () => {
+      setUrls({});
+      urlsForWorkflowTab(bundle, tab)
+        .then((nextUrls) => { if (active) setUrls(nextUrls); })
+        .catch((error) => { if (active) setMessage(error.message || 'Image previews could not be loaded.'); });
+    };
+    loadUrls();
+    if (bundle) refreshTimer = window.setInterval(loadUrls, 45 * 60 * 1000);
+    return () => { active = false; if (refreshTimer) window.clearInterval(refreshTimer); };
   }, [bundle, tab]);
 
   async function openProject(id) {
@@ -1081,7 +1119,7 @@ export default function MockupStudio() {
               {tab === 'captions' ? <CaptionsTab outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'approval' ? <ApprovalTab project={bundle.project} outputs={bundle.outputs} reviews={bundle.reviews} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'pricing' ? <PricingTab projectId={bundle.project.id} rows={bundle.pricing} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-              {tab === 'woocommerce' ? <WooCommerceTab project={bundle.project} bundle={bundle} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'woocommerce' ? <WooCommerceTab key={bundle.project.id} project={bundle.project} bundle={bundle} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'production' ? <ProductionTab project={bundle.project} bundle={bundle} /> : null}
             </>
           )}

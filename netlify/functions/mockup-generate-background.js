@@ -1,6 +1,6 @@
 import { authorizeEmployee, createServiceClient, jsonResponse } from './_shared/security.js';
 import { loadMockupAsset, parseJsonBody, requiredEnv, safePathSegment } from './_shared/mockupUtils.js';
-import { putMockupObject } from './_shared/mockupStorage.js';
+import { deleteStoredAsset, putMockupObject } from './_shared/mockupStorage.js';
 
 function promptFor({ project, blank, artwork, placement, extra }) {
   const preserveWhiteInk = placement.perspective_config?.preserve_white_ink
@@ -41,6 +41,7 @@ export async function handler(event) {
   }
 
   let jobId = '';
+  const created = [];
   try {
     const body = parseJsonBody(event);
     jobId = String(body.generation_job_id || '');
@@ -92,7 +93,6 @@ export async function handler(event) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload?.error?.message || `OpenAI image edit failed (HTTP ${response.status}).`);
 
-    const created = [];
     for (let index = 0; index < (payload.data || []).length; index += 1) {
       const item = payload.data[index];
       if (!item.b64_json) continue;
@@ -112,7 +112,7 @@ export async function handler(event) {
         variant_number: index + 1,
         ...location,
         mime_type: 'image/png',
-        metadata: { provider: 'openai', model, exact_artwork_requested: project.exact_artwork_required, usage: payload.usage || null },
+        metadata: { provider: 'openai', model, exact_artwork_requested: project.exact_artwork_required, usage: payload.usage || null, caption_render_state: 'current', blank_asset_id: blank.id, artwork_asset_id: artwork.id },
       }).select('*').single();
       if (outputError) throw outputError;
       created.push(output);
@@ -124,6 +124,10 @@ export async function handler(event) {
     return jsonResponse(200, { success: true, generation_job_id: jobId, outputs: created.map((row) => ({ id: row.id })) }, event);
   } catch (error) {
     console.error('Mockup generation failed:', error);
+    if (created.length) {
+      try { await auth.supabase.from('mockup_outputs').delete().eq('generation_job_id', jobId); } catch { /* best effort */ }
+      for (const output of created) await deleteStoredAsset(auth.supabase, output).catch((cleanupError) => console.warn('Partial AI output cleanup failed:', cleanupError.message));
+    }
     if (jobId) await failJob(auth.supabase, jobId, error);
     return jsonResponse(500, { success: false, error: error.message || 'Mockup generation failed.' }, event);
   }

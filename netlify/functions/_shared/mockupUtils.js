@@ -121,6 +121,18 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function safeResponseSample(value) {
+  return [...String(value || '')]
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? ' ' : character;
+    })
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240);
+}
+
 export async function wooRequest(path, { method = 'GET', body } = {}) {
   const requestMethod = String(method || 'GET').toUpperCase();
   const resource = String(path).replace(/^\//, '');
@@ -133,7 +145,14 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
     try {
       response = await fetch(url, {
         method: requestMethod,
-        headers: { Authorization: wooAuthHeader(), 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: wooAuthHeader(),
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, max-age=0',
+          Pragma: 'no-cache',
+          'User-Agent': 'SkilledCrafting-MockupStudio/1.0.9',
+        },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMilliseconds),
       });
@@ -149,15 +168,37 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
       throw new Error(`WooCommerce connection failed after ${attempt} attempt${attempt === 1 ? '' : 's'} while requesting ${requestMethod} ${resource} (${connectionDetail(error)}).`, { cause: error });
     }
 
-    const payload = await response.json().catch(() => ({}));
-    if (response.ok) return payload;
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    const responseText = await response.text();
+    let payload = null;
+    try { payload = responseText ? JSON.parse(responseText) : null; } catch { /* handled below with diagnostics */ }
+
+    if (response.ok && payload !== null) return payload;
+
+    if (response.ok) {
+      const requestId = response.headers.get('x-request-id') || response.headers.get('x-wp-request-id') || response.headers.get('x-nf-request-id') || '';
+      const sample = safeResponseSample(responseText);
+      const diagnostic = [
+        `HTTP ${response.status}`,
+        `content-type ${contentType || 'missing'}`,
+        requestId ? `request ${requestId}` : '',
+        sample ? `body ${JSON.stringify(sample)}` : 'empty body',
+      ].filter(Boolean).join('; ');
+      if (requestMethod === 'GET' && attempt < maximumAttempts) {
+        console.warn(`WooCommerce ${requestMethod} returned invalid JSON on attempt ${attempt} (${diagnostic}). Retrying sequentially.`);
+        await wait(750 * attempt);
+        continue;
+      }
+      throw new Error(`WooCommerce returned HTTP success with an invalid JSON response while requesting ${requestMethod} ${resource} (${diagnostic}). Check WordPress security/WAF logs and exclude /wp-json/wc/v3/ from response transformations.`);
+    }
 
     if (requestMethod === 'GET' && attempt < maximumAttempts && WOO_RETRYABLE_GET_STATUSES.has(response.status)) {
       const retryAfter = Number(response.headers.get('retry-after') || 0);
       await wait(Math.max(750 * attempt, Math.min(retryAfter * 1000, 5000)));
       continue;
     }
-    throw new Error(payload?.message || `WooCommerce request failed (HTTP ${response.status}) while requesting ${requestMethod} ${resource}.`);
+    const fallback = safeResponseSample(responseText);
+    throw new Error(payload?.message || `WooCommerce request failed (HTTP ${response.status}) while requesting ${requestMethod} ${resource}${fallback ? `: ${fallback}` : '.'}`);
   }
 
   throw new Error(`WooCommerce request did not complete: ${requestMethod} ${resource}.`);

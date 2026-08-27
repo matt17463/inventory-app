@@ -4,6 +4,7 @@ import { assertSafeExternalAssetUrl, fetchSafeExternalAsset, parseJsonBody } fro
 import {
   cleanObjectName,
   defaultMockupStorageProvider,
+  deleteStoredReference,
   deleteStoredAsset,
   putMockupObject,
   presignedR2Put,
@@ -14,6 +15,8 @@ import {
 } from './_shared/mockupStorage.js';
 
 const ALLOWED_FOLDERS = new Set(['blanks', 'artwork', 'outputs', 'production']);
+const ASSET_TABLES = new Set(['mockup_blank_assets', 'mockup_artwork_assets', 'mockup_outputs', 'mockup_production_packets']);
+const STORAGE_FIELDS = new Set(['storage_path', 'preview_storage_path', 'prepared_storage_path']);
 
 function positiveSize(value) {
   const size = Number(value || 0);
@@ -39,11 +42,19 @@ function inferredExternalContentType(contentType, filename) {
   return inferred;
 }
 
-async function createUpload(user, body) {
+async function existingProject(supabase, projectId) {
+  const { data, error } = await supabase.from('mockup_projects').select('id').eq('id', projectId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Mockup Studio project was not found.');
+  return data;
+}
+
+async function createUpload(user, supabase, body) {
   if (defaultMockupStorageProvider() !== 'r2') throw new Error('New Mockup Studio uploads are not configured for R2.');
   const projectId = String(body.project_id || '');
   const folder = String(body.folder || '');
   if (!/^[a-f0-9-]{36}$/i.test(projectId)) throw new Error('A valid Mockup Studio project ID is required.');
+  await existingProject(supabase, projectId);
   if (!ALLOWED_FOLDERS.has(folder)) throw new Error('Invalid Mockup Studio upload folder.');
   const contentType = safeContentType(body.content_type);
   positiveSize(body.file_size);
@@ -63,11 +74,21 @@ async function createUpload(user, body) {
   };
 }
 
-async function createRestoreUpload(body) {
+async function createRestoreUpload(supabase, body) {
   const provider = String(body.provider || '');
   if (provider !== 'r2') throw new Error('Only R2 restore uploads require a presigned URL.');
   if (String(body.bucket || '') !== r2BucketName()) throw new Error('The archive references an unexpected R2 bucket.');
   const key = safeObjectKey(body.path);
+  const archiveId = String(body.archive_id || '');
+  const fileKey = String(body.file_key || '');
+  if (!archiveId || !fileKey) throw new Error('A local archive ID and manifest file key are required for restore.');
+  const { data: archive, error } = await supabase.from('mockup_project_archives').select('status,manifest').eq('id', archiveId).maybeSingle();
+  if (error) throw error;
+  if (!archive || archive.status !== 'active') throw new Error('The local archive is not active or could not be found.');
+  const manifestFile = (archive.manifest?.files || []).find((row) => row.key === fileKey);
+  if (!manifestFile || manifestFile.provider !== provider || manifestFile.bucket !== body.bucket || manifestFile.path !== key) {
+    throw new Error('The requested restore path is not part of this verified local archive.');
+  }
   const contentType = safeContentType(body.content_type);
   positiveSize(body.file_size);
   return { upload_url: await presignedR2Put({ key, contentType }), provider, bucket: r2BucketName(), path: key };
@@ -127,13 +148,35 @@ async function importExternalArtwork(user, supabase, body) {
 }
 
 async function signDownload(supabase, body) {
+  const table = String(body.record_type || '');
+  const recordId = String(body.record_id || '');
+  const field = String(body.storage_field || 'storage_path');
+  if (!ASSET_TABLES.has(table) || !recordId || !STORAGE_FIELDS.has(field)) throw new Error('A valid Mockup Studio asset reference is required for download.');
+  const { data: record, error } = await supabase.from(table).select('*').eq('id', recordId).maybeSingle();
+  if (error) throw error;
+  if (!record) throw new Error('The requested Mockup Studio asset was not found.');
+  const preview = field === 'preview_storage_path';
+  const prepared = field === 'prepared_storage_path';
   const row = {
-    storage_provider: body.provider,
-    storage_bucket: body.bucket,
-    storage_path: body.path,
-    mime_type: body.mime_type,
+    storage_provider: preview ? (record.preview_storage_provider || record.storage_provider) : prepared ? (record.prepared_storage_provider || record.storage_provider) : record.storage_provider,
+    storage_bucket: preview ? (record.preview_storage_bucket || record.storage_bucket) : prepared ? (record.prepared_storage_bucket || record.storage_bucket) : record.storage_bucket,
+    storage_path: record[field],
+    mime_type: preview ? 'image/webp' : record.mime_type,
   };
+  if (!row.storage_path) throw new Error('The requested Mockup Studio asset file is not available.');
   return { url: await signedStoredAssetUrl(supabase, row, Number(body.expires_in || 3600)) };
+}
+
+async function cancelUpload(user, supabase, body) {
+  const projectId = String(body.project_id || '');
+  await existingProject(supabase, projectId);
+  const expectedPrefix = `${user.id}/${projectId}/`;
+  const paths = [body.path, body.preview_path].filter(Boolean).map(safeObjectKey);
+  if (!paths.length || paths.some((path) => !path.startsWith(expectedPrefix) && !path.startsWith(`previews/${expectedPrefix}`))) {
+    throw new Error('The abandoned upload does not belong to this employee and project.');
+  }
+  for (const path of paths) await deleteStoredReference(supabase, { provider: 'r2', bucket: r2BucketName(), path });
+  return { deleted_paths: paths };
 }
 
 export async function handler(event) {
@@ -147,13 +190,15 @@ export async function handler(event) {
     const result = action === 'status'
       ? { configured: r2Configured(), default_provider: defaultMockupStorageProvider(), bucket: r2Configured() ? r2BucketName() : null }
       : action === 'create_upload'
-        ? await createUpload(auth.user, body)
+        ? await createUpload(auth.user, auth.supabase, body)
         : action === 'import_external_artwork'
           ? await importExternalArtwork(auth.user, auth.supabase, body)
         : action === 'create_restore_upload'
-          ? await createRestoreUpload(body)
+          ? await createRestoreUpload(auth.supabase, body)
           : action === 'sign_download'
             ? await signDownload(auth.supabase, body)
+            : action === 'cancel_upload'
+              ? await cancelUpload(auth.user, auth.supabase, body)
             : null;
     if (!result) throw new Error('Unknown mockup storage action.');
     return jsonResponse(200, { success: true, ...result }, event);
