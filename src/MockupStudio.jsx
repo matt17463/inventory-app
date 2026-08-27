@@ -146,11 +146,35 @@ function objectValue(value) {
 }
 
 function normalizedOption(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return String(value || '')
+    .replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;/gi, "'")
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 function variationImageKey(color, logo) {
   return JSON.stringify([normalizedOption(color), normalizedOption(logo)]);
+}
+
+function canonicalSavedVariationKey(value) {
+  try {
+    const parsed = JSON.parse(String(value || ''));
+    if (Array.isArray(parsed) && parsed.length >= 2) return variationImageKey(parsed[0], parsed[1]);
+  } catch { /* invalid legacy values remain visible for manual correction */ }
+  return String(value || '');
+}
+
+function canonicalVariationImageMap(value) {
+  const canonical = {};
+  for (const [savedKey, outputId] of Object.entries(objectValue(value))) {
+    const key = canonicalSavedVariationKey(savedKey);
+    if (key && outputId && (!canonical[key] || savedKey === key)) canonical[key] = outputId;
+  }
+  return canonical;
+}
+
+function canonicalExcludedVariationPairs(value) {
+  return [...new Set(optionList(value).map(canonicalSavedVariationKey).filter(Boolean))];
 }
 
 function protectsWhiteInk(placement) {
@@ -683,8 +707,8 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     colors: saved.colors || inferredColors,
     sizes: saved.sizes || '',
     logo_options: optionList(saved.logo_options),
-    variation_image_map: objectValue(saved.variation_image_map),
-    excluded_variation_pairs: optionList(saved.excluded_variation_pairs),
+    variation_image_map: canonicalVariationImageMap(saved.variation_image_map),
+    excluded_variation_pairs: canonicalExcludedVariationPairs(saved.excluded_variation_pairs),
     main_product_image_output_id: saved.main_product_image_output_id || selectedOutputs[0]?.id || '',
     shipping_class: saved.shipping_class || '',
     weight: saved.weight || '',
