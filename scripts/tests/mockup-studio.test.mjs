@@ -422,6 +422,22 @@ test('Mockup cleanup is durable and caption changes cannot silently export stale
   assert.match(publish, /caption_render_state === 'stale'/);
 });
 
+test('Stale caption regeneration replaces the selected output and WooCommerce references', async () => {
+  const api = await read('src/lib/mockupStudioApi.js');
+  const studio = await read('src/MockupStudio.jsx');
+  const exact = await read('netlify/functions/mockup-generate-exact.js');
+  const publish = await read('netlify/functions/mockup-publish-woocommerce.js');
+  assert.match(api, /replaceOutputId = null/);
+  assert.match(api, /replace_output_id: replaceOutputId \|\| null/);
+  assert.match(studio, /Regenerate Caption/);
+  assert.match(studio, /replaceOutputId: output\.id/);
+  assert.match(studio, /selectedIds\.has\(String\(nextMap\[key\]/);
+  assert.match(exact, /replaceWooOutputReferences/);
+  assert.match(exact, /replaces_output_id: replacement\?\.id \|\| null/);
+  assert.match(exact, /approval_status: 'pending'/);
+  assert.match(publish, /output\.output_kind === 'captioned' && output\.metadata\?\.caption_render_state === 'stale'/);
+});
+
 test('WooCommerce list responses and legacy saved settings are normalized before spreading', async () => {
   const { wooCollection } = await import('../../netlify/functions/_shared/mockupUtils.js');
   const utils = await read('netlify/functions/_shared/mockupUtils.js');

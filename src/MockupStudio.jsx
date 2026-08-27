@@ -660,10 +660,35 @@ function GenerateTab({ project, blanks, artwork, placements, jobs, outputs, urls
   );
 }
 
-function CaptionsTab({ outputs, urls, refresh, setBusy, setMessage }) {
+function CaptionsTab({ projectId, outputs, urls, refresh, setBusy, setMessage }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   function edit(output) { setEditing(output.id); setForm(output); }
+  async function regenerate(output) {
+    if (!output.placement_id) { setMessage('This captioned mockup is not linked to a placement and cannot be regenerated automatically.'); return; }
+    setBusy(true);
+    try {
+      await requestExactMockup({
+        projectId,
+        placementId: output.placement_id,
+        replaceOutputId: output.id,
+        caption: {
+          text: output.caption_text,
+          font: output.caption_font || 'Arial',
+          size: Number(output.caption_size || 36),
+          color: output.caption_color || '#111827',
+          background: output.caption_background || '#ffffff',
+          alignment: output.caption_alignment || 'center',
+          padding: Number(output.caption_padding || 32),
+        },
+      });
+      await refresh();
+      setMessage(output.is_selected
+        ? 'Captioned mockup regenerated and replaced in the store selection. Review and approve the new image before exporting.'
+        : 'Captioned mockup regenerated with the saved caption settings.');
+    } catch (error) { setMessage(error.message || 'Captioned mockup regeneration failed.'); }
+    finally { setBusy(false); }
+  }
   async function save() {
     setBusy(true);
     try {
@@ -680,11 +705,16 @@ function CaptionsTab({ outputs, urls, refresh, setBusy, setMessage }) {
         caption_alignment: form.caption_alignment,
         metadata: { ...(original.metadata || {}), caption_render_state: captionChanged ? 'stale' : (original.metadata?.caption_render_state || 'current') },
       });
-      setMessage('Caption settings saved. Regenerate a captioned output to bake the updated caption into the store image.'); setEditing(null); await refresh();
+      setMessage(captionChanged
+        ? 'Caption settings saved. Use Regenerate Caption below to bake the changes into this image.'
+        : 'Mockup name saved.'); setEditing(null); await refresh();
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
   }
-  return <SectionCard title="Caption and identification editor" description="Captions are stored as metadata. Captioned outputs also bake the text beneath the mockup so every WooCommerce theme displays it.">{!outputs.length ? <EmptyState title="Generate an output first" /> : <div className="mockup-output-grid">{outputs.map((output) => <article className="mockup-output-card" key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}{editing === output.id ? <div className="mockup-caption-editor"><FormField label="Mockup name"><input value={form.output_name || ''} onChange={(e) => setForm({ ...form, output_name: e.target.value })} /></FormField><FormField label="Caption"><input value={form.caption_text || ''} onChange={(e) => setForm({ ...form, caption_text: e.target.value })} /></FormField><FormField label="Font"><input value={form.caption_font || 'Arial'} onChange={(e) => setForm({ ...form, caption_font: e.target.value })} /></FormField><FormField label="Size"><input type="number" value={form.caption_size || 36} onChange={(e) => setForm({ ...form, caption_size: e.target.value })} /></FormField><div className="mockup-color-pair"><input type="color" value={form.caption_color || '#111827'} onChange={(e) => setForm({ ...form, caption_color: e.target.value })} /><input type="color" value={form.caption_background || '#ffffff'} onChange={(e) => setForm({ ...form, caption_background: e.target.value })} /></div><div className="sc-button-row"><ActionButton tone="primary" size="sm" onClick={save}>Save</ActionButton><ActionButton size="sm" onClick={() => setEditing(null)}>Cancel</ActionButton></div></div> : <><h3>{output.output_name}</h3><p>{output.caption_text || 'No caption'}</p><ActionButton size="sm" onClick={() => edit(output)}>Edit Caption</ActionButton></>}</article>)}</div>}</SectionCard>;
+  return <SectionCard title="Caption and identification editor" description="Captions are stored as metadata. Captioned outputs also bake the text beneath the mockup so every WooCommerce theme displays it.">{!outputs.length ? <EmptyState title="Generate an output first" /> : <div className="mockup-output-grid">{outputs.map((output) => {
+    const stale = output.output_kind === 'captioned' && output.metadata?.caption_render_state === 'stale';
+    return <article className={`mockup-output-card ${stale ? 'caption-stale' : ''}`} key={output.id}>{urls[output.id] ? <img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /> : null}{editing === output.id ? <div className="mockup-caption-editor"><FormField label="Mockup name"><input value={form.output_name || ''} onChange={(e) => setForm({ ...form, output_name: e.target.value })} /></FormField><FormField label="Caption"><input value={form.caption_text || ''} onChange={(e) => setForm({ ...form, caption_text: e.target.value })} /></FormField><FormField label="Font"><input value={form.caption_font || 'Arial'} onChange={(e) => setForm({ ...form, caption_font: e.target.value })} /></FormField><FormField label="Size"><input type="number" value={form.caption_size || 36} onChange={(e) => setForm({ ...form, caption_size: e.target.value })} /></FormField><div className="mockup-color-pair"><input type="color" value={form.caption_color || '#111827'} onChange={(e) => setForm({ ...form, caption_color: e.target.value })} /><input type="color" value={form.caption_background || '#ffffff'} onChange={(e) => setForm({ ...form, caption_background: e.target.value })} /></div><div className="sc-button-row"><ActionButton tone="primary" size="sm" onClick={save}>Save</ActionButton><ActionButton size="sm" onClick={() => setEditing(null)}>Cancel</ActionButton></div></div> : <><h3>{output.output_name}</h3><p>{output.caption_text || 'No caption'}</p>{stale ? <p className="mockup-woo-warning">Caption pixels are out of date.</p> : null}<div className="sc-button-row"><ActionButton size="sm" onClick={() => edit(output)}>Edit Caption</ActionButton>{stale ? <ActionButton tone="primary" size="sm" onClick={() => regenerate(output)}>Regenerate Caption</ActionButton> : null}</div></>}</article>;
+  })}</div>}</SectionCard>;
 }
 
 function ApprovalTab({ project, outputs, reviews, urls, refresh, setBusy, setMessage }) {
@@ -832,11 +862,12 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   useEffect(() => {
     setForm((current) => {
       const nextMap = { ...objectValue(current.variation_image_map) };
+      const selectedIds = new Set(selectedOutputs.map((output) => output.id));
       let changed = false;
       selectedOutputs.forEach((output) => {
         const context = outputContextById[output.id] || { color: '', logo: '' };
         const key = variationImageKey(context.color, context.logo);
-        if (!nextMap[key]) { nextMap[key] = output.id; changed = true; }
+        if (!selectedIds.has(String(nextMap[key] || ''))) { nextMap[key] = output.id; changed = true; }
       });
       return changed ? { ...current, variation_image_map: nextMap } : current;
     });
@@ -1218,7 +1249,7 @@ export default function MockupStudio() {
               {tab === 'artwork' ? <ArtworkAssetsTab projectId={bundle.project.id} rows={bundle.artwork} urls={urls} vault={vault} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'placements' ? <PlacementsTab projectId={bundle.project.id} blanks={bundle.blanks} artwork={bundle.artwork} rows={bundle.placements} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'generate' ? <GenerateTab project={bundle.project} blanks={bundle.blanks} artwork={bundle.artwork} placements={bundle.placements} jobs={bundle.jobs} outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
-              {tab === 'captions' ? <CaptionsTab outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
+              {tab === 'captions' ? <CaptionsTab projectId={bundle.project.id} outputs={bundle.outputs} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'approval' ? <ApprovalTab project={bundle.project} outputs={bundle.outputs} reviews={bundle.reviews} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'pricing' ? <PricingTab projectId={bundle.project.id} rows={bundle.pricing} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}
               {tab === 'woocommerce' ? <WooCommerceTab key={bundle.project.id} project={bundle.project} bundle={bundle} urls={urls} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} /> : null}

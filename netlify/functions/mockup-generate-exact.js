@@ -13,6 +13,21 @@ function caption(value) {
   };
 }
 
+function replaceWooOutputReferences(value, oldOutputId, newOutputId) {
+  const config = value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
+  if (String(config.main_product_image_output_id || '') === oldOutputId) {
+    config.main_product_image_output_id = newOutputId;
+  }
+  const currentMap = config.variation_image_map && typeof config.variation_image_map === 'object' && !Array.isArray(config.variation_image_map)
+    ? config.variation_image_map
+    : {};
+  config.variation_image_map = Object.fromEntries(Object.entries(currentMap).map(([key, outputId]) => [
+    key,
+    String(outputId || '') === oldOutputId ? newOutputId : outputId,
+  ]));
+  return config;
+}
+
 async function failJob(supabase, id, error) {
   if (!id) return;
   await supabase.from('mockup_generation_jobs').update({
@@ -33,14 +48,17 @@ export async function handler(event) {
     jobId = String(body.generation_job_id || '');
     let projectId = String(body.project_id || '');
     let placementId = String(body.placement_id || '');
-    const captionSettings = caption(body.caption);
+    let queuedJob = null;
     if (jobId) {
-      const { data: queuedJob, error: queuedJobError } = await auth.supabase.from('mockup_generation_jobs').select('*').eq('id', jobId).maybeSingle();
+      const { data, error: queuedJobError } = await auth.supabase.from('mockup_generation_jobs').select('*').eq('id', jobId).maybeSingle();
       if (queuedJobError) throw queuedJobError;
+      queuedJob = data;
       if (!queuedJob || queuedJob.generation_mode !== 'exact_composite') throw new Error('The queued Exact Clean job could not be found.');
       projectId = queuedJob.project_id;
       placementId = queuedJob.placement_id;
     }
+    const captionSettings = caption(body.caption || queuedJob?.request_metadata?.caption);
+    const replaceOutputId = String(body.replace_output_id || queuedJob?.request_metadata?.replace_output_id || '');
     if (!projectId || !placementId) throw new Error('Project and placement are required.');
 
     const [{ data: project, error: projectError }, { data: placement, error: placementError }] = await Promise.all([
@@ -56,10 +74,32 @@ export async function handler(event) {
     if (blankError) throw blankError;
     if (artworkError) throw artworkError;
 
+    let replacement = null;
+    if (replaceOutputId) {
+      const { data, error } = await auth.supabase
+        .from('mockup_outputs')
+        .select('*')
+        .eq('id', replaceOutputId)
+        .eq('project_id', projectId)
+        .eq('placement_id', placementId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('The captioned mockup selected for regeneration was not found in this placement.');
+      if (data.output_kind !== 'captioned') throw new Error('Only a captioned mockup can be regenerated and replaced.');
+      replacement = data;
+    }
+
     if (jobId) {
       const { error: startError } = await auth.supabase.from('mockup_generation_jobs').update({
         status: 'processing', model_name: 'server-sharp', started_at: new Date().toISOString(), error_message: null,
-        request_metadata: { renderer: 'exact_server_sharp', cors_independent: true, background: true },
+        request_metadata: {
+          ...(queuedJob?.request_metadata || {}),
+          caption: captionSettings,
+          replace_output_id: replaceOutputId || null,
+          renderer: 'exact_server_sharp',
+          cors_independent: true,
+          background: true,
+        },
       }).eq('id', jobId);
       if (startError) throw startError;
     } else {
@@ -90,12 +130,48 @@ export async function handler(event) {
       caption_size: Number(captionSettings?.size || 36), caption_color: captionSettings?.color || '#111827',
       caption_background: captionSettings?.background || '#ffffff', caption_alignment: captionSettings?.alignment || 'center',
       caption_padding: Number(captionSettings?.padding || 32),
-      metadata: { renderer: 'exact_server_sharp', exact_artwork: true, cors_independent: true, caption_render_state: 'current', blank_asset_id: blank.id, artwork_asset_id: artwork.id },
+      metadata: {
+        renderer: 'exact_server_sharp', exact_artwork: true, cors_independent: true,
+        caption_render_state: 'current', blank_asset_id: blank.id, artwork_asset_id: artwork.id,
+        replaces_output_id: replacement?.id || null,
+      },
     }).select('*').single();
     if (saved.error) throw saved.error;
+
+    if (replacement?.is_selected) {
+      const { error: deselectError } = await auth.supabase
+        .from('mockup_outputs')
+        .update({ is_selected: false })
+        .eq('project_id', projectId)
+        .eq('placement_id', placementId);
+      if (deselectError) throw deselectError;
+      const { error: selectError } = await auth.supabase
+        .from('mockup_outputs')
+        .update({
+          is_selected: true,
+          approval_status: 'pending',
+          approved_at: null,
+          approved_by: null,
+          woo_position: replacement.woo_position,
+        })
+        .eq('id', saved.data.id);
+      if (selectError) {
+        await auth.supabase.from('mockup_outputs').update({ is_selected: true }).eq('id', replacement.id);
+        throw selectError;
+      }
+    }
+
+    const nextWooConfig = replacement
+      ? replaceWooOutputReferences(project.woo_config, replacement.id, saved.data.id)
+      : project.woo_config;
     await auth.supabase.from('mockup_generation_jobs').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', jobId);
-    await auth.supabase.from('mockup_projects').update({ status: 'review' }).eq('id', project.id);
-    return jsonResponse(200, { success: true, output: saved.data, generation_job_id: jobId }, event);
+    await auth.supabase.from('mockup_projects').update({ status: 'review', woo_config: nextWooConfig }).eq('id', project.id);
+    return jsonResponse(200, {
+      success: true,
+      output: { ...saved.data, is_selected: Boolean(replacement?.is_selected) },
+      generation_job_id: jobId,
+      replaced_output_id: replacement?.id || null,
+    }, event);
   } catch (error) {
     console.error('Exact mockup generation failed:', error);
     if (location) await deleteStoredAsset(auth.supabase, location).catch(() => {});

@@ -524,18 +524,23 @@ export async function saveExactCompositeOutput({ projectId, placementId, blob, c
   return data;
 }
 
-export async function requestExactMockup({ projectId, placementId, caption = null }) {
+export async function requestExactMockup({ projectId, placementId, caption = null, replaceOutputId = null }) {
   const { data: job, error } = await supabase.from('mockup_generation_jobs').insert({
     project_id: projectId, placement_id: placementId, generation_mode: 'exact_composite',
     status: 'queued', model_name: 'server-sharp', requested_variants: 1,
-    request_metadata: { caption: caption || null, renderer: 'exact_server_sharp', background: true },
+    request_metadata: {
+      caption: caption || null,
+      replace_output_id: replaceOutputId || null,
+      renderer: 'exact_server_sharp',
+      background: true,
+    },
   }).select('*').single();
   if (error) throw error;
 
   let invocationError = '';
   try {
     const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-generate-exact-background', {
-      method: 'POST', body: JSON.stringify({ generation_job_id: job.id, caption }),
+      method: 'POST', body: JSON.stringify({ generation_job_id: job.id, caption, replace_output_id: replaceOutputId || null }),
     });
     const responseText = await response.text();
     let payload = {};
