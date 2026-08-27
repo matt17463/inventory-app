@@ -191,26 +191,46 @@ function artworkCandidateName(row) {
   return row.request_title || row.title || row.artwork_title || row.artwork_name || row.organization || row.customer_name || `Artwork ${row.id || ''}`;
 }
 
-function PlacementPreview({ blankUrl, artworkUrl, placement }) {
+function PlacementPreview({ blankUrl, artworkUrl, placement, blankAsset = null }) {
+  const [loadedDimensions, setLoadedDimensions] = useState(null);
   if (!blankUrl || !artworkUrl) return <div className="mockup-missing-preview">Upload both images to preview this placement.</div>;
+  const dimensions = loadedDimensions?.url === blankUrl
+    ? loadedDimensions
+    : { width: Number(blankAsset?.pixel_width || 0), height: Number(blankAsset?.pixel_height || 0) };
+  const aspectRatio = dimensions.width > 0 && dimensions.height > 0
+    ? `${dimensions.width} / ${dimensions.height}`
+    : '4 / 5';
   return (
     <div className="mockup-placement-preview">
-      <img src={blankUrl} alt="Blank product preview" loading="lazy" decoding="async" />
-      <img
-        className="mockup-placement-artwork"
-        src={artworkUrl}
-        alt="Placed artwork preview"
-        loading="lazy"
-        decoding="async"
-        style={{
-          left: `${placement.x_pct ?? 50}%`,
-          top: `${placement.y_pct ?? 45}%`,
-          width: `${placement.width_pct ?? 40}%`,
-          opacity: placement.opacity ?? 1,
-          mixBlendMode: protectsWhiteInk(placement) ? 'normal' : (placement.blend_mode || 'normal'),
-          transform: `translate(-50%, -50%) rotate(${placement.rotation_degrees || 0}deg)`,
-        }}
-      />
+      <div className="mockup-placement-canvas" style={{ aspectRatio }}>
+        <img
+          className="mockup-placement-blank"
+          src={blankUrl}
+          alt="Blank product preview"
+          loading="lazy"
+          decoding="async"
+          onLoad={(event) => {
+            const width = Number(event.currentTarget.naturalWidth || 0);
+            const height = Number(event.currentTarget.naturalHeight || 0);
+            if (width > 0 && height > 0) setLoadedDimensions({ url: blankUrl, width, height });
+          }}
+        />
+        <img
+          className="mockup-placement-artwork"
+          src={artworkUrl}
+          alt="Placed artwork preview"
+          loading="lazy"
+          decoding="async"
+          style={{
+            left: `${placement.x_pct ?? 50}%`,
+            top: `${placement.y_pct ?? 45}%`,
+            width: `${placement.width_pct ?? 40}%`,
+            opacity: placement.opacity ?? 1,
+            mixBlendMode: protectsWhiteInk(placement) ? 'normal' : (placement.blend_mode || 'normal'),
+            transform: `translate(-50%, -50%) rotate(${placement.rotation_degrees || 0}deg)`,
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -581,7 +601,7 @@ function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBus
             </FieldGrid>
             <div className="sc-button-row"><ActionButton type="submit" tone="primary">{form.id ? 'Update Placement' : 'Save Placement'}</ActionButton>{form.id ? <ActionButton onClick={() => setForm(empty)}>Cancel Edit</ActionButton> : null}</div>
           </form>
-          <PlacementPreview blankUrl={urls[blank?.id]} artworkUrl={urls[art?.id]} placement={form} />
+          <PlacementPreview blankUrl={urls[blank?.id]} artworkUrl={urls[art?.id]} placement={form} blankAsset={blank} />
         </div>
       </SectionCard>
       <SectionCard title={`Saved placements (${rows.length})`}>
@@ -625,11 +645,11 @@ function GenerateTab({ project, blanks, artwork, placements, jobs, outputs, urls
           <FormField label="Background"><input type="color" value={caption.background} onChange={(e) => setCaption({ ...caption, background: e.target.value })} /></FormField>
         </FieldGrid>
       </SectionCard>
-      <SectionCard title="Generate mockups" description="Exact Composite preserves the artwork pixel-for-pixel. AI Assist adds surface realism and may require review.">
+      <SectionCard title="Generate mockups" description="The saved placement geometry is used unchanged for the preview, Exact Clean, and Exact + Caption. AI Assist is generative and may vary, so review it against the locked Exact preview.">
         {!placements.length ? <EmptyState title="No placements" description="Create at least one placement first." /> : <div className="mockup-generation-grid">{placements.map((placement) => {
           const blank = blanks.find((row) => row.id === placement.blank_asset_id);
           const art = artwork.find((row) => row.id === placement.artwork_asset_id);
-          return <article className="mockup-generation-card" key={placement.id}><PlacementPreview blankUrl={urls[blank?.id]} artworkUrl={urls[art?.id]} placement={placement} /><h3>{blank?.asset_name}</h3><p>{art?.artwork_name} · {placement.placement_name.replace(/_/g, ' ')}</p><div className="sc-button-row"><ActionButton tone="primary" size="sm" onClick={() => exact(placement, false)}>Exact Clean</ActionButton><ActionButton tone="success" size="sm" disabled={!caption.text} onClick={() => exact(placement, true)}>Exact + Caption</ActionButton><ActionButton size="sm" onClick={() => ai(placement)}>AI Assist</ActionButton></div></article>;
+          return <article className="mockup-generation-card" key={placement.id}><PlacementPreview blankUrl={urls[blank?.id]} artworkUrl={urls[art?.id]} placement={placement} blankAsset={blank} /><h3>{blank?.asset_name}</h3><p>{art?.artwork_name} · {placement.placement_name.replace(/_/g, ' ')}</p><div className="sc-button-row"><ActionButton tone="primary" size="sm" onClick={() => exact(placement, false)}>Exact Clean</ActionButton><ActionButton tone="success" size="sm" disabled={!caption.text} onClick={() => exact(placement, true)}>Exact + Caption</ActionButton><ActionButton size="sm" onClick={() => ai(placement)}>AI Assist</ActionButton></div></article>;
         })}</div>}
       </SectionCard>
       <SectionCard title={`Outputs (${outputs.length})`}>
@@ -673,14 +693,72 @@ function ApprovalTab({ project, outputs, reviews, urls, refresh, setBusy, setMes
 }
 
 function PricingTab({ projectId, rows, refresh, setBusy, setMessage }) {
-  const [form, setForm] = useState({ label: 'Blank garment', pricing_type: 'per_item', quantity: 1, unit_cost: 0, markup_percent: 50, sell_price: 0 });
-  const totals = useMemo(() => rows.reduce((acc, row) => {
+  const emptyPricing = (pricingPath = 'direct_retail') => ({ label: 'Blank garment', pricing_type: 'per_item', pricing_path: pricingPath, quantity: 1, unit_cost: 0, wholesale_price: '', sell_price: 0 });
+  const [pricingPath, setPricingPath] = useState('direct_retail');
+  const [form, setForm] = useState(emptyPricing());
+  const visibleRows = useMemo(() => rows.filter((row) => (row.pricing_path || 'direct_retail') === pricingPath), [rows, pricingPath]);
+  const totals = useMemo(() => visibleRows.reduce((acc, row) => {
     const cost = Number(row.quantity || 0) * Number(row.unit_cost || 0);
-    const sell = Number(row.quantity || 0) * Number(row.sell_price || 0);
-    return { cost: acc.cost + cost, sell: acc.sell + sell };
-  }, { cost: 0, sell: 0 }), [rows]);
-  async function save(event) { event.preventDefault(); setBusy(true); try { const suggested = Number(form.sell_price || 0) || Number(form.unit_cost || 0) * (1 + Number(form.markup_percent || 0) / 100); await savePricingItem({ ...form, project_id: projectId, sell_price: suggested }); setForm({ label: '', pricing_type: 'per_item', quantity: 1, unit_cost: 0, markup_percent: 50, sell_price: 0 }); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }
-  return <><div className="sc-metric-grid"><MetricCard label="Estimated cost" value={money(totals.cost)} /><MetricCard label="Estimated sale" value={money(totals.sell)} /><MetricCard label="Estimated profit" value={money(totals.sell - totals.cost)} tone={totals.sell >= totals.cost ? 'success' : 'danger'} /><MetricCard label="Margin" value={totals.sell ? `${(((totals.sell - totals.cost) / totals.sell) * 100).toFixed(1)}%` : '0%'} /></div><SectionCard title="Add pricing component"><form onSubmit={save}><FieldGrid><FormField label="Label"><input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></FormField><FormField label="Quantity"><input type="number" step="0.01" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></FormField><FormField label="Unit cost"><input type="number" step="0.01" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></FormField><FormField label="Markup %"><input type="number" step="0.01" value={form.markup_percent} onChange={(e) => setForm({ ...form, markup_percent: e.target.value })} /></FormField><FormField label="Sell price per unit" help="Leave zero to calculate from cost and markup."><input type="number" step="0.01" value={form.sell_price} onChange={(e) => setForm({ ...form, sell_price: e.target.value })} /></FormField></FieldGrid><ActionButton type="submit" tone="primary">Add Pricing Item</ActionButton></form></SectionCard><SectionCard title="Pricing breakdown"><ResponsiveTable><thead><tr><th>Label</th><th>Qty</th><th>Cost</th><th>Sell</th><th>Profit</th><th /></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.label}</td><td>{row.quantity}</td><td>{money(Number(row.quantity) * Number(row.unit_cost))}</td><td>{money(Number(row.quantity) * Number(row.sell_price))}</td><td>{money(Number(row.quantity) * (Number(row.sell_price) - Number(row.unit_cost)))}</td><td><ActionButton tone="danger" size="sm" onClick={async () => { setBusy(true); try { await deletePricingItem(row.id); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete</ActionButton></td></tr>)}</tbody></ResponsiveTable></SectionCard></>;
+    const wholesale = Number(row.quantity || 0) * Number(row.wholesale_price || 0);
+    const retail = Number(row.quantity || 0) * Number(row.sell_price || 0);
+    return { cost: acc.cost + cost, wholesale: acc.wholesale + wholesale, retail: acc.retail + retail };
+  }, { cost: 0, wholesale: 0, retail: 0 }), [visibleRows]);
+
+  function changePath(nextPath) {
+    setPricingPath(nextPath);
+    setForm(emptyPricing(nextPath));
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    if (!String(form.label || '').trim()) { setMessage('Enter a pricing label.'); return; }
+    if (!(Number(form.quantity) > 0)) { setMessage('Enter a quantity greater than zero.'); return; }
+    if (pricingPath === 'wholesale' && !(Number(form.wholesale_price) >= 0)) { setMessage('Enter the wholesale price.'); return; }
+    if (!(Number(form.sell_price) >= 0)) { setMessage('Enter the retail price.'); return; }
+    setBusy(true);
+    try {
+      await savePricingItem({ ...form, project_id: projectId, pricing_path: pricingPath });
+      setForm(emptyPricing(pricingPath));
+      await refresh();
+      setMessage(`${pricingPath === 'wholesale' ? 'Wholesale' : 'Direct retail'} pricing item saved.`);
+    } catch (error) { setMessage(error.message); }
+    finally { setBusy(false); }
+  }
+
+  return <>
+    <SectionCard title="Pricing path" description="Maintain separate cost and selling-price plans for wholesale orders and direct retail sales.">
+      <div className="sc-button-row">
+        <ActionButton type="button" tone={pricingPath === 'direct_retail' ? 'primary' : 'secondary'} onClick={() => changePath('direct_retail')}>Direct Retail</ActionButton>
+        <ActionButton type="button" tone={pricingPath === 'wholesale' ? 'primary' : 'secondary'} onClick={() => changePath('wholesale')}>Wholesale</ActionButton>
+      </div>
+    </SectionCard>
+    <div className="sc-metric-grid">
+      <MetricCard label={`${pricingPath === 'wholesale' ? 'Wholesale' : 'Retail'} estimated cost`} value={money(totals.cost)} />
+      {pricingPath === 'wholesale' ? <MetricCard label="Wholesale revenue" value={money(totals.wholesale)} /> : null}
+      <MetricCard label="Retail revenue" value={money(totals.retail)} />
+      <MetricCard label={`${pricingPath === 'wholesale' ? 'Wholesale' : 'Retail'} profit`} value={money((pricingPath === 'wholesale' ? totals.wholesale : totals.retail) - totals.cost)} tone={(pricingPath === 'wholesale' ? totals.wholesale : totals.retail) >= totals.cost ? 'success' : 'danger'} />
+    </div>
+    <SectionCard title={`Add ${pricingPath === 'wholesale' ? 'wholesale' : 'direct retail'} pricing item`}>
+      <form onSubmit={save}>
+        <FieldGrid>
+          <FormField label="Label" required><input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></FormField>
+          <FormField label="Quantity" required><input type="number" min="0.001" step="0.001" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></FormField>
+          <FormField label="Unit cost" required><input type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></FormField>
+          {pricingPath === 'wholesale' ? <FormField label="Wholesale price" required><input type="number" min="0" step="0.01" value={form.wholesale_price} onChange={(e) => setForm({ ...form, wholesale_price: e.target.value })} /></FormField> : null}
+          <FormField label="Retail price" required><input type="number" min="0" step="0.01" value={form.sell_price} onChange={(e) => setForm({ ...form, sell_price: e.target.value })} /></FormField>
+        </FieldGrid>
+        <ActionButton type="submit" tone="primary">Add Pricing Item</ActionButton>
+      </form>
+    </SectionCard>
+    <SectionCard title={`${pricingPath === 'wholesale' ? 'Wholesale' : 'Direct retail'} pricing breakdown`}>
+      {!visibleRows.length ? <EmptyState title={`No ${pricingPath === 'wholesale' ? 'wholesale' : 'direct retail'} pricing items yet`} /> : <ResponsiveTable><thead><tr><th>Label</th><th>Qty</th><th>Unit cost</th>{pricingPath === 'wholesale' ? <th>Wholesale price</th> : null}<th>Retail price</th><th>{pricingPath === 'wholesale' ? 'Wholesale profit' : 'Retail profit'}</th><th /></tr></thead><tbody>{visibleRows.map((row) => {
+        const quantity = Number(row.quantity || 0);
+        const unitCost = Number(row.unit_cost || 0);
+        const salePrice = pricingPath === 'wholesale' ? Number(row.wholesale_price || 0) : Number(row.sell_price || 0);
+        return <tr key={row.id}><td>{row.label}</td><td>{row.quantity}</td><td>{money(unitCost)}</td>{pricingPath === 'wholesale' ? <td>{money(row.wholesale_price)}</td> : null}<td>{money(row.sell_price)}</td><td>{money(quantity * (salePrice - unitCost))}</td><td><ActionButton tone="danger" size="sm" onClick={async () => { setBusy(true); try { await deletePricingItem(row.id); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete</ActionButton></td></tr>;
+      })}</tbody></ResponsiveTable>}
+    </SectionCard>
+  </>;
 }
 
 function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage }) {
@@ -854,8 +932,8 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
             <FormField label="Length" required help="Use the dimension unit configured in WooCommerce."><input type="number" min="0.01" step="0.01" value={form.length} onChange={(e) => setForm({ ...form, length: e.target.value })} /></FormField>
             <FormField label="Width" required><input type="number" min="0.01" step="0.01" value={form.width} onChange={(e) => setForm({ ...form, width: e.target.value })} /></FormField>
             <FormField label="Height" required><input type="number" min="0.01" step="0.01" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></FormField>
-            <FormField label="Short description"><textarea value={form.short_description} onChange={(e) => setForm({ ...form, short_description: e.target.value })} /></FormField>
-            <FormField label="Full description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></FormField>
+            <FormField label="Short description" help="Optional summary used by WooCommerce themes near the product price."><textarea value={form.short_description} onChange={(e) => setForm({ ...form, short_description: e.target.value })} /></FormField>
+            <FormField label="Product description" help="Full product description sent to the WooCommerce product Description field."><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></FormField>
             <FormField label="Variations"><label className="mockup-check"><input type="checkbox" checked={form.create_variations} onChange={(e) => setForm({ ...form, create_variations: e.target.checked })} /> Create and update Color × Size × Logo variations</label></FormField>
           </FieldGrid>
 

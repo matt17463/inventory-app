@@ -227,10 +227,17 @@ create table if not exists public.mockup_pricing_items (
   label text not null,
   pricing_type text not null default 'per_item'
     check (pricing_type in ('per_item', 'flat', 'percentage')),
+  pricing_path text not null default 'direct_retail'
+    check (pricing_path in ('direct_retail', 'wholesale')),
   quantity numeric(12,3) not null default 1,
   unit_cost numeric(12,4) not null default 0,
+  wholesale_price numeric(12,4),
   markup_percent numeric(9,4) not null default 0,
   sell_price numeric(12,4) not null default 0,
+  check (
+    (pricing_path = 'direct_retail' and wholesale_price is null)
+    or (pricing_path = 'wholesale' and wholesale_price is not null and wholesale_price >= 0)
+  ),
   metadata jsonb not null default '{}'::jsonb,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),

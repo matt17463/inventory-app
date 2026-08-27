@@ -177,6 +177,27 @@ test('server exact compositor preserves dimensions and creates caption space', a
   assert.ok(captioned.height > clean.height);
 });
 
+test('placement geometry is identical before and after adding a caption', async () => {
+  const sharp = (await import('sharp')).default;
+  const { renderExactMockup } = await import('../../netlify/functions/_shared/exactMockupRenderer.js');
+  const blank = await sharp({ create: { width: 500, height: 600, channels: 4, background: '#303030' } }).png().toBuffer();
+  const artwork = await sharp({ create: { width: 180, height: 90, channels: 4, background: '#ffffff' } }).png().toBuffer();
+  const placement = { width_pct: 37, x_pct: 42, y_pct: 39, rotation_degrees: 7, shadow_strength: 0, perspective_config: { preserve_white_ink: true } };
+  const clean = await renderExactMockup({ blankBytes: blank, artworkBytes: artwork, placement });
+  const captioned = await renderExactMockup({ blankBytes: blank, artworkBytes: artwork, placement, caption: { text: 'Same placement', size: 28, padding: 20 } });
+  const cleanPixels = await sharp(clean.data).raw().toBuffer();
+  const captionProductPixels = await sharp(captioned.data).extract({ left: 0, top: 0, width: clean.width, height: clean.height }).raw().toBuffer();
+  assert.deepEqual(captionProductPixels, cleanPixels);
+
+  const studio = await read('src/MockupStudio.jsx');
+  const css = await read('src/MockupStudio.css');
+  assert.match(studio, /mockup-placement-canvas/);
+  assert.match(studio, /blankAsset=\{blank\}/);
+  assert.match(css, /\.mockup-placement-canvas \{ position: relative; width: 100%; overflow: hidden; \}/);
+  assert.match(css, /\.mockup-output-card > img \{ display: block; width: 100%; height: auto;/);
+  assert.doesNotMatch(css, /\.mockup-generation-card \.mockup-placement-preview > img:first-child/);
+});
+
 test('server exact compositor bounds large 300-DPI sources before compositing', async () => {
   const sharp = (await import('sharp')).default;
   const { renderExactMockup } = await import('../../netlify/functions/_shared/exactMockupRenderer.js');
@@ -332,6 +353,26 @@ test('legacy variation image mappings survive punctuation normalization', async 
   assert.match(studio, /variation_image_map: canonicalVariationImageMap/);
   assert.match(studio, /excluded_variation_pairs: canonicalExcludedVariationPairs/);
   assert.match(studio, /replace\(\/&\/g, ' and '\)/);
+});
+
+test('WooCommerce product descriptions and separate pricing paths are supported', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const api = await read('src/lib/mockupStudioApi.js');
+  const publish = await read('netlify/functions/mockup-publish-woocommerce.js');
+  const migration = await read('deployment/sql/36_MOCKUP_STUDIO_PLACEMENT_PRICING.sql');
+  const verify = await read('deployment/sql/37_VERIFY_MOCKUP_STUDIO_PLACEMENT_PRICING.sql');
+  assert.match(studio, /label="Product description"/);
+  assert.match(studio, /Direct Retail/);
+  assert.match(studio, /Wholesale price/);
+  assert.match(studio, /Retail price/);
+  assert.match(api, /pricing_path: pricingPath/);
+  assert.match(api, /wholesale_price: pricingPath === 'wholesale'/);
+  assert.match(publish, /description: String\(config\.description \|\| ''\)/);
+  assert.match(migration, /add column if not exists pricing_path/i);
+  assert.match(migration, /add column if not exists wholesale_price/i);
+  assert.match(migration, /pricing_path in \('direct_retail', 'wholesale'\)/i);
+  assert.match(verify, /pricing_path_ready/);
+  assert.match(verify, /existing_rows_valid/);
 });
 
 test('WooCommerce reads retry transient connection failures without duplicating ambiguous writes', async () => {
