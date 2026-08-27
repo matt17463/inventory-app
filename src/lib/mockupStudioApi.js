@@ -723,16 +723,22 @@ export async function createMockupReviewLink(projectId, expiresInDays = 14) {
 }
 
 export async function savePricingItem(values) {
+  const pricingPath = values.pricing_path === 'wholesale' ? 'wholesale' : 'direct_retail';
   const payload = {
     project_id: values.project_id,
-    label: values.label,
+    label: String(values.label || '').trim(),
     pricing_type: values.pricing_type || 'per_item',
+    pricing_path: pricingPath,
     quantity: Number(values.quantity || 1),
     unit_cost: Number(values.unit_cost || 0),
-    markup_percent: Number(values.markup_percent || 0),
+    wholesale_price: pricingPath === 'wholesale' ? Number(values.wholesale_price || 0) : null,
+    markup_percent: 0,
     sell_price: Number(values.sell_price || 0),
     sort_order: Number(values.sort_order || 0),
   };
+  if (!payload.label) throw new Error('Enter a pricing label.');
+  if (!(payload.quantity > 0)) throw new Error('Enter a quantity greater than zero.');
+  if (payload.unit_cost < 0 || payload.sell_price < 0 || (pricingPath === 'wholesale' && payload.wholesale_price < 0)) throw new Error('Pricing values cannot be negative.');
   const query = values.id
     ? supabase.from('mockup_pricing_items').update(payload).eq('id', values.id)
     : supabase.from('mockup_pricing_items').insert(payload);
