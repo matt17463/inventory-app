@@ -402,7 +402,7 @@ export async function handler(event) {
     if (projectError) throw projectError;
     if (outputsError) throw outputsError;
     if (!outputs?.length) throw new Error('Select at least one mockup output for the store.');
-    const staleCaptions = outputs.filter((output) => output.metadata?.caption_render_state === 'stale');
+    const staleCaptions = outputs.filter((output) => output.output_kind === 'captioned' && output.metadata?.caption_render_state === 'stale');
     if (staleCaptions.length) throw new Error(`Regenerate ${staleCaptions.length} selected captioned mockup${staleCaptions.length === 1 ? '' : 's'} before exporting. Caption settings changed after the image was rendered.`);
 
     const categoryIds = numericIdList(config.category_ids);
