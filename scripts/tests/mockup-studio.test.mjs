@@ -313,6 +313,27 @@ test('unwanted Color and Logo combinations are excluded from WooCommerce variati
   assert.match(fn, /status: 'private'/);
 });
 
+test('legacy variation image mappings survive punctuation normalization', async () => {
+  const {
+    canonicalVariationImageMap,
+    canonicalExcludedVariationPairs,
+  } = await import('../../netlify/functions/mockup-publish-woocommerce.js');
+  const legacyKey = JSON.stringify(['Grey', 'EPO Orcas Black & White (1)']);
+  const canonicalKey = JSON.stringify(['grey', 'epo orcas black and white 1']);
+
+  assert.deepEqual(
+    canonicalVariationImageMap({ [legacyKey]: 'mockup-output-1' }),
+    { [canonicalKey]: 'mockup-output-1' },
+  );
+  assert.deepEqual(canonicalExcludedVariationPairs([legacyKey]), [canonicalKey]);
+
+  const studio = await read('src/MockupStudio.jsx');
+  assert.match(studio, /function canonicalSavedVariationKey/);
+  assert.match(studio, /variation_image_map: canonicalVariationImageMap/);
+  assert.match(studio, /excluded_variation_pairs: canonicalExcludedVariationPairs/);
+  assert.match(studio, /replace\(\/&\/g, ' and '\)/);
+});
+
 test('WooCommerce reads retry transient connection failures without duplicating ambiguous writes', async () => {
   const utils = await read('netlify/functions/_shared/mockupUtils.js');
   assert.match(utils, /UND_ERR_CONNECT_TIMEOUT/);

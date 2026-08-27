@@ -23,6 +23,32 @@ function imageMapKey(color, logo) {
   return JSON.stringify([normalized(color), normalized(logo)]);
 }
 
+function canonicalSavedPairKey(value) {
+  try {
+    const parsed = JSON.parse(String(value || ''));
+    if (Array.isArray(parsed) && parsed.length >= 2) return imageMapKey(parsed[0], parsed[1]);
+  } catch { /* preserve an invalid legacy key so normal validation can report it */ }
+  return String(value || '');
+}
+
+export function canonicalVariationImageMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const canonical = {};
+  for (const [savedKey, outputId] of Object.entries(value)) {
+    const key = canonicalSavedPairKey(savedKey);
+    if (!key || !outputId) continue;
+    // Prefer a key already saved in canonical form over an older UI key when
+    // both normalize to the same Color/Logo combination.
+    if (!canonical[key] || savedKey === key) canonical[key] = String(outputId);
+  }
+  return canonical;
+}
+
+export function canonicalExcludedVariationPairs(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(canonicalSavedPairKey).filter(Boolean))];
+}
+
 function findAttribute(discovered, slugs, names = []) {
   const wantedSlugs = slugs.map(normalized);
   const wantedNames = names.map(normalized);
@@ -123,8 +149,8 @@ function variationRows(parent, config, productId, imageIdByOutput) {
   const sizes = parent.size?.options?.length ? parent.size.options : [null];
   const logos = parent.logo?.options?.length ? parent.logo.options : [null];
   const rows = [];
-  const outputMap = config.variation_image_map && typeof config.variation_image_map === 'object' ? config.variation_image_map : {};
-  const excludedPairs = new Set(Array.isArray(config.excluded_variation_pairs) ? config.excluded_variation_pairs.map(String) : []);
+  const outputMap = canonicalVariationImageMap(config.variation_image_map);
+  const excludedPairs = new Set(canonicalExcludedVariationPairs(config.excluded_variation_pairs));
   const fallbackImageId = imageIdByOutput.values().next().value || null;
   const skuBase = skuPart(config.sku || `MS-${productId}`, `MS${productId}`);
 
@@ -348,6 +374,8 @@ export async function handler(event) {
     const body = parseJsonBody(event);
     const projectId = String(body.project_id || '');
     const config = { ...(body.config || {}), project_id: projectId };
+    config.variation_image_map = canonicalVariationImageMap(config.variation_image_map);
+    config.excluded_variation_pairs = canonicalExcludedVariationPairs(config.excluded_variation_pairs);
     if (!projectId) throw new Error('Missing mockup project ID.');
 
     let exportRow = null;
