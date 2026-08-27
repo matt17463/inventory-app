@@ -13,7 +13,10 @@
   schedule = "*/15 * * * *"
 
 [functions."mockup-generate-background"]
-  background = true
+background = true
+
+[functions."mockup-generate-exact-background"]
+background = true
 
 [functions."mockup-publish-woocommerce-background"]
   background = true

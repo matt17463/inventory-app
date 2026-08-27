@@ -43,24 +43,21 @@ export async function handler(event) {
     const { data: output, error: outputError } = await supabase.from('mockup_outputs').select('id,project_id').eq('id', body.output_id).eq('project_id', project.id).single();
     if (outputError || !output) throw new Error('The selected mockup was not found in this review.');
 
-    const { error: reviewError } = await supabase.from('mockup_reviews').insert({
-      project_id: project.id,
-      output_id: output.id,
-      review_token_id: tokenRow.id,
-      decision,
-      reviewer_name: String(body.reviewer_name || '').trim() || null,
-      reviewer_email: String(body.reviewer_email || '').trim() || null,
-      notes: String(body.notes || '').trim() || null,
-      metadata: { user_agent: event.headers?.['user-agent'] || null },
+    const { error: reviewError } = await supabase.rpc('sc_mockup_apply_customer_review', {
+      p_token_id: tokenRow.id,
+      p_project_id: project.id,
+      p_output_id: output.id,
+      p_decision: decision,
+      p_reviewer_name: String(body.reviewer_name || '').trim(),
+      p_reviewer_email: String(body.reviewer_email || '').trim(),
+      p_notes: String(body.notes || '').trim(),
+      p_metadata: { user_agent: event.headers?.['user-agent'] || null },
     });
     if (reviewError) throw reviewError;
-
-    const approved = decision === 'approved';
-    await supabase.from('mockup_outputs').update({ approval_status: approved ? 'customer_approved' : decision, approved_at: approved ? new Date().toISOString() : null, approved_by: approved ? (String(body.reviewer_email || body.reviewer_name || 'customer')) : null }).eq('id', output.id);
-    await supabase.from('mockup_projects').update({ status: approved ? 'approved' : (decision === 'changes_requested' ? 'changes_requested' : 'review') }).eq('id', project.id);
-    await supabase.from('mockup_review_tokens').update({ status: approved ? 'used' : 'active', last_accessed_at: new Date().toISOString() }).eq('id', tokenRow.id);
     return jsonResponse(200, { success: true, decision }, event);
   } catch (error) {
-    return jsonResponse(400, { success: false, error: error.message || 'Mockup review failed.' }, event);
+    console.error('Mockup customer review failed:', error);
+    const expected = /invalid|expired|no longer active|not found|choose approve|selected mockup/i.test(String(error?.message || ''));
+    return jsonResponse(expected ? 400 : 500, { success: false, error: error.message || 'Mockup review failed.' }, event);
   }
 }

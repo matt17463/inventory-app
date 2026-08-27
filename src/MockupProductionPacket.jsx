@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMockupProjectBundle, saveProductionPacket, signedUrlsForAssets, updateMockupProject } from './lib/mockupStudioApi';
+import { getMockupProjectBundle, saveProductionPacket, signedUrlsForAssets } from './lib/mockupStudioApi';
 import './MockupStudio.css';
 
 function downloadText(text, name, type) {
@@ -54,7 +54,7 @@ export default function MockupProductionPacket() {
       <header>
         <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" />
         <div><p>Mockup Studio Production Packet</p><h1>{bundle.project.project_name}</h1><span>{bundle.project.customer_name || 'Internal project'} · {bundle.project.campaign_name || 'No campaign'}</span></div>
-        <div className="mockup-packet-actions"><button type="button" onClick={() => window.print()}>Print / Save PDF</button><button type="button" onClick={exportCsv}>Download Placement CSV</button><button type="button" onClick={() => downloadText(JSON.stringify(packetData, null, 2), `${bundle.project.project_name}-production.json`, 'application/json')}>Download JSON</button><button type="button" onClick={async () => { try { const packet = await saveProductionPacket(projectId, packetData); await updateMockupProject(projectId, { status: 'production_ready' }); setMessage(`Production packet ${packet.packet_number} saved.`); } catch (error) { setMessage(error.message); } }}>Mark Production Ready</button></div>
+        <div className="mockup-packet-actions"><button type="button" onClick={() => window.print()}>Print / Save PDF</button><button type="button" onClick={exportCsv}>Download Placement CSV</button><button type="button" onClick={() => downloadText(JSON.stringify(packetData, null, 2), `${bundle.project.project_name}-production.json`, 'application/json')}>Download JSON</button><button type="button" onClick={async () => { try { const packet = await saveProductionPacket(projectId, packetData); setBundle((current) => ({ ...current, project: { ...current.project, status: 'production_ready' }, packets: [packet, ...(current.packets || [])] })); setMessage(`Production packet ${packet.packet_number} saved and validated.`); } catch (error) { setMessage(error.message); } }}>Validate & Mark Production Ready</button></div>
       </header>
       {message ? <p className="message">{message}</p> : null}
       <section className="mockup-packet-summary"><div><strong>Status</strong><span>{bundle.project.status}</span></div><div><strong>Decoration placements</strong><span>{bundle.placements.length}</span></div><div><strong>Selected mockups</strong><span>{selected.length}</span></div><div><strong>Created</strong><span>{new Date().toLocaleDateString()}</span></div></section>

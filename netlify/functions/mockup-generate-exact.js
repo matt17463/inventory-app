@@ -30,9 +30,17 @@ export async function handler(event) {
   let location = null;
   try {
     const body = parseJsonBody(event);
-    const projectId = String(body.project_id || '');
-    const placementId = String(body.placement_id || '');
+    jobId = String(body.generation_job_id || '');
+    let projectId = String(body.project_id || '');
+    let placementId = String(body.placement_id || '');
     const captionSettings = caption(body.caption);
+    if (jobId) {
+      const { data: queuedJob, error: queuedJobError } = await auth.supabase.from('mockup_generation_jobs').select('*').eq('id', jobId).maybeSingle();
+      if (queuedJobError) throw queuedJobError;
+      if (!queuedJob || queuedJob.generation_mode !== 'exact_composite') throw new Error('The queued Exact Clean job could not be found.');
+      projectId = queuedJob.project_id;
+      placementId = queuedJob.placement_id;
+    }
     if (!projectId || !placementId) throw new Error('Project and placement are required.');
 
     const [{ data: project, error: projectError }, { data: placement, error: placementError }] = await Promise.all([
@@ -48,13 +56,21 @@ export async function handler(event) {
     if (blankError) throw blankError;
     if (artworkError) throw artworkError;
 
-    const job = await auth.supabase.from('mockup_generation_jobs').insert({
-      project_id: projectId, placement_id: placementId, generation_mode: 'exact_composite',
-      status: 'processing', model_name: 'server-sharp', requested_variants: 1,
-      started_at: new Date().toISOString(), request_metadata: { renderer: 'exact_server_sharp', cors_independent: true },
-    }).select('*').single();
-    if (job.error) throw job.error;
-    jobId = job.data.id;
+    if (jobId) {
+      const { error: startError } = await auth.supabase.from('mockup_generation_jobs').update({
+        status: 'processing', model_name: 'server-sharp', started_at: new Date().toISOString(), error_message: null,
+        request_metadata: { renderer: 'exact_server_sharp', cors_independent: true, background: true },
+      }).eq('id', jobId);
+      if (startError) throw startError;
+    } else {
+      const job = await auth.supabase.from('mockup_generation_jobs').insert({
+        project_id: projectId, placement_id: placementId, generation_mode: 'exact_composite',
+        status: 'processing', model_name: 'server-sharp', requested_variants: 1,
+        started_at: new Date().toISOString(), request_metadata: { renderer: 'exact_server_sharp', cors_independent: true, background: false },
+      }).select('*').single();
+      if (job.error) throw job.error;
+      jobId = job.data.id;
+    }
 
     const [blankFile, artworkFile] = await Promise.all([
       loadMockupAsset(auth.supabase, blank), loadMockupAsset(auth.supabase, artwork),
@@ -74,7 +90,7 @@ export async function handler(event) {
       caption_size: Number(captionSettings?.size || 36), caption_color: captionSettings?.color || '#111827',
       caption_background: captionSettings?.background || '#ffffff', caption_alignment: captionSettings?.alignment || 'center',
       caption_padding: Number(captionSettings?.padding || 32),
-      metadata: { renderer: 'exact_server_sharp', exact_artwork: true, cors_independent: true },
+      metadata: { renderer: 'exact_server_sharp', exact_artwork: true, cors_independent: true, caption_render_state: 'current', blank_asset_id: blank.id, artwork_asset_id: artwork.id },
     }).select('*').single();
     if (saved.error) throw saved.error;
     await auth.supabase.from('mockup_generation_jobs').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', jobId);
