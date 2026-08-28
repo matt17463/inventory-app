@@ -3631,3 +3631,4 @@ tr.is-overdue { background: #fff8f8; }
 .supplier-review-toolbar select {
   min-width: 150px;
 }
+.pbm-heading,.pbm-search,.pbm-picker-grid,.pbm-preview{display:flex;gap:1rem;align-items:flex-start;justify-content:space-between}.pbm-search{margin:1rem 0}.pbm-search input{flex:1}.pbm-picker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:1rem 0}.pbm-picker{display:grid;gap:.55rem;min-width:0}.pbm-picker label{display:grid;gap:.35rem}.pbm-picker select{width:100%;min-height:10rem}.pbm-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:1rem}.pbm-preview>div{display:grid;gap:.25rem;padding:1rem;border:1px solid var(--border-color,#d7deea);border-radius:.75rem}.pbm-preview strong{font-size:1.4rem}.pbm-preview span{color:var(--muted,#667085)}@media(max-width:800px){.pbm-picker-grid,.pbm-preview{grid-template-columns:1fr}.pbm-heading,.pbm-search{display:grid}}

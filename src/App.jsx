@@ -7,6 +7,7 @@ import AuthGate from './AuthGate';
 const ActivityPage = lazy(() => import('./ActivityPage'));
 const AddItemToBin = lazy(() => import('./AddItemToBin'));
 const ApprovalAutomation = lazy(() => import('./ApprovalAutomation'));
+const AssetStorageHealth = lazy(() => import('./AssetStorageHealth'));
 const ArtworkPluginBridge = lazy(() => import('./ArtworkPluginBridge'));
 const ArtworkRequests = lazy(() => import('./ArtworkRequests'));
 const AuditMode = lazy(() => import('./AuditMode'));
@@ -50,6 +51,7 @@ const PricingRules = lazy(() => import('./PricingRules'));
 const ProductDataHealth = lazy(() => import('./ProductDataHealth'));
 const ProductIntegrityCenter = lazy(() => import('./ProductIntegrityCenter'));
 const ProductMappingRepair = lazy(() => import('./ProductMappingRepair'));
+const ProductBlankMappings = lazy(() => import('./ProductBlankMappings'));
 const ProductionBoard = lazy(() => import('./ProductionBoard'));
 const ProductionCalendar = lazy(() => import('./ProductionCalendar'));
 const ProductionEstimator = lazy(() => import('./ProductionEstimator'));
@@ -143,6 +145,7 @@ function EmployeeRoutes() {
       <Route path="/color-aliases" element={<ColorAliasReview />} />
       <Route path="/color-pairings" element={<ColorAliasReview />} />
       <Route path="/mapping-repair" element={<ProductMappingRepair />} />
+      <Route path="/product-blank-mappings" element={<ProductBlankMappings />} />
       <Route path="/bulk-pairing-repair" element={<BulkPairingRepair />} />
       <Route path="/non-inventory-rules" element={<NonInventoryRules />} />
       <Route path="/exception-center" element={<ExceptionCenter />} />
@@ -164,6 +167,7 @@ function EmployeeRoutes() {
       <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
       <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
       <Route path="/deployment-health" element={<DeploymentHealth />} />
+      <Route path="/asset-storage-health" element={<AssetStorageHealth />} />
       <Route path="/google-calendar" element={<GoogleCalendarIntegration />} />
       <Route path="/mockup-studio" element={<MockupStudio />} />
       <Route path="/mockup-studio/:projectId/production-packet" element={<MockupProductionPacket />} />
