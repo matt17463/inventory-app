@@ -2,6 +2,12 @@ import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { getPendingStockBins } from './pullSheetBinAssignmentApi';
 import {
+  normalizePurchasingDemandSourceRow,
+  purchasingDemandSourceQuantity,
+  representedPurchasingJobItemIds,
+  unrepresentedPurchasingSources,
+} from './purchasingDemandSources';
+import {
   addPullSheetLineGuarded,
   bulkUpdateBlankProductsGuarded,
   createBlankProductGuarded,
@@ -1590,33 +1596,18 @@ function purchasingSearchText(row) {
   ].filter(Boolean).join(' ');
 }
 
-function normalizePurchasingDemandSourceRow(row) {
-  let sources = row?.sources || [];
-
-  if (typeof sources === 'string') {
-    try {
-      sources = JSON.parse(sources);
-    } catch (_err) {
-      sources = [];
-    }
-  }
-
-  if (!Array.isArray(sources)) sources = [];
-
-  return {
-    blank_product_id: row?.blank_product_id,
-    demand_source_count: Number(row?.source_count || 0),
-    demand_total_quantity: Number(row?.total_quantity || 0),
-    demand_order_numbers: row?.order_numbers || '',
-    demand_pullsheet_numbers: row?.pullsheet_numbers || '',
-    demand_sources: sources,
-  };
-}
-
 async function getPurchasingDemandSourceMap() {
-  const { data, error } = await supabase
-    .from('purchasing_demand_sources_v1')
+  let { data, error } = await supabase
+    .from('sc_purchasing_demand_sources_v2')
     .select('*');
+
+  if (error) {
+    const fallback = await supabase
+      .from('purchasing_demand_sources_v1')
+      .select('*');
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     // The purchasing page still works before the SQL patch is installed;
@@ -1968,10 +1959,7 @@ async function getNonInventoryPurchasingContext() {
 }
 
 function purchasingSourceQuantity(source) {
-  return Math.max(
-    0,
-    Number(source?.quantity ?? source?.reserved_quantity ?? 0)
-  );
+  return purchasingDemandSourceQuantity(source);
 }
 
 function sourceIsExcluded(source, excludedJobItemIds) {
@@ -2062,30 +2050,23 @@ function mergePurchasingLineOverrides(
         0
       );
 
-    const representedJobItemIds = new Set(
+    const representedJobItemIds = representedPurchasingJobItemIds(
       includedSourceRecordSources
-        .map((source) => source?.job_item_id)
-        .filter((value) => value !== null && value !== undefined)
-        .map(String)
     );
 
-    const additionalPendingSources = (
-      pending?.pending_stock_sources || []
-    ).filter((source) => (
-      !source?.job_item_id
-      || !representedJobItemIds.has(String(source.job_item_id))
-    ));
+    const additionalPendingSources = unrepresentedPurchasingSources(
+      pending?.pending_stock_sources || [],
+      representedJobItemIds
+    );
     const additionalPendingQuantity = additionalPendingSources.reduce(
       (sum, source) => sum + purchasingSourceQuantity(source),
       0
     );
 
-    const additionalNonInventorySources = (
-      nonInventory?.non_inventory_purchase_sources || []
-    ).filter((source) => (
-      !source?.job_item_id
-      || !representedJobItemIds.has(String(source.job_item_id))
-    ));
+    const additionalNonInventorySources = unrepresentedPurchasingSources(
+      nonInventory?.non_inventory_purchase_sources || [],
+      representedJobItemIds
+    );
     const additionalNonInventoryQuantity =
       additionalNonInventorySources.reduce(
         (sum, source) => sum + purchasingSourceQuantity(source),
