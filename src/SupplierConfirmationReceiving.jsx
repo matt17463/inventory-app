@@ -40,6 +40,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   const [rowFilter, setRowFilter] = useState('');
   const [reviewOnly, setReviewOnly] = useState(false);
   const [bulkChoice, setBulkChoice] = useState({ bin_id: '', color_id: '', size_id: '' });
+  const [receiveRequestKey, setReceiveRequestKey] = useState(() => idempotencyKey());
 
   async function loadHistory({ quiet = false } = {}) {
     try {
@@ -94,6 +95,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
       const result = await parseSupplierConfirmation(file);
       const parsed = result.confirmation;
       setConfirmation(parsed);
+      setReceiveRequestKey(idempotencyKey());
       setRows((parsed.lines || []).map((row) => ({
         ...row,
         selected: Number(row.remaining_quantity) > 0,
@@ -158,10 +160,11 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
         prepared.push({ ...row, blank_product_id: String(blankId), blank_created: created });
       }
       const result = await supplierReceivingAction({
-        action: 'commit', idempotency_key: idempotencyKey(), confirmation, rows: prepared, notes,
+        action: 'commit', idempotency_key: receiveRequestKey, confirmation, rows: prepared, notes,
       });
       const received = Number(result.receipt?.received_units || 0);
-      setMessage(`${received} unit(s) received into inventory.${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}${result.errors?.length ? ` Review: ${result.errors.join('; ')}` : ''}`);
+      setReceiveRequestKey(idempotencyKey());
+      setMessage(`${result.duplicate_request ? 'This receiving request was already processed. ' : ''}${received} unit(s) received into inventory.${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}${result.errors?.length ? ` Review: ${result.errors.join('; ')}` : ''}${result.warnings?.length ? ` Mapping warnings: ${result.warnings.join('; ')}` : ''}`);
       await loadHistory({ quiet: true });
       if (createdLookups.length && refreshLookups) await refreshLookups();
       if (file) await parseFile();
@@ -204,7 +207,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
         </div>
       </div>
       <div className="supplier-upload-row">
-        <label className="sc-field"><span>Order confirmation PDF</span><input type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+        <label className="sc-field"><span>Order confirmation PDF</span><input type="file" accept="application/pdf,.pdf" onChange={(event) => { setFile(event.target.files?.[0] || null); setReceiveRequestKey(idempotencyKey()); }} /></label>
         <button className="sc-btn sc-btn-primary" onClick={parseFile} disabled={!file || Boolean(busy)}>{busy === 'parse' ? 'Reading PDF…' : 'Read Confirmation'}</button>
       </div>
       {message && <div className="sc-alert">{message}</div>}

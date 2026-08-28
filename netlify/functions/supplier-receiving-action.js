@@ -1,6 +1,7 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { supplierMatchKey } from './_shared/supplierConfirmationParser.js';
 import { signedOperationalUrl } from './_shared/operationalStorage.js';
+import { requireSupplierReceivingContract } from './_shared/supplierReceivingContract.js';
 
 const FUNCTION_NAME = 'supplier-receiving-action';
 
@@ -13,8 +14,51 @@ function optionalUnitCost(value) {
   return parsed;
 }
 
+function schemaUnavailable(error) {
+  return /does not exist|schema cache|could not find/i.test(error?.message || '');
+}
+
+async function findNaturalKey(supabase, table, filters, label = table) {
+  let query = supabase.from(table).select('*');
+  for (const [column, value] of Object.entries(filters)) query = query.eq(column, value);
+  const result = await query.limit(2);
+  if (result.error) throw result.error;
+  if ((result.data || []).length > 1) {
+    throw new Error(`${label} has duplicate database records for its natural key. Resolve the duplicates in Operations Integrity before retrying.`);
+  }
+  return result.data?.[0] || null;
+}
+
+async function saveNaturalKey(supabase, {
+  table, filters, insertPayload, updatePayload = insertPayload, label = table, optional = false,
+}) {
+  try {
+    const existing = await findNaturalKey(supabase, table, filters, label);
+    if (existing) {
+      const updated = await supabase.from(table).update(updatePayload).eq('id', existing.id).select('*').single();
+      if (updated.error) throw updated.error;
+      return updated.data;
+    }
+
+    const inserted = await supabase.from(table).insert(insertPayload).select('*').single();
+    if (!inserted.error) return inserted.data;
+    if (inserted.error.code !== '23505') throw inserted.error;
+
+    // Another request may have inserted the same natural key after our read.
+    // Re-read that record and apply the current values instead of relying on
+    // PostgREST to infer a particular UNIQUE constraint for ON CONFLICT.
+    const winner = await findNaturalKey(supabase, table, filters, label);
+    if (!winner) throw inserted.error;
+    const updated = await supabase.from(table).update(updatePayload).eq('id', winner.id).select('*').single();
+    if (updated.error) throw updated.error;
+    return updated.data;
+  } catch (error) {
+    if (optional && schemaUnavailable(error)) return null;
+    throw error;
+  }
+}
+
 async function trackIntegrationJob(supabase, payload) {
-  const unavailable = (error) => /does not exist|schema cache|could not find/i.test(error?.message || '');
   const idempotencyKey = clean(payload.idempotency_key);
 
   if (idempotencyKey) {
@@ -24,7 +68,7 @@ async function trackIntegrationJob(supabase, payload) {
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
     if (existing.error) {
-      if (unavailable(existing.error)) return null;
+      if (schemaUnavailable(existing.error)) return null;
       throw existing.error;
     }
     if (existing.data?.id) return existing.data.id;
@@ -32,7 +76,7 @@ async function trackIntegrationJob(supabase, payload) {
 
   const inserted = await supabase.from('sc_integration_jobs').insert(payload).select('id').maybeSingle();
   if (!inserted.error) return inserted.data?.id || null;
-  if (unavailable(inserted.error)) return null;
+  if (schemaUnavailable(inserted.error)) return null;
 
   // The partial unique index can reject a simultaneous retry, but PostgREST
   // cannot target that partial index using onConflict. Re-read the winner.
@@ -43,7 +87,7 @@ async function trackIntegrationJob(supabase, payload) {
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
     if (!winner.error && winner.data?.id) return winner.data.id;
-    if (winner.error && !unavailable(winner.error)) throw winner.error;
+    if (winner.error && !schemaUnavailable(winner.error)) throw winner.error;
   }
 
   throw inserted.error;
@@ -56,13 +100,19 @@ async function rememberColorAlias(supabase, confirmation, row, userId) {
   const color = await supabase.from('sc_active_colors').select('id,name').eq('id', canonicalId).maybeSingle();
   if (color.error) throw color.error;
   if (!color.data) throw new Error(`${row.supplier_sku}: choose an active WooCommerce color.`);
-  const saved = await supabase.from('sc_import_color_aliases').upsert({
+  const sourceSystem = clean(confirmation.supplier_key);
+  const sourceKey = supplierMatchKey(sourceValue);
+  const values = {
     source_system: clean(confirmation.supplier_key), source_value: sourceValue,
-    source_key: supplierMatchKey(sourceValue), canonical_color_id_text: canonicalId,
+    source_key: sourceKey, canonical_color_id_text: canonicalId,
     canonical_color_name: color.data.name, notes: `Remembered while receiving ${confirmation.supplier_name || confirmation.supplier_key}`,
-    created_by: userId, updated_at: new Date().toISOString(),
-  }, { onConflict: 'source_system,source_key' });
-  if (saved.error) throw saved.error;
+    updated_at: new Date().toISOString(),
+  };
+  await saveNaturalKey(supabase, {
+    table: 'sc_import_color_aliases', filters: { source_system: sourceSystem, source_key: sourceKey },
+    insertPayload: { ...values, created_by: userId }, updatePayload: values,
+    label: 'Supplier color alias', optional: true,
+  });
 }
 
 async function rememberProductIdentityAlias(supabase, confirmation, row, userId) {
@@ -70,16 +120,45 @@ async function rememberProductIdentityAlias(supabase, confirmation, row, userId)
   const blankProductId = clean(row.blank_product_id);
   if (!supplierSku || !blankProductId) return;
   const normalize = (value) => clean(value).toUpperCase().replace(/[^A-Z0-9]+/g, '');
-  const saved = await supabase.from('sc_product_identity_aliases').upsert({
-    source_system: clean(confirmation.supplier_key).toLowerCase(), alias_type: 'supplier_sku',
-    source_value: supplierSku, source_value_norm: normalize(supplierSku),
-    context_brand_norm: normalize(row.brand), context_style_norm: normalize(row.style),
+  const sourceSystem = clean(confirmation.supplier_key).toLowerCase();
+  const sourceValueNorm = normalize(supplierSku);
+  const contextBrandNorm = normalize(row.brand);
+  const contextStyleNorm = normalize(row.style);
+  const values = {
+    source_system: sourceSystem, alias_type: 'supplier_sku',
+    source_value: supplierSku, source_value_norm: sourceValueNorm,
+    context_brand_norm: contextBrandNorm, context_style_norm: contextStyleNorm,
     canonical_blank_product_id_text: blankProductId, canonical_label: clean(row.description) || supplierSku,
-    confidence: 100, status: 'active', created_by: userId, reviewed_by: userId,
+    confidence: 100, status: 'active', reviewed_by: userId,
     notes: `Remembered while receiving order ${clean(confirmation.order_number)}`,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'source_system,alias_type,source_value_norm,context_brand_norm,context_style_norm' });
-  if (saved.error && !/does not exist|schema cache|could not find/i.test(saved.error.message || '')) throw saved.error;
+  };
+  await saveNaturalKey(supabase, {
+    table: 'sc_product_identity_aliases',
+    filters: {
+      source_system: sourceSystem, alias_type: 'supplier_sku', source_value_norm: sourceValueNorm,
+      context_brand_norm: contextBrandNorm, context_style_norm: contextStyleNorm,
+    },
+    insertPayload: { ...values, created_by: userId }, updatePayload: values,
+    label: 'Supplier product identity alias', optional: true,
+  });
+}
+
+async function rememberSupplierItemMapping(supabase, confirmation, row, userId) {
+  const supplierKey = clean(confirmation.supplier_key);
+  const supplierSku = clean(row.supplier_sku);
+  if (!supplierKey || !supplierSku) return;
+  const values = {
+    supplier_key: supplierKey, supplier_sku: supplierSku,
+    blank_product_id_text: clean(row.blank_product_id), last_brand: clean(row.brand) || null,
+    last_style: clean(row.style) || null, last_color: clean(row.color) || null,
+    last_size: clean(row.size) || null, updated_at: new Date().toISOString(),
+  };
+  await saveNaturalKey(supabase, {
+    table: 'sc_supplier_item_mappings', filters: { supplier_key: supplierKey, supplier_sku: supplierSku },
+    insertPayload: { ...values, created_by: userId }, updatePayload: values,
+    label: 'Supplier item mapping',
+  });
 }
 
 function lookupCode(value) {
@@ -160,13 +239,8 @@ async function ensureSupplierLookups(supabase, body) {
   return { rows: resolvedRows, created_lookups: created };
 }
 
-async function requireTables(supabase) {
-  const probe = await supabase.from('sc_supplier_receiving_imports').select('id').limit(1);
-  if (probe.error) throw new Error('Supplier receiving SQL is not installed. Run deployment/sql/19_SUPPLIER_CONFIRMATION_RECEIVING.sql in Supabase, then retry.');
-}
-
 async function history(supabase) {
-  await requireTables(supabase);
+  await requireSupplierReceivingContract(supabase);
   const imports = await supabase.from('sc_supplier_receiving_imports').select('*').order('created_at', { ascending: false }).limit(50);
   if (imports.error) throw imports.error;
   const importIds = (imports.data || []).map((row) => row.id);
@@ -192,16 +266,17 @@ async function upsertImport(supabase, confirmation, userId) {
     document_mime_type: clean(confirmation.document_mime_type) || 'application/pdf',
     document_sha256: clean(confirmation.document_sha256) || null,
     ordered_lines: number(confirmation.total_lines), ordered_units: number(confirmation.total_units),
-    order_total: number(confirmation.subtotal), created_by: userId, updated_at: new Date().toISOString(),
+    order_total: number(confirmation.subtotal), updated_at: new Date().toISOString(),
   };
-  const result = await supabase.from('sc_supplier_receiving_imports').upsert(payload, { onConflict: 'supplier_key,order_number', ignoreDuplicates: false }).select('*').single();
-  if (result.error) throw result.error;
-  return result.data;
+  return saveNaturalKey(supabase, {
+    table: 'sc_supplier_receiving_imports',
+    filters: { supplier_key: payload.supplier_key, order_number: payload.order_number },
+    insertPayload: { ...payload, created_by: userId }, updatePayload: payload,
+    label: 'Supplier order import',
+  });
 }
 
 async function ensureImportLine(supabase, importId, row) {
-  const existing = await supabase.from('sc_supplier_receiving_lines').select('*').eq('import_id', importId).eq('supplier_line_key', row.supplier_line_key).maybeSingle();
-  if (existing.error) throw existing.error;
   const payload = {
     import_id: importId, supplier_line_key: clean(row.supplier_line_key), supplier_sku: clean(row.supplier_sku) || null,
     description: clean(row.description) || null, brand: clean(row.brand) || null, style: clean(row.style) || null,
@@ -209,14 +284,12 @@ async function ensureImportLine(supabase, importId, row) {
     ordered_quantity: number(row.ordered_quantity), unit_cost: optionalUnitCost(row.unit_cost), line_total: number(row.line_total),
     blank_product_id_text: clean(row.blank_product_id) || null, updated_at: new Date().toISOString(),
   };
-  if (existing.data) {
-    const updated = await supabase.from('sc_supplier_receiving_lines').update(payload).eq('id', existing.data.id).select('*').single();
-    if (updated.error) throw updated.error;
-    return updated.data;
-  }
-  const inserted = await supabase.from('sc_supplier_receiving_lines').insert({ ...payload, received_quantity: 0 }).select('*').single();
-  if (inserted.error) throw inserted.error;
-  return inserted.data;
+  return saveNaturalKey(supabase, {
+    table: 'sc_supplier_receiving_lines',
+    filters: { import_id: importId, supplier_line_key: payload.supplier_line_key },
+    insertPayload: { ...payload, received_quantity: 0 }, updatePayload: payload,
+    label: 'Supplier order line',
+  });
 }
 
 async function refreshImportTotals(supabase, importId) {
@@ -249,9 +322,8 @@ async function commitReceipt(supabase, body, userId) {
   if (!rows.length) throw new Error('No rows have a Receive Now quantity greater than zero.');
   const key = clean(body.idempotency_key);
   if (!key) throw new Error('The receiving request key is missing. Refresh and retry.');
-  const duplicate = await supabase.from('sc_supplier_receiving_receipts').select('*').eq('idempotency_key', key).maybeSingle();
-  if (duplicate.error) throw duplicate.error;
-  if (duplicate.data) return { receipt: duplicate.data, duplicate_request: true };
+  const duplicate = await findNaturalKey(supabase, 'sc_supplier_receiving_receipts', { idempotency_key: key }, 'Supplier receipt');
+  if (duplicate) return { receipt: duplicate, duplicate_request: true };
 
   const trackedJobId = await trackIntegrationJob(supabase, {
     job_type: 'supplier_receiving', source_system: clean(confirmation.supplier_key),
@@ -272,13 +344,18 @@ async function commitReceipt(supabase, body, userId) {
     prepared.push({ row, importLine, quantity });
   }
 
-  const receiptResult = await supabase.from('sc_supplier_receiving_receipts').insert({
+  let receiptResult = await supabase.from('sc_supplier_receiving_receipts').insert({
     import_id: receivingImport.id, idempotency_key: key, status: 'processing', notes: clean(body.notes) || null, created_by: userId,
   }).select('*').single();
+  if (receiptResult.error?.code === '23505') {
+    const winner = await findNaturalKey(supabase, 'sc_supplier_receiving_receipts', { idempotency_key: key }, 'Supplier receipt');
+    if (winner) return { receipt: winner, duplicate_request: true };
+  }
   if (receiptResult.error) throw receiptResult.error;
   const receipt = receiptResult.data;
   let completedUnits = 0;
   const errors = [];
+  const warnings = [];
 
   for (const item of prepared) {
     const receiptLineResult = await supabase.from('sc_supplier_receiving_receipt_lines').insert({
@@ -300,22 +377,33 @@ async function commitReceipt(supabase, body, userId) {
       errors.push(`${item.row.supplier_sku}: ${message}`);
       continue;
     }
-    await supabase.from('sc_supplier_receiving_receipt_lines').update({ status: 'completed' }).eq('id', receiptLine.id);
-    await supabase.from('sc_supplier_receiving_lines').update({
+    // The inventory RPC is the authoritative mutation. Count the units as
+    // received even if later bookkeeping needs integrity review.
+    completedUnits += item.quantity;
+    const completedLine = await supabase.from('sc_supplier_receiving_receipt_lines').update({ status: 'completed' }).eq('id', receiptLine.id);
+    if (completedLine.error) {
+      errors.push(`${item.row.supplier_sku}: inventory was received but its receipt line could not be finalized (${completedLine.error.message}). Do not retry; review this receipt in Operations Integrity.`);
+      continue;
+    }
+    const importLineUpdate = await supabase.from('sc_supplier_receiving_lines').update({
       received_quantity: number(item.importLine.received_quantity) + item.quantity,
       blank_product_id_text: clean(item.row.blank_product_id), updated_at: new Date().toISOString(),
     }).eq('id', item.importLine.id);
-    if (item.row.remember_mapping !== false && item.row.supplier_sku) {
-      await supabase.from('sc_supplier_item_mappings').upsert({
-        supplier_key: confirmation.supplier_key, supplier_sku: item.row.supplier_sku,
-        blank_product_id_text: clean(item.row.blank_product_id), last_brand: clean(item.row.brand) || null,
-        last_style: clean(item.row.style) || null, last_color: clean(item.row.color) || null,
-        last_size: clean(item.row.size) || null, created_by: userId, updated_at: new Date().toISOString(),
-      }, { onConflict: 'supplier_key,supplier_sku' });
+    if (importLineUpdate.error) {
+      errors.push(`${item.row.supplier_sku}: inventory was received but the order-line total could not be updated (${importLineUpdate.error.message}). Do not retry; review this receipt in Operations Integrity.`);
+      continue;
     }
-    if (item.row.remember_mapping !== false) await rememberColorAlias(supabase, confirmation, item.row, userId);
-    if (item.row.remember_mapping !== false) await rememberProductIdentityAlias(supabase, confirmation, item.row, userId);
-    completedUnits += item.quantity;
+    if (item.row.remember_mapping !== false) {
+      const rememberTasks = [
+        ['supplier SKU mapping', () => rememberSupplierItemMapping(supabase, confirmation, item.row, userId)],
+        ['supplier color pairing', () => rememberColorAlias(supabase, confirmation, item.row, userId)],
+        ['product identity alias', () => rememberProductIdentityAlias(supabase, confirmation, item.row, userId)],
+      ];
+      for (const [label, task] of rememberTasks) {
+        try { await task(); }
+        catch (error) { warnings.push(`${item.row.supplier_sku}: inventory was received, but the ${label} was not saved (${error.message}).`); }
+      }
+    }
   }
 
   const status = errors.length ? (completedUnits ? 'partial_error' : 'failed') : 'completed';
@@ -330,7 +418,7 @@ async function commitReceipt(supabase, body, userId) {
     last_error: errors.length ? errors.join('; ').slice(0, 4000) : null,
     completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }).eq('id', trackedJobId);
-  return { receipt: completed.data, receiving_import: updatedImport, errors };
+  return { receipt: completed.data, receiving_import: updatedImport, errors, warnings };
 }
 
 async function rollbackReceipt(supabase, body, userId) {
@@ -383,9 +471,12 @@ export async function handler(event) {
     let data;
     if (action === 'history') data = { history: await history(auth.supabase) };
     else if (action === 'ensure_lookups') data = await ensureSupplierLookups(auth.supabase, body);
-    else if (action === 'save_draft') data = await saveDraft(auth.supabase, body, auth.user.id);
-    else if (action === 'commit') data = await commitReceipt(auth.supabase, body, auth.user.id);
-    else if (action === 'rollback') data = await rollbackReceipt(auth.supabase, body, auth.user.id);
+    else if (['save_draft', 'commit', 'rollback'].includes(action)) {
+      await requireSupplierReceivingContract(auth.supabase);
+      if (action === 'save_draft') data = await saveDraft(auth.supabase, body, auth.user.id);
+      else if (action === 'commit') data = await commitReceipt(auth.supabase, body, auth.user.id);
+      else data = await rollbackReceipt(auth.supabase, body, auth.user.id);
+    }
     else if (action === 'document_url') {
       data = { url: await signedOperationalUrl(auth.supabase, {
         provider: clean(body.document_storage_provider) || (clean(body.document_storage_bucket) ? 'r2' : 'supabase'),
