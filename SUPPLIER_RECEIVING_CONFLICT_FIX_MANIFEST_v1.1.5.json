@@ -1,0 +1,13 @@
+{
+  "name": "Supplier Receiving Conflict Fix",
+  "version": "1.1.5",
+  "supersedes": "1.1.4",
+  "root_cause": "PostgREST could not infer the partial unique sc_integration_jobs idempotency index from a column-only onConflict request.",
+  "sql_required": false,
+  "environment_variables_required": [],
+  "behavior": [
+    "Reuse an existing integration job by idempotency key",
+    "Insert when no matching job exists",
+    "Recover safely from a concurrent unique violation"
+  ]
+}
