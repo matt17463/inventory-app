@@ -1,0 +1,27 @@
+{
+  "name": "Supplier Receiving Unit Cost Fix",
+  "version": "1.1.3",
+  "base_version": "1.1.2",
+  "database_migration": "deployment/sql/40_SUPPLIER_RECEIVING_UNIT_COST_SAFETY.sql",
+  "database_verification": "deployment/sql/41_VERIFY_SUPPLIER_RECEIVING_UNIT_COST_SAFETY.sql",
+  "environment_variables_required": [],
+  "files": [
+    "src/lib/unitCost.js",
+    "src/lib/inventoryApi.js",
+    "src/AddItemToBin.jsx",
+    "src/SupplierConfirmationReceiving.jsx",
+    "netlify/functions/supplier-receiving-action.js",
+    "scripts/tests/supplier-confirmation-parser.test.mjs",
+    "deployment/sql/40_SUPPLIER_RECEIVING_UNIT_COST_SAFETY.sql",
+    "deployment/sql/41_VERIFY_SUPPLIER_RECEIVING_UNIT_COST_SAFETY.sql",
+    "SUPPLIER_RECEIVING_UNIT_COST_FIX_DEPLOYMENT_v1.1.3.md",
+    "SUPPLIER_RECEIVING_UNIT_COST_FIX_MANIFEST_v1.1.3.json",
+    "package.json",
+    "package-lock.json"
+  ],
+  "verification": {
+    "targeted_test": "npm run test:supplier-receiving",
+    "full_check": "npm run check",
+    "status": "passed"
+  }
+}

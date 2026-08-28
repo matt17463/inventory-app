@@ -21,6 +21,10 @@ function missingReceivingFields(row) {
   if (!row.product_type_id && !row.style) missing.push('Style');
   if (!row.color_id) missing.push('Color');
   if (!row.size_id) missing.push('Size');
+  if (!row.blank_product_id && String(row.unit_cost ?? '').trim() === '') missing.push('Unit Cost');
+  if (String(row.unit_cost ?? '').trim() !== '' && (!Number.isFinite(Number(row.unit_cost)) || Number(row.unit_cost) < 0)) {
+    missing.push('Valid Unit Cost');
+  }
   return missing;
 }
 
@@ -168,9 +172,13 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
     }
   }
 
-  async function openDocument(documentPath) {
+  async function openDocument(entry) {
     try {
-      const result = await supplierReceivingAction({ action: 'document_url', document_path: documentPath });
+      const result = await supplierReceivingAction({
+        action: 'document_url', document_path: entry.document_path,
+        document_storage_provider: entry.document_storage_provider,
+        document_storage_bucket: entry.document_storage_bucket,
+      });
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (error) { setMessage(error.message); }
   }
@@ -267,7 +275,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
               <div><strong>{entry.supplier_name} — Order {entry.order_number}</strong><span className="sc-badge">{statusText(entry.status)}</span></div>
               <p>{entry.received_units} of {entry.ordered_units} units received · {new Date(entry.created_at).toLocaleString()}</p>
               <div className="supplier-history-actions">
-                {entry.document_path && <button className="sc-btn sc-btn-small" onClick={() => openDocument(entry.document_path)}>Open Original PDF</button>}
+                {entry.document_path && <button className="sc-btn sc-btn-small" onClick={() => openDocument(entry)}>Open Original PDF</button>}
                 {(entry.receipts || []).filter((receipt) => receipt.status !== 'rolled_back' && Number(receipt.received_units) > 0).map((receipt) => (
                   <button className="sc-btn sc-btn-danger sc-btn-small" key={receipt.id} disabled={Boolean(busy)} onClick={() => rollback(receipt)}>Rollback {receipt.received_units} units from {new Date(receipt.created_at).toLocaleDateString()}</button>
                 ))}

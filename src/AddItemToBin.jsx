@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import SupplierConfirmationReceiving from './SupplierConfirmationReceiving';
 import { createBlankProduct, updateBlankProduct } from './lib/inventoryApi';
+import { requireUnitCost } from './lib/unitCost';
 
 const lineTemplate = {
   brand_id: '',
@@ -256,6 +257,11 @@ export default function AddItemToBin() {
       return updateBlankAttributes(existingBySku, line, skuBase, name);
     }
 
+    const unitCost = requireUnitCost(
+      line.unit_cost,
+      line.supplier_sku || blankDescription(line) || 'this new blank product',
+    );
+
     const payload = {
       sku_base: skuBase,
       name,
@@ -263,6 +269,7 @@ export default function AddItemToBin() {
       product_type_id: dbId(line.product_type_id),
       color_id: dbId(line.color_id),
       size_id: dbId(line.size_id),
+      unit_cost: unitCost,
     };
 
     Object.keys(payload).forEach((key) => {

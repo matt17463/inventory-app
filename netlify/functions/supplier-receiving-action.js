@@ -1,11 +1,17 @@
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { supplierMatchKey } from './_shared/supplierConfirmationParser.js';
+import { signedOperationalUrl } from './_shared/operationalStorage.js';
 
 const FUNCTION_NAME = 'supplier-receiving-action';
-const BUCKET = 'sc-receiving-documents';
 
 function clean(value) { return String(value ?? '').trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+function optionalUnitCost(value) {
+  if (value == null || String(value).trim() === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error('Unit cost must be a number that is zero or greater.');
+  return parsed;
+}
 
 async function trackIntegrationJob(supabase, payload) {
   const result = payload.idempotency_key
@@ -151,7 +157,12 @@ async function upsertImport(supabase, confirmation, userId) {
     supplier_key: clean(confirmation.supplier_key), supplier_name: clean(confirmation.supplier_name),
     order_number: clean(confirmation.order_number), po_number: clean(confirmation.po_number) || null,
     order_date: clean(confirmation.order_date) || null, original_file_name: clean(confirmation.original_file_name) || null,
-    document_path: clean(confirmation.document_path) || null, document_sha256: clean(confirmation.document_sha256) || null,
+    document_storage_provider: clean(confirmation.document_storage_provider) || 'r2',
+    document_storage_bucket: clean(confirmation.document_storage_bucket) || null,
+    document_path: clean(confirmation.document_path) || null,
+    document_size_bytes: number(confirmation.document_size_bytes) || null,
+    document_mime_type: clean(confirmation.document_mime_type) || 'application/pdf',
+    document_sha256: clean(confirmation.document_sha256) || null,
     ordered_lines: number(confirmation.total_lines), ordered_units: number(confirmation.total_units),
     order_total: number(confirmation.subtotal), created_by: userId, updated_at: new Date().toISOString(),
   };
@@ -167,7 +178,7 @@ async function ensureImportLine(supabase, importId, row) {
     import_id: importId, supplier_line_key: clean(row.supplier_line_key), supplier_sku: clean(row.supplier_sku) || null,
     description: clean(row.description) || null, brand: clean(row.brand) || null, style: clean(row.style) || null,
     color: clean(row.color) || null, size: clean(row.size) || null, source_page: number(row.source_page) || null,
-    ordered_quantity: number(row.ordered_quantity), unit_cost: number(row.unit_cost), line_total: number(row.line_total),
+    ordered_quantity: number(row.ordered_quantity), unit_cost: optionalUnitCost(row.unit_cost), line_total: number(row.line_total),
     blank_product_id_text: clean(row.blank_product_id) || null, updated_at: new Date().toISOString(),
   };
   if (existing.data) {
@@ -245,14 +256,14 @@ async function commitReceipt(supabase, body, userId) {
     const receiptLineResult = await supabase.from('sc_supplier_receiving_receipt_lines').insert({
       receipt_id: receipt.id, import_line_id: item.importLine.id,
       blank_product_id_text: clean(item.row.blank_product_id), bin_id_text: clean(item.row.bin_id),
-      quantity: item.quantity, unit_cost: number(item.row.unit_cost), status: 'pending',
+      quantity: item.quantity, unit_cost: optionalUnitCost(item.row.unit_cost), status: 'pending',
     }).select('*').single();
     if (receiptLineResult.error) { errors.push(receiptLineResult.error.message); continue; }
     const receiptLine = receiptLineResult.data;
     const marker = `[SC-SUPPLIER-RECEIPT:${receipt.id}:${receiptLine.id}]`;
     const rpc = await supabase.rpc('sc_receive_blank_inventory_v4', {
       p_blank_product_id_text: clean(item.row.blank_product_id), p_bin_id_text: clean(item.row.bin_id),
-      p_quantity: item.quantity, p_unit_cost: number(item.row.unit_cost),
+      p_quantity: item.quantity, p_unit_cost: optionalUnitCost(item.row.unit_cost),
       p_notes: [marker, confirmation.supplier_name, `Order ${confirmation.order_number}`, body.notes].filter(Boolean).join(' | '),
     });
     if (rpc.error || rpc.data?.success === false) {
@@ -348,9 +359,11 @@ export async function handler(event) {
     else if (action === 'commit') data = await commitReceipt(auth.supabase, body, auth.user.id);
     else if (action === 'rollback') data = await rollbackReceipt(auth.supabase, body, auth.user.id);
     else if (action === 'document_url') {
-      const signed = await auth.supabase.storage.from(BUCKET).createSignedUrl(clean(body.document_path), 300);
-      if (signed.error) throw signed.error;
-      data = { url: signed.data.signedUrl };
+      data = { url: await signedOperationalUrl(auth.supabase, {
+        provider: clean(body.document_storage_provider) || (clean(body.document_storage_bucket) ? 'r2' : 'supabase'),
+        bucket: clean(body.document_storage_bucket) || 'sc-receiving-documents',
+        path: clean(body.document_path),
+      }, 300) };
     } else throw new Error('Unknown supplier receiving action.');
     return jsonResponse(200, { success: true, ...data }, event);
   } catch (error) {
