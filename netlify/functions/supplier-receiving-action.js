@@ -14,11 +14,39 @@ function optionalUnitCost(value) {
 }
 
 async function trackIntegrationJob(supabase, payload) {
-  const result = payload.idempotency_key
-    ? await supabase.from('sc_integration_jobs').upsert(payload, { onConflict: 'idempotency_key' }).select('id').maybeSingle()
-    : await supabase.from('sc_integration_jobs').insert(payload).select('id').maybeSingle();
-  if (result.error && !/does not exist|schema cache|could not find/i.test(result.error.message || '')) throw result.error;
-  return result.data?.id || null;
+  const unavailable = (error) => /does not exist|schema cache|could not find/i.test(error?.message || '');
+  const idempotencyKey = clean(payload.idempotency_key);
+
+  if (idempotencyKey) {
+    const existing = await supabase
+      .from('sc_integration_jobs')
+      .select('id')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+    if (existing.error) {
+      if (unavailable(existing.error)) return null;
+      throw existing.error;
+    }
+    if (existing.data?.id) return existing.data.id;
+  }
+
+  const inserted = await supabase.from('sc_integration_jobs').insert(payload).select('id').maybeSingle();
+  if (!inserted.error) return inserted.data?.id || null;
+  if (unavailable(inserted.error)) return null;
+
+  // The partial unique index can reject a simultaneous retry, but PostgREST
+  // cannot target that partial index using onConflict. Re-read the winner.
+  if (idempotencyKey && inserted.error.code === '23505') {
+    const winner = await supabase
+      .from('sc_integration_jobs')
+      .select('id')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+    if (!winner.error && winner.data?.id) return winner.data.id;
+    if (winner.error && !unavailable(winner.error)) throw winner.error;
+  }
+
+  throw inserted.error;
 }
 
 async function rememberColorAlias(supabase, confirmation, row, userId) {
