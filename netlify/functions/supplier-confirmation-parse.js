@@ -3,9 +3,10 @@ import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { extractPdfTextPages } from './_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from './_shared/supplierConfirmationParser.js';
 import { matchSupplierColor } from './_shared/supplierColorMatcher.js';
+import { putOperationalObject } from './_shared/operationalStorage.js';
+import { requireSupplierReceivingContract } from './_shared/supplierReceivingContract.js';
 
 const FUNCTION_NAME = 'supplier-confirmation-parse';
-const BUCKET = 'sc-receiving-documents';
 const MAX_BYTES = 12 * 1024 * 1024;
 
 function safeFileName(value) {
@@ -210,31 +211,41 @@ export async function handler(event) {
     const bytes = Buffer.from(body.file_base64, 'base64');
     if (!bytes.length || bytes.length > MAX_BYTES) throw new Error('The PDF must be between 1 byte and 12 MB.');
     if (bytes.subarray(0, 4).toString() !== '%PDF') throw new Error('The selected file is not a valid PDF.');
+    // Validate every table and column used by the receiving workflow before
+    // extracting or uploading the PDF. This prevents orphaned R2 documents
+    // when a database migration is missing or PostgREST has stale metadata.
+    await requireSupplierReceivingContract(auth.supabase);
     const parsed = parseSupplierConfirmationPages(await extractPdfTextPages(bytes));
     const hash = createHash('sha256').update(bytes).digest('hex');
-    const objectPath = `${parsed.supplier_key}/${safeFileName(parsed.order_number)}/${hash.slice(0, 16)}-${safeFileName(body.file_name)}`;
-    const upload = await auth.supabase.storage.from(BUCKET).upload(objectPath, bytes, {
-      contentType: 'application/pdf', upsert: true,
-    });
-    if (upload.error) {
-      if (/bucket not found/i.test(upload.error.message || '')) throw new Error('Supplier receiving storage is not installed. Run deployment/sql/19_SUPPLIER_CONFIRMATION_RECEIVING.sql in Supabase, then retry.');
-      throw upload.error;
-    }
+    const objectPath = `operational/receiving/${parsed.supplier_key}/${safeFileName(parsed.order_number)}/${hash.slice(0, 16)}-${safeFileName(body.file_name)}`;
     const lines = await parseAndMatch(auth.supabase, parsed);
-    const { data: existingImport, error: existingError } = await auth.supabase
-      .from('sc_supplier_receiving_imports').select('id,status,received_units').eq('supplier_key', parsed.supplier_key).eq('order_number', parsed.order_number).maybeSingle();
+    const { data: existingImports, error: existingError } = await auth.supabase
+      .from('sc_supplier_receiving_imports').select('id,status,received_units')
+      .eq('supplier_key', parsed.supplier_key).eq('order_number', parsed.order_number).limit(2);
     if (existingError) throw existingError;
+    if ((existingImports || []).length > 1) {
+      throw new Error(`Supplier order ${parsed.order_number} has duplicate import records. Resolve them in Operations Integrity before importing this confirmation.`);
+    }
+    const existingImport = existingImports?.[0] || null;
     const previousByKey = new Map();
     if (existingImport?.id) {
       const prior = await auth.supabase.from('sc_supplier_receiving_lines').select('supplier_line_key,received_quantity').eq('import_id', existingImport.id);
       if (prior.error) throw prior.error;
       (prior.data || []).forEach((line) => previousByKey.set(line.supplier_line_key, Number(line.received_quantity || 0)));
     }
+    // Upload only after parsing, matching, schema validation, and duplicate
+    // checks have all succeeded. The hash-based key also makes a retry replace
+    // the same R2 object instead of creating an orphaned copy.
+    const stored = await putOperationalObject({ key: objectPath, bytes, contentType: 'application/pdf', makePreview: false });
     return jsonResponse(200, {
       success: true,
       confirmation: {
         ...parsed,
-        document_path: objectPath,
+        document_storage_provider: stored.storage_provider,
+        document_storage_bucket: stored.storage_bucket,
+        document_path: stored.storage_path,
+        document_size_bytes: stored.file_size_bytes,
+        document_mime_type: 'application/pdf',
         document_sha256: hash,
         original_file_name: safeFileName(body.file_name),
         duplicate_order: Boolean(existingImport),

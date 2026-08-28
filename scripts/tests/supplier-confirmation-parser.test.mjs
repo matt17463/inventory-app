@@ -43,12 +43,38 @@ test('supplier receiving function ships its complete local dependency chain', as
     '../../netlify/functions/_shared/supplierConfirmationParser.js',
     '../../netlify/functions/_shared/operationalStorage.js',
     '../../netlify/functions/_shared/mockupStorage.js',
+    '../../netlify/functions/_shared/supplierReceivingContract.js',
   ];
 
   for (const relativePath of requiredFiles) {
     const contents = await fs.readFile(new URL(relativePath, import.meta.url), 'utf8');
     assert.ok(contents.length > 0, `${relativePath} must be included in the deployment package`);
   }
+});
+
+test('supplier receiving validates its complete schema before uploading a PDF', async () => {
+  const [parser, action, contract, migration, verification, client] = await Promise.all([
+    fs.readFile(new URL('../../netlify/functions/supplier-confirmation-parse.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/supplier-receiving-action.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/_shared/supplierReceivingContract.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../deployment/sql/42_SUPPLIER_RECEIVING_SCHEMA_CONTRACT.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../deployment/sql/43_VERIFY_SUPPLIER_RECEIVING_SCHEMA_CONTRACT.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/SupplierConfirmationReceiving.jsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.ok(parser.indexOf('requireSupplierReceivingContract(auth.supabase)') < parser.indexOf('await putOperationalObject'));
+  assert.match(contract, /document_mime_type/);
+  assert.match(contract, /42_SUPPLIER_RECEIVING_SCHEMA_CONTRACT\.sql/);
+  assert.match(action, /requireSupplierReceivingContract/);
+  assert.doesNotMatch(action, /\.upsert\(/);
+  assert.match(action, /inserted\.error\.code !== '23505'/);
+  assert.match(migration, /add column if not exists document_mime_type text/i);
+  assert.match(migration, /pg_notify\('pgrst', 'reload schema'\)/i);
+  assert.doesNotMatch(migration, /delete\s+from|truncate\s+table|drop\s+table/i);
+  assert.match(verification, /contract_ready/);
+  assert.match(verification, /duplicate_groups/);
+  assert.match(client, /receiveRequestKey/);
+  assert.match(client, /idempotency_key: receiveRequestKey/);
 });
 
 test('integration job tracking does not target a partial unique index with onConflict', async () => {
