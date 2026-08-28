@@ -36,6 +36,21 @@ test('carries supplier cost into new blanks and preserves existing product costs
   assert.match(verification, /no_null_product_costs/);
 });
 
+test('supplier receiving function ships its complete local dependency chain', async () => {
+  const requiredFiles = [
+    '../../netlify/functions/_shared/security.js',
+    '../../netlify/functions/_shared/cryptoSecurity.js',
+    '../../netlify/functions/_shared/supplierConfirmationParser.js',
+    '../../netlify/functions/_shared/operationalStorage.js',
+    '../../netlify/functions/_shared/mockupStorage.js',
+  ];
+
+  for (const relativePath of requiredFiles) {
+    const contents = await fs.readFile(new URL(relativePath, import.meta.url), 'utf8');
+    assert.ok(contents.length > 0, `${relativePath} must be included in the deployment package`);
+  }
+});
+
 test('initializes PDF.js without optional Node canvas polyfills', async () => {
   const original = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule');
   Object.defineProperty(process, 'getBuiltinModule', { configurable: true, value: () => undefined });
