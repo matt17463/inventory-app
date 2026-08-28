@@ -27,6 +27,7 @@ import {
   updatePullSheetItemStatus,
   updatePullSheetStatus,
 } from './lib/inventoryApi';
+import { searchMappingBlanks, setProductBlankMapping } from './lib/productBlankMappingApi';
 
 function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
@@ -95,6 +96,7 @@ export default function PullSheetView() {
   const [overrideRow, setOverrideRow] = useState(null);
   const [blankSearch, setBlankSearch] = useState('');
   const [blankResults, setBlankResults] = useState([]);
+  const [rememberBlankMapping, setRememberBlankMapping] = useState(true);
   const [sourceBinsByLine, setSourceBinsByLine] = useState({});
   const [selectedBinByLine, setSelectedBinByLine] = useState({});
   const [outOfStockByLine, setOutOfStockByLine] = useState({});
@@ -118,6 +120,10 @@ export default function PullSheetView() {
         name,
         item_name,
         order_sku,
+        woocommerce_product_id,
+        woocommerce_variation_id,
+        pairing_source,
+        pairing_warning,
         brand,
         product_type,
         color,
@@ -371,12 +377,11 @@ export default function PullSheetView() {
   }, [items]);
 
   async function searchBlanks() {
-    const term = String(blankSearch || '').trim();
-    let query = supabase.from('blank_products').select('id, sku_base, name, brand_id, product_type_id, color_id, size_id').eq('sc_is_archived', false).limit(25);
-    if (term) query = query.or(`sku_base.ilike.%${term.replace(/[%_,]/g, '')}%,name.ilike.%${term.replace(/[%_,]/g, '')}%`);
-    const { data, error } = await query;
-    if (error) alert(error.message);
-    else setBlankResults(data || []);
+    try {
+      // The privileged catalog search enforces sc_is_archived = false and searches
+      // Brand, Style, Color, Size, SKU, and name across the full blank catalog.
+      setBlankResults(await searchMappingBlanks(blankSearch, 100));
+    } catch (error) { alert(error.message); }
   }
 
   async function applyOverride(blankProductId) {
@@ -391,9 +396,31 @@ export default function PullSheetView() {
       alert(error.message);
       return;
     }
+    if (rememberBlankMapping) {
+      try {
+        if (overrideRow.woocommerce_variation_id) {
+          await setProductBlankMapping({
+            source_kind: 'woocommerce_variation', source_key: String(overrideRow.woocommerce_variation_id),
+            blank_product_id: blankProductId, mapping_source: 'pullsheet_override',
+            notes: `Remembered from pull sheet ${resolvedJobId}`, propagate_unpaired: true,
+          });
+        }
+        const orderSku = String(overrideRow.order_sku || overrideRow.sku || '').trim();
+        if (orderSku) {
+          await setProductBlankMapping({
+            source_kind: 'woocommerce_sku', source_key: orderSku,
+            blank_product_id: blankProductId, mapping_source: 'pullsheet_override',
+            notes: `Remembered from pull sheet ${resolvedJobId}`, propagate_unpaired: true,
+          });
+        }
+      } catch (mappingError) {
+        alert(`This pull-sheet line was paired, but the future mapping could not be remembered: ${mappingError.message}`);
+      }
+    }
     setOverrideRow(null);
     setBlankSearch('');
     setBlankResults([]);
+    setRememberBlankMapping(true);
     await load();
   }
 
@@ -402,6 +429,7 @@ export default function PullSheetView() {
     setOverrideRow(row);
     setBlankSearch('');
     setBlankResults([]);
+    setRememberBlankMapping(true);
   }
 
   async function markPulledOnly(row, idx) {
@@ -1032,7 +1060,7 @@ export default function PullSheetView() {
                           searchBlanks();
                         }
                       }}
-                      placeholder="Search SKU or blank product name"
+                      placeholder="Search SKU, brand, style, color, or size"
                     />
                     <ActionButton tone="secondary" onClick={searchBlanks}>Search</ActionButton>
                   </div>
@@ -1044,13 +1072,14 @@ export default function PullSheetView() {
                         onClick={() => applyOverride(blankProduct.id)}
                       >
                         <strong>{blankProduct.sku_base || blankProduct.name}</strong>
-                        <span>{blankProduct.name}</span>
+                        <span>{[blankProduct.brands?.name || blankProduct.brand, blankProduct.product_types?.name || blankProduct.style, blankProduct.colors?.name || blankProduct.color, blankProduct.sizes?.name || blankProduct.size].filter(Boolean).join(' / ') || blankProduct.name}</span>
                       </button>
                     ))}
                     {!blankResults.length ? (
                       <p className="sc-muted">Enter a SKU or product name, then select Search.</p>
                     ) : null}
                   </div>
+                  <label className="mockup-check"><input type="checkbox" checked={rememberBlankMapping} onChange={(event) => setRememberBlankMapping(event.target.checked)} /> Remember this variation/SKU mapping for future orders and repair other currently unpaired lines</label>
                   <div className="sc-button-row sc-inline-editor__actions">
                     <ActionButton tone="secondary" onClick={() => setOverrideRow(null)}>
                       Cancel

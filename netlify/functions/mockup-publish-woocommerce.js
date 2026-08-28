@@ -23,6 +23,10 @@ function imageMapKey(color, logo) {
   return JSON.stringify([normalized(color), normalized(logo)]);
 }
 
+function blankMapKey(color, size) {
+  return JSON.stringify([normalized(color), normalized(size)]);
+}
+
 function canonicalSavedPairKey(value) {
   try {
     const parsed = JSON.parse(String(value || ''));
@@ -144,7 +148,7 @@ function variationSignature(attributes) {
     .join('|');
 }
 
-function variationRows(parent, config, productId, imageIdByOutput) {
+function variationRows(parent, config, productId, imageIdByOutput, blankProductByOption = new Map()) {
   const colors = parent.color?.options?.length ? parent.color.options : [null];
   const sizes = parent.size?.options?.length ? parent.size.options : [null];
   const logos = parent.logo?.options?.length ? parent.logo.options : [null];
@@ -165,6 +169,8 @@ function variationRows(parent, config, productId, imageIdByOutput) {
     if ((colors.length > 1 || logos.length > 1 || color || logo) && !imageId) {
       throw new Error(`Choose a variation mockup for ${color || 'all colors'} / ${logo || 'no logo option'}.`);
     }
+    const blankProductId = blankProductByOption.get(blankMapKey(color, size)) || '';
+    if (!blankProductId) throw new Error(`Choose or create a blank product mapping for ${color || 'no color'} / ${size || 'no size'} before exporting.`);
     const row = {
       regular_price: String(config.regular_price || ''),
       status: 'publish',
@@ -174,6 +180,7 @@ function variationRows(parent, config, productId, imageIdByOutput) {
         { key: '_sc_mockup_project_id', value: String(config.project_id || '') },
         { key: '_sc_logo_selection', value: logo || '' },
         { key: '_sc_blank_color', value: color || '' },
+        { key: '_sc_blank_product_id', value: blankProductId },
       ],
     };
     if (imageId) row.image = { id: imageId };
@@ -271,7 +278,55 @@ async function syncVariations(productId, desired, onProgress = async () => {}) {
     throw new Error(`WooCommerce variation reconciliation failed: ${missing.length} required combination${missing.length === 1 ? '' : 's'} missing and ${duplicates.length} duplicated. The draft was preserved; retry the export to repair it.`);
   }
   const touchedExisting = desired.filter((row) => existingBySignature.has(variationSignature(row.attributes))).length + staleProjectVariations.length;
-  return { created, updated, deactivated, untouched: Math.max(0, existing.length - touchedExisting) };
+  const mappings = desired.map((wanted) => {
+    const actual = (activeBySignature.get(variationSignature(wanted.attributes)) || [])[0];
+    const blankProductId = wanted.meta_data?.find((item) => item.key === '_sc_blank_product_id')?.value || '';
+    return actual?.id && blankProductId ? { variation_id: actual.id, sku: actual.sku || wanted.sku, blank_product_id: blankProductId } : null;
+  }).filter(Boolean);
+  return { created, updated, deactivated, untouched: Math.max(0, existing.length - touchedExisting), mappings };
+}
+
+async function resolveMockupBlankMatrix(supabase, config, parentAttributes) {
+  const colors = parentAttributes.color?.options || [];
+  const sizes = parentAttributes.size?.options || [];
+  if (!colors.length || !sizes.length) throw new Error('Variable products require at least one Color and Size before their blank products can be mapped.');
+  const { data, error } = await supabase.rpc('sc_resolve_blank_matrix_v1', {
+    p_brand: String(config.brand || '').trim(),
+    p_style: String(config.style || '').trim(),
+    p_colors: colors,
+    p_sizes: sizes,
+  });
+  if (error) {
+    if (/does not exist|schema cache|could not find/i.test(error.message || '')) {
+      throw new Error('Product-to-blank mapping SQL is not installed. Run deployment/sql/44_PRODUCT_BLANK_MAPPING_LIFECYCLE.sql before exporting this Mockup Studio product.');
+    }
+    throw error;
+  }
+  const rows = Array.isArray(data) ? data : [];
+  const unresolved = rows.filter((row) => row.status !== 'matched' || !row.blank_product_id);
+  if (unresolved.length) {
+    const examples = unresolved.slice(0, 6).map((row) => `${row.color} / ${row.size} (${row.status}${Number(row.candidate_count) > 1 ? `, ${row.candidate_count} candidates` : ''})`).join('; ');
+    throw new Error(`${unresolved.length} Color/Size blank mapping${unresolved.length === 1 ? '' : 's'} require review: ${examples}. Open Product-to-Blank Mappings to create or correct the canonical blanks, then retry.`);
+  }
+  return new Map(rows.map((row) => [blankMapKey(row.color, row.size), row.blank_product_id]));
+}
+
+async function rememberWooVariationMappings(supabase, mappings, actorId, projectId) {
+  const rows = [];
+  for (const mapping of mappings || []) {
+    rows.push({ source_kind: 'woocommerce_variation', source_key: String(mapping.variation_id), blank_product_id: mapping.blank_product_id });
+    if (String(mapping.sku || '').trim()) rows.push({ source_kind: 'woocommerce_sku', source_key: mapping.sku, blank_product_id: mapping.blank_product_id });
+  }
+  if (!rows.length) return { mappings_saved: 0, unpaired_lines_repaired: 0 };
+  const { data, error } = await supabase.rpc('sc_set_product_blank_mappings_bulk_v1', {
+    p_mappings: rows,
+    p_mapping_source: 'mockup_studio_export',
+    p_notes: `Mockup Studio project ${projectId}`,
+    p_propagate_unpaired: true,
+    p_actor_id: actorId,
+  });
+  if (error) throw new Error(`WooCommerce product was saved, but its blank mappings could not be recorded: ${error.message}. Install SQL 44 and retry this export.`);
+  return data || {};
 }
 
 function imageRowsFor(outputs) {
@@ -459,6 +514,9 @@ export async function handler(event) {
 
     const discovered = wooCollection(await wooRequest('products/attributes?per_page=100'), 'product attributes');
     const parentAttributes = await productAttributes(config, discovered);
+    const blankProductByOption = config.type === 'variable' && config.create_variations !== false
+      ? await resolveMockupBlankMatrix(auth.supabase, config, parentAttributes)
+      : new Map();
     const productPayload = {
       name: String(config.name).trim(),
       type: config.type === 'variable' ? 'variable' : 'simple',
@@ -520,9 +578,9 @@ export async function handler(event) {
     product = imageResult.product;
     const imageIdByOutput = imageResult.imageIdByOutput;
 
-    let variationResult = { created: 0, updated: 0, deactivated: 0, untouched: 0 };
+    let variationResult = { created: 0, updated: 0, deactivated: 0, untouched: 0, mappings: [] };
     if (productPayload.type === 'variable' && config.create_variations !== false) {
-      const desired = variationRows(parentAttributes, config, product.id, imageIdByOutput);
+      const desired = variationRows(parentAttributes, config, product.id, imageIdByOutput, blankProductByOption);
       if (desired.length) {
         variationResult = await syncVariations(product.id, desired, async (progress) => {
           await auth.supabase.from('mockup_woo_exports').update({
@@ -539,6 +597,7 @@ export async function handler(event) {
         });
       }
     }
+    const mappingResult = await rememberWooVariationMappings(auth.supabase, variationResult.mappings, auth.user.id, projectId);
 
     const responsePayload = {
       product_id: product.id,
@@ -548,6 +607,8 @@ export async function handler(event) {
       variations_updated: variationResult.updated,
       variations_deactivated: variationResult.deactivated || 0,
       existing_variations_untouched: variationResult.untouched,
+      blank_mappings_saved: mappingResult.mappings_saved || 0,
+      unpaired_lines_repaired: mappingResult.unpaired_lines_repaired || 0,
     };
     await auth.supabase.from('mockup_woo_exports').update({ status: 'completed', woo_product_id: product.id, response_payload: responsePayload, completed_at: new Date().toISOString() }).eq('id', exportId);
     await auth.supabase.from('mockup_projects').update({ status: product.status === 'publish' ? 'published' : 'woo_draft', woo_product_id: product.id, woo_product_url: product.permalink || null, woo_config: config }).eq('id', projectId);

@@ -49,6 +49,7 @@ const fallbackNav = [
   { title: 'Tools', items: [
     { label: 'Labels', path: '/labels' },
     { label: 'Mapping Repair', path: '/mapping-repair' },
+    { label: 'Product-to-Blank Mappings', path: '/product-blank-mappings' },
     { label: 'Testing Mode', path: '/testing-mode' },
     { label: 'Google Calendar', path: '/google-calendar' },
     { label: 'Theme Settings', path: '/theme-settings' },

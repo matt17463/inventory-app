@@ -19,6 +19,10 @@ function normalizeSku(value) {
   return clean(value).toUpperCase();
 }
 
+function mappingKey(value) {
+  return clean(value).toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 function normalizeText(value) {
   return clean(value)
     .toLowerCase()
@@ -332,6 +336,23 @@ async function queryMapping(column, value) {
   return data || null;
 }
 
+async function queryLifecycleMapping(sourceKind, sourceKey) {
+  if (!sourceKey) return null;
+  const { data, error } = await supabase
+    .from('sc_product_blank_mappings')
+    .select('blank_product_id, blank_products:blank_product_id (id, sku_base, name)')
+    .eq('source_kind', sourceKind)
+    .eq('source_key_norm', mappingKey(sourceKey))
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (/does not exist|schema cache|could not find/i.test(error.message || '')) return null;
+    throw error;
+  }
+  return data || null;
+}
+
 async function queryProductWithBlank(filters) {
   let query = supabase
     .from('products')
@@ -422,6 +443,16 @@ async function findBlankProductForLineItem(rawLineItem) {
   let warning = null;
 
   if (variationId) {
+    mapping = await queryLifecycleMapping('woocommerce_variation', String(variationId));
+    source = 'remembered_variation_mapping';
+  }
+
+  if (!mapping && sku) {
+    mapping = await queryLifecycleMapping('woocommerce_sku', sku);
+    source = 'remembered_sku_mapping';
+  }
+
+  if (!mapping && variationId) {
     mapping = await queryMapping('woo_variation_id', variationId);
     source = 'variation_id_mapping';
   }
