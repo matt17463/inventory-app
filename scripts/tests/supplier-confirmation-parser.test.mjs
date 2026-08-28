@@ -51,6 +51,18 @@ test('supplier receiving function ships its complete local dependency chain', as
   }
 });
 
+test('integration job tracking does not target a partial unique index with onConflict', async () => {
+  const source = await fs.readFile(
+    new URL('../../netlify/functions/supplier-receiving-action.js', import.meta.url),
+    'utf8',
+  );
+  const trackingBlock = source.match(/async function trackIntegrationJob[\s\S]*?\n}\n\nasync function rememberColorAlias/)?.[0] || '';
+  assert.ok(trackingBlock);
+  assert.doesNotMatch(trackingBlock, /onConflict:\s*'idempotency_key'/);
+  assert.match(trackingBlock, /inserted\.error\.code === '23505'/);
+  assert.match(trackingBlock, /Re-read the winner/);
+});
+
 test('initializes PDF.js without optional Node canvas polyfills', async () => {
   const original = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule');
   Object.defineProperty(process, 'getBuiltinModule', { configurable: true, value: () => undefined });
