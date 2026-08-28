@@ -16,6 +16,7 @@ import {
   updatePullSheetLineStatusGuarded,
   updatePullSheetStatusGuarded,
 } from './applicationIntegrityApi';
+import { parseOptionalUnitCost } from './unitCost';
 
 function normalizeSearchValue(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -285,6 +286,7 @@ export async function createBlankProduct(input) {
   if (!skuBase) throw new Error('Enter a blank SKU base.');
   if (!name) throw new Error('Enter a blank item name.');
 
+  const unitCost = parseOptionalUnitCost(input?.unit_cost);
   const payload = {
     sku_base: skuBase,
     name,
@@ -294,7 +296,10 @@ export async function createBlankProduct(input) {
     color_id: input?.color_id ? Number(input.color_id) : null,
     size_id: input?.size_id ? Number(input.size_id) : null,
     image_url: String(input?.image_url || '').trim() || null,
-    unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : null,
+    // Guarded creation names every database column. Supplying zero here keeps
+    // omitted costs from becoming an explicit SQL NULL that bypasses the
+    // blank_products column default.
+    unit_cost: unitCost ?? 0,
     low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
   };
 
@@ -325,9 +330,15 @@ export async function updateBlankProduct(blankProductId, input) {
     color_id: input?.color_id ? Number(input.color_id) : null,
     size_id: input?.size_id ? Number(input.size_id) : null,
     image_url: String(input?.image_url || '').trim() || null,
-    unit_cost: input?.unit_cost !== '' && input?.unit_cost != null ? Number(input.unit_cost) : 0,
     low_stock_threshold: input?.low_stock_threshold !== '' && input?.low_stock_threshold != null ? Number(input.low_stock_threshold) : null,
   };
+
+  // A partial attribute edit must not reset accounting data. Only send a cost
+  // when the caller explicitly supplied a non-blank value.
+  if (Object.prototype.hasOwnProperty.call(input || {}, 'unit_cost')) {
+    const unitCost = parseOptionalUnitCost(input.unit_cost);
+    if (unitCost != null) payload.unit_cost = unitCost;
+  }
 
   Object.keys(payload).forEach((key) => {
     if (Number.isNaN(payload[key])) delete payload[key];

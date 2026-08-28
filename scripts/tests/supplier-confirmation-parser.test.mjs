@@ -6,6 +6,35 @@ import { pathToFileURL } from 'node:url';
 import { installPdfTextRuntimeCompatibility } from '../../netlify/functions/_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from '../../netlify/functions/_shared/supplierConfirmationParser.js';
 import { matchSupplierColor } from '../../netlify/functions/_shared/supplierColorMatcher.js';
+import { parseOptionalUnitCost, requireUnitCost } from '../../src/lib/unitCost.js';
+
+test('validates optional and required supplier unit costs', () => {
+  assert.equal(parseOptionalUnitCost(''), null);
+  assert.equal(parseOptionalUnitCost('5.60'), 5.6);
+  assert.equal(requireUnitCost('0', 'sample item'), 0);
+  assert.throws(() => parseOptionalUnitCost('-0.01'), /zero or greater/);
+  assert.throws(() => requireUnitCost('', 'SKU 123'), /Enter the unit cost for SKU 123/);
+});
+
+test('carries supplier cost into new blanks and preserves existing product costs', async () => {
+  const [receivingPage, inventoryApi, serverAction, migration, verification] = await Promise.all([
+    fs.readFile(new URL('../../src/AddItemToBin.jsx', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/lib/inventoryApi.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../netlify/functions/supplier-receiving-action.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../deployment/sql/40_SUPPLIER_RECEIVING_UNIT_COST_SAFETY.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../deployment/sql/41_VERIFY_SUPPLIER_RECEIVING_UNIT_COST_SAFETY.sql', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(receivingPage, /unit_cost: unitCost/);
+  assert.match(receivingPage, /requireUnitCost/);
+  assert.match(inventoryApi, /unit_cost: unitCost \?\? 0/);
+  assert.match(inventoryApi, /hasOwnProperty\.call\(input \|\| \{\}, 'unit_cost'\)/);
+  assert.match(serverAction, /p_unit_cost: optionalUnitCost\(item\.row\.unit_cost\)/);
+  assert.match(migration, /alter column unit_cost set default 0/i);
+  assert.match(migration, /v_unit_cost := v_before\.unit_cost/);
+  assert.doesNotMatch(migration, /delete\s+from\s+public\.blank_products/i);
+  assert.match(verification, /no_null_product_costs/);
+});
 
 test('initializes PDF.js without optional Node canvas polyfills', async () => {
   const original = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule');
