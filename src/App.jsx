@@ -42,6 +42,7 @@ const ManualInvoicedOrders = lazy(() => import('./ManualInvoicedOrders'));
 const MockupCustomerReview = lazy(() => import('./MockupCustomerReview'));
 const MockupProductionPacket = lazy(() => import('./MockupProductionPacket'));
 const MockupStudio = lazy(() => import('./MockupStudio'));
+const NewProductLineSetup = lazy(() => import('./NewProductLineSetup'));
 const NfcWriter = lazy(() => import('./NfcWriter'));
 const NonInventoryRules = lazy(() => import('./NonInventoryRules'));
 const NotFound = lazy(() => import('./NotFound'));
@@ -106,6 +107,7 @@ function EmployeeRoutes() {
       <Route path="/bins" element={<BinsDashboard />} />
       <Route path="/bin/:binId" element={<BinContents />} />
       <Route path="/add-item" element={<AddItemToBin />} />
+      <Route path="/new-product-line" element={<NewProductLineSetup />} />
       <Route path="/scan" element={<ScanInventory />} />
       <Route path="/transfer" element={<TransferInventory />} />
       <Route path="/audit" element={<AuditMode />} />

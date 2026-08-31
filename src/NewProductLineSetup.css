@@ -1,0 +1,15 @@
+.npl-page { display: grid; gap: 1rem; }
+.npl-chooser-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.npl-chooser { min-width: 0; border: 1px solid var(--sc-border, #cbd5e1); border-radius: 12px; padding: .85rem; }
+.npl-chooser legend { font-weight: 800; padding: 0 .35rem; }
+.npl-chooser legend span { color: var(--sc-text-muted, #64748b); font-size: .8rem; font-weight: 600; }
+.npl-chooser > input { width: 100%; }
+.npl-chooser__actions { display: flex; gap: .5rem; margin: .5rem 0; }
+.npl-chooser__actions button { border: 0; background: transparent; color: var(--sc-primary, #2563eb); cursor: pointer; font-weight: 700; }
+.npl-chooser__options { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .4rem; max-height: 16rem; overflow: auto; padding: .25rem; }
+.npl-chooser__options label, .npl-inline-check, .npl-confirm label { display: flex; align-items: center; gap: .5rem; }
+.npl-form-actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
+.npl-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.npl-blocked { padding: .9rem; border-radius: 10px; background: #fff7ed; color: #9a3412; font-weight: 700; }
+.npl-confirm { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-top: 1rem; }
+@media (max-width: 900px) { .npl-chooser-grid { grid-template-columns: 1fr; } .npl-metrics { grid-template-columns: repeat(2, 1fr); } .npl-confirm { align-items: stretch; flex-direction: column; } }
