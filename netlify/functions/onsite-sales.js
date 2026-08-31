@@ -2,7 +2,7 @@ import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { wooCollection, wooRequest } from './_shared/mockupUtils.js';
 
 const clean = (value) => String(value ?? '').trim();
-const number = (value) => Number(value || 0);
+const logoAttribute = (row) => /logo|graphic|design/i.test(clean(row?.name));
 
 async function categories() {
   const rows = wooCollection(await wooRequest('products/categories?per_page=100&orderby=name&order=asc&hide_empty=true'), 'product categories');
@@ -11,8 +11,37 @@ async function categories() {
 
 async function products(categoryId) {
   if (!categoryId) return [];
-  const rows = wooCollection(await wooRequest(`products?category=${encodeURIComponent(categoryId)}&status=publish&per_page=100&orderby=name&order=asc`), 'category products');
+  // Woo products accept orderby=title. orderby=name is rejected by the REST API.
+  const rows = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const batch = wooCollection(await wooRequest(`products?category=${encodeURIComponent(categoryId)}&status=publish&per_page=100&page=${page}&orderby=title&order=asc`), 'category products');
+    rows.push(...batch);
+    if (batch.length < 100) break;
+  }
   return rows.map(({ id, name, sku, type, attributes, images }) => ({ id, name, sku, type, attributes, image: images?.[0]?.src || '' }));
+}
+
+async function categoryMenu(categoryId) {
+  const rows = await products(categoryId);
+  const byName = new Map();
+  for (const product of rows) {
+    for (const attribute of product.attributes || []) {
+      if (!logoAttribute(attribute)) continue;
+      for (const raw of attribute.options || []) {
+        const name = clean(raw);
+        if (!name) continue;
+        const key = name.toLocaleLowerCase();
+        if (!byName.has(key)) byName.set(key, { name, product_ids: [], product_names: [] });
+        const entry = byName.get(key);
+        if (!entry.product_ids.includes(product.id)) entry.product_ids.push(product.id);
+        if (!entry.product_names.includes(product.name)) entry.product_names.push(product.name);
+      }
+    }
+  }
+  return {
+    products: rows.map(({ id, name, sku, type, image }) => ({ id, name, sku, type, image })),
+    logos: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
 
 async function productOptions(productId) {
@@ -28,15 +57,16 @@ async function productOptions(productId) {
   };
 }
 
-async function inventory(supabase, search) {
-  const result = await supabase.rpc('sc_onsite_inventory_search_v1', { p_search: clean(search), p_limit: 300 });
+async function inventory(supabase, search, version = 1) {
+  const functionName = Number(version) >= 2 ? 'sc_onsite_inventory_search_v2' : 'sc_onsite_inventory_search_v1';
+  const result = await supabase.rpc(functionName, { p_search: clean(search), p_limit: Number(version) >= 2 ? 5000 : 300 });
   if (result.error) throw result.error;
   return result.data || [];
 }
 
 async function complete(supabase, body, userId) {
   const result = await supabase.rpc('sc_complete_onsite_sale_v1', {
-    p_blank_product_id: number(body.blank_product_id),
+    p_blank_product_id: clean(body.blank_product_id) || null,
     p_customer_name: clean(body.customer_name) || null,
     p_player_name: clean(body.player_name) || null,
     p_player_number: clean(body.player_number) || null,
@@ -64,8 +94,10 @@ export async function handler(event) {
     let data;
     if (action === 'categories') data = await categories();
     else if (action === 'products') data = await products(query.category_id);
+    else if (action === 'category-menu') data = await categoryMenu(query.category_id);
     else if (action === 'product-options') data = await productOptions(query.product_id);
-    else if (action === 'inventory') data = await inventory(auth.supabase, query.search);
+    else if (action === 'inventory') data = await inventory(auth.supabase, query.search, 1);
+    else if (action === 'inventory-v2') data = await inventory(auth.supabase, query.search, 2);
     else if (action === 'complete') data = await complete(auth.supabase, body, auth.user.id);
     else throw new Error('Unsupported on-site sales action.');
     return jsonResponse(200, { success: true, data }, event);

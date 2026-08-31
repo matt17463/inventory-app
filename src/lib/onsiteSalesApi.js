@@ -16,12 +16,20 @@ export async function getOnsiteProducts(categoryId) {
   return payload(await authenticatedFunctionFetch(`/.netlify/functions/onsite-sales?action=products&category_id=${encodeURIComponent(categoryId || '')}`));
 }
 
+export async function getOnsiteCategoryMenu(categoryId) {
+  return payload(await authenticatedFunctionFetch(`/.netlify/functions/onsite-sales?action=category-menu&category_id=${encodeURIComponent(categoryId || '')}`));
+}
+
 export async function getOnsiteProductOptions(productId) {
   return payload(await authenticatedFunctionFetch(`/.netlify/functions/onsite-sales?action=product-options&product_id=${encodeURIComponent(productId || '')}`));
 }
 
 export async function searchOnsiteInventory(search = '') {
   return payload(await authenticatedFunctionFetch(`/.netlify/functions/onsite-sales?action=inventory&search=${encodeURIComponent(search)}`));
+}
+
+export async function getOnsiteInventoryV2(search = '') {
+  return payload(await authenticatedFunctionFetch(`/.netlify/functions/onsite-sales?action=inventory-v2&search=${encodeURIComponent(search)}`));
 }
 
 export async function completeOnsiteItem(input) {
