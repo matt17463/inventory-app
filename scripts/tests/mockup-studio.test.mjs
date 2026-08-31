@@ -27,6 +27,18 @@ test('mockup routes include employee studio, production packet, and public revie
   assert.match(navigation, /Mockup Studio/);
 });
 
+test('mockup project dashboard fills the page, uses a responsive grid, and supports requested sorting', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const css = await read('src/MockupStudio.css');
+  assert.match(studio, /Sort by/);
+  assert.match(studio, /value="project_name">Project name/);
+  assert.match(studio, /value="customer_name">Customer/);
+  assert.match(studio, /value="campaign_name">Campaign \/ store/);
+  assert.match(studio, /sortedProjects\.map/);
+  assert.match(css, /\.mockup-studio-page \{[^}]*place-items: stretch/);
+  assert.match(css, /\.mockup-project-grid \{[^}]*repeat\(auto-fill, minmax\(270px, 1fr\)\)/);
+});
+
 test('AI generation uses an authenticated background function and server-only key', async () => {
   const api = await read('src/lib/mockupStudioApi.js');
   const fn = await read('netlify/functions/mockup-generate-background.js');

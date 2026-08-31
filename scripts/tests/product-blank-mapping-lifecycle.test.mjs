@@ -38,10 +38,17 @@ test('Mockup Studio requires and remembers Color/Size blank mappings', () => {
 
 test('pull sheet shows actual Woo identity and can remember an override', () => {
   const source = read('src/PullSheetView.jsx');
+  const api = read('src/lib/productBlankMappingApi.js');
+  const css = read('src/App.css');
   assert.match(source, /woocommerce_variation_id,/);
   assert.match(source, /pairing_source,/);
   assert.match(source, /Remember this variation\/SKU mapping for future orders/);
   assert.match(source, /setProductBlankMapping/);
+  assert.match(api, /normalizeMappingBlankRow/);
+  assert.match(api, /row\?\.sc_search_blank_products_for_pairing/);
+  assert.match(api, /filter\(\(row\) => row\.id/);
+  assert.match(css, /\.sc-pullsheet-inline-editor \.sc-blank-result-list > button \{/);
+  assert.match(css, /grid-template-columns: repeat\(auto-fill, minmax\(260px, 1fr\)\)/);
 });
 
 test('mapping lifecycle UI exposes review, backfill, and substitution', () => {

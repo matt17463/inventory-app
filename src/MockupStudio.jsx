@@ -237,6 +237,27 @@ function PlacementPreview({ blankUrl, artworkUrl, placement, blankAsset = null }
 
 function ProjectDashboard({ projects, onOpen, onCreated, busy, setBusy, setMessage }) {
   const [form, setForm] = useState({ project_name: '', customer_name: '', campaign_name: '', output_style: 'clean_catalog' });
+  const [sortField, setSortField] = useState('updated_at');
+  const [sortDirection, setSortDirection] = useState('desc');
+
+  const sortedProjects = useMemo(() => {
+    const rows = [...projects];
+    rows.sort((leftProject, rightProject) => {
+      if (sortField === 'updated_at') {
+        const leftTime = new Date(leftProject.updated_at || leftProject.created_at || 0).getTime() || 0;
+        const rightTime = new Date(rightProject.updated_at || rightProject.created_at || 0).getTime() || 0;
+        return sortDirection === 'asc' ? leftTime - rightTime : rightTime - leftTime;
+      }
+
+      const leftValue = String(leftProject[sortField] || '').trim();
+      const rightValue = String(rightProject[sortField] || '').trim();
+      if (!leftValue && rightValue) return 1;
+      if (leftValue && !rightValue) return -1;
+      const comparison = leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' });
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    return rows;
+  }, [projects, sortDirection, sortField]);
 
   async function submit(event) {
     event.preventDefault();
@@ -274,10 +295,42 @@ function ProjectDashboard({ projects, onOpen, onCreated, busy, setBusy, setMessa
         </form>
       </SectionCard>
 
-      <SectionCard title="Mockup projects" description="Open a project to continue at any stage.">
+      <SectionCard
+        title="Mockup projects"
+        description="Open a project to continue at any stage."
+        actions={(
+          <div className="mockup-project-sort" aria-label="Sort mockup projects">
+            <label>
+              <span>Sort by</span>
+              <select
+                value={sortField}
+                onChange={(event) => {
+                  const nextField = event.target.value;
+                  setSortField(nextField);
+                  setSortDirection(nextField === 'updated_at' ? 'desc' : 'asc');
+                }}
+              >
+                <option value="updated_at">Last updated</option>
+                <option value="project_name">Project name</option>
+                <option value="customer_name">Customer</option>
+                <option value="campaign_name">Campaign / store</option>
+              </select>
+            </label>
+            <ActionButton
+              size="sm"
+              tone="secondary"
+              aria-label={sortDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              title={sortDirection === 'asc' ? 'Currently ascending; click for descending' : 'Currently descending; click for ascending'}
+              onClick={() => setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')}
+            >
+              {sortDirection === 'asc' ? 'A → Z' : 'Z → A'}
+            </ActionButton>
+          </div>
+        )}
+      >
         {!projects.length ? <EmptyState title="No mockup projects yet" description="Create the first project above." /> : (
           <div className="mockup-project-grid">
-            {projects.map((project) => (
+            {sortedProjects.map((project) => (
               <button type="button" className="mockup-project-card" key={project.id} onClick={() => onOpen(project.id)}>
                 <div><StatusBadge status={project.status} /></div>
                 <h3>{project.project_name}</h3>
