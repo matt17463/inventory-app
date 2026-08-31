@@ -36,7 +36,7 @@ test('authenticated UI and endpoint are routed and shipped together', () => {
   assert.match(app, /path="\/new-product-line"/);
   assert.match(nav, /New Product Line Setup/);
   assert.match(page, /zero on hand/i);
-  assert.match(page, /Preview product line/);
+  assert.match(page, /ActionButton type="submit"[^>]*>[^{]*\{working \? 'Checking…' : 'Preview product line'\}/);
   assert.match(endpoint, /allowedRoles: \['admin', 'manager'\]/);
   assert.match(endpoint, /sc_preview_new_product_line_v1/);
   assert.match(endpoint, /sc_apply_new_product_line_v1/);
