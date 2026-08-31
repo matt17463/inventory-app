@@ -117,6 +117,29 @@ test('WooCommerce export supports catalog attributes, logo variations, image map
   assert.match(studio, /Product categories/);
 });
 
+test('Mockup Studio creates or reuses zero-on-hand blanks during WooCommerce export', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const publisher = await read('netlify/functions/mockup-publish-woocommerce.js');
+  const catalog = await read('netlify/functions/_shared/mockupBlankCatalog.js');
+  const sql = await read('deployment/sql/48_MOCKUP_STUDIO_AUTOMATIC_BLANKS.sql');
+  const verify = await read('deployment/sql/49_VERIFY_MOCKUP_STUDIO_AUTOMATIC_BLANKS.sql');
+  assert.match(studio, /Blank inventory catalog/);
+  assert.match(studio, /Create missing blank products and save variation mappings/);
+  assert.match(studio, /blank_unit_cost/);
+  assert.match(studio, /blank_low_stock_threshold/);
+  assert.match(publisher, /prepareMockupBlankMatrix/);
+  assert.match(publisher, /recordBlankPreparation/);
+  assert.match(publisher, /blank_products_created/);
+  assert.match(catalog, /sc_create_blank_product_safe_v1/);
+  assert.match(catalog, /blank_usage/);
+  assert.match(catalog, /product_usage/);
+  assert.match(catalog, /semantic_sku/);
+  assert.match(catalog, /zero or greater/);
+  assert.match(sql, /sc_mockup_blank_catalog_events/);
+  assert.match(sql, /ix_blank_products_mockup_catalog_identity/);
+  assert.match(verify, /mockup blank audit/);
+});
+
 test('project deletion is privileged and cleans private storage', async () => {
   const api = await read('src/lib/mockupStudioApi.js');
   const fn = await read('netlify/functions/mockup-delete-project.js');

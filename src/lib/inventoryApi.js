@@ -1633,6 +1633,41 @@ async function getPurchasingDemandSourceMap() {
   }));
 }
 
+async function getPurchasingAuthoritativeInventoryMap() {
+  const { data, error } = await supabase
+    .from('sc_purchasing_authoritative_inventory_v3')
+    .select('*');
+  if (error) {
+    console.warn('Authoritative purchasing inventory view unavailable:', error.message || error);
+    return new Map();
+  }
+  return new Map((data || []).map((row) => [String(row.blank_product_id || ''), row]));
+}
+
+function applyAuthoritativePurchasingInventory(rows, authoritativeMap, mode) {
+  if (!authoritativeMap?.size) return rows || [];
+  return (rows || []).map((row) => {
+    const authoritative = authoritativeMap.get(String(row.blank_product_id || ''));
+    if (!authoritative) return row;
+    const onHand = Number(authoritative.quantity_on_hand || 0);
+    const reserved = Number(authoritative.reserved_quantity || 0);
+    const shortage = Number(authoritative.shortage_quantity || 0);
+    const recommended = Number(authoritative.recommended_order_quantity || 0);
+    const orderQuantity = mode === 'shortages' ? shortage : recommended;
+    return {
+      ...row,
+      quantity_on_hand: onHand,
+      reserved_quantity: reserved,
+      available_quantity: Number(authoritative.available_quantity || 0),
+      need_to_order: shortage,
+      recommended_order_quantity: recommended,
+      estimated_order_value: orderQuantity * Number(row.unit_cost || 0),
+    };
+  }).filter((row) => mode === 'shortages'
+    ? Number(row.need_to_order || 0) > 0
+    : Number(row.recommended_order_quantity || 0) > 0);
+}
+
 function attachPurchasingDemandSources(rows, sourceMap) {
   return (rows || []).map((row) => {
     const source = sourceMap.get(String(row?.blank_product_id || ''));
@@ -2209,6 +2244,7 @@ export async function getPurchasingShortages(search = '') {
     sourceMap,
     pendingContext,
     nonInventoryContext,
+    authoritativeMap,
   ] = await Promise.all([
     supabase
       .from('purchasing_shortages')
@@ -2217,18 +2253,20 @@ export async function getPurchasingShortages(search = '') {
     getPurchasingDemandSourceMap(),
     getPendingStockPurchasingContext(),
     getNonInventoryPurchasingContext(),
+    getPurchasingAuthoritativeInventoryMap(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
 
   const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
-  const rows = mergePurchasingLineOverrides(
+  const mergedRows = mergePurchasingLineOverrides(
     sourcedRows,
     pendingContext,
     nonInventoryContext,
     'shortages',
     sourceMap
   );
+  const rows = applyAuthoritativePurchasingInventory(mergedRows, authoritativeMap, 'shortages');
 
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
@@ -2255,6 +2293,7 @@ export async function getPurchasingRecommendedOrders(search = '') {
     sourceMap,
     pendingContext,
     nonInventoryContext,
+    authoritativeMap,
   ] = await Promise.all([
     supabase
       .from('purchasing_recommended_orders')
@@ -2263,18 +2302,20 @@ export async function getPurchasingRecommendedOrders(search = '') {
     getPurchasingDemandSourceMap(),
     getPendingStockPurchasingContext(),
     getNonInventoryPurchasingContext(),
+    getPurchasingAuthoritativeInventoryMap(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
 
   const sourcedRows = attachPurchasingDemandSources(rowsRes.data || [], sourceMap);
-  const rows = mergePurchasingLineOverrides(
+  const mergedRows = mergePurchasingLineOverrides(
     sourcedRows,
     pendingContext,
     nonInventoryContext,
     'recommended',
     sourceMap
   );
+  const rows = applyAuthoritativePurchasingInventory(mergedRows, authoritativeMap, 'recommended');
 
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
@@ -3713,13 +3754,23 @@ export async function saveBulkColorPairingRules({
   reviewedBy,
   applyExisting = true,
 }) {
-  const { data, error } = await supabase.rpc('sc_save_color_pairing_rules_bulk', {
+  let { data, error } = await supabase.rpc('sc_save_color_drag_mappings_v1', {
     p_source_color_ids_text: (sourceColorIds || []).map((id) => String(id)),
     p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
     p_notes: notes || null,
     p_reviewed_by: reviewedBy || null,
     p_apply_existing: Boolean(applyExisting),
   });
+
+  if (error && /does not exist|schema cache|could not find/i.test(error.message || '')) {
+    ({ data, error } = await supabase.rpc('sc_save_color_pairing_rules_bulk', {
+      p_source_color_ids_text: (sourceColorIds || []).map((id) => String(id)),
+      p_canonical_color_id_text: canonicalColorId ? String(canonicalColorId) : null,
+      p_notes: notes || null,
+      p_reviewed_by: reviewedBy || null,
+      p_apply_existing: Boolean(applyExisting),
+    }));
+  }
 
   if (error) throw error;
   return data;

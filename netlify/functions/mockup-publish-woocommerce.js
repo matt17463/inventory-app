@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { commaList, numericIdList, parseJsonBody, safePathSegment, wooCollection, wooRequest } from './_shared/mockupUtils.js';
 import { signedStoredAssetUrl } from './_shared/mockupStorage.js';
+import { prepareMockupBlankMatrix } from './_shared/mockupBlankCatalog.js';
 
 const MAX_VARIATIONS = 500;
 const WOO_BATCH_SIZE = 25;
@@ -311,6 +312,41 @@ async function resolveMockupBlankMatrix(supabase, config, parentAttributes) {
   return new Map(rows.map((row) => [blankMapKey(row.color, row.size), row.blank_product_id]));
 }
 
+async function prepareOrResolveMockupBlankMatrix(supabase, config, parentAttributes, actorId) {
+  if (config.create_missing_blanks === false) {
+    return {
+      map: await resolveMockupBlankMatrix(supabase, config, parentAttributes),
+      created: 0,
+      reused: 0,
+      lookups_created: 0,
+      decisions: [],
+    };
+  }
+  return prepareMockupBlankMatrix(supabase, config, parentAttributes, actorId);
+}
+
+async function recordBlankPreparation(supabase, projectId, exportId, actorId, preparation) {
+  if (!preparation.decisions?.length) return;
+  const recorded = await supabase.from('sc_mockup_blank_catalog_events').insert(preparation.decisions.map((row) => ({
+    project_id: projectId,
+    export_id: exportId,
+    blank_product_id: row.blank_product_id,
+    color_name: row.color,
+    size_name: row.size,
+    outcome: row.outcome,
+    reused_by: row.reused_by,
+    canonical_color_id: row.canonical_color_id,
+    canonical_size_id: row.canonical_size_id,
+    created_by: actorId,
+  })));
+  if (recorded.error) {
+    if (/does not exist|schema cache|could not find/i.test(recorded.error.message || '')) {
+      throw new Error('Mockup automatic blank SQL is not installed. Run deployment/sql/48_MOCKUP_STUDIO_AUTOMATIC_BLANKS.sql, then retry.');
+    }
+    throw recorded.error;
+  }
+}
+
 async function rememberWooVariationMappings(supabase, mappings, actorId, projectId) {
   const rows = [];
   for (const mapping of mappings || []) {
@@ -514,9 +550,11 @@ export async function handler(event) {
 
     const discovered = wooCollection(await wooRequest('products/attributes?per_page=100'), 'product attributes');
     const parentAttributes = await productAttributes(config, discovered);
-    const blankProductByOption = config.type === 'variable' && config.create_variations !== false
-      ? await resolveMockupBlankMatrix(auth.supabase, config, parentAttributes)
-      : new Map();
+    const blankPreparation = config.type === 'variable' && config.create_variations !== false
+      ? await prepareOrResolveMockupBlankMatrix(auth.supabase, config, parentAttributes, auth.user.id)
+      : { map: new Map(), created: 0, reused: 0, lookups_created: 0, decisions: [] };
+    const blankProductByOption = blankPreparation.map;
+    await recordBlankPreparation(auth.supabase, projectId, exportId, auth.user.id, blankPreparation);
     const productPayload = {
       name: String(config.name).trim(),
       type: config.type === 'variable' ? 'variable' : 'simple',
@@ -544,6 +582,11 @@ export async function handler(event) {
         { key: '_sc_logo_options', value: JSON.stringify(listValue(config.logo_options)) },
         { key: '_sc_variation_image_map', value: JSON.stringify(config.variation_image_map || {}) },
         { key: '_sc_excluded_variation_pairs', value: JSON.stringify(config.excluded_variation_pairs || []) },
+        { key: '_sc_blank_catalog_preparation', value: JSON.stringify({
+          created: blankPreparation.created,
+          reused: blankPreparation.reused,
+          lookups_created: blankPreparation.lookups_created,
+        }) },
         { key: '_sc_mockup_captions', value: JSON.stringify(storeOutputs.map((row) => ({ output_id: row.id, caption: row.caption_text, font: row.caption_font, size: row.caption_size, color: row.caption_color }))) },
       ],
     };
@@ -609,6 +652,9 @@ export async function handler(event) {
       existing_variations_untouched: variationResult.untouched,
       blank_mappings_saved: mappingResult.mappings_saved || 0,
       unpaired_lines_repaired: mappingResult.unpaired_lines_repaired || 0,
+      blank_products_created: blankPreparation.created || 0,
+      blank_products_reused: blankPreparation.reused || 0,
+      blank_lookup_values_created: blankPreparation.lookups_created || 0,
     };
     await auth.supabase.from('mockup_woo_exports').update({ status: 'completed', woo_product_id: product.id, response_payload: responsePayload, completed_at: new Date().toISOString() }).eq('id', exportId);
     await auth.supabase.from('mockup_projects').update({ status: product.status === 'publish' ? 'published' : 'woo_draft', woo_product_id: product.id, woo_product_url: product.permalink || null, woo_config: config }).eq('id', projectId);

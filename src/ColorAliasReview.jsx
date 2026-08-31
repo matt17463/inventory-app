@@ -69,9 +69,14 @@ function ColorSearchBox({ label, value, onSearchChange, results, selected, onSel
   );
 }
 
-function VariationRow({ row, checked, disabled, onToggle }) {
+function VariationRow({ row, checked, disabled, onToggle, onDragStart }) {
   return (
-    <label className={`color-variation-row ${checked ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}>
+    <label
+      className={`color-variation-row ${checked ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+      draggable={!disabled}
+      onDragStart={(event) => onDragStart?.(event, row)}
+      title={disabled ? 'This is the master color.' : 'Drag this color onto the master-color box.'}
+    >
       <input
         type="checkbox"
         checked={checked}
@@ -81,6 +86,7 @@ function VariationRow({ row, checked, disabled, onToggle }) {
       <span className="variation-main">
         <strong>{row.color_name}</strong>
         <small>
+          ID {row.color_id}{row.color_code ? ` • code ${row.color_code}` : ''} •
           {compactNumber(row.usage_count)} uses
           {row.family_key ? ` • ${row.family_key} family` : ''}
           {row.match_reason ? ` • ${row.match_reason}` : ''}
@@ -285,6 +291,20 @@ export default function ColorAliasReview() {
         ? current.filter((existing) => String(existing) !== idText)
         : [...current, idText]
     ));
+  }
+
+  function dragVariation(event, row) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/sc-color-id', String(row.color_id));
+  }
+
+  function dropOnMaster(event) {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData('text/sc-color-id');
+    if (!sourceId || !selectedVariationCanonical?.color_id) return;
+    if (String(sourceId) === String(selectedVariationCanonical.color_id)) return;
+    setSelectedVariationIds((current) => Array.from(new Set([...current.map(String), String(sourceId)])));
+    setMessage('Color added to the master group. Drop more colors, then save the pairings.');
   }
 
   function selectVisibleVariations() {
@@ -547,6 +567,7 @@ export default function ColorAliasReview() {
                       checked={selectedVariationIds.map(String).includes(String(row.color_id))}
                       disabled={disabled}
                       onToggle={toggleVariation}
+                      onDragStart={dragVariation}
                     />
                   );
                 })}
@@ -587,9 +608,10 @@ export default function ColorAliasReview() {
                 Apply to existing products and blank products immediately
               </label>
 
-              <div className="pairing-preview-card">
-                <span>Bulk rule preview</span>
+              <div className="pairing-preview-card color-master-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={dropOnMaster}>
+                <span>Master color drop zone</span>
                 <strong>{compactNumber(selectedVariationIds.length)} selected variation(s) → {selectedVariationCanonical ? colorLabel(selectedVariationCanonical) : 'Choose canonical color'}</strong>
+                <small>{selectedVariationCanonical ? 'Drag color cards from the left and drop them here.' : 'Choose the master color above before dragging variations.'}</small>
                 {selectedVariationRows.length > 0 && (
                   <small>{selectedVariationRows.slice(0, 6).map((row) => row.color_name).join(', ')}{selectedVariationRows.length > 6 ? `, +${selectedVariationRows.length - 6} more` : ''}</small>
                 )}

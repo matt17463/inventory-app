@@ -47,6 +47,7 @@ const NfcWriter = lazy(() => import('./NfcWriter'));
 const NonInventoryRules = lazy(() => import('./NonInventoryRules'));
 const NotFound = lazy(() => import('./NotFound'));
 const OrderRiskDashboard = lazy(() => import('./OrderRiskDashboard'));
+const OnsiteSales = lazy(() => import('./OnsiteSales'));
 const ApplicationIntegrityCenter = lazy(() => import('./ApplicationIntegrityCenter'));
 const PricingRules = lazy(() => import('./PricingRules'));
 const ProductDataHealth = lazy(() => import('./ProductDataHealth'));
@@ -138,6 +139,7 @@ function EmployeeRoutes() {
       <Route path="/qc-checklist" element={<QcChecklist />} />
       <Route path="/employee-tasks" element={<EmployeeTasks />} />
       <Route path="/order-risk" element={<OrderRiskDashboard />} />
+      <Route path="/onsite-sales" element={<OnsiteSales />} />
       <Route path="/command-center" element={<DailyCommandCenter />} />
       <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
       <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />

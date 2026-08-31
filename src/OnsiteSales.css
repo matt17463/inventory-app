@@ -1,0 +1,38 @@
+.onsite-page { max-width: 1500px; }
+.onsite-layout { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(360px, 1.3fr); gap: 1rem; }
+.onsite-step { display: grid; gap: .85rem; align-content: start; }
+.onsite-step:last-child { grid-column: 1 / -1; }
+.onsite-step label { display: grid; gap: .35rem; font-weight: 800; }
+.onsite-step input, .onsite-step select, .onsite-step textarea { width: 100%; }
+.onsite-inventory-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .65rem; max-height: 55vh; overflow: auto; }
+.onsite-inventory-grid button { display: grid; gap: .25rem; text-align: left; padding: .85rem; border: 2px solid var(--sc-border, #d8e1ec); border-radius: 14px; background: var(--sc-surface, #fff); color: inherit; }
+.onsite-inventory-grid button.selected { border-color: #2463eb; box-shadow: 0 0 0 3px #2463eb25; }
+.onsite-inventory-grid span { color: #147a3e; font-weight: 900; }
+.onsite-fields { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: .8rem; }
+.onsite-fields .wide { grid-column: 1 / -1; }
+.onsite-complete { justify-self: end; font-size: 1.1rem; padding: 1rem 1.4rem; }
+.onsite-label { display: none; background: #fff; color: #000; padding: .18in; font-family: Arial, sans-serif; }
+.onsite-label header, .onsite-label footer { display: flex; justify-content: space-between; gap: .2in; border-bottom: 2px solid #000; padding-bottom: .08in; }
+.onsite-label footer { border: 0; border-top: 2px solid #000; padding-top: .08in; }
+.onsite-label h2 { font-size: 24pt; margin: .12in 0; }
+.onsite-label p { font-size: 14pt; margin: .06in 0; }
+.onsite-label-logo { display: block; max-width: 1.65in; max-height: .55in; object-fit: contain; }
+.label-2x3 { width: 3in; min-height: 2in; }
+.label-4x6 { width: 4in; min-height: 6in; }
+@media (max-width: 780px) {
+  .onsite-layout { grid-template-columns: 1fr; }
+  .onsite-step:last-child { grid-column: auto; }
+  .onsite-fields { grid-template-columns: 1fr 1fr; }
+  .onsite-inventory-grid { grid-template-columns: 1fr 1fr; }
+  .onsite-complete { width: 100%; }
+}
+@media (max-width: 480px) { .onsite-fields, .onsite-inventory-grid { grid-template-columns: 1fr; } }
+@media print {
+  body * { visibility: hidden !important; }
+  .onsite-label, .onsite-label * { visibility: visible !important; }
+  .onsite-label { display: block !important; position: absolute; left: 0; top: 0; }
+  .label-2x3 { page: label2x3; }
+  .label-4x6 { page: label4x6; }
+  @page label2x3 { size: 3in 2in; margin: 0; }
+  @page label4x6 { size: 4in 6in; margin: 0; }
+}
