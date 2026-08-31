@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getProductIntegrityIssues,
   getProductIntegritySummary,
+  getCatalogReconciliation,
   productIntegrityLabel,
 } from './lib/productIntegrityApi';
 
@@ -25,17 +26,20 @@ export default function ProductIntegrityCenter() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [catalogIssues, setCatalogIssues] = useState([]);
 
   const load = useCallback(async (nextType = 'all', nextSearch = '') => {
     setLoading(true);
     setMessage('');
     try {
-      const [summaryRows, issueRows] = await Promise.all([
+      const [summaryRows, issueRows, catalogRows] = await Promise.all([
         getProductIntegritySummary(),
         getProductIntegrityIssues({ issueType: nextType, search: nextSearch }),
+        getCatalogReconciliation({ search: nextSearch }).catch(() => []),
       ]);
       setSummary(summaryRows);
       setIssues(issueRows);
+      setCatalogIssues(catalogRows);
     } catch (error) {
       const missingSql = /sc_product_integrity_(summary|issues)_v1|schema cache|does not exist/i.test(error.message || '');
       setMessage(missingSql
@@ -82,6 +86,15 @@ export default function ProductIntegrityCenter() {
         <article className="sc-stat-card"><span>High priority</span><strong>{count(totals.high)}</strong><small>Deterministic conflicts</small></article>
         <article className="sc-stat-card"><span>Issue types</span><strong>{count(totals.issueGroups)}</strong><small>Categories detected</small></article>
         <article className="sc-stat-card"><span>Changes made</span><strong>0</strong><small>Diagnostics are read-only</small></article>
+      </section>
+
+      <section className="sc-panel">
+        <div className="sc-panel-header"><div><h2>WooCommerce ↔ blank reconciliation</h2><p>Variations missing a blank, mapped to an archived blank, pointing to a missing record, or lacking identity attributes.</p></div></div>
+        <div className="sc-responsive-table-wrap"><table className="sc-table"><thead><tr><th>Severity</th><th>Problem</th><th>Woo SKU</th><th>Product</th><th>Blank</th><th>Recommended repair</th></tr></thead><tbody>
+          {catalogIssues.map((row) => <tr key={row.issue_key}><td><span className={`sc-badge ${row.severity === 'high' ? 'danger' : 'warning'}`}>{row.severity}</span></td><td>{row.message}</td><td><strong>{row.sku || '—'}</strong><br/><small>variation {row.woo_variation_id || '—'}</small></td><td>{row.product_name || '—'}</td><td>{row.blank_product_id || '—'}</td><td>{String(row.repair_action || '').replaceAll('_',' ')}</td></tr>)}
+          {!catalogIssues.length && !loading && <tr><td colSpan="6" className="sc-empty-cell">No WooCommerce-to-blank reconciliation issues found.</td></tr>}
+        </tbody></table></div>
+        <p className="helper-text">Use Product-to-Blank Mappings for replacement blanks. Missing blanks created by Mockup Studio v1.3.2+ are generated automatically during Woo export.</p>
       </section>
 
       <section className="sc-panel">

@@ -53,6 +53,7 @@ export const navSections = [
       { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
       { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
       { label: 'Create Finished Product', path: '/finished/create', keywords: 'make finished from blank decorated product' },
+      { label: 'On-site Sales', path: '/onsite-sales', keywords: 'event mobile sale blank logo player name number thermal label' },
       { label: 'Finished Match Suggestions', path: '/finished-suggestions', keywords: 'finished matches use existing finished stock' },
       { label: 'Spoilage / Misprints', path: '/spoilage', keywords: 'spoilage waste misprint damaged defect' },
       { label: 'QC Checklist', path: '/qc-checklist', keywords: 'quality control checklist inspect' },

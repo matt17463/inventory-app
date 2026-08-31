@@ -1,5 +1,13 @@
 import { supabase } from '../supabaseClient';
 
+export async function getCatalogReconciliation({ search = '', limit = 500 } = {}) {
+  const { data, error } = await supabase.rpc('sc_catalog_reconciliation_v2', {
+    p_search: search || '', p_limit: limit,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getProductIntegritySummary() {
   const { data, error } = await supabase.rpc('sc_product_integrity_summary_v1');
   if (error) throw error;

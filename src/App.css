@@ -2206,6 +2206,10 @@ body.dark .manual-order-search-results-table {
   cursor: not-allowed;
 }
 
+.color-variation-row[draggable="true"] { cursor: grab; }
+.color-variation-row[draggable="true"]:active { cursor: grabbing; }
+.color-master-dropzone { border: 3px dashed #2f66e9; min-height: 130px; display: grid; place-content: center; text-align: center; }
+
 .variation-main {
   display: grid;
   gap: 0.2rem;

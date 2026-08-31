@@ -1,0 +1,30 @@
+Skilled Crafting Operations Workflow v1.4.0
+
+Core new files:
+- src/OnsiteSales.jsx
+- src/OnsiteSales.css
+- src/lib/onsiteSalesApi.js
+- netlify/functions/onsite-sales.js
+- deployment/sql/50_ONSITE_SALES_PURCHASING_AND_CATALOG_RECONCILIATION.sql
+- deployment/sql/51_VERIFY_ONSITE_SALES_AND_RECONCILIATION.sql
+- scripts/tests/onsite-sales-and-reconciliation.test.mjs
+
+Automatic Mockup Studio blank catalog files included:
+- netlify/functions/_shared/mockupBlankCatalog.js
+- deployment/sql/48_MOCKUP_STUDIO_AUTOMATIC_BLANKS.sql
+- deployment/sql/49_VERIFY_MOCKUP_STUDIO_AUTOMATIC_BLANKS.sql
+
+Modified integration files:
+- src/App.jsx
+- src/navigationConfig.js
+- src/ColorAliasReview.jsx
+- src/ProductIntegrityCenter.jsx
+- src/lib/inventoryApi.js
+- src/lib/productIntegrityApi.js
+- src/MockupStudio.jsx
+- netlify/functions/mockup-publish-woocommerce.js
+- src/App.css
+- package.json
+- package-lock.json
+
+Validation command: npm run check
