@@ -143,7 +143,7 @@ export default function NewProductLineSetup() {
             <MultiChooser label="Colors" items={lookups.colors} selected={form.color_ids} onChange={(value) => update('color_ids', value)} filter={colorFilter} setFilter={setColorFilter} />
             <MultiChooser label="Sizes" items={lookups.sizes} selected={form.size_ids} onChange={(value) => update('size_ids', value)} filter={sizeFilter} setFilter={setSizeFilter} />
           </div>
-          <div className="npl-form-actions"><ActionButton tone="primary" disabled={loading || working}>{working ? 'Checking…' : 'Preview product line'}</ActionButton></div>
+          <div className="npl-form-actions"><ActionButton type="submit" tone="primary" disabled={loading || working}>{working ? 'Checking…' : 'Preview product line'}</ActionButton></div>
         </SectionCard>
       </form>
 
