@@ -43,6 +43,10 @@ const requiredMarkers = [
   '/product-integrity',
   'Product Integrity Center',
   'Run Diagnostics',
+  '/new-product-line',
+  'New Product Line Setup',
+  'Preview product line',
+  'Create and link product line',
 ];
 
 function walkFiles(directory) {

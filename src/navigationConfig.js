@@ -28,6 +28,7 @@ export const navSections = [
     items: [
       { label: 'Inventory Overview', path: '/inventory/blanks', keywords: 'blank inventory on hand available value' },
       { label: 'Edit Blank Items', path: '/inventory/edit-blanks', keywords: 'edit blanks products sku barcode cost threshold' },
+      { label: 'New Product Line Setup', path: '/new-product-line', keywords: 'new blank product line matrix colors sizes zero on hand woocommerce pairing' },
       { label: 'Import Inventory', path: '/inventory/import', keywords: 'excel import blank finished inventory' },
       { label: 'Add Item to Bin', path: '/add-item', keywords: 'receive add item bin receiving' },
       { label: 'Sample Inventory', path: '/inventory/samples', keywords: 'samples sample products showroom' },
