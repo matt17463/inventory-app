@@ -1,0 +1,14 @@
+package.json
+package-lock.json
+netlify/functions/onsite-sales.js
+netlify/functions/_shared/mockupBlankCatalog.js
+netlify/functions/mockup-publish-woocommerce.js
+src/lib/onsiteSalesApi.js
+src/OnsiteSales.jsx
+src/OnsiteSales.css
+src/MockupStudio.jsx
+scripts/tests/onsite-sales-and-reconciliation.test.mjs
+deployment/sql/52_ONSITE_SALES_CASCADING_PICKER.sql
+deployment/sql/53_VERIFY_ONSITE_SALES_CASCADING_PICKER.sql
+RELEASE_NOTES_v1.4.2.md
+DEPLOY_ONSITE_SALES_v1.4.2.md

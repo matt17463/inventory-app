@@ -168,6 +168,13 @@ export async function prepareMockupBlankMatrix(supabase, config, parentAttribute
 
   const brand = await ensureLookup(supabase, { table: 'brands', label: 'brand', referenceColumn: 'brand_id' }, config.brand);
   const style = await ensureLookup(supabase, { table: 'product_types', label: 'style', referenceColumn: 'product_type_id' }, config.style);
+  const itemTypeName = clean(config.blank_item_type);
+  if (!itemTypeName) throw new Error('Choose a blank Item Type (Tee, Hoodie, Bag, etc.) before creating or repairing blank products.');
+  const itemTypes = await allRows(supabase, 'sc_blank_item_types', 'id,name,code,sort_order', (query) => query.eq('is_active', true));
+  const itemType = itemTypes.find((row) => [row.name, row.code].some((candidate) => normalized(candidate) === normalized(itemTypeName)));
+  if (!itemType) throw new Error('On-site Item Type SQL is not installed or the selected Item Type is invalid. Run deployment SQL 52 before exporting.');
+  const classified = await supabase.from('product_types').update({ sc_item_type_id: itemType.id }).eq('id', style.id);
+  if (classified.error) throw classified.error;
   const colorLookups = [];
   for (const color of colors) colorLookups.push(await ensureLookup(supabase, { table: 'colors', label: 'color', referenceColumn: 'color_id' }, color));
   const sizeLookups = [];

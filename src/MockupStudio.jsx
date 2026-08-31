@@ -70,7 +70,8 @@ const TABS = [
   ['production', '10. Production'],
 ];
 
-const PRODUCT_TYPES = ['tee', 'hoodie', 'sweatshirt', 'hat', 'drinkware', 'jacket', 'bag', 'other'];
+const PRODUCT_TYPES = ['tee', 'hoodie', 'sweatshirt', 'quarter zip', 'full zip', 'polo', 'jersey', 'jacket', 'vest', 'shorts', 'pants', 'hat', 'drinkware', 'bag', 'other'];
+const BLANK_ITEM_TYPES = ['Tee', 'Hoodie', 'Sweatshirt', 'Quarter Zip', 'Full Zip', 'Polo', 'Jersey', 'Jacket', 'Vest', 'Shorts', 'Pants', 'Bag', 'Hat', 'Drinkware', 'Other'];
 const PRODUCT_VIEWS = ['front', 'back', 'left', 'right', 'detail', 'wrap', 'lifestyle'];
 const PLACEMENT_PRESETS = [
   ['center_chest', 50, 44, 42, 10],
@@ -851,6 +852,8 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
   const inferredBrand = bundle.blanks.find((row) => row.metadata?.catalog_brand)?.metadata?.catalog_brand || '';
   const inferredStyle = bundle.blanks.find((row) => row.metadata?.catalog_style)?.metadata?.catalog_style || '';
   const inferredBlankCost = bundle.pricing.find((row) => /blank|garment/i.test(String(row.label || '')))?.unit_cost ?? 0;
+  const inferredItemTypeRaw = bundle.blanks.find((row) => row.product_type)?.product_type || '';
+  const inferredItemType = BLANK_ITEM_TYPES.find((name) => normalizedOption(name) === normalizedOption(inferredItemTypeRaw)) || '';
   const [wooOptions, setWooOptions] = useState({ brand: null, style: null, color: null, size: null, categories: [], shipping_classes: [], tags: [], warnings: [] });
   const [optionsMessage, setOptionsMessage] = useState('Loading WooCommerce attributes…');
   const [optionsReady, setOptionsReady] = useState(false);
@@ -879,6 +882,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     height: saved.height || '',
     create_variations: saved.create_variations !== false,
     create_missing_blanks: saved.create_missing_blanks !== false,
+    blank_item_type: saved.blank_item_type || inferredItemType,
     blank_unit_cost: saved.blank_unit_cost ?? inferredBlankCost,
     blank_low_stock_threshold: saved.blank_low_stock_threshold ?? 0,
     blank_cost_review_required: saved.blank_cost_review_required ?? Number(saved.blank_unit_cost ?? inferredBlankCost) === 0,
@@ -988,6 +992,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     if (form.type === 'variable' && form.create_variations && !imagePairs.length) { setMessage('Include at least one Color and Logo combination.'); return; }
     if (variationCount > 500) { setMessage('Reduce the variation combinations to 500 or fewer.'); return; }
     if (missingMappings.length) { setMessage('Choose a mockup for every Color and Logo combination.'); return; }
+    if (form.create_missing_blanks && !form.blank_item_type) { setMessage('Choose the blank Item Type used by this Style.'); return; }
     if (form.create_missing_blanks && !(Number(form.blank_unit_cost) >= 0)) { setMessage('Enter a blank unit cost of zero or greater.'); return; }
     if (form.create_missing_blanks && (!Number.isInteger(Number(form.blank_low_stock_threshold)) || Number(form.blank_low_stock_threshold) < 0)) { setMessage('Enter a whole-number blank low-stock threshold of zero or greater.'); return; }
     setBusy(true);
@@ -1030,7 +1035,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
 
           <SectionCard title="Product categories" description="Select every WooCommerce category that should contain this product."><div className="mockup-woo-category-options">{(wooOptions.categories || []).map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedCategoryIds.includes(String(row.id))} onChange={(e) => toggleCategory(row.id, e.target.checked)} /> {row.name}</label>)}</div>{!wooOptions.categories?.length ? <FormField label="WooCommerce category IDs" required help="Category discovery was unavailable. Enter one or more existing numeric category IDs separated by commas, then retry discovery later."><input value={form.category_ids} placeholder="For example: 15, 27" onChange={(e) => setForm({ ...form, category_ids: e.target.value })} /></FormField> : null}</SectionCard>
 
-          {form.type === 'variable' && form.create_variations ? <SectionCard title="Blank inventory catalog" description="Every Color × Size combination will reuse an existing blank or create a new zero-on-hand blank automatically before WooCommerce variations are built. No inventory quantity is added."><FieldGrid><FormField label="Automatic blank setup"><label className="mockup-check"><input type="checkbox" checked={form.create_missing_blanks} onChange={(e) => setForm({ ...form, create_missing_blanks: e.target.checked })} /> Create missing blank products and save variation mappings</label></FormField><FormField label="Blank unit cost" required help="Used only for newly created blanks. Existing blank costs are never overwritten."><input type="number" min="0" step="0.01" value={form.blank_unit_cost} onChange={(e) => setForm({ ...form, blank_unit_cost: e.target.value, blank_cost_review_required: Number(e.target.value) === 0 ? true : form.blank_cost_review_required })} /></FormField><FormField label="Blank low-stock threshold" required><input type="number" min="0" step="1" value={form.blank_low_stock_threshold} onChange={(e) => setForm({ ...form, blank_low_stock_threshold: e.target.value })} /></FormField><FormField label="Cost review"><label className="mockup-check"><input type="checkbox" checked={form.blank_cost_review_required} onChange={(e) => setForm({ ...form, blank_cost_review_required: e.target.checked })} /> Mark newly created blanks for cost review</label></FormField></FieldGrid><p className="muted-text">Duplicate color names are resolved by the color record already used most often by blank inventory. Only a genuine SKU or duplicate-blank conflict stops the export.</p></SectionCard> : null}
+          {form.type === 'variable' && form.create_variations ? <SectionCard title="Blank inventory catalog" description="Every Color × Size combination will reuse an existing blank or create a new zero-on-hand blank automatically before WooCommerce variations are built. No inventory quantity is added."><FieldGrid><FormField label="Automatic blank setup"><label className="mockup-check"><input type="checkbox" checked={form.create_missing_blanks} onChange={(e) => setForm({ ...form, create_missing_blanks: e.target.checked })} /> Create missing blank products and save variation mappings</label></FormField><FormField label="Item Type" required help="Classifies this Style for the on-site Type → Brand → Style picker. Updating an older Woo draft also repairs this classification."><select value={form.blank_item_type} onChange={(e) => setForm({ ...form, blank_item_type: e.target.value })}><option value="">Choose item type</option>{BLANK_ITEM_TYPES.map((name) => <option key={name} value={name}>{name}</option>)}</select></FormField><FormField label="Blank unit cost" required help="Used only for newly created blanks. Existing blank costs are never overwritten."><input type="number" min="0" step="0.01" value={form.blank_unit_cost} onChange={(e) => setForm({ ...form, blank_unit_cost: e.target.value, blank_cost_review_required: Number(e.target.value) === 0 ? true : form.blank_cost_review_required })} /></FormField><FormField label="Blank low-stock threshold" required><input type="number" min="0" step="1" value={form.blank_low_stock_threshold} onChange={(e) => setForm({ ...form, blank_low_stock_threshold: e.target.value })} /></FormField><FormField label="Cost review"><label className="mockup-check"><input type="checkbox" checked={form.blank_cost_review_required} onChange={(e) => setForm({ ...form, blank_cost_review_required: e.target.checked })} /> Mark newly created blanks for cost review</label></FormField></FieldGrid><p className="muted-text">Duplicate color names are resolved by the color record already used most often by blank inventory. Only a genuine SKU or duplicate-blank conflict stops the export.</p></SectionCard> : null}
 
           {form.type === 'variable' ? <SectionCard title="Logo choices" description="Select the artwork choices customers may order. The order webhook will preserve the Logo Selection value for the pull sheet and production workflow."><div className="mockup-woo-logo-options">{bundle.artwork.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={logos.some((name) => normalizedOption(name) === normalizedOption(row.artwork_name))} onChange={(e) => toggleLogo(row.artwork_name, e.target.checked)} /> {row.artwork_name}</label>)}</div></SectionCard> : null}
 

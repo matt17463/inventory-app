@@ -13,6 +13,9 @@ test('on-site sale is routed, responsive, authenticated, and atomically deducts 
   assert.match(sql, /pg_advisory_xact_lock/);
   assert.match(sql, /quantity_change.*-1/s);
   assert.match(sql, /sc_onsite_production_orders/);
+  assert.match(sql, /blank_product_id uuid not null references public\.blank_products\(id\)/);
+  assert.match(sql, /p_blank_product_id uuid/);
+  assert.doesNotMatch(read('netlify/functions/onsite-sales.js'), /p_blank_product_id:\s*number\(/);
 });
 
 test('purchasing uses authoritative movement-ledger availability', () => {
@@ -33,4 +36,32 @@ test('color mapping supports master drop zone and same-name distinct IDs', () =>
 test('product integrity includes WooCommerce blank reconciliation', () => {
   assert.match(read('src/ProductIntegrityCenter.jsx'), /WooCommerce ↔ blank reconciliation/);
   assert.match(read('deployment/sql/50_ONSITE_SALES_PURCHASING_AND_CATALOG_RECONCILIATION.sql'), /sc_catalog_reconciliation_v2/);
+});
+
+
+test('on-site sales v2 uses valid Woo ordering, category logos, and cascading in-stock selectors', () => {
+  const fn = read('netlify/functions/onsite-sales.js');
+  const page = read('src/OnsiteSales.jsx');
+  const sql = read('deployment/sql/52_ONSITE_SALES_CASCADING_PICKER.sql');
+  assert.match(fn, /orderby=title/);
+  assert.doesNotMatch(fn, /products\?category=.*orderby=name/);
+  assert.match(fn, /category-menu/);
+  assert.match(fn, /logo\|graphic\|design/);
+  assert.match(page, /Type/);
+  assert.match(page, /Brand/);
+  assert.match(page, /Style/);
+  assert.match(page, /Color/);
+  assert.match(page, /Size/);
+  assert.doesNotMatch(page, /Finished item \/ design menu/);
+  assert.match(sql, /sc_blank_item_types/);
+  assert.match(sql, /sc_item_type_id/);
+  assert.match(sql, /sc_onsite_inventory_search_v2/);
+});
+
+test('Mockup Studio classifies a style item type when creating or repairing blanks', () => {
+  assert.match(read('src/MockupStudio.jsx'), /blank_item_type/);
+  assert.match(read('src/MockupStudio.jsx'), /Item Type/);
+  assert.match(read('netlify/functions/_shared/mockupBlankCatalog.js'), /sc_blank_item_types/);
+  assert.match(read('netlify/functions/_shared/mockupBlankCatalog.js'), /sc_item_type_id/);
+  assert.match(read('netlify/functions/mockup-publish-woocommerce.js'), /_sc_blank_item_type/);
 });
