@@ -1,0 +1,20 @@
+Skilled Crafting Inventory v1.4.6 — Product Type Manager
+
+Cumulative patch includes v1.4.5 corrected-v6 plus:
+- package.json
+- package-lock.json
+- src/App.jsx
+- src/navigationConfig.js
+- src/ProductTypeManager.jsx
+- src/ProductTypeManager.css
+- src/lib/productTypeManagerApi.js
+- netlify/functions/product-type-manager.js
+- netlify/functions/_shared/mockupBlankCatalog.js
+- netlify/functions/mockup-publish-woocommerce.js
+- deployment/sql/56_PRODUCT_TYPE_MANAGER.sql
+- deployment/sql/57_VERIFY_PRODUCT_TYPE_MANAGER.sql
+- scripts/tests/product-type-manager.test.mjs
+- scripts/tests/onsite-sales-and-reconciliation.test.mjs
+- RELEASE_NOTES_v1.4.6.md
+- DEPLOY_PRODUCT_TYPE_MANAGER_v1.4.6.md
+- PATCH_MANIFEST_v1.4.6.txt

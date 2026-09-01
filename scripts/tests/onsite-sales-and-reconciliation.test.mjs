@@ -63,6 +63,7 @@ test('Mockup Studio classifies a style item type when creating or repairing blan
   assert.match(read('src/MockupStudio.jsx'), /Item Type/);
   assert.match(read('netlify/functions/_shared/mockupBlankCatalog.js'), /sc_blank_item_types/);
   assert.match(read('netlify/functions/_shared/mockupBlankCatalog.js'), /sc_item_type_id/);
+  assert.match(read('netlify/functions/_shared/mockupBlankCatalog.js'), /sc_brand_style_item_types/);
   assert.match(read('netlify/functions/mockup-publish-woocommerce.js'), /_sc_blank_item_type/);
 });
 

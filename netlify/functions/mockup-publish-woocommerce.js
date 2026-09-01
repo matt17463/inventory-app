@@ -116,7 +116,13 @@ async function productAttributes(config, discovered) {
   const colorAttribute = await validatedGlobalAttribute(color, listValue(config.colors), 'Color', 2, config.type === 'variable');
   const sizeAttribute = await validatedGlobalAttribute(size, listValue(config.sizes), 'Size', 3, config.type === 'variable');
   const logoAttribute = config.type === 'variable' ? customLogoAttribute(listValue(config.logo_options), 4) : null;
-  const ordered = [brandAttribute, styleAttribute, colorAttribute, sizeAttribute, logoAttribute].filter(Boolean);
+  const itemTypeName = String(config.blank_item_type || '').trim();
+  const itemTypeAttribute = itemTypeName ? {
+    definition: { name: 'Item Type', position: 5, visible: false, variation: false, options: [itemTypeName] },
+    reference: { name: 'Item Type' },
+    options: [itemTypeName],
+  } : null;
+  const ordered = [brandAttribute, styleAttribute, colorAttribute, sizeAttribute, logoAttribute, itemTypeAttribute].filter(Boolean);
 
   return {
     definitions: ordered.map((row) => row.definition),

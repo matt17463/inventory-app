@@ -125,6 +125,7 @@ export const navSections = [
       { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },
       { label: 'Bulk Pairing Repair', path: '/bulk-pairing-repair', keywords: 'bulk pairing repair pull sheet order incorrect blank product job items reservations' },
       { label: 'Product-to-Blank Mappings', path: '/product-blank-mappings', keywords: 'woocommerce variation blank pairing discontinued replacement substitution mapping' },
+      { label: 'Product Type Manager', path: '/product-type-manager', keywords: 'product type hoodie tee sweatshirt drinkware brand style onsite sales woocommerce classification bulk' },
       { label: 'Non-Inventory Rules', path: '/non-inventory-rules', keywords: 'non inventory product rules fees rush artwork no blank pull sheet close' },
       { label: 'Product Data Health', path: '/product-data-health', keywords: 'product data health missing attributes cost barcode supplier reports' },
       { label: 'Product Integrity Center', path: '/product-integrity', keywords: 'duplicate products sku barcode brand style color size conflicts integrity diagnostic' },

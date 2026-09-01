@@ -173,8 +173,26 @@ export async function prepareMockupBlankMatrix(supabase, config, parentAttribute
   const itemTypes = await allRows(supabase, 'sc_blank_item_types', 'id,name,code,sort_order', (query) => query.eq('is_active', true));
   const itemType = itemTypes.find((row) => [row.name, row.code].some((candidate) => normalized(candidate) === normalized(itemTypeName)));
   if (!itemType) throw new Error('On-site Item Type SQL is not installed or the selected Item Type is invalid. Run deployment SQL 52 before exporting.');
-  const classified = await supabase.from('product_types').update({ sc_item_type_id: itemType.id }).eq('id', style.id);
-  if (classified.error) throw classified.error;
+  const classified = await supabase.from('sc_brand_style_item_types').upsert({
+    brand_id: brand.id,
+    product_type_id: style.id,
+    item_type_id: itemType.id,
+    actor_id: actorId,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'brand_id,product_type_id' });
+  if (classified.error) {
+    if (/does not exist|schema cache|could not find/i.test(classified.error.message || '')) {
+      throw new Error('Product Type Manager SQL is not installed. Run deployment SQL 56 before exporting this Mockup Studio product.');
+    }
+    throw classified.error;
+  }
+  // Keep the original style-level field as a legacy fallback only when it has not
+  // already been classified. Brand + Style mappings are authoritative in v1.4.6.
+  const legacyClassified = await supabase.from('product_types')
+    .update({ sc_item_type_id: itemType.id })
+    .eq('id', style.id)
+    .is('sc_item_type_id', null);
+  if (legacyClassified.error) throw legacyClassified.error;
   const colorLookups = [];
   for (const color of colors) colorLookups.push(await ensureLookup(supabase, { table: 'colors', label: 'color', referenceColumn: 'color_id' }, color));
   const sizeLookups = [];
