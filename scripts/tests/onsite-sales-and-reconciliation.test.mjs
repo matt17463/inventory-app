@@ -83,6 +83,9 @@ test('on-site test mode cannot mutate inventory and provides device preview cont
   assert.match(fn, /TEST MODE — no inventory deduction/);
   assert.match(css, /onsite-device-phone/);
   assert.match(css, /onsite-test-watermark/);
+  assert.match(css, /\.onsite-label\{display:block/);
+  assert.doesNotMatch(css, /\.onsite-label\{display:none/);
+  assert.match(page, /onClick=\{\(\)=>window\.print\(\)\}/);
 });
 
 test('on-site Woo reads cache category menus and diagnose SiteGround challenges', () => {
