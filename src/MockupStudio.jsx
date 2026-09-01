@@ -24,6 +24,7 @@ import {
   createMockupReviewLink,
   deleteMockupProject,
   deleteMockupOutput,
+  deleteMockupPlacement,
   deletePricingItem,
   getMockupProjectBundle,
   getMockupStorageStatus,
@@ -72,6 +73,11 @@ const TABS = [
 
 const PRODUCT_TYPES = ['tee', 'hoodie', 'sweatshirt', 'quarter zip', 'full zip', 'polo', 'jersey', 'jacket', 'vest', 'shorts', 'pants', 'hat', 'drinkware', 'bag', 'other'];
 const BLANK_ITEM_TYPES = ['Tee', 'Hoodie', 'Sweatshirt', 'Quarter Zip', 'Full Zip', 'Polo', 'Jersey', 'Jacket', 'Vest', 'Shorts', 'Pants', 'Bag', 'Hat', 'Drinkware', 'Other'];
+const SIZE_PRESETS = [
+  ['Youth + Adult', 'YXS, YS, YM, YL, YXL, AS, AM, AL, AXL, A2XL, A3XL'],
+  ['Youth only', 'YXS, YS, YM, YL, YXL'],
+  ['Adult only', 'AS, AM, AL, AXL, A2XL, A3XL'],
+];
 const PRODUCT_VIEWS = ['front', 'back', 'left', 'right', 'detail', 'wrap', 'lifestyle'];
 const PLACEMENT_PRESETS = [
   ['center_chest', 50, 44, 42, 10],
@@ -659,7 +665,7 @@ function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBus
         </div>
       </SectionCard>
       <SectionCard title={`Saved placements (${rows.length})`}>
-        {!rows.length ? <EmptyState title="No placements" description="Create the first placement above." /> : <ResponsiveTable><thead><tr><th>Blank</th><th>Artwork</th><th>Placement</th><th>Method</th><th>Width</th><th>Actions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{blanks.find((x) => x.id === row.blank_asset_id)?.asset_name}</td><td>{artwork.find((x) => x.id === row.artwork_asset_id)?.artwork_name}</td><td>{row.placement_name.replace(/_/g, ' ')}</td><td>{row.decoration_method}</td><td>{row.print_width_inches ? `${row.print_width_inches} in.` : `${row.width_pct}%`}</td><td><div className="sc-button-row"><ActionButton size="sm" onClick={() => setForm(row)}>Edit</ActionButton><ActionButton size="sm" onClick={async () => { setBusy(true); try { const copied = await copyPlacementToBlanks(row, blanks.map((x) => x.id)); await refresh(); setMessage(`Placement copied to ${copied.length} additional blank photo${copied.length === 1 ? '' : 's'}. ${copied.length + 1} total blank placements are ready for this artwork.`); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Copy to all</ActionButton></div></td></tr>)}</tbody></ResponsiveTable>}
+        {!rows.length ? <EmptyState title="No placements" description="Create the first placement above." /> : <ResponsiveTable><thead><tr><th>Blank</th><th>Artwork</th><th>Placement</th><th>Method</th><th>Width</th><th>Actions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{blanks.find((x) => x.id === row.blank_asset_id)?.asset_name}</td><td>{artwork.find((x) => x.id === row.artwork_asset_id)?.artwork_name}</td><td>{row.placement_name.replace(/_/g, ' ')}</td><td>{row.decoration_method}</td><td>{row.print_width_inches ? `${row.print_width_inches} in.` : `${row.width_pct}%`}</td><td><div className="sc-button-row"><ActionButton size="sm" onClick={() => setForm(row)}>Edit</ActionButton><ActionButton size="sm" onClick={async () => { setBusy(true); try { const copied = await copyPlacementToBlanks(row, blanks.map((x) => x.id)); await refresh(); setMessage(`Placement copied to ${copied.length} additional blank photo${copied.length === 1 ? '' : 's'}. ${copied.length + 1} total blank placements are ready for this artwork.`); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Copy to all</ActionButton><ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm('Delete this saved placement? Existing generated mockups will remain but will no longer be linked to this placement. This cannot be undone.')) return; setBusy(true); try { await deleteMockupPlacement(row.id); if (form.id === row.id) setForm({ ...empty, blank_asset_id: blanks[0]?.id || '', artwork_asset_id: artwork[0]?.id || '' }); await refresh(); setMessage('Placement deleted. Existing generated mockups were preserved.'); } catch (error) { setMessage(error.message || 'Could not delete placement.'); } finally { setBusy(false); } }}>Delete</ActionButton></div></td></tr>)}</tbody></ResponsiveTable>}
       </SectionCard>
     </>
   );
@@ -972,6 +978,14 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     setForm({ ...form, category_ids: next.join(', ') });
   }
 
+  function toggleTag(id, checked) {
+    const value = String(id);
+    const next = checked
+      ? [...selectedTagIds, value].filter((item, index, rows) => rows.indexOf(item) === index)
+      : selectedTagIds.filter((item) => item !== value);
+    setForm({ ...form, tag_ids: next.join(', ') });
+  }
+
   function toggleVariationPair(key, included) {
     const next = new Set(optionList(form.excluded_variation_pairs));
     if (included) next.delete(key);
@@ -1020,9 +1034,9 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
             <FormField label="Style" required help="Uses the existing WooCommerce pa_style attribute."><select value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })}><option value="">Select Style</option>{form.style && !wooOptions.style?.terms?.some((row) => normalizedOption(row.name) === normalizedOption(form.style)) ? <option value={form.style}>{form.style}</option> : null}{(wooOptions.style?.terms || []).map((row) => <option key={row.id} value={row.name}>{row.name}</option>)}</select></FormField>
             <FormField label="Base price" required><input type="number" min="0" step="0.01" value={form.regular_price} onChange={(e) => setForm({ ...form, regular_price: e.target.value })} /></FormField>
             <FormField label="Base SKU" help="Variation SKUs add Color, Size, and Logo codes. If blank, Mockup Studio creates a product-based SKU."><input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></FormField>
-            <FormField label="Product tags" help={wooOptions.tags?.length ? 'Select WooCommerce tags.' : 'Optional: enter comma-separated WooCommerce tag IDs because tag discovery was unavailable.'}>{wooOptions.tags?.length ? <select multiple value={selectedTagIds} onChange={(e) => setForm({ ...form, tag_ids: [...e.target.selectedOptions].map((option) => option.value).join(',') })}>{wooOptions.tags.map((row) => <option key={row.id} value={String(row.id)}>{row.name}</option>)}</select> : <input value={form.tag_ids} placeholder="Optional tag IDs, such as 12, 18" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} />}</FormField>
+            <FormField label="Product tags" help={wooOptions.tags?.length ? 'Check only the WooCommerce tags you want. Nothing is selected by default unless it was saved on this project.' : 'Optional: enter comma-separated WooCommerce tag IDs because tag discovery was unavailable.'}>{wooOptions.tags?.length ? <div className="mockup-woo-tag-picker"><div className="mockup-woo-tag-options">{wooOptions.tags.map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedTagIds.includes(String(row.id))} onChange={(e) => toggleTag(row.id, e.target.checked)} /> {row.name}</label>)}</div><ActionButton type="button" size="sm" tone="secondary" disabled={!selectedTagIds.length} onClick={() => setForm({ ...form, tag_ids: '' })}>Clear all tags</ActionButton></div> : <input value={form.tag_ids} placeholder="Optional tag IDs, such as 12, 18" onChange={(e) => setForm({ ...form, tag_ids: e.target.value })} />}</FormField>
             <FormField label="Colors" help="Comma-separated existing WooCommerce Color terms."><input value={form.colors} list="mockup-woo-colors" placeholder="Black, Forest Green, White" onChange={(e) => setForm({ ...form, colors: e.target.value })} /><datalist id="mockup-woo-colors">{(wooOptions.color?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
-            <FormField label="Sizes" help="Comma-separated existing WooCommerce Size terms."><input value={form.sizes} list="mockup-woo-sizes" placeholder="YS, YM, YL, AS, AM, AL, AXL" onChange={(e) => setForm({ ...form, sizes: e.target.value })} /><datalist id="mockup-woo-sizes">{(wooOptions.size?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist></FormField>
+            <FormField label="Sizes" help="Enter sizes manually or load a common Skilled Crafting size series, then edit it if needed."><div className="mockup-woo-size-field"><input value={form.sizes} list="mockup-woo-sizes" placeholder="YS, YM, YL, AS, AM, AL, AXL" onChange={(e) => setForm({ ...form, sizes: e.target.value })} /><datalist id="mockup-woo-sizes">{(wooOptions.size?.terms || []).map((row) => <option key={row.id} value={row.name} />)}</datalist><div className="mockup-woo-size-presets">{SIZE_PRESETS.map(([label, values]) => <ActionButton key={label} type="button" size="sm" tone="secondary" onClick={() => setForm({ ...form, sizes: values })}>{label}</ActionButton>)}</div></div></FormField>
             <FormField label="Shipping class" required help={wooOptions.shipping_classes?.length ? 'Select the WooCommerce shipping class.' : 'Enter the existing WooCommerce shipping-class slug because discovery was unavailable.'}>{wooOptions.shipping_classes?.length ? <select value={form.shipping_class} onChange={(e) => setForm({ ...form, shipping_class: e.target.value })}><option value="">Select Shipping Class</option>{wooOptions.shipping_classes.map((row) => <option key={row.id} value={row.slug}>{row.name}</option>)}</select> : <input value={form.shipping_class} placeholder="Existing shipping-class slug" onChange={(e) => setForm({ ...form, shipping_class: e.target.value })} />}</FormField>
             <FormField label="Weight" required help="Use the weight unit configured in WooCommerce."><input type="number" min="0.001" step="0.001" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></FormField>
             <FormField label="Length" required help="Use the dimension unit configured in WooCommerce."><input type="number" min="0.01" step="0.01" value={form.length} onChange={(e) => setForm({ ...form, length: e.target.value })} /></FormField>
@@ -1331,3 +1345,4 @@ export default function MockupStudio() {
     </main>
   );
 }
+

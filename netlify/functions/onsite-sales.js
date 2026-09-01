@@ -3,11 +3,14 @@ import { wooCollection, wooRequest } from './_shared/mockupUtils.js';
 
 const clean = (value) => String(value ?? '').trim();
 const logoAttribute = (row) => /logo|graphic|design/i.test(clean(row?.name));
+const responseCache = new Map();
+function cached(key, ttlMs, loader) { const hit=responseCache.get(key); if(hit && Date.now()-hit.at<ttlMs) return Promise.resolve(hit.value); return Promise.resolve(loader()).then((value)=>{responseCache.set(key,{at:Date.now(),value});return value;}); }
 
-async function categories() {
+async function categories() { return cached('categories', 10 * 60 * 1000, async () => {
   const rows = wooCollection(await wooRequest('products/categories?per_page=100&orderby=name&order=asc&hide_empty=true'), 'product categories');
   return rows.map(({ id, name, slug, count }) => ({ id, name, slug, count }));
-}
+}); }
+
 
 async function products(categoryId) {
   if (!categoryId) return [];
@@ -21,7 +24,7 @@ async function products(categoryId) {
   return rows.map(({ id, name, sku, type, attributes, images }) => ({ id, name, sku, type, attributes, image: images?.[0]?.src || '' }));
 }
 
-async function categoryMenu(categoryId) {
+async function categoryMenu(categoryId) { return cached(`category-menu:${categoryId}`, 5 * 60 * 1000, async () => {
   const rows = await products(categoryId);
   const byName = new Map();
   for (const product of rows) {
@@ -42,7 +45,7 @@ async function categoryMenu(categoryId) {
     products: rows.map(({ id, name, sku, type, image }) => ({ id, name, sku, type, image })),
     logos: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
   };
-}
+}); }
 
 async function productOptions(productId) {
   if (!productId) throw new Error('Choose a WooCommerce product.');
@@ -65,6 +68,25 @@ async function inventory(supabase, search, version = 1) {
 }
 
 async function complete(supabase, body, userId) {
+  if (body.test_mode === true || clean(body.test_mode).toLowerCase() === 'true') {
+    const rows = await inventory(supabase, '', 2);
+    const blank = rows.find((row) => clean(row.blank_product_id) === clean(body.blank_product_id));
+    if (!blank || Number(blank.available_quantity || 0) <= 0) throw new Error('The selected blank is no longer available for this test. Refresh inventory and choose another item.');
+    return {
+      test_mode: true,
+      production_number: `TEST-${Date.now()}`,
+      produced_at: new Date().toISOString(),
+      label_size: ['2x3','4x6'].includes(clean(body.label_size)) ? clean(body.label_size) : '4x6',
+      customer_name: clean(body.customer_name) || null,
+      player_name: clean(body.player_name) || null,
+      player_number: clean(body.player_number) || null,
+      personalization_color: clean(body.personalization_color) || null,
+      logo_name: clean(body.logo_name) || null,
+      source_bin_label: 'TEST MODE — no inventory deduction',
+      blank_label: [blank.brand, blank.style, blank.color, blank.size].filter(Boolean).join(' • '),
+      sku_base: blank.sku_base,
+    };
+  }
   const result = await supabase.rpc('sc_complete_onsite_sale_v1', {
     p_blank_product_id: clean(body.blank_product_id) || null,
     p_customer_name: clean(body.customer_name) || null,

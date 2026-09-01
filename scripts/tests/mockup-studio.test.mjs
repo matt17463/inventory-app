@@ -413,7 +413,7 @@ test('WooCommerce product descriptions and separate pricing paths are supported'
 test('WooCommerce reads retry transient connection failures without duplicating ambiguous writes', async () => {
   const utils = await read('netlify/functions/_shared/mockupUtils.js');
   assert.match(utils, /UND_ERR_CONNECT_TIMEOUT/);
-  assert.match(utils, /const maximumAttempts = 3/);
+  assert.match(utils, /requestMethod === 'GET' \? 4 : 3/);
   assert.match(utils, /safeConnectionRetry \|\| safeReadRetry/);
   assert.match(utils, /requestMethod === 'GET'/);
   assert.match(utils, /requestMethod === 'GET' \? 60000 : 180000/);
@@ -490,4 +490,16 @@ test('WooCommerce list responses and legacy saved settings are normalized before
   assert.deepEqual(wooCollection({ 1: { id: 2 }, 0: { id: 1 } }, 'test'), [{ id: 1 }, { id: 2 }]);
   assert.deepEqual(wooCollection({ data: [{ id: 3 }] }, 'test'), [{ id: 3 }]);
   assert.throws(() => wooCollection({ code: 'unexpected' }, 'test'), /unexpected response/);
+});
+
+
+test('Mockup Studio supports placement deletion, clearable tags, and common size presets', async () => {
+  const studio = await read('src/MockupStudio.jsx');
+  const api = await read('src/lib/mockupStudioApi.js');
+  assert.match(api, /deleteMockupPlacement/);
+  assert.match(studio, /Delete this saved placement/);
+  assert.match(studio, /Clear all tags/);
+  assert.match(studio, /Youth \+ Adult/);
+  assert.match(studio, /YXS, YS, YM, YL, YXL, AS, AM, AL, AXL, A2XL, A3XL/);
+  assert.match(studio, /Adult only/);
 });

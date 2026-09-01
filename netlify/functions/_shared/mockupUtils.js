@@ -105,7 +105,7 @@ const WOO_RETRYABLE_CONNECT_CODES = new Set([
   'EAI_AGAIN',
 ]);
 
-const WOO_RETRYABLE_GET_STATUSES = new Set([429, 502, 503, 504]);
+const WOO_RETRYABLE_GET_STATUSES = new Set([202, 429, 502, 503, 504]);
 
 function connectionCode(error) {
   return String(error?.cause?.code || error?.code || '').trim();
@@ -137,7 +137,7 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
   const requestMethod = String(method || 'GET').toUpperCase();
   const resource = String(path).replace(/^\//, '');
   const url = `${wooBaseUrl()}/wp-json/wc/v3/${resource}`;
-  const maximumAttempts = 3;
+  const maximumAttempts = requestMethod === 'GET' ? 4 : 3;
   const timeoutMilliseconds = requestMethod === 'GET' ? 60000 : 180000;
 
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
@@ -151,7 +151,7 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, max-age=0',
           Pragma: 'no-cache',
-          'User-Agent': 'SkilledCrafting-MockupStudio/1.0.9',
+          'User-Agent': 'SkilledCrafting-InventoryApp/1.4.3',
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMilliseconds),
@@ -162,7 +162,7 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
       const safeReadRetry = requestMethod === 'GET';
       if (attempt < maximumAttempts && (safeConnectionRetry || safeReadRetry)) {
         console.warn(`WooCommerce ${requestMethod} connection attempt ${attempt} failed (${connectionDetail(error)}). Retrying.`);
-        await wait(750 * attempt);
+        await wait([1000, 2500, 5000][Math.min(attempt - 1, 2)]);
         continue;
       }
       throw new Error(`WooCommerce connection failed after ${attempt} attempt${attempt === 1 ? '' : 's'} while requesting ${requestMethod} ${resource} (${connectionDetail(error)}).`, { cause: error });
@@ -170,6 +170,22 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
 
     const contentType = String(response.headers.get('content-type') || '').toLowerCase();
     const responseText = await response.text();
+    const isSiteGroundChallenge = response.status === 202 || /sgcaptcha|\/\.well-known\/sgcaptcha\//i.test(responseText);
+    if (isSiteGroundChallenge) {
+      const details = {
+        utc: new Date().toISOString(), method: requestMethod, resource, attempt,
+        status: response.status, content_type: contentType || 'missing',
+        server: response.headers.get('server') || '', location: response.headers.get('location') || '',
+        request_id: response.headers.get('x-request-id') || response.headers.get('x-wp-request-id') || '',
+        body: safeResponseSample(responseText),
+      };
+      console.warn('WooCommerce SiteGround Anti-Bot challenge', details);
+      if (requestMethod === 'GET' && attempt < maximumAttempts) {
+        await wait([1000, 2500, 5000][Math.min(attempt - 1, 2)]);
+        continue;
+      }
+      throw new Error(`SiteGround Anti-Bot returned a CAPTCHA instead of WooCommerce JSON at ${details.utc} while requesting ${requestMethod} ${resource} (HTTP ${response.status}; content-type ${details.content_type}${details.location ? `; location ${details.location}` : ''}; body ${JSON.stringify(details.body)}). Provide this timestamp to SiteGround support.`);
+    }
     let payload = null;
     try { payload = responseText ? JSON.parse(responseText) : null; } catch { /* handled below with diagnostics */ }
 
@@ -186,7 +202,7 @@ export async function wooRequest(path, { method = 'GET', body } = {}) {
       ].filter(Boolean).join('; ');
       if (requestMethod === 'GET' && attempt < maximumAttempts) {
         console.warn(`WooCommerce ${requestMethod} returned invalid JSON on attempt ${attempt} (${diagnostic}). Retrying sequentially.`);
-        await wait(750 * attempt);
+        await wait([1000, 2500, 5000][Math.min(attempt - 1, 2)]);
         continue;
       }
       throw new Error(`WooCommerce returned HTTP success with an invalid JSON response while requesting ${requestMethod} ${resource} (${diagnostic}). Check WordPress security/WAF logs and exclude /wp-json/wc/v3/ from response transformations.`);

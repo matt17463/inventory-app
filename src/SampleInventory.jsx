@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { deleteOperationalAsset, operationalAssetUrls, uploadOperationalImage } from './lib/assetStorageApi';
 import './standalone_samples_manual.css';
 
 const DEFAULT_PRODUCT_TYPES = [
@@ -205,16 +206,24 @@ export default function SampleInventory() {
     if (error) {
       const fallback = await supabase
         .from('sample_products')
-        .select('id, brand, style, price, vendor, color, size, product_type, customer, quantity, bin_id, image_url, image_path, notes, created_at, updated_at')
+        .select('id, brand, style, price, vendor, color, size, product_type, customer, quantity, bin_id, image_url, image_path, image_storage_provider, image_storage_bucket, image_file_size_bytes, image_mime_type, preview_storage_provider, preview_storage_bucket, preview_storage_path, preview_size_bytes, notes, created_at, updated_at')
         .order('created_at', { ascending: false })
         .limit(5000);
 
       if (fallback.error) throw fallback.error;
-      setRows(fallback.data || []);
+      const fallbackRows = fallback.data || [];
+      const urls = await operationalAssetUrls(fallbackRows, {
+        urlField: 'image_url', providerField: 'image_storage_provider', bucketField: 'image_storage_bucket', pathField: 'image_path',
+      });
+      setRows(fallbackRows.map((row) => ({ ...row, _display_image_url: urls[String(row.id)] || row.image_url || '' })));
       return;
     }
 
-    setRows(data || []);
+    const loadedRows = data || [];
+    const urls = await operationalAssetUrls(loadedRows, {
+      urlField: 'image_url', providerField: 'image_storage_provider', bucketField: 'image_storage_bucket', pathField: 'image_path',
+    });
+    setRows(loadedRows.map((row) => ({ ...row, _display_image_url: urls[String(row.id)] || row.image_url || '' })));
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -304,26 +313,18 @@ export default function SampleInventory() {
 
   async function uploadImage(file) {
     if (!file) return { image_url: null, image_path: null };
-
-    const safeName = file.name.replace(/[^a-z0-9.\-_]+/gi, '-').toLowerCase();
-    const imagePath = `${Date.now()}-${safeName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('sample-product-images')
-      .upload(imagePath, file, {
-        cacheControl: '3600',
-        upsert: true,
-      });
-
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage
-      .from('sample-product-images')
-      .getPublicUrl(imagePath);
-
+    const stored = await uploadOperationalImage(file, 'samples');
     return {
-      image_url: data?.publicUrl || null,
-      image_path: imagePath,
+      image_url: null,
+      image_storage_provider: stored.storage_provider,
+      image_storage_bucket: stored.storage_bucket,
+      image_path: stored.storage_path,
+      image_file_size_bytes: stored.file_size_bytes,
+      image_mime_type: stored.mime_type,
+      preview_storage_provider: stored.preview_storage_provider,
+      preview_storage_bucket: stored.preview_storage_bucket,
+      preview_storage_path: stored.preview_storage_path,
+      preview_size_bytes: stored.preview_size_bytes,
     };
   }
 
@@ -346,8 +347,10 @@ export default function SampleInventory() {
       notes: source.notes.trim() || null,
     };
 
-    if (imageInfo.image_url !== undefined) payload.image_url = imageInfo.image_url;
-    if (imageInfo.image_path !== undefined) payload.image_path = imageInfo.image_path;
+    for (const field of [
+      'image_url', 'image_storage_provider', 'image_storage_bucket', 'image_path', 'image_file_size_bytes', 'image_mime_type',
+      'preview_storage_provider', 'preview_storage_bucket', 'preview_storage_path', 'preview_size_bytes',
+    ]) if (imageInfo[field] !== undefined) payload[field] = imageInfo[field];
 
     if (!payload.brand) throw new Error('Brand is required.');
     if (!payload.style) throw new Error('Style is required.');
@@ -364,9 +367,10 @@ export default function SampleInventory() {
     event.preventDefault();
     setBusy(true);
     setMessage('');
+    let imageInfo = null;
 
     try {
-      const imageInfo = await uploadImage(form.imageFile);
+      imageInfo = await uploadImage(form.imageFile);
       const payload = buildPayload(form, imageInfo);
 
       await ensureProductType(payload.product_type);
@@ -381,6 +385,11 @@ export default function SampleInventory() {
       setMessage('Sample saved.');
       await loadAll();
     } catch (err) {
+      if (imageInfo?.image_path) {
+        await deleteOperationalAsset(imageInfo, {
+          providerField: 'image_storage_provider', bucketField: 'image_storage_bucket', pathField: 'image_path',
+        }).catch(() => {});
+      }
       setMessage(err.message || 'Failed to save sample.');
     } finally {
       setBusy(false);
@@ -409,9 +418,10 @@ export default function SampleInventory() {
   async function saveEdit(row) {
     setBusy(true);
     setMessage('');
+    let imageInfo = null;
 
     try {
-      const imageInfo = editForm.imageFile
+      imageInfo = editForm.imageFile
         ? await uploadImage(editForm.imageFile)
         : {};
 
@@ -425,11 +435,23 @@ export default function SampleInventory() {
 
       if (error) throw error;
 
+      if (editForm.imageFile && row.image_path) {
+        await deleteOperationalAsset(row, {
+          providerField: 'image_storage_provider', bucketField: 'image_storage_bucket', pathField: 'image_path',
+          legacyBucket: 'sample-product-images',
+        }).catch((cleanupError) => console.warn('Old sample image cleanup failed:', cleanupError));
+      }
+
       setEditingId(null);
       setEditForm(EMPTY_FORM);
       setMessage('Sample updated.');
       await loadAll();
     } catch (err) {
+      if (imageInfo?.image_path) {
+        await deleteOperationalAsset(imageInfo, {
+          providerField: 'image_storage_provider', bucketField: 'image_storage_bucket', pathField: 'image_path',
+        }).catch(() => {});
+      }
       setMessage(err.message || 'Failed to update sample.');
     } finally {
       setBusy(false);
@@ -451,9 +473,10 @@ export default function SampleInventory() {
 
       if (error) throw error;
 
-      if (row.image_path) {
-        await supabase.storage.from('sample-product-images').remove([row.image_path]);
-      }
+      await deleteOperationalAsset(row, {
+        providerField: 'image_storage_provider', bucketField: 'image_storage_bucket', pathField: 'image_path',
+        legacyBucket: 'sample-product-images',
+      }).catch((cleanupError) => console.warn('Deleted sample image cleanup failed:', cleanupError));
 
       setMessage('Sample deleted.');
       await loadAll();
@@ -635,7 +658,7 @@ export default function SampleInventory() {
   }
 
   function renderThumbnail(row) {
-    if (!row.image_url) return <span className="muted">No image</span>;
+    if (!row._display_image_url) return <span className="muted">No image</span>;
 
     return (
       <button
@@ -644,7 +667,7 @@ export default function SampleInventory() {
         onClick={() => setImagePreview(row)}
         title="Click to enlarge image"
       >
-        <img src={row.image_url} alt={imageAlt(row)} className="sample-thumb sample-thumb-small" />
+        <img src={row._display_image_url} alt={imageAlt(row)} className="sample-thumb sample-thumb-small" loading="lazy" decoding="async" />
       </button>
     );
   }
@@ -677,7 +700,7 @@ export default function SampleInventory() {
               </div>
               <button type="button" onClick={() => setImagePreview(null)}>Close</button>
             </div>
-            <img src={imagePreview.image_url} alt={imageAlt(imagePreview)} />
+            <img src={imagePreview._display_image_url} alt={imageAlt(imagePreview)} />
           </div>
         </div>
       )}

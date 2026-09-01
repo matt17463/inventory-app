@@ -65,3 +65,33 @@ test('Mockup Studio classifies a style item type when creating or repairing blan
   assert.match(read('netlify/functions/_shared/mockupBlankCatalog.js'), /sc_item_type_id/);
   assert.match(read('netlify/functions/mockup-publish-woocommerce.js'), /_sc_blank_item_type/);
 });
+
+
+test('on-site test mode cannot mutate inventory and provides device preview controls', () => {
+  const fn = read('netlify/functions/onsite-sales.js');
+  const page = read('src/OnsiteSales.jsx');
+  const css = read('src/OnsiteSales.css');
+  assert.match(page, /sc-onsite-test-mode/);
+  assert.match(page, /Create TEST label/);
+  assert.match(page, /TEST MODE — NO INVENTORY DEDUCTION/);
+  assert.match(page, /sc-onsite-device-mode/);
+  assert.match(page, /Phone/);
+  assert.match(page, /Tablet/);
+  assert.match(page, /Laptop/);
+  assert.match(fn, /body\.test_mode/);
+  assert.match(fn, /test_mode: true/);
+  assert.match(fn, /TEST MODE — no inventory deduction/);
+  assert.match(css, /onsite-device-phone/);
+  assert.match(css, /onsite-test-watermark/);
+});
+
+test('on-site Woo reads cache category menus and diagnose SiteGround challenges', () => {
+  const fn = read('netlify/functions/onsite-sales.js');
+  const utils = read('netlify/functions/_shared/mockupUtils.js');
+  assert.match(fn, /10 \* 60 \* 1000/);
+  assert.match(fn, /5 \* 60 \* 1000/);
+  assert.match(utils, /SkilledCrafting-InventoryApp\/1\.4\.3/);
+  assert.match(utils, /sgcaptcha/);
+  assert.match(utils, /new Date\(\)\.toISOString\(\)/);
+  assert.match(utils, /SiteGround Anti-Bot challenge/);
+});

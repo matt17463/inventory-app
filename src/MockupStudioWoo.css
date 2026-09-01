@@ -20,14 +20,16 @@
 }
 
 .mockup-woo-logo-options,
-.mockup-woo-category-options {
+.mockup-woo-category-options,
+.mockup-woo-tag-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: .65rem;
 }
 
 .mockup-woo-logo-options .mockup-check,
-.mockup-woo-category-options .mockup-check {
+.mockup-woo-category-options .mockup-check,
+.mockup-woo-tag-options .mockup-check {
   padding: .65rem .75rem;
   border: 1px solid var(--mockup-border, var(--sc-border, #cbd5e1));
   border-radius: 9px;
@@ -97,3 +99,7 @@
 @media (max-width: 700px) {
   .mockup-woo-summary { grid-template-columns: 1fr; }
 }
+
+.mockup-woo-tag-picker, .mockup-woo-size-field { display: grid; gap: .6rem; }
+.mockup-woo-size-presets { display: flex; flex-wrap: wrap; gap: .45rem; }
+.mockup-woo-tag-picker > button { justify-self: start; }

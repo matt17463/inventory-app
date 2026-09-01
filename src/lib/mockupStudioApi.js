@@ -452,6 +452,13 @@ export async function saveMockupPlacement(values) {
   return data;
 }
 
+export async function deleteMockupPlacement(id) {
+  if (!id) throw new Error('Placement ID is required.');
+  const { error } = await supabase.from('mockup_placements').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
 export async function copyPlacementToBlanks(placement, blankAssetIds = []) {
   const targetIds = [...new Set(blankAssetIds)]
     .filter((id) => id && id !== placement.blank_asset_id);

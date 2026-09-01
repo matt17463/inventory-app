@@ -1,0 +1,14 @@
+Skilled Crafting Inventory App v1.4.5 — R2 Egress Contract Corrective Overlay
+
+This overlay supplies files omitted from the first v1.4.5 app patch packaging.
+It does not change package.json version; the application remains v1.4.5.
+
+Files:
+- src/SampleInventory.jsx
+- src/lib/assetStorageApi.js
+- netlify/functions/asset-storage.js
+- scripts/migrate-operational-assets-to-r2.mjs
+- deployment/sql/32_R2_EGRESS_COMPLETION.sql
+- deployment/sql/33_VERIFY_R2_EGRESS_COMPLETION.sql
+- deployment/netlify-r2-egress-v1.0.5.env.example
+- deployment/cloudflare-r2-cors-v1.0.5.json
