@@ -1,0 +1,26 @@
+Skilled Crafting Inventory App v1.4.5 cumulative overlay
+
+Target: current v1.4.2 production tree. This overlay supersedes the not-yet-deployed v1.4.3 and v1.4.4 application overlays.
+
+Functional files carried forward from v1.4.3/v1.4.4:
+- src/MockupStudio.jsx
+- src/OnsiteSales.jsx
+- src/MockupStudioWoo.css
+- src/OnsiteSales.css
+- src/lib/mockupStudioApi.js
+- netlify/functions/_shared/mockupUtils.js
+- netlify/functions/onsite-sales.js
+- scripts/tests/mockup-studio.test.mjs
+- scripts/tests/onsite-sales-and-reconciliation.test.mjs
+
+New/updated for v1.4.5:
+- package.json
+- package-lock.json
+- netlify/functions/artwork-r2-storage.js
+- scripts/tests/artwork-r2-storage.test.mjs
+- deployment/DEPLOY_WORKFLOW_RELIABILITY_v1.4.5.md
+- deployment/RELEASE_NOTES_v1.4.5.md
+- deployment/ARTWORK_R2_STORAGE_v1.1.0.md
+
+No new Supabase SQL is required by v1.4.5.
+The WordPress Artwork R2 companion is distributed separately.

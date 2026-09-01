@@ -1,0 +1,12 @@
+Skilled Crafting Inventory App v1.4.5 - R2 Production Photo Contract Fix
+
+Files:
+- src/lib/phase6Api.js
+
+Purpose:
+- Routes production photo uploads through uploadOperationalImage(file, 'production').
+- Resolves display URLs through operationalAssetUrls.
+- Deletes the newly uploaded R2 asset if the database insert fails.
+- Completes the operational R2 contract required by scripts/tests/r2-egress-completion.test.mjs.
+
+No version bump. This is a packaging correction to v1.4.5.

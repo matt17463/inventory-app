@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { deleteOperationalAsset, operationalAssetUrls, uploadOperationalImage } from './assetStorageApi';
 
 function clean(value) {
   return String(value ?? '').trim();
@@ -336,16 +337,16 @@ export async function getProductionPhotos() {
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) throw error;
-  return data || [];
+  const rows = data || [];
+  const urls = await operationalAssetUrls(rows, {
+    urlField: 'photo_url', providerField: 'storage_provider', bucketField: 'storage_bucket', pathField: 'storage_path',
+  });
+  return rows.map((row) => ({ ...row, _display_photo_url: urls[String(row.id)] || row.photo_url || '' }));
 }
 
 export async function uploadProductionPhoto(file, input) {
   if (!file) throw new Error('Photo file is required.');
-  const ext = file.name.split('.').pop() || 'jpg';
-  const path = `${new Date().toISOString().slice(0, 10)}/${crypto?.randomUUID ? crypto.randomUUID() : Date.now()}.${ext}`;
-  const { error: uploadError } = await supabase.storage.from('production-photo-proof').upload(path, file, { upsert: false });
-  if (uploadError) throw uploadError;
-  const { data: publicData } = supabase.storage.from('production-photo-proof').getPublicUrl(path);
+  const stored = await uploadOperationalImage(file, 'production');
   const payload = {
     uploaded_by: clean(input.uploaded_by),
     source_type: clean(input.source_type),
@@ -354,14 +355,25 @@ export async function uploadProductionPhoto(file, input) {
     order_id: clean(input.order_id),
     job_id: clean(input.job_id),
     photo_type: clean(input.photo_type) || 'general',
-    photo_url: publicData.publicUrl,
-    storage_path: path,
+    photo_url: null,
+    storage_provider: stored.storage_provider,
+    storage_bucket: stored.storage_bucket,
+    storage_path: stored.storage_path,
+    file_size_bytes: stored.file_size_bytes,
+    mime_type: stored.mime_type,
+    preview_storage_provider: stored.preview_storage_provider,
+    preview_storage_bucket: stored.preview_storage_bucket,
+    preview_storage_path: stored.preview_storage_path,
+    preview_size_bytes: stored.preview_size_bytes,
     caption: clean(input.caption),
     notes: clean(input.notes),
     metadata: input.metadata || {},
   };
   const { data, error } = await supabase.from('sc_production_photos').insert(payload).select().single();
-  if (error) throw error;
+  if (error) {
+    await deleteOperationalAsset(stored).catch(() => {});
+    throw error;
+  }
   await logAction('production_photo_uploaded', 'production_photo', data.id, payload.caption || `Photo uploaded: ${payload.photo_type}`, payload.uploaded_by, 'info', payload);
   return data;
 }

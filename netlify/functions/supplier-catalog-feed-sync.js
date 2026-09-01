@@ -3,12 +3,13 @@ import zlib from 'node:zlib';
 import { authorizeEmployee, createServiceClient, jsonResponse } from './_shared/security.js';
 import { supplierMatchKey } from './_shared/supplierConfirmationParser.js';
 import { matchSupplierColor } from './_shared/supplierColorMatcher.js';
+import { deleteOperationalObject, getOperationalObject, putOperationalObject } from './_shared/operationalStorage.js';
 
 const DEFAULT_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_CHUNK_SIZE || 50);
 const MAX_CHUNK_SIZE = Number(process.env.SUPPLIER_CATALOG_SYNC_MAX_CHUNK_SIZE || 250);
 const DOWNLOAD_TIMEOUT_MS = Number(process.env.SUPPLIER_CATALOG_DOWNLOAD_TIMEOUT_MS || 30000);
 const MAX_SOURCE_BYTES = Number(process.env.SUPPLIER_CATALOG_MAX_SOURCE_BYTES || 100 * 1024 * 1024);
-const CACHE_BUCKET = 'supplier-sync-cache';
+const LEGACY_CACHE_BUCKET = 'supplier-sync-cache';
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -480,20 +481,17 @@ async function createRun(supabase, feed, userId) {
 
 async function cacheSource(supabase, run, feed) {
   const downloaded = await downloadSupplierBuffer(feed);
-  const objectPath = `${String(feed.id).replace(/[^a-zA-Z0-9_-]/g, '_')}/${run.id}/source.bin`;
-  const { error: uploadError } = await supabase.storage
-    .from(CACHE_BUCKET)
-    .upload(objectPath, downloaded.buffer, {
-      contentType: downloaded.contentType || 'application/octet-stream',
-      upsert: true,
-      cacheControl: '0',
-    });
-  if (uploadError) throw new Error(`Unable to cache supplier source: ${uploadError.message}`);
+  const objectPath = `operational/supplier-cache/${String(feed.id).replace(/[^a-zA-Z0-9_-]/g, '_')}/${run.id}/source.bin`;
+  const stored = await putOperationalObject({
+    key: objectPath, bytes: downloaded.buffer,
+    contentType: downloaded.contentType || 'application/octet-stream', makePreview: false,
+  });
 
   const source = supplierTextFromBuffer(downloaded.buffer, downloaded.auditUrl);
   const updated = await updateRun(supabase, run.id, {
-    cache_bucket: CACHE_BUCKET,
-    cache_object_path: objectPath,
+    cache_storage_provider: stored.storage_provider,
+    cache_bucket: stored.storage_bucket,
+    cache_object_path: stored.storage_path,
     source_url: downloaded.auditUrl,
     source_label: source.sourceLabel,
     source_kind: source.sourceKind,
@@ -507,9 +505,12 @@ async function cacheSource(supabase, run, feed) {
 
 async function loadCachedSource(supabase, run) {
   if (!run.cache_object_path) throw new Error('Supplier sync run has no cached source. Start a new run.');
-  const { data, error } = await supabase.storage.from(run.cache_bucket || CACHE_BUCKET).download(run.cache_object_path);
-  if (error) throw new Error(`Unable to read cached supplier source: ${error.message}`);
-  const buffer = Buffer.from(await data.arrayBuffer());
+  const loaded = await getOperationalObject(supabase, {
+    provider: run.cache_storage_provider || 'supabase',
+    bucket: run.cache_bucket || LEGACY_CACHE_BUCKET,
+    path: run.cache_object_path,
+  });
+  const buffer = loaded.bytes;
   if (!buffer.length) throw new Error('Cached supplier source is empty.');
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
   if (run.source_sha256 && sha256 !== run.source_sha256) throw new Error('Cached supplier source checksum does not match the recorded run.');
@@ -518,8 +519,11 @@ async function loadCachedSource(supabase, run) {
 
 async function removeCachedSource(supabase, run) {
   if (!run?.cache_object_path) return;
-  const { error } = await supabase.storage.from(run.cache_bucket || CACHE_BUCKET).remove([run.cache_object_path]);
-  if (error) console.warn('Supplier cache cleanup failed:', error.message);
+  await deleteOperationalObject(supabase, {
+    provider: run.cache_storage_provider || 'supabase',
+    bucket: run.cache_bucket || LEGACY_CACHE_BUCKET,
+    path: run.cache_object_path,
+  }).catch((error) => console.warn('Supplier cache cleanup failed:', error.message));
 }
 
 export const handler = async (event) => {
