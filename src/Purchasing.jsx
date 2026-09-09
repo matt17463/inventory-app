@@ -9,6 +9,8 @@ import {
 } from './lib/inventoryApi';
 import {
   fixPurchasingPairing,
+  fixPurchasingSuggestedItem,
+  getPurchasingSuggestedItemPreview,
   reusableMappingSummary,
   searchPurchasingPairingBlanks,
   sourceHasReusableMappingKey,
@@ -103,15 +105,30 @@ function sourceQuantity(source) {
   return Number(source?.quantity || source?.reserved_quantity || 0);
 }
 
-function DemandSourcesCell({ row, expanded, onToggle, onFixPairing }) {
+function DemandSourcesCell({ row, expanded, onToggle, onFixPairing, onFixSuggestedItem }) {
   const sources = demandSources(row);
   const visibleSources = expanded ? sources : sources.slice(0, 2);
   const sourceCount = Number(row?.demand_source_count || sources.length || 0);
 
   if (!sources.length) {
+    const reserved = Number(row?.reserved_quantity || 0);
+    const threshold = Number(row?.low_stock_threshold || 0);
+    const driverLabel = reserved > 0
+      ? (threshold > 0 ? 'Reservation + threshold; no pull-sheet source' : 'Reservation; no pull-sheet source')
+      : (threshold > 0 ? 'Threshold / stock-level suggestion' : 'No source details');
+
     return (
       <td className="purchasing-source-cell muted-cell">
-        {Number(row?.reserved_quantity || 0) > 0 ? 'No source details' : '—'}
+        <div className="purchasing-source-less">
+          <span>{driverLabel}</span>
+          <button
+            type="button"
+            className="pairing-fix-button purchasing-suggested-fix-button"
+            onClick={() => onFixSuggestedItem(row)}
+          >
+            Fix Suggested Item
+          </button>
+        </div>
       </td>
     );
   }
@@ -184,6 +201,10 @@ export default function Purchasing() {
   const [rememberPairing, setRememberPairing] = useState(true);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingMessage, setPairingMessage] = useState('');
+  const [suggestedPreview, setSuggestedPreview] = useState(null);
+  const [moveSuggestedThreshold, setMoveSuggestedThreshold] = useState(true);
+  const [moveUnlinkedReservations, setMoveUnlinkedReservations] = useState(true);
+  const [rememberSuggestedRule, setRememberSuggestedRule] = useState(true);
 
   async function loadData() {
     setLoading(true);
@@ -244,13 +265,47 @@ export default function Purchasing() {
 
   function openPairingFix(row, source) {
     const canRemember = sourceHasReusableMappingKey(source);
-    setPairingTarget({ row, source });
+    setPairingTarget({ row, source, mode: 'source' });
     setPairingSearch([row?.brand, row?.product_type, row?.color, row?.size].filter(Boolean).join(' '));
     setPairingResults([]);
     setSelectedPairingBlank(null);
     setPairingReason('Correcting blank pairing from Purchasing Report.');
     setRememberPairing(canRemember);
     setPairingMessage('');
+  }
+
+  async function openSuggestedItemFix(row) {
+    setPairingTarget({ row, source: null, mode: 'suggested' });
+    setPairingSearch([row?.brand, row?.product_type, row?.color, row?.size].filter(Boolean).join(' '));
+    setPairingResults([]);
+    setSelectedPairingBlank(null);
+    setPairingReason('Correcting a source-less Purchasing suggestion.');
+    setRememberPairing(false);
+    setSuggestedPreview(null);
+    setMoveSuggestedThreshold(Number(row?.low_stock_threshold || 0) > 0);
+    setMoveUnlinkedReservations(Number(row?.reserved_quantity || 0) > 0);
+    setRememberSuggestedRule(true);
+    setPairingMessage('');
+    setPairingBusy(true);
+
+    try {
+      const preview = await getPurchasingSuggestedItemPreview(row?.blank_product_id);
+      setSuggestedPreview(preview || null);
+      setMoveSuggestedThreshold(Number(preview?.source_threshold ?? row?.low_stock_threshold ?? 0) > 0);
+      setMoveUnlinkedReservations(Number(preview?.unlinked_active_reservation_count || 0) > 0);
+      if (preview?.saved_replacement_blank_product_id) {
+        setSelectedPairingBlank({
+          id: preview.saved_replacement_blank_product_id,
+          sku_base: preview.saved_replacement_sku || '',
+          name: preview.saved_replacement_name || '',
+          label: [preview.saved_replacement_sku, preview.saved_replacement_name].filter(Boolean).join(' / '),
+        });
+      }
+    } catch (err) {
+      setPairingMessage(err.message || 'Could not inspect the Purchasing suggestion.');
+    } finally {
+      setPairingBusy(false);
+    }
   }
 
   function closePairingFix() {
@@ -260,6 +315,10 @@ export default function Purchasing() {
     setPairingResults([]);
     setSelectedPairingBlank(null);
     setPairingMessage('');
+    setSuggestedPreview(null);
+    setMoveSuggestedThreshold(true);
+    setMoveUnlinkedReservations(true);
+    setRememberSuggestedRule(true);
   }
 
   async function searchPairingBlanks(event) {
@@ -279,10 +338,6 @@ export default function Purchasing() {
   }
 
   async function savePairingFix() {
-    if (!pairingTarget?.source?.job_item_id) {
-      setPairingMessage('This purchasing source does not have a pull-sheet line ID to repair.');
-      return;
-    }
     if (!selectedPairingBlank?.id) {
       setPairingMessage('Choose the correct replacement blank product first.');
       return;
@@ -290,6 +345,68 @@ export default function Purchasing() {
 
     const currentSku = pairingTarget?.row?.sku_base || pairingTarget?.row?.name || 'current blank';
     const nextSku = selectedPairingBlank?.sku_base || selectedPairingBlank?.name || 'selected blank';
+
+    if (pairingTarget?.mode === 'suggested') {
+      const actions = [];
+      if (moveUnlinkedReservations) actions.push('move active reservations that are not tied to an existing pull-sheet line');
+      if (moveSuggestedThreshold) actions.push('move the low-stock threshold to the replacement blank');
+      if (rememberSuggestedRule) actions.push('save a Purchasing replacement rule');
+
+      if (!actions.length) {
+        setPairingMessage('Select at least one correction action.');
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Repair this Purchasing suggestion from ${currentSku} to ${nextSku}?\n\n`
+        + `${actions.join('; ')}.\n\n`
+        + 'This does not move or deduct physical on-hand inventory and does not rewrite inventory movement history.'
+      );
+      if (!confirmed) return;
+
+      setPairingBusy(true);
+      setPairingMessage('');
+      try {
+        const result = await fixPurchasingSuggestedItem({
+          sourceBlankProductId: pairingTarget.row.blank_product_id,
+          newBlankProductId: selectedPairingBlank.id,
+          reason: pairingReason,
+          moveUnlinkedReservations,
+          moveThreshold: moveSuggestedThreshold,
+          rememberRule: rememberSuggestedRule,
+        });
+
+        const movedReservations = Number(result?.unlinked_reservations_moved || 0);
+        const movedQty = Number(result?.unlinked_reserved_quantity_moved || 0);
+        const thresholdMoved = Boolean(result?.threshold_moved);
+        const ruleSaved = Boolean(result?.rule_id);
+        const skipped = Number(result?.inactive_linked_reservations_skipped || 0);
+        const details = [
+          movedReservations ? `${movedReservations} unlinked reservation${movedReservations === 1 ? '' : 's'} moved (Qty ${number(movedQty)})` : null,
+          thresholdMoved ? 'low-stock threshold moved' : null,
+          ruleSaved ? 'Purchasing replacement rule saved' : null,
+          skipped ? `${skipped} stale/inactive linked reservation${skipped === 1 ? '' : 's'} left unchanged for safety` : null,
+        ].filter(Boolean).join('; ');
+
+        setPairingTarget(null);
+        setPairingResults([]);
+        setSelectedPairingBlank(null);
+        setSuggestedPreview(null);
+        await loadData();
+        setMessage(`Suggested Purchasing item corrected.${details ? ` ${details}.` : ''}`);
+      } catch (err) {
+        setPairingMessage(err.message || 'Could not correct the suggested Purchasing item.');
+      } finally {
+        setPairingBusy(false);
+      }
+      return;
+    }
+
+    if (!pairingTarget?.source?.job_item_id) {
+      setPairingMessage('This purchasing source does not have a pull-sheet line ID to repair.');
+      return;
+    }
+
     const confirmed = window.confirm(
       `Change this purchasing demand from ${currentSku} to ${nextSku}?\n\n`
       + 'The pull-sheet pairing and its existing reservation will be corrected. '
@@ -478,6 +595,7 @@ export default function Purchasing() {
                         expanded={expandedSources.has(rowKey)}
                         onToggle={() => toggleSourceDetails(rowKey)}
                         onFixPairing={openPairingFix}
+                        onFixSuggestedItem={openSuggestedItemFix}
                       />
                       <td>{number(row.available_quantity)}</td>
                       <td>{number(row.low_stock_threshold)}</td>
@@ -528,26 +646,48 @@ export default function Purchasing() {
       {pairingTarget ? (
         <div className="purchasing-pairing-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closePairingFix(); }}>
           <section className="purchasing-pairing-modal" role="dialog" aria-modal="true" aria-labelledby="purchasing-pairing-title">
-            <h2 id="purchasing-pairing-title">Fix Blank Pairing</h2>
-            <p>Correct the pull-sheet line that is currently creating purchasing demand against the wrong blank product.</p>
+            <h2 id="purchasing-pairing-title">{pairingTarget.mode === 'suggested' ? 'Fix Suggested Purchasing Item' : 'Fix Blank Pairing'}</h2>
+            <p>{pairingTarget.mode === 'suggested'
+              ? 'Correct a Purchasing recommendation that is not tied to an existing pull-sheet source. Only the selected purchasing drivers are changed.'
+              : 'Correct the pull-sheet line that is currently creating purchasing demand against the wrong blank product.'}</p>
 
-            <div className="purchasing-pairing-summary">
-              <div>
-                <span>Order / Pull Sheet</span>
-                <strong>{sourceOrderLabel(pairingTarget.source)}</strong>
-                <small>{sourcePullSheetLabel(pairingTarget.source)} • Line #{pairingTarget.source.job_item_id}</small>
+            {pairingTarget.mode === 'suggested' ? (
+              <div className="purchasing-pairing-summary">
+                <div>
+                  <span>Currently Suggested Blank</span>
+                  <strong>{pairingTarget.row.sku_base || pairingTarget.row.name || '—'}</strong>
+                  <small>{[pairingTarget.row.brand, pairingTarget.row.product_type, pairingTarget.row.color, pairingTarget.row.size].filter(Boolean).join(' / ')}</small>
+                </div>
+                <div>
+                  <span>Why It Appears</span>
+                  <strong>Reserved {number(pairingTarget.row.reserved_quantity)} • Threshold {number(pairingTarget.row.low_stock_threshold)}</strong>
+                  <small>On hand {number(pairingTarget.row.quantity_on_hand)} • Suggested qty {number(getOrderQuantity(pairingTarget.row, tab))}</small>
+                </div>
+                <div>
+                  <span>Source-less Reservation Check</span>
+                  <strong>{number(suggestedPreview?.unlinked_active_reservation_count || 0)} unlinked active reservation(s)</strong>
+                  <small>Qty {number(suggestedPreview?.unlinked_active_reserved_quantity || 0)} can be moved safely</small>
+                </div>
               </div>
-              <div>
-                <span>Ordered Item</span>
-                <strong>{pairingTarget.source.order_sku || pairingTarget.source.item_name || '—'}</strong>
-                <small>Qty {number(sourceQuantity(pairingTarget.source))}</small>
+            ) : (
+              <div className="purchasing-pairing-summary">
+                <div>
+                  <span>Order / Pull Sheet</span>
+                  <strong>{sourceOrderLabel(pairingTarget.source)}</strong>
+                  <small>{sourcePullSheetLabel(pairingTarget.source)} • Line #{pairingTarget.source.job_item_id}</small>
+                </div>
+                <div>
+                  <span>Ordered Item</span>
+                  <strong>{pairingTarget.source.order_sku || pairingTarget.source.item_name || '—'}</strong>
+                  <small>Qty {number(sourceQuantity(pairingTarget.source))}</small>
+                </div>
+                <div>
+                  <span>Currently Paired Blank</span>
+                  <strong>{pairingTarget.row.sku_base || pairingTarget.row.name || '—'}</strong>
+                  <small>{[pairingTarget.row.brand, pairingTarget.row.product_type, pairingTarget.row.color, pairingTarget.row.size].filter(Boolean).join(' / ')}</small>
+                </div>
               </div>
-              <div>
-                <span>Currently Paired Blank</span>
-                <strong>{pairingTarget.row.sku_base || pairingTarget.row.name || '—'}</strong>
-                <small>{[pairingTarget.row.brand, pairingTarget.row.product_type, pairingTarget.row.color, pairingTarget.row.size].filter(Boolean).join(' / ')}</small>
-              </div>
-            </div>
+            )}
 
             <form onSubmit={searchPairingBlanks}>
               <label>Search correct blank product</label>
@@ -595,7 +735,65 @@ export default function Purchasing() {
                 />
               </label>
 
-              {sourceHasReusableMappingKey(pairingTarget.source) ? (
+              {pairingTarget.mode === 'suggested' ? (
+                <>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={moveUnlinkedReservations}
+                      onChange={(event) => setMoveUnlinkedReservations(event.target.checked)}
+                      disabled={!Number(suggestedPreview?.unlinked_active_reservation_count || 0)}
+                    />
+                    <span>
+                      <strong>Move active reservations that are not tied to an existing pull sheet</strong>
+                      <small>{number(suggestedPreview?.unlinked_active_reservation_count || 0)} reservation(s), Qty {number(suggestedPreview?.unlinked_active_reserved_quantity || 0)}</small>
+                    </span>
+                  </label>
+
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={moveSuggestedThreshold}
+                      onChange={(event) => setMoveSuggestedThreshold(event.target.checked)}
+                      disabled={Number(suggestedPreview?.source_threshold ?? pairingTarget.row.low_stock_threshold ?? 0) <= 0}
+                    />
+                    <span>
+                      <strong>Move the low-stock threshold to the replacement blank</strong>
+                      <small>Source threshold {number(suggestedPreview?.source_threshold ?? pairingTarget.row.low_stock_threshold ?? 0)}; replacement keeps the higher of its existing threshold or this value.</small>
+                    </span>
+                  </label>
+
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={rememberSuggestedRule}
+                      onChange={(event) => setRememberSuggestedRule(event.target.checked)}
+                    />
+                    <span>
+                      <strong>Remember this as a Purchasing replacement rule</strong>
+                      <small>This is scoped to source-less Purchasing suggestions. It does not rewrite WooCommerce product mappings or pull-sheet pairings.</small>
+                    </span>
+                  </label>
+
+                  {suggestedPreview?.saved_replacement_blank_product_id ? (
+                    <div className="purchasing-pairing-note">
+                      Saved replacement preference: <strong>{suggestedPreview.saved_replacement_sku || suggestedPreview.saved_replacement_name || suggestedPreview.saved_replacement_blank_product_id}</strong>.
+                    </div>
+                  ) : null}
+
+                  {Number(suggestedPreview?.linked_active_job_item_count || 0) > 0 ? (
+                    <div className="purchasing-pairing-note warning-text">
+                      {number(suggestedPreview.linked_active_job_item_count)} active pull-sheet line(s) still reference this blank. They are intentionally not changed by this source-less repair; use the line-level Fix Pairing control for those jobs.
+                    </div>
+                  ) : null}
+
+                  {Number(suggestedPreview?.inactive_linked_reservation_count || 0) > 0 ? (
+                    <div className="purchasing-pairing-note warning-text">
+                      {number(suggestedPreview.inactive_linked_reservation_count)} active reservation(s) are tied to inactive/closed work and will be left unchanged for safety.
+                    </div>
+                  ) : null}
+                </>
+              ) : sourceHasReusableMappingKey(pairingTarget.source) ? (
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
@@ -619,7 +817,7 @@ export default function Purchasing() {
             <div className="purchasing-pairing-modal-actions">
               <button type="button" className="secondary-button" onClick={closePairingFix} disabled={pairingBusy}>Cancel</button>
               <button type="button" onClick={savePairingFix} disabled={pairingBusy || !selectedPairingBlank}>
-                {pairingBusy ? 'Saving…' : 'Save Pairing Correction'}
+                {pairingBusy ? 'Saving…' : (pairingTarget.mode === 'suggested' ? 'Save Suggested Item Correction' : 'Save Pairing Correction')}
               </button>
             </div>
           </section>
@@ -633,6 +831,7 @@ export default function Purchasing() {
           <li><strong>Low Stock</strong>: monitor and reorder when you want to maintain minimum shelf stock.</li>
           <li><strong>Recommended Orders</strong>: primary buying list. Formula: Reserved + Threshold - On Hand.</li>
           <li><strong>Orders / Pull Sheets</strong>: open the pull sheet or use <strong>Fix Pairing</strong> directly from Purchasing. A saved correction updates the current pull-sheet reservation and can remember the Woo variation/SKU for future orders.</li>
+          <li><strong>Source-less suggestions</strong>: use <strong>Fix Suggested Item</strong> to move an unlinked active reservation, move the low-stock threshold, and optionally remember a Purchasing replacement rule. Physical on-hand inventory is never moved by this action.</li>
           <li><strong>Supplier Summary</strong>: use this to group the recommended order by brand and style before placing vendor orders.</li>
         </ol>
       </section>

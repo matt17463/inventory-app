@@ -55,9 +55,9 @@ order by check_name;
 -- purchasing demand tied to pull-sheet lines.
 select
   blank_product_id,
-  source_count,
-  total_quantity,
-  sources
+  demand_source_count,
+  demand_total_quantity,
+  demand_sources
 from public.purchasing_demand_sources_v1
-order by total_quantity desc nulls last
+order by demand_total_quantity desc nulls last
 limit 5;
