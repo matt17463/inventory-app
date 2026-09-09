@@ -7,6 +7,13 @@ import {
   getPurchasingSupplierSummary,
   money,
 } from './lib/inventoryApi';
+import {
+  fixPurchasingPairing,
+  reusableMappingSummary,
+  searchPurchasingPairingBlanks,
+  sourceHasReusableMappingKey,
+} from './lib/purchasingPairingApi';
+import './purchasingPairing.css';
 
 function number(value) {
   return Number(value || 0).toLocaleString();
@@ -96,7 +103,7 @@ function sourceQuantity(source) {
   return Number(source?.quantity || source?.reserved_quantity || 0);
 }
 
-function DemandSourcesCell({ row, expanded, onToggle }) {
+function DemandSourcesCell({ row, expanded, onToggle, onFixPairing }) {
   const sources = demandSources(row);
   const visibleSources = expanded ? sources : sources.slice(0, 2);
   const sourceCount = Number(row?.demand_source_count || sources.length || 0);
@@ -125,16 +132,27 @@ function DemandSourcesCell({ row, expanded, onToggle }) {
               <span>{sourceOrderLabel(source)}</span>
               {source?.customer_name && <small>{source.customer_name}</small>}
             </div>
-            {source?.job_id ? (
-              <Link to={`/pullsheets/${source.job_id}`}>{sourcePullSheetLabel(source)}</Link>
-            ) : (
-              <span>{sourcePullSheetLabel(source)}</span>
-            )}
             <small>
               Qty {number(sourceQuantity(source))}
               {source?.order_sku ? ` • ${source.order_sku}` : ''}
             </small>
             {source?.pairing_warning && <small className="warning-text">{source.pairing_warning}</small>}
+            <div className="purchasing-source-actions">
+              {source?.job_id ? (
+                <Link to={`/pullsheets/${source.job_id}`}>{sourcePullSheetLabel(source)}</Link>
+              ) : (
+                <span>{sourcePullSheetLabel(source)}</span>
+              )}
+              {source?.job_item_id ? (
+                <button
+                  type="button"
+                  className="pairing-fix-button"
+                  onClick={() => onFixPairing(row, source)}
+                >
+                  Fix Pairing
+                </button>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
@@ -158,6 +176,14 @@ export default function Purchasing() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [expandedSources, setExpandedSources] = useState(() => new Set());
+  const [pairingTarget, setPairingTarget] = useState(null);
+  const [pairingSearch, setPairingSearch] = useState('');
+  const [pairingResults, setPairingResults] = useState([]);
+  const [selectedPairingBlank, setSelectedPairingBlank] = useState(null);
+  const [pairingReason, setPairingReason] = useState('Correcting blank pairing from Purchasing Report.');
+  const [rememberPairing, setRememberPairing] = useState(true);
+  const [pairingBusy, setPairingBusy] = useState(false);
+  const [pairingMessage, setPairingMessage] = useState('');
 
   async function loadData() {
     setLoading(true);
@@ -214,6 +240,87 @@ export default function Purchasing() {
       }
       return next;
     });
+  }
+
+  function openPairingFix(row, source) {
+    const canRemember = sourceHasReusableMappingKey(source);
+    setPairingTarget({ row, source });
+    setPairingSearch([row?.brand, row?.product_type, row?.color, row?.size].filter(Boolean).join(' '));
+    setPairingResults([]);
+    setSelectedPairingBlank(null);
+    setPairingReason('Correcting blank pairing from Purchasing Report.');
+    setRememberPairing(canRemember);
+    setPairingMessage('');
+  }
+
+  function closePairingFix() {
+    if (pairingBusy) return;
+    setPairingTarget(null);
+    setPairingSearch('');
+    setPairingResults([]);
+    setSelectedPairingBlank(null);
+    setPairingMessage('');
+  }
+
+  async function searchPairingBlanks(event) {
+    event?.preventDefault?.();
+    setPairingBusy(true);
+    setPairingMessage('');
+    setSelectedPairingBlank(null);
+    try {
+      const rows = await searchPurchasingPairingBlanks(pairingSearch);
+      setPairingResults(rows);
+      if (!rows.length) setPairingMessage('No active blank products matched that search.');
+    } catch (err) {
+      setPairingMessage(err.message || 'Could not search blank products.');
+    } finally {
+      setPairingBusy(false);
+    }
+  }
+
+  async function savePairingFix() {
+    if (!pairingTarget?.source?.job_item_id) {
+      setPairingMessage('This purchasing source does not have a pull-sheet line ID to repair.');
+      return;
+    }
+    if (!selectedPairingBlank?.id) {
+      setPairingMessage('Choose the correct replacement blank product first.');
+      return;
+    }
+
+    const currentSku = pairingTarget?.row?.sku_base || pairingTarget?.row?.name || 'current blank';
+    const nextSku = selectedPairingBlank?.sku_base || selectedPairingBlank?.name || 'selected blank';
+    const confirmed = window.confirm(
+      `Change this purchasing demand from ${currentSku} to ${nextSku}?\n\n`
+      + 'The pull-sheet pairing and its existing reservation will be corrected. '
+      + (rememberPairing ? 'A reusable WooCommerce mapping will also be saved when a stable variation/SKU/product key is available.' : 'Future-order mapping will not be changed.')
+    );
+    if (!confirmed) return;
+
+    setPairingBusy(true);
+    setPairingMessage('');
+    try {
+      const result = await fixPurchasingPairing({
+        jobItemId: pairingTarget.source.job_item_id,
+        newBlankProductId: selectedPairingBlank.id,
+        reason: pairingReason,
+        rememberMapping: rememberPairing,
+      });
+
+      const saved = Number(result?.mappings_saved || 0);
+      const extra = saved
+        ? ` Saved ${saved} reusable mapping rule${saved === 1 ? '' : 's'}.`
+        : (result?.mapping_skipped_reason ? ` ${result.mapping_skipped_reason}` : '');
+      setPairingTarget(null);
+      setPairingResults([]);
+      setSelectedPairingBlank(null);
+      await loadData();
+      setMessage(`Blank pairing corrected from Purchasing Report.${extra}`);
+    } catch (err) {
+      setPairingMessage(err.message || 'Could not correct the purchasing pairing.');
+    } finally {
+      setPairingBusy(false);
+    }
   }
 
   function exportActiveRows() {
@@ -370,6 +477,7 @@ export default function Purchasing() {
                         row={row}
                         expanded={expandedSources.has(rowKey)}
                         onToggle={() => toggleSourceDetails(rowKey)}
+                        onFixPairing={openPairingFix}
                       />
                       <td>{number(row.available_quantity)}</td>
                       <td>{number(row.low_stock_threshold)}</td>
@@ -417,13 +525,114 @@ export default function Purchasing() {
         </section>
       )}
 
+      {pairingTarget ? (
+        <div className="purchasing-pairing-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closePairingFix(); }}>
+          <section className="purchasing-pairing-modal" role="dialog" aria-modal="true" aria-labelledby="purchasing-pairing-title">
+            <h2 id="purchasing-pairing-title">Fix Blank Pairing</h2>
+            <p>Correct the pull-sheet line that is currently creating purchasing demand against the wrong blank product.</p>
+
+            <div className="purchasing-pairing-summary">
+              <div>
+                <span>Order / Pull Sheet</span>
+                <strong>{sourceOrderLabel(pairingTarget.source)}</strong>
+                <small>{sourcePullSheetLabel(pairingTarget.source)} • Line #{pairingTarget.source.job_item_id}</small>
+              </div>
+              <div>
+                <span>Ordered Item</span>
+                <strong>{pairingTarget.source.order_sku || pairingTarget.source.item_name || '—'}</strong>
+                <small>Qty {number(sourceQuantity(pairingTarget.source))}</small>
+              </div>
+              <div>
+                <span>Currently Paired Blank</span>
+                <strong>{pairingTarget.row.sku_base || pairingTarget.row.name || '—'}</strong>
+                <small>{[pairingTarget.row.brand, pairingTarget.row.product_type, pairingTarget.row.color, pairingTarget.row.size].filter(Boolean).join(' / ')}</small>
+              </div>
+            </div>
+
+            <form onSubmit={searchPairingBlanks}>
+              <label>Search correct blank product</label>
+              <div className="purchasing-pairing-search-row">
+                <input
+                  value={pairingSearch}
+                  onChange={(event) => setPairingSearch(event.target.value)}
+                  placeholder="Brand, style, color, size, SKU, or name"
+                  autoFocus
+                />
+                <button type="submit" disabled={pairingBusy}>{pairingBusy ? 'Searching…' : 'Search'}</button>
+              </div>
+            </form>
+
+            {pairingResults.length ? (
+              <div className="purchasing-pairing-results">
+                {pairingResults.map((blank) => (
+                  <button
+                    type="button"
+                    key={blank.id}
+                    className={`purchasing-pairing-result ${selectedPairingBlank?.id === blank.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedPairingBlank(blank)}
+                  >
+                    <strong>{blank.sku_base || blank.name}</strong>
+                    <span>{blank.label || [blank.brand, blank.product_type, blank.color, blank.size].filter(Boolean).join(' / ')}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {selectedPairingBlank ? (
+              <div className="purchasing-pairing-note">
+                Selected replacement: <strong>{selectedPairingBlank.sku_base || selectedPairingBlank.name}</strong>
+              </div>
+            ) : null}
+
+            <div className="purchasing-pairing-options">
+              <label>
+                Reason / note
+                <textarea
+                  value={pairingReason}
+                  onChange={(event) => setPairingReason(event.target.value)}
+                  rows={3}
+                  placeholder="Example: Woo variation was paired to the wrong hoodie style."
+                />
+              </label>
+
+              {sourceHasReusableMappingKey(pairingTarget.source) ? (
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={rememberPairing}
+                    onChange={(event) => setRememberPairing(event.target.checked)}
+                  />
+                  <span>
+                    <strong>Remember this pairing for future orders</strong>
+                    <small>{reusableMappingSummary(pairingTarget.source)}</small>
+                  </span>
+                </label>
+              ) : (
+                <div className="purchasing-pairing-note">
+                  No reusable WooCommerce variation/SKU/product ID was captured for this source. The current pull-sheet line can still be corrected, but no future rule will be created.
+                </div>
+              )}
+            </div>
+
+            {pairingMessage ? <p className="message error-message">{pairingMessage}</p> : null}
+
+            <div className="purchasing-pairing-modal-actions">
+              <button type="button" className="secondary-button" onClick={closePairingFix} disabled={pairingBusy}>Cancel</button>
+              <button type="button" onClick={savePairingFix} disabled={pairingBusy || !selectedPairingBlank}>
+                {pairingBusy ? 'Saving…' : 'Save Pairing Correction'}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <section className="card elevated-card guide-card">
         <h2>How to Use These Sections</h2>
         <ol>
           <li><strong>Current Shortages</strong>: order immediately if production depends on these blanks.</li>
           <li><strong>Low Stock</strong>: monitor and reorder when you want to maintain minimum shelf stock.</li>
           <li><strong>Recommended Orders</strong>: primary buying list. Formula: Reserved + Threshold - On Hand.</li>
-          <li><strong>Orders / Pull Sheets</strong>: use these links to open the related pull sheet when a blank appears paired incorrectly.</li>
+          <li><strong>Orders / Pull Sheets</strong>: open the pull sheet or use <strong>Fix Pairing</strong> directly from Purchasing. A saved correction updates the current pull-sheet reservation and can remember the Woo variation/SKU for future orders.</li>
           <li><strong>Supplier Summary</strong>: use this to group the recommended order by brand and style before placing vendor orders.</li>
         </ol>
       </section>
