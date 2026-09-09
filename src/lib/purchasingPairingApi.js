@@ -124,3 +124,59 @@ export async function fixPurchasingPairing({
 
   return data || {};
 }
+
+export async function getPurchasingSuggestedItemPreview(sourceBlankProductId) {
+  if (!sourceBlankProductId) {
+    throw new Error('A suggested blank product is required.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_purchasing_suggested_item_preview_v1', {
+    p_source_blank_product_id: sourceBlankProductId,
+  });
+
+  if (error) {
+    if (/function .*sc_purchasing_suggested_item_preview_v1.*does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Suggested-item repair SQL is not installed yet. Run deployment/sql/60_PURCHASING_SOURCELESS_SUGGESTED_ITEM_REPAIR.sql in Supabase.');
+    }
+    throw error;
+  }
+
+  return data || {};
+}
+
+export async function fixPurchasingSuggestedItem({
+  sourceBlankProductId,
+  newBlankProductId,
+  reason,
+  moveUnlinkedReservations = true,
+  moveThreshold = true,
+  rememberRule = true,
+}) {
+  if (!sourceBlankProductId) {
+    throw new Error('A suggested blank product is required.');
+  }
+  if (!newBlankProductId) {
+    throw new Error('Choose the correct replacement blank product.');
+  }
+  if (String(sourceBlankProductId) === String(newBlankProductId)) {
+    throw new Error('Choose a different replacement blank product.');
+  }
+
+  const { data, error } = await supabase.rpc('sc_purchasing_fix_suggested_item_v1', {
+    p_source_blank_product_id: sourceBlankProductId,
+    p_new_blank_product_id: newBlankProductId,
+    p_reason: String(reason || '').trim() || 'Corrected source-less Purchasing suggestion',
+    p_move_unlinked_reservations: Boolean(moveUnlinkedReservations),
+    p_move_threshold: Boolean(moveThreshold),
+    p_remember_rule: Boolean(rememberRule),
+  });
+
+  if (error) {
+    if (/function .*sc_purchasing_fix_suggested_item_v1.*does not exist|could not find/i.test(error.message || '')) {
+      throw new Error('Suggested-item repair SQL is not installed yet. Run deployment/sql/60_PURCHASING_SOURCELESS_SUGGESTED_ITEM_REPAIR.sql in Supabase.');
+    }
+    throw error;
+  }
+
+  return data || {};
+}

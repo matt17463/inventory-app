@@ -1,0 +1,31 @@
+Skilled Crafting Inventory App v1.4.8
+Purchasing Source-less Suggested Item Repair
+
+MODIFIED
+- src/Purchasing.jsx
+- deployment/sql/58_PURCHASING_INLINE_PAIRING_REPAIR.sql (repository reconciliation to corrected v1.4.7 SQL)
+- deployment/sql/59_VERIFY_PURCHASING_INLINE_PAIRING_REPAIR.sql (repository reconciliation to corrected v1.4.7 verification)
+- src/lib/purchasingPairingApi.js
+- src/purchasingPairing.css
+
+ADDED
+- deployment/sql/60_PURCHASING_SOURCELESS_SUGGESTED_ITEM_REPAIR.sql
+- deployment/sql/61_VERIFY_PURCHASING_SOURCELESS_SUGGESTED_ITEM_REPAIR.sql
+- scripts/tests/purchasing-sourceless-suggested-item.test.mjs
+- deployment/DEPLOY_PURCHASING_SOURCELESS_SUGGESTED_ITEM_v1.4.8.md
+- deployment/RELEASE_NOTES_v1.4.8.md
+
+Database behavior
+- Adds a durable Purchasing-only blank replacement preference table.
+- Adds a row-level Purchasing repair audit table.
+- Adds a read-only preview RPC for source-less recommendations.
+- Adds a source-less repair RPC that can move only unlinked active reservations,
+  move a low-stock threshold, and remember a Purchasing replacement preference.
+
+Safety
+- No WooCommerce / WordPress plugin changes.
+- No Netlify environment-variable changes.
+- No physical on-hand inventory is moved or deducted.
+- No inventory movement rows are created or rewritten.
+- Existing pull-sheet line-level Fix Pairing remains unchanged.
+- Blank product IDs remain UUID-safe.

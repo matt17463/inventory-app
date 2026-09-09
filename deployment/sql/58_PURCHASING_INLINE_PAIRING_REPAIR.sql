@@ -43,86 +43,101 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Purchasing demand-source view
 --
--- Keep the same top-level columns already consumed by inventoryApi.js. The only
--- change is additional keys inside each sources JSON object so Purchasing can
--- create a durable future mapping without guessing from display text.
+-- IMPORTANT COMPATIBILITY NOTE:
+-- Production Purchasing was rebuilt by the reservation recount fix and the
+-- existing view now exposes these top-level columns:
+--   blank_product_id, demand_source_count, demand_total_quantity,
+--   demand_order_numbers, demand_pullsheet_numbers, demand_sources
+--
+-- Preserve those names AND types exactly. We only enrich each demand_sources
+-- JSON object with the identifiers needed by the inline pairing repair UI.
+-- This also preserves the active-reservation logic that prevents stale/closed
+-- reservations from inflating Purchasing.
 -- ---------------------------------------------------------------------------
 create or replace view public.purchasing_demand_sources_v1 as
-with source_lines as (
+with active_reservations as (
   select
-    ji.blank_product_id::uuid as blank_product_id,
-    j.id as job_id,
-    ji.id as job_item_id,
+    r.id as reservation_id,
+    r.blank_product_id,
     coalesce(
-      nullif(to_jsonb(ji)->>'quantity', '')::numeric,
-      nullif(to_jsonb(ji)->>'qty', '')::numeric,
-      1
+      public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity', 'reserved_quantity'),
+      0
     ) as quantity,
-    nullif(to_jsonb(j)->>'woocommerce_order_id', '') as woocommerce_order_id,
+    public.sc_purchasing_json_text_v1(to_jsonb(r), 'status') as reservation_status,
+    public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'job_id')::bigint as job_id,
+    public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'job_item_id')::bigint as job_item_id
+  from public.inventory_reservations r
+  where r.blank_product_id is not null
+    and public.sc_purchasing_status_is_active_v1(
+      public.sc_purchasing_json_text_v1(to_jsonb(r), 'status')
+    )
+),
+joined as (
+  select
+    ar.*,
+    j.id as joined_job_id,
+    public.sc_purchasing_json_text_v1(to_jsonb(j), 'status') as job_status,
+    public.sc_purchasing_json_text_v1(to_jsonb(j), 'job_name', 'name') as job_name,
+    public.sc_purchasing_json_text_v1(to_jsonb(j), 'customer_name', 'customer') as customer_name,
+    public.sc_purchasing_json_text_v1(to_jsonb(j), 'woocommerce_order_id', 'order_id') as order_number,
+    public.sc_purchasing_json_text_v1(to_jsonb(j), 'woocommerce_order_id', 'order_id') as woocommerce_order_id,
+    public.sc_purchasing_json_text_v1(to_jsonb(j), 'manual_order_id') as job_manual_order_id,
+    ji.id as joined_job_item_id,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'status') as job_item_status,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'order_sku', 'sku') as order_sku,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'item_name', 'ordered_product_name', 'name') as item_name,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'pairing_source') as pairing_source,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'pairing_warning') as pairing_warning,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'woocommerce_product_id') as woocommerce_product_id,
+    public.sc_purchasing_json_text_v1(to_jsonb(ji), 'woocommerce_variation_id') as woocommerce_variation_id,
     coalesce(
-      nullif(to_jsonb(j)->>'woocommerce_order_id', ''),
-      nullif(to_jsonb(j)->>'manual_order_id', ''),
-      nullif(to_jsonb(j)->>'order_number', ''),
-      nullif(to_jsonb(j)->>'order_id', '')
-    ) as order_number,
-    coalesce(
-      nullif(to_jsonb(j)->>'job_name', ''),
-      'Pull Sheet #' || j.id::text
-    ) as job_name,
-    nullif(to_jsonb(j)->>'customer_name', '') as customer_name,
-    coalesce(nullif(to_jsonb(j)->>'status', ''), 'queued') as job_status,
-    nullif(to_jsonb(ji)->>'status', '') as job_item_status,
-    coalesce(
-      nullif(to_jsonb(ji)->>'order_sku', ''),
-      nullif(to_jsonb(ji)->>'sku', '')
-    ) as order_sku,
-    coalesce(
-      nullif(to_jsonb(ji)->>'ordered_product_name', ''),
-      nullif(to_jsonb(ji)->>'item_name', ''),
-      nullif(to_jsonb(ji)->>'notes', '')
-    ) as item_name,
-    nullif(to_jsonb(ji)->>'pairing_source', '') as pairing_source,
-    nullif(to_jsonb(ji)->>'pairing_warning', '') as pairing_warning,
-    nullif(to_jsonb(ji)->>'woocommerce_product_id', '') as woocommerce_product_id,
-    nullif(to_jsonb(ji)->>'woocommerce_variation_id', '') as woocommerce_variation_id,
-    coalesce(
-      nullif(to_jsonb(ji)->>'manual_order_id', ''),
-      nullif(to_jsonb(j)->>'manual_order_id', '')
+      public.sc_purchasing_json_text_v1(to_jsonb(ji), 'manual_order_id'),
+      public.sc_purchasing_json_text_v1(to_jsonb(j), 'manual_order_id')
     ) as manual_order_id,
     coalesce(
-      nullif(to_jsonb(ji)->>'manual_order_item_id', ''),
-      nullif(to_jsonb(ji)->>'manual_invoice_order_item_id', '')
-    ) as manual_order_item_id,
-    coalesce(
-      nullif(to_jsonb(j)->>'due_date', ''),
-      nullif(to_jsonb(j)->>'created_at', ''),
-      nullif(to_jsonb(ji)->>'created_at', '')
-    ) as sort_date
-  from public.job_items ji
-  left join public.jobs j
-    on j.id = ji.job_id
-  where ji.blank_product_id is not null
-    and lower(coalesce(nullif(to_jsonb(j)->>'status', ''), 'queued')) not in (
-      'completed', 'complete', 'filled', 'cancelled', 'canceled', 'voided', 'void'
+      public.sc_purchasing_json_text_v1(to_jsonb(ji), 'manual_order_item_id'),
+      public.sc_purchasing_json_text_v1(to_jsonb(ji), 'manual_invoice_order_item_id')
+    ) as manual_order_item_id
+  from active_reservations ar
+  left join public.jobs j on j.id = ar.job_id
+  left join public.job_items ji on ji.id = ar.job_item_id
+  where (
+    j.id is null
+    or public.sc_purchasing_status_is_active_v1(
+      public.sc_purchasing_json_text_v1(to_jsonb(j), 'status')
     )
-    and lower(coalesce(nullif(to_jsonb(ji)->>'status', ''), 'queued')) not in (
-      'completed', 'complete', 'filled', 'cancelled', 'canceled', 'voided', 'void'
+  )
+    and (
+      ji.id is null
+      or public.sc_purchasing_status_is_active_v1(
+        public.sc_purchasing_json_text_v1(to_jsonb(ji), 'status')
+      )
     )
 )
 select
   blank_product_id,
-  count(*)::integer as source_count,
-  coalesce(sum(quantity), 0)::numeric as total_quantity,
-  string_agg(distinct coalesce('Order #' || order_number, 'Pull Sheet #' || job_id::text), ', ') as order_numbers,
-  string_agg(distinct 'Pull Sheet #' || job_id::text, ', ') as pullsheet_numbers,
+  count(*)::integer as demand_source_count,
+  coalesce(sum(quantity), 0)::integer as demand_total_quantity,
+  string_agg(
+    distinct coalesce(nullif(order_number, ''), job_id::text),
+    ', ' order by coalesce(nullif(order_number, ''), job_id::text)
+  ) as demand_order_numbers,
+  string_agg(
+    distinct job_id::text,
+    ', ' order by job_id::text
+  ) as demand_pullsheet_numbers,
   jsonb_agg(
     jsonb_build_object(
+      'reservation_id', reservation_id,
       'job_id', job_id,
       'pullsheet_number', job_id,
-      'pullsheet_label', 'Pull Sheet #' || job_id::text,
+      'pullsheet_label', case when job_id is null then null else 'Pull Sheet #' || job_id::text end,
       'job_item_id', job_item_id,
       'order_number', order_number,
-      'order_label', coalesce('Order #' || order_number, 'Order not recorded'),
+      'order_label', case
+        when nullif(order_number, '') is not null then 'Order #' || order_number
+        else 'Order not recorded'
+      end,
       'woocommerce_order_id', woocommerce_order_id,
       'woocommerce_product_id', woocommerce_product_id,
       'woocommerce_variation_id', woocommerce_variation_id,
@@ -136,13 +151,13 @@ select
       'quantity', quantity,
       'order_sku', order_sku,
       'item_name', item_name,
+      'reservation_status', reservation_status,
       'pairing_source', pairing_source,
-      'pairing_warning', pairing_warning,
-      'sort_date', sort_date
+      'pairing_warning', pairing_warning
     )
-    order by sort_date desc nulls last, job_id desc, job_item_id desc
-  ) as sources
-from source_lines
+    order by job_id desc nulls last, job_item_id desc nulls last
+  ) as demand_sources
+from joined
 group by blank_product_id;
 
 grant select on public.purchasing_demand_sources_v1 to anon, authenticated;
