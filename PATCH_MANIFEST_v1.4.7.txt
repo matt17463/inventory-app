@@ -1,0 +1,18 @@
+Skilled Crafting Inventory App v1.4.7
+Purchasing Report Inline Pairing Repair
+
+MODIFIED
+- src/Purchasing.jsx
+
+ADDED
+- src/lib/purchasingPairingApi.js
+- src/purchasingPairing.css
+- deployment/sql/58_PURCHASING_INLINE_PAIRING_REPAIR.sql
+- deployment/sql/59_VERIFY_PURCHASING_INLINE_PAIRING_REPAIR.sql
+- scripts/tests/purchasing-pairing-inline.test.mjs
+- deployment/DEPLOY_PURCHASING_INLINE_PAIRING_v1.4.7.md
+- deployment/RELEASE_NOTES_v1.4.7.md
+
+No WooCommerce plugin changes.
+No Netlify environment-variable changes.
+No inventory quantities or inventory movement history are changed by the migration.
