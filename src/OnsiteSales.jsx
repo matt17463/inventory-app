@@ -37,6 +37,140 @@ export default function OnsiteSales(){
  function changeCategory(value){setCategoryId(value);setCategoryMenu({logos:[],products:[]});setForm((c)=>({...c,logo_name:'',woo_product_id:'',woo_variation_id:''}));setResult(null);setMessage('');}
  function changeLogo(value){const row=categoryMenu.logos.find((e)=>e.name===value);setForm((c)=>({...c,logo_name:value,woo_product_id:row?.product_ids?.length===1?String(row.product_ids[0]):'',woo_variation_id:''}));setResult(null);setMessage('');}
  async function submit(event){event.preventDefault();if(!categoryId){setMessage('Choose the active WooCommerce category.');return;}if(!form.blank_product_id||!selectedBlank){setMessage('Choose Type, Brand, Style, Color, and Size for an in-stock blank.');return;} const verb=testMode?'Create a TEST label without deducting inventory':'Deduct one item and create its production label';if(!window.confirm(`${verb} for ${labelInventory(selectedBlank)}?`))return;setWorking(true);setMessage(testMode?'Creating test label — inventory will not change…':'Deducting inventory and creating label…');try{const completed=await completeOnsiteItem({...form,woo_category_id:categoryId,test_mode:testMode});setResult(completed);setMessage(testMode?'TEST complete. No inventory or production record was changed. Print and inspect the test label.':'Item recorded and inventory deducted. Print the label now.');setSelection(EMPTY_SELECTION);setForm((c)=>({...c,blank_product_id:'',customer_name:'',player_name:'',player_number:'',notes:''}));}catch(e){setMessage(e.message);}finally{setWorking(false);}}
+
+ function printLabel(){
+   const source=document.querySelector('.onsite-label');
+   if(!source){
+     setMessage('No label is ready to print.');
+     return;
+   }
+
+   const printWindow=window.open('','_blank','popup=yes,width=720,height=720');
+   if(!printWindow){
+     setMessage('The label print window was blocked. Allow pop-ups for this site and try again.');
+     return;
+   }
+
+   const clone=source.cloneNode(true);
+   clone.querySelectorAll('.no-print').forEach((node)=>node.remove());
+
+   const labelSize=result?.label_size||form.label_size||'2x3';
+   const pageWidth=labelSize==='4x6'?'4in':'3in';
+   const pageHeight=labelSize==='4x6'?'6in':'2in';
+
+   printWindow.addEventListener('load',()=>{
+     window.setTimeout(()=>{
+       printWindow.focus();
+       printWindow.print();
+       printWindow.close();
+     },75);
+   },{once:true});
+
+   printWindow.document.open();
+   printWindow.document.write(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Skilled Crafting Production Label</title>
+<style>
+  @page {
+    size: ${pageWidth} ${pageHeight};
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: ${pageWidth};
+    height: ${pageHeight};
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: Arial, sans-serif;
+    color: #000;
+  }
+
+  .onsite-label {
+    position: relative;
+    display: block;
+    width: ${pageWidth};
+    height: ${pageHeight};
+    min-height: 0;
+    margin: 0;
+    padding: .18in;
+    overflow: hidden;
+    background: #fff;
+    color: #000;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .onsite-label header,
+  .onsite-label footer {
+    display: flex;
+    justify-content: space-between;
+    gap: .2in;
+    border-bottom: 2px solid #000;
+    padding-bottom: .08in;
+  }
+
+  .onsite-label footer {
+    border: 0;
+    border-top: 2px solid #000;
+    padding-top: .08in;
+  }
+
+  .onsite-label h2 {
+    font-size: 24pt;
+    margin: .12in 0;
+  }
+
+  .onsite-label p {
+    font-size: 14pt;
+    margin: .06in 0;
+  }
+
+  .onsite-label-logo {
+    display: block;
+    max-width: 1.65in;
+    max-height: .55in;
+    object-fit: contain;
+  }
+
+  .onsite-test-watermark {
+    position: absolute;
+    inset: 34% auto auto 5%;
+    font-size: 72pt;
+    font-weight: 900;
+    transform: rotate(-28deg);
+    opacity: .12;
+    z-index: 0;
+  }
+
+  .onsite-test-label-note {
+    display: block;
+    border: 3px solid #000;
+    padding: .05in;
+    margin: .08in 0;
+    text-align: center;
+    font-size: 10pt;
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>${clone.outerHTML}</body>
+</html>`);
+   printWindow.document.close();
+ }
+
  return <main className={`page onsite-page onsite-device-${deviceMode}`}>
   <section className="page-header no-print"><div><p className="eyebrow">Mobile production counter</p><h1>On-site Sales</h1><p>Set the event category, choose its graphic, then drill into only physical blanks that are actually available.</p></div></section>
   <section className="onsite-controlbar no-print"><label className={`onsite-test-toggle ${testMode?'is-active':''}`}><input type="checkbox" checked={testMode} onChange={(e)=>{setTestMode(e.target.checked);setResult(null);setMessage(e.target.checked?'TEST MODE enabled. No inventory or production records will be changed.':'Live mode restored. Completed items will deduct inventory.');}}/><span><strong>Test mode</strong><small>{testMode?'No inventory deduction / no production record':'Live inventory deduction'}</small></span></label><div className="onsite-device-toggle" role="group" aria-label="On-site page preview size">{DEVICE_MODES.map(([key,label])=><button key={key} type="button" className={deviceMode===key?'is-active':''} onClick={()=>setDeviceMode(key)}>{label}</button>)}</div></section>
@@ -47,6 +181,6 @@ export default function OnsiteSales(){
    <section className="card onsite-step onsite-blank"><h2>2. Physical blank</h2><p className="onsite-help">Each choice narrows the next list to blanks with positive availability after reservations.</p><div className="onsite-cascade"><Selector label="Type" value={selection.item_type_id} options={typeOptions} placeholder="Choose type" onChange={(v)=>selectDimension('item_type_id',v)}/><Selector label="Brand" value={selection.brand_id} options={brandOptions} placeholder="Choose brand" disabled={!selection.item_type_id} onChange={(v)=>selectDimension('brand_id',v)}/><Selector label="Style" value={selection.style_id} options={styleOptions} placeholder="Choose style" disabled={!selection.brand_id} onChange={(v)=>selectDimension('style_id',v)}/><Selector label="Color" value={selection.color_id} options={colorOptions} placeholder="Choose color" disabled={!selection.style_id} onChange={(v)=>selectDimension('color_id',v)}/><Selector label="Size" value={selection.size_id} options={sizeOptions} placeholder="Choose size" disabled={!selection.color_id} onChange={(v)=>selectDimension('size_id',v)}/></div>{selectedBlank?<div className="onsite-selected-blank"><strong>{labelInventory(selectedBlank)}</strong><span>{selectedBlank.available_quantity} available</span><small>{selectedBlank.sku_base}</small></div>:selection.size_id&&!exactRows.length?<p className="onsite-warning">That selection no longer has available inventory. Refresh or choose another size.</p>:null}</section>
    <section className="card onsite-step"><h2>3. Customer & production</h2><div className="onsite-fields"><label>Customer name<input value={form.customer_name} onChange={(e)=>update('customer_name',e.target.value)}/></label><label>Player name<input value={form.player_name} onChange={(e)=>update('player_name',e.target.value)}/></label><label>Player number<input value={form.player_number} onChange={(e)=>update('player_number',e.target.value)} inputMode="numeric"/></label><label>Name / number color<input value={form.personalization_color} onChange={(e)=>update('personalization_color',e.target.value)}/></label><label>Label size<select value={form.label_size} onChange={(e)=>update('label_size',e.target.value)}><option value="2x3">2 × 3 inches</option><option value="4x6">4 × 6 inches</option></select></label><label className="wide">Production notes<textarea value={form.notes} onChange={(e)=>update('notes',e.target.value)}/></label></div><button className="primary-action onsite-complete" disabled={working||!form.blank_product_id}>{working?'Recording…':testMode?'Create TEST label':'Complete item & create label'}</button></section>
   </form></div>
-  {result&&<section className={`onsite-label label-${result.label_size||form.label_size} ${result.test_mode?'is-test-label':''}`}>{result.test_mode&&<div className="onsite-test-watermark">TEST</div>}<header><img className="onsite-label-logo" src={skilledCraftingLogo} alt="Skilled Crafting"/><span>{new Date(result.produced_at).toLocaleDateString()}</span></header>{result.test_mode&&<strong className="onsite-test-label-note">TEST MODE — NO INVENTORY DEDUCTION</strong>}<h2>{result.customer_name||'On-site customer'}</h2><p>{result.blank_label}</p>{result.logo_name&&<p><strong>Graphic:</strong> {result.logo_name}</p>}{result.player_name&&<p><strong>Player:</strong> {result.player_name}</p>}{result.player_number&&<p><strong>Number:</strong> {result.player_number} · {result.personalization_color||''}</p>}<footer><span>Production #{result.production_number}</span><span>{result.source_bin_label}</span></footer><button type="button" className="no-print primary-action" onClick={()=>window.print()}>Print label</button></section>}
+  {result&&<section className={`onsite-label label-${result.label_size||form.label_size} ${result.test_mode?'is-test-label':''}`}>{result.test_mode&&<div className="onsite-test-watermark">TEST</div>}<header><img className="onsite-label-logo" src={skilledCraftingLogo} alt="Skilled Crafting"/><span>{new Date(result.produced_at).toLocaleDateString()}</span></header>{result.test_mode&&<strong className="onsite-test-label-note">TEST MODE — NO INVENTORY DEDUCTION</strong>}<h2>{result.customer_name||'On-site customer'}</h2><p>{result.blank_label}</p>{result.logo_name&&<p><strong>Graphic:</strong> {result.logo_name}</p>}{result.player_name&&<p><strong>Player:</strong> {result.player_name}</p>}{result.player_number&&<p><strong>Number:</strong> {result.player_number} · {result.personalization_color||''}</p>}<footer><span>Production #{result.production_number}</span><span>{result.source_bin_label}</span></footer><button type="button" className="no-print primary-action" onClick={printLabel}>Print label</button></section>}
  </main>;
 }

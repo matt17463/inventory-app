@@ -86,7 +86,12 @@ test('on-site test mode cannot mutate inventory and provides device preview cont
   assert.match(css, /onsite-test-watermark/);
   assert.match(css, /\.onsite-label\{display:block/);
   assert.doesNotMatch(css, /\.onsite-label\{display:none/);
-  assert.match(page, /onClick=\{\(\)=>window\.print\(\)\}/);
+  assert.match(page, /function printLabel\(\)/);
+  assert.match(page, /window\.open\('',\s*'_blank'/);
+  assert.match(page, /printWindow\.print\(\)/);
+  assert.match(page, /onClick=\{printLabel\}/);
+  assert.match(page, /@page/);
+  assert.doesNotMatch(page, /onClick=\{\(\)=>window\.print\(\)\}/);
 });
 
 test('on-site Woo reads cache category menus and diagnose SiteGround challenges', () => {
