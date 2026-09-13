@@ -136,6 +136,25 @@ export async function setJobItemPurchasingReportInclusion({
   return rows[0] || null;
 }
 
+export async function restoreJobItemInventoryTracking(jobItemId) {
+  const { data, error } = await supabase.rpc('sc_restore_job_item_inventory_tracking', {
+    p_job_item_id: Number(jobItemId),
+  });
+
+  if (error) {
+    throw new Error(buildSupabaseErrorMessage(
+      error,
+      'Could not restore inventory tracking for this pull sheet line.'
+    ));
+  }
+
+  if (data?.success === false) {
+    throw new Error(data.message || 'Inventory tracking could not be restored.');
+  }
+
+  return data || {};
+}
+
 export async function applyNonInventoryRulesToJob(jobId) {
   const { data, error } = await supabase.rpc('sc_apply_non_inventory_rules_to_job_v2', {
     p_job_id: Number(jobId),

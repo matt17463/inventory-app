@@ -13,6 +13,7 @@ import {
 import {
   applyNonInventoryRulesToJob,
   markJobItemNonInventory,
+  restoreJobItemInventoryTracking,
   setJobItemPurchasingReportInclusion,
 } from './lib/nonInventoryApi';
 import {
@@ -102,6 +103,7 @@ export default function PullSheetView() {
   const [outOfStockByLine, setOutOfStockByLine] = useState({});
   const [lineMessages, setLineMessages] = useState({});
   const [completingLine, setCompletingLine] = useState('');
+  const [restoringLine, setRestoringLine] = useState('');
   const [completingAll, setCompletingAll] = useState(false);
   const [jobStatusBusy, setJobStatusBusy] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
@@ -756,6 +758,65 @@ export default function PullSheetView() {
     }
   }
 
+  async function restoreLineInventoryTracking(row, idx) {
+    const key = rowKey(row, idx);
+    const jobItemId = pickJobItemId(row);
+
+    if (!jobItemId) {
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: 'This line is missing a job item ID.',
+      }));
+      return;
+    }
+
+    const ruleId = row.non_inventory_rule_id;
+    const ruleWarning = ruleId
+      ? `\n\nThis line is associated with non-inventory rule #${ruleId}. Restoring this line will NOT deactivate that rule. If the rule remains active, applying non-inventory rules again could mark this line non-inventory again.`
+      : '';
+
+    const confirmed = window.confirm(
+      `Restore inventory tracking for this pull sheet line?\n\n` +
+      `This will make the line inventory-required again, include it in Purchasing, and restore its exact blank pairing when one can be safely recovered.${ruleWarning}`
+    );
+
+    if (!confirmed) return;
+
+    setRestoringLine(key);
+    setLineMessages((messages) => ({
+      ...messages,
+      [key]: 'Restoring inventory tracking…',
+    }));
+
+    try {
+      const result = await restoreJobItemInventoryTracking(jobItemId);
+
+      await load();
+
+      let message = result?.message || 'Inventory tracking restored.';
+
+      if (result?.rule_left_active && result?.rule_id) {
+        message += ` Non-inventory rule #${result.rule_id} is still active. Deactivate that rule under Tools & Admin → Non-Inventory Rules if this product should remain inventory-tracked.`;
+      }
+
+      if (result?.reservation_warning) {
+        message += ` Reservation warning: ${result.reservation_warning}`;
+      }
+
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: message,
+      }));
+    } catch (err) {
+      setLineMessages((messages) => ({
+        ...messages,
+        [key]: err.message || 'Could not restore inventory tracking.',
+      }));
+    } finally {
+      setRestoringLine('');
+    }
+  }
+
   async function updateJobStatus(nextStatus) {
     if (!resolvedJobId) return;
 
@@ -850,6 +911,7 @@ export default function PullSheetView() {
             ? 'Out of stock — automatically assigned to Pending Stock. Receive the blank into inventory and refresh this pull sheet before completing and deducting.'
             : '';
           const isCompleting = completingLine === key;
+          const isRestoring = restoringLine === key;
           const nonInventory = isNonInventoryLine(row);
           const includedOnPurchasingReport = isIncludedOnPurchasingReport(row);
           const lineStatusLabel = nonInventory
@@ -927,6 +989,16 @@ export default function PullSheetView() {
                   <div className="sc-button-row">
                     <ActionButton tone="secondary" onClick={() => openNonInventoryDialog(row, idx)}>
                       Edit Non-Inventory Settings
+                    </ActionButton>
+                    <ActionButton tone="warning" onClick={() => openOverrideEditor(row)}>
+                      Override Blank Pairing
+                    </ActionButton>
+                    <ActionButton
+                      tone="success"
+                      disabled={isRestoring || isClosedLine(row)}
+                      onClick={() => restoreLineInventoryTracking(row, idx)}
+                    >
+                      {isRestoring ? 'Restoring…' : 'Restore Inventory Tracking'}
                     </ActionButton>
                     <ActionButton tone="secondary" onClick={() => markPulledOnly(row, idx)}>
                       Mark Done / No Inventory Action
