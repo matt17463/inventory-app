@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { assignOutOfStockJobItemsToPendingStock } from './pullSheetBinAssignmentApi';
+import { findUniqueExactBlankMatch } from './manualInvoicePairing';
 
 function clean(value) {
   return String(value ?? '').trim();
@@ -72,6 +73,81 @@ export async function searchManualInvoiceProducts(input = {}) {
   return v1.data || [];
 }
 
+async function resolveManualInvoiceBlankItem(item = {}) {
+  const itemType = clean(
+    item.item_type || item.product_source || 'blank'
+  ).toLowerCase() === 'finished'
+    ? 'finished'
+    : 'blank';
+
+  // A deliberately selected product already has authoritative identity.
+  if (itemType !== 'blank' || clean(item.blank_product_id)) {
+    return item;
+  }
+
+  const identity = {
+    brand: clean(item.brand),
+    style: clean(item.style),
+    color: clean(item.color),
+    size: clean(item.size),
+  };
+
+  // Incomplete manual lines remain unresolved for operator review.
+  if (!identity.brand || !identity.style || !identity.color || !identity.size) {
+    return item;
+  }
+
+  const rows = await searchManualInvoiceProducts({
+    productSource: 'blank',
+    search: '',
+    brand: identity.brand,
+    style: identity.style,
+    color: identity.color,
+    size: identity.size,
+    limit: 200,
+  });
+
+  const match = findUniqueExactBlankMatch(rows, identity);
+
+  // Zero or multiple exact matches are intentionally NOT guessed.
+  if (!match) {
+    return item;
+  }
+
+  const blankProductId = clean(
+    match.blank_product_id || match.product_id || match.id
+  );
+
+  if (!blankProductId) {
+    return item;
+  }
+
+  return {
+    ...item,
+    blank_product_id: blankProductId,
+    sku_base: clean(
+      match.sku_base || match.sku || item.sku_base
+    ),
+    item_name: clean(
+      match.name
+      || match.item_name
+      || match.sku_base
+      || match.sku
+      || item.item_name
+    ),
+    brand: clean(match.brand || match.brand_name) || identity.brand,
+    style: clean(match.style || match.product_type) || identity.style,
+    color: clean(match.color || match.color_name) || identity.color,
+    size: clean(match.size || match.size_name) || identity.size,
+  };
+}
+
+async function resolveManualInvoiceBlankItems(items = []) {
+  return Promise.all(
+    (items || []).map((item) => resolveManualInvoiceBlankItem(item))
+  );
+}
+
 export async function searchBlanksForManualInvoice(input = '') {
   const args = normalizeSearchArgs(input);
 
@@ -121,7 +197,8 @@ export async function createManualInvoiceOrder(order, items, generateJob = true)
     notes: clean(order.notes),
   };
 
-  const safeItems = (items || []).map((item, index) => {
+  const resolvedItems = await resolveManualInvoiceBlankItems(items);
+  const safeItems = resolvedItems.map((item, index) => {
     const itemType = clean(item.item_type || item.product_source || 'blank').toLowerCase() === 'finished' ? 'finished' : 'blank';
     return {
       line_number: index + 1,
@@ -227,7 +304,8 @@ export async function updateManualInvoiceOrder(manualOrderId, order, items, opti
     notes: clean(order.notes),
   };
 
-  const safeItems = (items || []).map((item, index) => {
+  const resolvedItems = await resolveManualInvoiceBlankItems(items);
+  const safeItems = resolvedItems.map((item, index) => {
     const itemType = clean(item.item_type || item.product_source || 'blank').toLowerCase() === 'finished' ? 'finished' : 'blank';
     return {
       line_number: index + 1,
