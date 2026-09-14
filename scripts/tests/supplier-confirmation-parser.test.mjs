@@ -73,8 +73,9 @@ test('supplier receiving validates its complete schema before uploading a PDF', 
   assert.doesNotMatch(migration, /delete\s+from|truncate\s+table|drop\s+table/i);
   assert.match(verification, /contract_ready/);
   assert.match(verification, /duplicate_groups/);
-  assert.match(client, /receiveRequestKey/);
-  assert.match(client, /idempotency_key: receiveRequestKey/);
+  assert.match(client, /const requestKey = receiveRequestKey/);
+  assert.match(client, /startSupplierReceivingCommit/);
+  assert.match(client, /idempotency_key: requestKey/);
 });
 
 test('integration job tracking does not target a partial unique index with onConflict', async () => {
