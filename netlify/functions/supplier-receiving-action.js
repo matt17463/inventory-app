@@ -254,6 +254,198 @@ async function history(supabase) {
   }));
 }
 
+
+async function loadDraft(supabase, importId) {
+  await requireSupplierReceivingContract(supabase);
+
+  const id = clean(importId);
+  if (!id) throw new Error('Receiving import id is required.');
+
+  const importResult = await supabase
+    .from('sc_supplier_receiving_imports')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (importResult.error) throw importResult.error;
+
+  const receivingImport = importResult.data;
+
+  const linesResult = await supabase
+    .from('sc_supplier_receiving_lines')
+    .select('*')
+    .eq('import_id', id)
+    .order('source_page', { ascending: true })
+    .order('supplier_line_key', { ascending: true });
+
+  if (linesResult.error) throw linesResult.error;
+
+  const storedLines = linesResult.data || [];
+
+  const supplierSkus = [
+    ...new Set(storedLines.map((row) => clean(row.supplier_sku)).filter(Boolean)),
+  ];
+
+  let mappingRows = [];
+
+  if (supplierSkus.length) {
+    const mappingResult = await supabase
+      .from('sc_supplier_item_mappings')
+      .select('supplier_sku,blank_product_id_text')
+      .eq('supplier_key', receivingImport.supplier_key)
+      .in('supplier_sku', supplierSkus);
+
+    if (mappingResult.error) throw mappingResult.error;
+    mappingRows = mappingResult.data || [];
+  }
+
+  const supplierMappings = new Map(
+    mappingRows.map((row) => [
+      clean(row.supplier_sku),
+      clean(row.blank_product_id_text),
+    ]),
+  );
+
+  const blankIds = [
+    ...new Set(
+      storedLines
+        .map((row) =>
+          clean(row.blank_product_id_text) ||
+          supplierMappings.get(clean(row.supplier_sku)) ||
+          ''
+        )
+        .filter(Boolean),
+    ),
+  ];
+
+  let blankRows = [];
+
+  if (blankIds.length) {
+    const blankResult = await supabase
+      .from('blank_products')
+      .select('id,sku_base,name,brand_id,product_type_id,color_id,size_id')
+      .in('id', blankIds);
+
+    if (blankResult.error) throw blankResult.error;
+    blankRows = blankResult.data || [];
+  }
+
+  const blanksById = new Map(
+    blankRows.map((row) => [String(row.id), row]),
+  );
+
+  const [brandsResult, stylesResult, colorsResult, sizesResult] =
+    await Promise.all([
+      supabase.from('brands').select('id,name,code'),
+      supabase.from('product_types').select('id,name,code'),
+      supabase.from('colors').select('id,name,code'),
+      supabase.from('sizes').select('id,name,code'),
+    ]);
+
+  for (const result of [brandsResult, stylesResult, colorsResult, sizesResult]) {
+    if (result.error) throw result.error;
+  }
+
+  function exactLookupId(rows, value) {
+    const wanted = clean(value).toLowerCase();
+    if (!wanted) return '';
+
+    const matches = (rows || []).filter((row) =>
+      [row.name, row.code]
+        .map((candidate) => clean(candidate).toLowerCase())
+        .filter(Boolean)
+        .includes(wanted)
+    );
+
+    return matches.length === 1 ? String(matches[0].id) : '';
+  }
+
+  const rows = storedLines.map((line) => {
+    const mappedBlankId =
+      clean(line.blank_product_id_text) ||
+      supplierMappings.get(clean(line.supplier_sku)) ||
+      '';
+
+    const blank = mappedBlankId
+      ? blanksById.get(String(mappedBlankId))
+      : null;
+
+    const previouslyReceived = number(line.received_quantity);
+    const orderedQuantity = number(line.ordered_quantity);
+    const remainingQuantity = Math.max(
+      0,
+      orderedQuantity - previouslyReceived,
+    );
+
+    const brandId = blank?.brand_id != null
+      ? String(blank.brand_id)
+      : exactLookupId(brandsResult.data, line.brand);
+
+    const productTypeId = blank?.product_type_id != null
+      ? String(blank.product_type_id)
+      : exactLookupId(stylesResult.data, line.style);
+
+    const colorId = blank?.color_id != null
+      ? String(blank.color_id)
+      : exactLookupId(colorsResult.data, line.color);
+
+    const sizeId = blank?.size_id != null
+      ? String(blank.size_id)
+      : exactLookupId(sizesResult.data, line.size);
+
+    const hasCompleteIdentity =
+      Boolean(brandId && productTypeId && colorId && sizeId);
+
+    return {
+      ...line,
+      blank_product_id: mappedBlankId,
+      brand_id: brandId,
+      product_type_id: productTypeId,
+      color_id: colorId,
+      size_id: sizeId,
+      previously_received: previouslyReceived,
+      remaining_quantity: remainingQuantity,
+      receive_now: remainingQuantity,
+      match_status: mappedBlankId
+        ? 'matched'
+        : hasCompleteIdentity
+          ? 'review'
+          : 'unmatched',
+      match_method: mappedBlankId
+        ? 'saved supplier/blank mapping'
+        : hasCompleteIdentity
+          ? 'exact saved draft attributes'
+          : 'saved draft requires review',
+    };
+  });
+
+  const confirmation = {
+    supplier_key: receivingImport.supplier_key,
+    supplier_name: receivingImport.supplier_name,
+    order_number: receivingImport.order_number,
+    po_number: receivingImport.po_number,
+    order_date: receivingImport.order_date,
+    original_file_name: receivingImport.original_file_name,
+    document_storage_provider: receivingImport.document_storage_provider,
+    document_storage_bucket: receivingImport.document_storage_bucket,
+    document_path: receivingImport.document_path,
+    document_size_bytes: receivingImport.document_size_bytes,
+    document_mime_type: receivingImport.document_mime_type,
+    document_sha256: receivingImport.document_sha256,
+    total_lines: number(receivingImport.ordered_lines),
+    total_units: number(receivingImport.ordered_units),
+    subtotal: number(receivingImport.order_total),
+    received_units: number(receivingImport.received_units),
+    duplicate_order: true,
+  };
+
+  return {
+    receiving_import: receivingImport,
+    confirmation,
+    rows,
+  };
+}
+
 async function upsertImport(supabase, confirmation, userId) {
   const payload = {
     supplier_key: clean(confirmation.supplier_key), supplier_name: clean(confirmation.supplier_name),
@@ -470,6 +662,7 @@ export async function handler(event) {
     const action = event.httpMethod === 'GET' ? 'history' : clean(body.action || 'history');
     let data;
     if (action === 'history') data = { history: await history(auth.supabase) };
+    else if (action === 'load_draft') data = await loadDraft(auth.supabase, body.import_id);
     else if (action === 'ensure_lookups') data = await ensureSupplierLookups(auth.supabase, body);
     else if (['save_draft', 'commit', 'rollback'].includes(action)) {
       await requireSupplierReceivingContract(auth.supabase);

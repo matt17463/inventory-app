@@ -180,14 +180,93 @@ function DuplicateWorkbench() {
 }
 
 function ReceivingInbox() {
-  const [rows, setRows] = useState([]); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false);
-  const load = useCallback(async () => { setLoading(true); try { const result = await getSupplierReceivingHistory(); setRows(result.history || []); } catch (error) { setMessage(error.message); } finally { setLoading(false); } }, []);
+  const [rows, setRows] = useState([]);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const result = await getSupplierReceivingHistory();
+      setRows(result.history || []);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => { load(); }, [load]);
-  return <section className="sc-panel"><div className="sc-panel-header"><div><h2>Supplier Receiving Inbox</h2><p>PDFs are saved as review drafts as soon as they parse, so you can see outstanding orders before inventory is received.</p></div><div className="sc-button-row"><Link className="sc-btn sc-btn-primary" to="/add-item">Open Receiving</Link><button className="sc-btn" onClick={load}>Refresh</button></div></div>{message && <div className="sc-alert">{message}</div>}
-    <div className="sc-responsive-table-wrap"><table className="sc-table"><thead><tr><th>Status</th><th>Supplier / Order</th><th>Units</th><th>Remaining</th><th>Receipts</th><th>Updated</th></tr></thead><tbody>
-      {rows.map((row) => { const remaining = Math.max(0, Number(row.ordered_units || 0) - Number(row.received_units || 0)); return <tr key={row.id}><td><span className="sc-badge">{status(row.status)}</span></td><td><strong>{row.supplier_name}</strong><br />Order {row.order_number}</td><td>{count(row.received_units)} / {count(row.ordered_units)}</td><td>{count(remaining)}</td><td>{row.receipts?.length || 0}</td><td>{date(row.updated_at || row.created_at)}</td></tr>; })}
-      {!rows.length && !loading && <tr><td colSpan="6" className="sc-empty-cell">No saved supplier confirmations.</td></tr>}
-    </tbody></table></div></section>;
+
+  return (
+    <section className="sc-panel">
+      <div className="sc-panel-header">
+        <div>
+          <h2>Supplier Receiving Inbox</h2>
+          <p>PDFs are saved as review drafts as soon as they parse, so you can see outstanding orders before inventory is received.</p>
+        </div>
+        <div className="sc-button-row">
+          <Link className="sc-btn" to="/add-item">New Receiving</Link>
+          <button className="sc-btn" onClick={load} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {message && <div className="sc-alert">{message}</div>}
+
+      <div className="sc-responsive-table-wrap">
+        <table className="sc-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Supplier / Order</th>
+              <th>Units</th>
+              <th>Remaining</th>
+              <th>Receipts</th>
+              <th>Updated</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const remaining = Math.max(
+                0,
+                Number(row.ordered_units || 0) - Number(row.received_units || 0),
+              );
+
+              return (
+                <tr key={row.id}>
+                  <td><span className="sc-badge">{status(row.status)}</span></td>
+                  <td><strong>{row.supplier_name}</strong><br />Order {row.order_number}</td>
+                  <td>{count(row.received_units)} / {count(row.ordered_units)}</td>
+                  <td>{count(remaining)}</td>
+                  <td>{row.receipts?.length || 0}</td>
+                  <td>{date(row.updated_at || row.created_at)}</td>
+                  <td>
+                    <Link
+                      className="sc-btn sc-btn-primary sc-btn-small"
+                      to={`/add-item?receiving_import=${encodeURIComponent(row.id)}`}
+                    >
+                      Open Receiving
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && !loading && (
+              <tr>
+                <td colSpan="7" className="sc-empty-cell">
+                  No saved supplier confirmations.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function Reconciliation() {
