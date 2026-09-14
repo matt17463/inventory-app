@@ -409,6 +409,7 @@ export default function AddItemToBin() {
         defaultBinId={defaults.bin_id}
         resolveBlank={findOrCreateBlank}
         refreshLookups={loadAllLookups}
+        initialImportId={new URLSearchParams(window.location.search).get('receiving_import') || ''}
       />
 
       <section className="sc-panel">

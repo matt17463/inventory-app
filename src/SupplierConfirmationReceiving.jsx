@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSupplierReceivingHistory, parseSupplierConfirmation, supplierReceivingAction } from './lib/supplierReceivingApi';
 
 function optionLabel(row, type) {
@@ -28,7 +28,7 @@ function missingReceivingFields(row) {
   return missing;
 }
 
-export default function SupplierConfirmationReceiving({ lookups, defaultBinId, resolveBlank, refreshLookups }) {
+export default function SupplierConfirmationReceiving({ lookups, defaultBinId, resolveBlank, refreshLookups, initialImportId = '' }) {
   const [file, setFile] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [rows, setRows] = useState([]);
@@ -51,7 +51,58 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
     }
   }
 
+  const resumeDraft = useCallback(async (importId, { quiet = false } = {}) => {
+    if (!importId) return;
+
+    if (!quiet) {
+      setBusy('resume');
+      setMessage('');
+    }
+
+    try {
+      const result = await supplierReceivingAction({
+        action: 'load_draft',
+        import_id: importId,
+      });
+
+      const resumed = result.confirmation;
+      const resumedRows = Array.isArray(result.rows) ? result.rows : [];
+
+      if (!resumed) throw new Error('The saved receiving draft could not be loaded.');
+
+      setFile(null);
+      setConfirmation(resumed);
+      setReceiveRequestKey(idempotencyKey());
+
+      setRows(resumedRows.map((row) => ({
+        ...row,
+        selected: Number(row.remaining_quantity || 0) > 0,
+        receive_now: Number(row.remaining_quantity || 0),
+        bin_id: row.bin_id || '',
+        remember_mapping: true,
+      })));
+
+      if (!quiet) {
+        setMessage(
+          `Resumed ${resumed.supplier_name || 'supplier'} order ${resumed.order_number}: ` +
+          `${resumedRows.length} line(s), ${Number(resumed.total_units || 0)} unit(s) ordered. ` +
+          'Choose the receiving bin and review any yellow/red rows before receiving.'
+        );
+      }
+    } catch (error) {
+      if (!quiet) setMessage(error.message);
+      throw error;
+    } finally {
+      if (!quiet) setBusy('');
+    }
+  }, []);
+
   useEffect(() => { loadHistory({ quiet: true }); }, []);
+
+  useEffect(() => {
+    if (!initialImportId) return;
+    resumeDraft(initialImportId).catch(() => {});
+  }, [initialImportId, resumeDraft]);
 
   useEffect(() => {
     if (!defaultBinId) return;
@@ -167,7 +218,11 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
       setMessage(`${result.duplicate_request ? 'This receiving request was already processed. ' : ''}${received} unit(s) received into inventory.${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}${result.errors?.length ? ` Review: ${result.errors.join('; ')}` : ''}${result.warnings?.length ? ` Mapping warnings: ${result.warnings.join('; ')}` : ''}`);
       await loadHistory({ quiet: true });
       if (createdLookups.length && refreshLookups) await refreshLookups();
-      if (file) await parseFile();
+      if (initialImportId) {
+        await resumeDraft(initialImportId, { quiet: true });
+      } else if (file) {
+        await parseFile();
+      }
     } catch (error) {
       setMessage(error.message);
     } finally {
