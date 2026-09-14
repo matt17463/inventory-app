@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { getSupplierReceivingHistory, parseSupplierConfirmation, supplierReceivingAction } from './lib/supplierReceivingApi';
+import {
+  getSupplierReceivingHistory,
+  parseSupplierConfirmation,
+  supplierReceivingAction,
+  startSupplierReceivingCommit,
+  getSupplierReceivingCommitStatus,
+} from './lib/supplierReceivingApi';
 
 function optionLabel(row, type) {
   if (type === 'bin') return row.display_name || row.label || row.bin_code || row.id;
@@ -210,14 +216,110 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
         if (!blankId) throw new Error(`${row.supplier_sku}: no blank product mapping was found. Enable creation or correct the four item fields.`);
         prepared.push({ ...row, blank_product_id: String(blankId), blank_created: created });
       }
-      const result = await supplierReceivingAction({
-        action: 'commit', idempotency_key: receiveRequestKey, confirmation, rows: prepared, notes,
+      const requestKey = receiveRequestKey;
+
+      const queued = await startSupplierReceivingCommit({
+        idempotency_key: requestKey,
+        confirmation,
+        rows: prepared,
+        notes,
       });
-      const received = Number(result.receipt?.received_units || 0);
+
+      let finalStatus = null;
+
+      if (queued.duplicate_request) {
+        finalStatus = {
+          done: true,
+          status: queued.receipt?.status || 'completed',
+          receipt: queued.receipt,
+          duplicate_request: true,
+          errors: [],
+          warnings: [],
+        };
+      } else {
+        const deadline = Date.now() + (5 * 60 * 1000);
+
+        setMessage(
+          `Receiving started in the background for ${prepared.length} line(s). ` +
+          'Progress will update automatically.'
+        );
+
+        while (Date.now() < deadline) {
+          const current =
+            await getSupplierReceivingCommitStatus(requestKey);
+
+          const progressCurrent =
+            Number(current.progress_current || 0);
+
+          const progressTotal =
+            Number(current.progress_total || prepared.length);
+
+          const completedUnits =
+            Number(current.completed_units || 0);
+
+          setMessage(
+            `Receiving in background… ${progressCurrent}/${progressTotal} line(s) processed` +
+            `${completedUnits ? ` · ${completedUnits} unit(s) received` : ''}.`
+          );
+
+          if (current.done) {
+            finalStatus = current;
+            break;
+          }
+
+          await new Promise(
+            (resolve) => setTimeout(resolve, 2000)
+          );
+        }
+
+        if (!finalStatus) {
+          throw new Error(
+            'Receiving is still processing in the background. Do not retry the receipt. ' +
+            'Check Receiving Inbox or Integration Job Center for completion.'
+          );
+        }
+      }
+
+      const received = Number(
+        finalStatus.receipt?.received_units ||
+        finalStatus.completed_units ||
+        0
+      );
+
+      const finalErrors = Array.isArray(finalStatus.errors)
+        ? finalStatus.errors
+        : [];
+
+      const finalWarnings = Array.isArray(finalStatus.warnings)
+        ? finalStatus.warnings
+        : [];
+
+      if (finalStatus.status === 'failed' && received <= 0) {
+        setReceiveRequestKey(idempotencyKey());
+
+        throw new Error(
+          finalErrors.length
+            ? `Supplier receiving failed: ${finalErrors.join('; ')}`
+            : 'Supplier receiving failed in the background. Review Integration Job Center before retrying.'
+        );
+      }
+
       setReceiveRequestKey(idempotencyKey());
-      setMessage(`${result.duplicate_request ? 'This receiving request was already processed. ' : ''}${received} unit(s) received into inventory.${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}${result.errors?.length ? ` Review: ${result.errors.join('; ')}` : ''}${result.warnings?.length ? ` Mapping warnings: ${result.warnings.join('; ')}` : ''}`);
+
+      setMessage(
+        `${finalStatus.duplicate_request ? 'This receiving request was already processed. ' : ''}` +
+        `${received} unit(s) received into inventory.` +
+        `${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}` +
+        `${finalErrors.length ? ` Review: ${finalErrors.join('; ')}` : ''}` +
+        `${finalWarnings.length ? ` Mapping warnings: ${finalWarnings.join('; ')}` : ''}`
+      );
+
       await loadHistory({ quiet: true });
-      if (createdLookups.length && refreshLookups) await refreshLookups();
+
+      if (createdLookups.length && refreshLookups) {
+        await refreshLookups();
+      }
+
       if (initialImportId) {
         await resumeDraft(initialImportId, { quiet: true });
       } else if (file) {

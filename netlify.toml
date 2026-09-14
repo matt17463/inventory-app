@@ -24,5 +24,8 @@ background = true
 [functions."color-lifecycle-background"]
   background = true
 
+[functions."supplier-receiving-background"]
+  background = true
+
 [functions."supplier-confirmation-parse"]
   included_files = ["netlify/functions/_vendor/pdfjs/pdf.worker.mjs", "netlify/functions/_vendor/pdfjs/LICENSE"]

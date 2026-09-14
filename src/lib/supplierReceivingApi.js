@@ -40,3 +40,45 @@ export async function getSupplierReceivingHistory() {
   const response = await authenticatedFunctionFetch('/.netlify/functions/supplier-receiving-action');
   return responseBody(response, 'Receiving history could not be loaded.');
 }
+
+
+export async function startSupplierReceivingCommit(payload) {
+  const queued = await supplierReceivingAction({
+    ...payload,
+    action: 'queue_commit',
+  });
+
+  if (queued.duplicate_request) {
+    return queued;
+  }
+
+  const response = await authenticatedFunctionFetch(
+    '/.netlify/functions/supplier-receiving-background',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        action: 'commit',
+      }),
+    },
+  );
+
+  // Netlify Background Functions acknowledge accepted work with 202.
+  if (!response.ok && response.status !== 202) {
+    return responseBody(
+      response,
+      'The supplier receiving background job could not be started.',
+    );
+  }
+
+  return queued;
+}
+
+export async function getSupplierReceivingCommitStatus(
+  idempotencyKey
+) {
+  return supplierReceivingAction({
+    action: 'commit_status',
+    idempotency_key: idempotencyKey,
+  });
+}

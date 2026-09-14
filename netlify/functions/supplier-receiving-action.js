@@ -507,7 +507,190 @@ async function saveDraft(supabase, body, userId) {
   return { receiving_import: updated, saved_lines: rows.length };
 }
 
-async function commitReceipt(supabase, body, userId) {
+
+async function queueCommit(supabase, body, userId) {
+  await requireSupplierReceivingContract(supabase);
+
+  const confirmation = body.confirmation || {};
+  const rows = Array.isArray(body.rows)
+    ? body.rows.filter((row) => number(row.receive_now) > 0)
+    : [];
+
+  const key = clean(body.idempotency_key);
+
+  if (!clean(confirmation.supplier_key) || !clean(confirmation.order_number)) {
+    throw new Error('The parsed supplier and order number are required.');
+  }
+
+  if (!rows.length) {
+    throw new Error('No rows have a Receive Now quantity greater than zero.');
+  }
+
+  if (!key) {
+    throw new Error('The receiving request key is missing. Refresh and retry.');
+  }
+
+  const duplicate = await findNaturalKey(
+    supabase,
+    'sc_supplier_receiving_receipts',
+    { idempotency_key: key },
+    'Supplier receipt',
+  );
+
+  if (duplicate) {
+    return {
+      queued: false,
+      duplicate_request: true,
+      receipt: duplicate,
+      idempotency_key: key,
+    };
+  }
+
+  const jobId = await trackIntegrationJob(supabase, {
+    job_type: 'supplier_receiving',
+    source_system: clean(confirmation.supplier_key),
+    external_reference: clean(confirmation.order_number),
+    status: 'queued',
+    progress_current: 0,
+    progress_total: rows.length,
+    attempt_count: 1,
+    idempotency_key: `supplier-receiving:${key}`,
+    input_summary: { ordered_rows: rows.length },
+    created_by: userId,
+    updated_at: new Date().toISOString(),
+  });
+
+  return {
+    queued: true,
+    duplicate_request: false,
+    job_id: jobId,
+    idempotency_key: key,
+  };
+}
+
+async function commitStatus(supabase, idempotencyKey) {
+  await requireSupplierReceivingContract(supabase);
+
+  const key = clean(idempotencyKey);
+
+  if (!key) {
+    throw new Error('Receiving request key is required.');
+  }
+
+  let job = null;
+
+  const jobResult = await supabase
+    .from('sc_integration_jobs')
+    .select('*')
+    .eq('idempotency_key', `supplier-receiving:${key}`)
+    .maybeSingle();
+
+  if (jobResult.error) {
+    if (!schemaUnavailable(jobResult.error)) throw jobResult.error;
+  } else {
+    job = jobResult.data || null;
+  }
+
+  const receipt = await findNaturalKey(
+    supabase,
+    'sc_supplier_receiving_receipts',
+    { idempotency_key: key },
+    'Supplier receipt',
+  );
+
+  let receiptLines = [];
+
+  if (receipt?.id) {
+    const linesResult = await supabase
+      .from('sc_supplier_receiving_receipt_lines')
+      .select('id,status,quantity,error_message')
+      .eq('receipt_id', receipt.id);
+
+    if (linesResult.error) throw linesResult.error;
+    receiptLines = linesResult.data || [];
+  }
+
+  const terminalLineStatuses = new Set([
+    'completed',
+    'failed',
+    'rolled_back',
+  ]);
+
+  const progressCurrent = receiptLines.filter((line) =>
+    terminalLineStatuses.has(clean(line.status))
+  ).length;
+
+  const progressTotal =
+    number(job?.progress_total) ||
+    receiptLines.length;
+
+  const completedUnits = receiptLines
+    .filter((line) => clean(line.status) === 'completed')
+    .reduce((sum, line) => sum + number(line.quantity), 0);
+
+  const receiptStatus = clean(receipt?.status);
+  const jobStatus = clean(job?.status);
+
+  const terminalReceiptStatuses = new Set([
+    'completed',
+    'partial_error',
+    'failed',
+    'rolled_back',
+  ]);
+
+  const terminalJobStatuses = new Set([
+    'completed',
+    'failed',
+    'cancelled',
+  ]);
+
+  const receiptDone = terminalReceiptStatuses.has(receiptStatus);
+  const jobDone = terminalJobStatuses.has(jobStatus);
+  const done = receiptDone || jobDone;
+
+  let status = receiptStatus || jobStatus || 'queued';
+
+  if (jobDone && !receiptDone) {
+    status = jobStatus;
+  }
+
+  const summary =
+    job?.result_summary &&
+    typeof job.result_summary === 'object'
+      ? job.result_summary
+      : {};
+
+  const errors = [
+    ...(Array.isArray(summary.errors) ? summary.errors : []),
+    ...receiptLines
+      .filter(
+        (line) =>
+          clean(line.status) === 'failed' &&
+          clean(line.error_message)
+      )
+      .map((line) => clean(line.error_message)),
+    ...(clean(job?.last_error) ? [clean(job.last_error)] : []),
+  ];
+
+  const warnings = Array.isArray(summary.warnings)
+    ? summary.warnings
+    : [];
+
+  return {
+    done,
+    status,
+    job,
+    receipt,
+    progress_current: progressCurrent,
+    progress_total: progressTotal,
+    completed_units:
+      number(receipt?.received_units) || completedUnits,
+    errors: [...new Set(errors.filter(Boolean))],
+    warnings: [...new Set(warnings.filter(Boolean))],
+  };
+}
+
+export async function commitReceipt(supabase, body, userId) {
   const confirmation = body.confirmation || {};
   const rows = Array.isArray(body.rows) ? body.rows.filter((row) => number(row.receive_now) > 0) : [];
   if (!confirmation.supplier_key || !confirmation.order_number) throw new Error('The parsed supplier and order number are required.');
@@ -524,6 +707,25 @@ async function commitReceipt(supabase, body, userId) {
     idempotency_key: `supplier-receiving:${key}`, input_summary: { ordered_rows: rows.length },
     created_by: userId, started_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   });
+
+  if (trackedJobId) {
+    const runningJob = await supabase
+      .from('sc_integration_jobs')
+      .update({
+        status: 'running',
+        progress_current: 0,
+        progress_total: rows.length,
+        last_error: null,
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', trackedJobId);
+
+    if (runningJob.error && !schemaUnavailable(runningJob.error)) {
+      throw runningJob.error;
+    }
+  }
 
   const receivingImport = await upsertImport(supabase, confirmation, userId);
   const prepared = [];
@@ -605,10 +807,19 @@ async function commitReceipt(supabase, body, userId) {
   if (completed.error) throw completed.error;
   const updatedImport = await refreshImportTotals(supabase, receivingImport.id);
   if (trackedJobId) await supabase.from('sc_integration_jobs').update({
-    status: errors.length ? 'failed' : 'completed', progress_current: prepared.length,
-    result_summary: { completed_units: completedUnits, error_count: errors.length },
+    status: errors.length ? 'failed' : 'completed',
+    progress_current: prepared.length,
+    progress_total: prepared.length,
+    result_summary: {
+      completed_units: completedUnits,
+      error_count: errors.length,
+      warning_count: warnings.length,
+      errors: errors.slice(0, 25),
+      warnings: warnings.slice(0, 25),
+    },
     last_error: errors.length ? errors.join('; ').slice(0, 4000) : null,
-    completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   }).eq('id', trackedJobId);
   return { receipt: completed.data, receiving_import: updatedImport, errors, warnings };
 }
@@ -663,6 +874,8 @@ export async function handler(event) {
     let data;
     if (action === 'history') data = { history: await history(auth.supabase) };
     else if (action === 'load_draft') data = await loadDraft(auth.supabase, body.import_id);
+    else if (action === 'queue_commit') data = await queueCommit(auth.supabase, body, auth.user.id);
+    else if (action === 'commit_status') data = await commitStatus(auth.supabase, body.idempotency_key);
     else if (action === 'ensure_lookups') data = await ensureSupplierLookups(auth.supabase, body);
     else if (['save_draft', 'commit', 'rollback'].includes(action)) {
       await requireSupplierReceivingContract(auth.supabase);
