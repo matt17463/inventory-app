@@ -1,7 +1,7 @@
 {
   "name": "create-product-app",
   "private": true,
-  "version": "1.4.12",
+  "version": "1.4.13",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,7 +17,7 @@
     "test:static": "node --test scripts/tests/static-contract.test.mjs",
     "test:security": "node --test scripts/tests/security-helpers.test.mjs",
     "test:calendar": "node --test scripts/tests/google-calendar.test.mjs",
-    "test:mockups": "node --test scripts/tests/mockup-studio.test.mjs scripts/tests/mockup-auto-blank-catalog.test.mjs",
+    "test:mockups": "node --test scripts/tests/mockup-studio.test.mjs scripts/tests/mockup-auto-blank-catalog.test.mjs scripts/tests/warehouse-audit-and-global-addons.test.mjs",
     "test:supplier-receiving": "node --test scripts/tests/supplier-confirmation-parser.test.mjs",
     "test:production-board": "node --test scripts/tests/production-board-active-lines.test.mjs",
     "test:purchasing-demand": "node --test scripts/tests/purchasing-demand-deduplication.test.mjs",
@@ -41,6 +41,8 @@
     "@aws-sdk/client-s3": "^3.883.0",
     "@aws-sdk/s3-request-presigner": "^3.883.0",
     "@supabase/supabase-js": "^2.106.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.18.2",

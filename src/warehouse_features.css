@@ -106,3 +106,27 @@
     margin-bottom: 18px;
   }
 }
+
+.warehouse-audit-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.warehouse-audit-sort {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 220px;
+}
+
+.warehouse-audit-sort span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.warehouse-audit-sort select {
+  min-width: 220px;
+}
+

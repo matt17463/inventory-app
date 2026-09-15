@@ -571,6 +571,7 @@ export async function handler(event) {
       regular_price: config.type === 'simple' ? String(config.regular_price || '') : undefined,
       categories: categoryIds.map((id) => ({ id })),
       tags: numericIdList(config.tag_ids).map((id) => ({ id })),
+      exclude_global_add_ons: config.use_global_add_ons === false,
       virtual: false,
       weight: String(shippingValues.weight),
       dimensions: {
@@ -586,6 +587,7 @@ export async function handler(event) {
         { key: '_sc_brand', value: config.brand },
         { key: '_sc_style', value: config.style },
         { key: '_sc_blank_item_type', value: config.blank_item_type || '' },
+        { key: '_sc_use_global_add_ons', value: config.use_global_add_ons !== false ? 'yes' : 'no' },
         { key: '_sc_logo_options', value: JSON.stringify(listValue(config.logo_options)) },
         { key: '_sc_variation_image_map', value: JSON.stringify(config.variation_image_map || {}) },
         { key: '_sc_excluded_variation_pairs', value: JSON.stringify(config.excluded_variation_pairs || []) },
