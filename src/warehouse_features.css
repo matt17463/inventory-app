@@ -102,9 +102,39 @@
   }
 
   .audit-bin-section {
-    page-break-inside: avoid;
-    margin-bottom: 18px;
+    break-inside: auto;
+    page-break-inside: auto;
+    margin: 0;
   }
+
+  /*
+   * Every bin after the first begins on a fresh physical page.
+   * Include both modern and legacy properties because browser
+   * print engines differ in paged-media support.
+   */
+  .audit-bin-section + .audit-bin-section {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /*
+   * Individual inventory lines should not split between pages,
+   * but a large bin itself is allowed to continue to page 2+.
+   */
+  .audit-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .audit-bin-heading {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}
+
+@page {
+  size: landscape;
+  margin: 0.4in;
 }
 
 .warehouse-audit-actions {
