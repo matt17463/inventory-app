@@ -892,6 +892,7 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
     blank_unit_cost: saved.blank_unit_cost ?? inferredBlankCost,
     blank_low_stock_threshold: saved.blank_low_stock_threshold ?? 0,
     blank_cost_review_required: saved.blank_cost_review_required ?? Number(saved.blank_unit_cost ?? inferredBlankCost) === 0,
+    use_global_add_ons: saved.use_global_add_ons !== false,
     update_existing_product_id: saved.update_existing_product_id || project.woo_product_id || '',
   });
 
@@ -1048,6 +1049,25 @@ function WooCommerceTab({ project, bundle, urls, refresh, setBusy, setMessage })
           </FieldGrid>
 
           <SectionCard title="Product categories" description="Select every WooCommerce category that should contain this product."><div className="mockup-woo-category-options">{(wooOptions.categories || []).map((row) => <label className="mockup-check" key={row.id}><input type="checkbox" checked={selectedCategoryIds.includes(String(row.id))} onChange={(e) => toggleCategory(row.id, e.target.checked)} /> {row.name}</label>)}</div>{!wooOptions.categories?.length ? <FormField label="WooCommerce category IDs" required help="Category discovery was unavailable. Enter one or more existing numeric category IDs separated by commas, then retry discovery later."><input value={form.category_ids} placeholder="For example: 15, 27" onChange={(e) => setForm({ ...form, category_ids: e.target.value })} /></FormField> : null}</SectionCard>
+
+          <SectionCard
+            title="Product Add-Ons"
+            description="Controls whether this WooCommerce product uses applicable global Product Add-On groups."
+          >
+            <FormField
+              label="Global add-ons"
+              help="When enabled, WooCommerce Product Add-Ons global groups may apply according to their category and product rules."
+            >
+              <label className="mockup-check">
+                <input
+                  type="checkbox"
+                  checked={form.use_global_add_ons !== false}
+                  onChange={(e) => setForm({ ...form, use_global_add_ons: e.target.checked })}
+                />
+                Use applicable global add-ons
+              </label>
+            </FormField>
+          </SectionCard>
 
           {form.type === 'variable' && form.create_variations ? <SectionCard title="Blank inventory catalog" description="Every Color × Size combination will reuse an existing blank or create a new zero-on-hand blank automatically before WooCommerce variations are built. No inventory quantity is added."><FieldGrid><FormField label="Automatic blank setup"><label className="mockup-check"><input type="checkbox" checked={form.create_missing_blanks} onChange={(e) => setForm({ ...form, create_missing_blanks: e.target.checked })} /> Create missing blank products and save variation mappings</label></FormField><FormField label="Item Type" required help="Classifies this Style for the on-site Type → Brand → Style picker. Updating an older Woo draft also repairs this classification."><select value={form.blank_item_type} onChange={(e) => setForm({ ...form, blank_item_type: e.target.value })}><option value="">Choose item type</option>{BLANK_ITEM_TYPES.map((name) => <option key={name} value={name}>{name}</option>)}</select></FormField><FormField label="Blank unit cost" required help="Used only for newly created blanks. Existing blank costs are never overwritten."><input type="number" min="0" step="0.01" value={form.blank_unit_cost} onChange={(e) => setForm({ ...form, blank_unit_cost: e.target.value, blank_cost_review_required: Number(e.target.value) === 0 ? true : form.blank_cost_review_required })} /></FormField><FormField label="Blank low-stock threshold" required><input type="number" min="0" step="1" value={form.blank_low_stock_threshold} onChange={(e) => setForm({ ...form, blank_low_stock_threshold: e.target.value })} /></FormField><FormField label="Cost review"><label className="mockup-check"><input type="checkbox" checked={form.blank_cost_review_required} onChange={(e) => setForm({ ...form, blank_cost_review_required: e.target.checked })} /> Mark newly created blanks for cost review</label></FormField></FieldGrid><p className="muted-text">Duplicate color names are resolved by the color record already used most often by blank inventory. Only a genuine SKU or duplicate-blank conflict stops the export.</p></SectionCard> : null}
 
