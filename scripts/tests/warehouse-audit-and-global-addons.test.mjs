@@ -8,7 +8,8 @@ test('warehouse audit provides XLS and PDF exports with per-bin PDF pages and re
     'utf8',
   );
 
-  assert.match(source, /Download XLS/);
+  assert.match(source, /Download Excel \(\.xls\)/);
+  assert.match(source, /Print Report/);
   assert.match(source, /Download PDF/);
   assert.match(source, /application\/vnd\.ms-excel/);
   assert.match(source, /new jsPDF/);
@@ -24,6 +25,17 @@ test('warehouse audit provides XLS and PDF exports with per-bin PDF pages and re
   assert.match(source, /Product Name/);
   assert.match(source, /System Qty/);
   assert.match(source, /Actual Count/);
+
+  const css = await fs.readFile(
+    new URL('../../src/warehouse_features.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(css, /audit-bin-section \+ \.audit-bin-section/);
+  assert.match(css, /break-before:\s*page/);
+  assert.match(css, /page-break-before:\s*always/);
+  assert.match(css, /@page/);
+  assert.match(css, /size:\s*landscape/);
 });
 
 test('Mockup Studio explicitly controls WooCommerce global Product Add-Ons', async () => {

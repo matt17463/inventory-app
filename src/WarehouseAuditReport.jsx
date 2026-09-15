@@ -365,7 +365,7 @@ export default function WarehouseAuditReport() {
             onClick={downloadExcel}
             disabled={!groups.length}
           >
-            Download XLS
+            Download Excel (.xls)
           </button>
 
           <button
@@ -374,6 +374,14 @@ export default function WarehouseAuditReport() {
             disabled={!groups.length}
           >
             Download PDF
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            disabled={!groups.length}
+          >
+            Print Report
           </button>
         </div>
       </section>
