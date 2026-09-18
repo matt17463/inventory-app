@@ -1,0 +1,21 @@
+{
+  "version": "1.4.15",
+  "feature": "SanMar Excel supplier receiving",
+  "new_files": [
+    "netlify/functions/_shared/sanmarConfirmationParser.js",
+    "scripts/tests/sanmar-confirmation-parser.test.mjs"
+  ],
+  "patched_files": [
+    "package.json",
+    "src/SupplierConfirmationReceiving.jsx",
+    "src/lib/supplierReceivingApi.js",
+    "netlify/functions/supplier-confirmation-parse.js"
+  ],
+  "database_migration_required": false,
+  "supported_sanmar_formats": [
+    ".xls",
+    ".xlsx"
+  ],
+  "legacy_xls_parser": "bounded-biff8-no-xlsx-dependency",
+  "xlsx_parser": "read-excel-file"
+}

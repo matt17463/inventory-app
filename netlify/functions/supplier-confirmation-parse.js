@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
+import readXlsxFile from 'read-excel-file/node';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { extractPdfTextPages } from './_shared/pdfTextExtractor.js';
 import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from './_shared/supplierConfirmationParser.js';
+import { parseSanMarRows } from './_shared/sanmarConfirmationParser.js';
+import { parseSanMarLegacyXlsRows } from './_shared/sanmarLegacyXlsParser.js';
 import { matchSupplierColor } from './_shared/supplierColorMatcher.js';
 import { putOperationalObject } from './_shared/operationalStorage.js';
 import { requireSupplierReceivingContract } from './_shared/supplierReceivingContract.js';
@@ -10,7 +13,57 @@ const FUNCTION_NAME = 'supplier-confirmation-parse';
 const MAX_BYTES = 12 * 1024 * 1024;
 
 function safeFileName(value) {
-  return String(value || 'confirmation.pdf').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(-120);
+  return String(value || 'confirmation').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(-120);
+}
+
+function spreadsheetMimeType(fileName, mimeType) {
+  const lowerName = String(fileName || '').toLowerCase();
+  const lowerMime = String(mimeType || '').toLowerCase();
+  if (lowerName.endsWith('.xlsx') || lowerMime.includes('spreadsheetml')) {
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
+  return 'application/vnd.ms-excel';
+}
+
+function parseUploadedSupplierFile(body, bytes) {
+  const fileName = String(body.file_name || '');
+  const mimeType = String(body.mime_type || '');
+  const lowerName = fileName.toLowerCase();
+  const lowerMime = mimeType.toLowerCase();
+  const pdfSignature = bytes.subarray(0, 4).toString() === '%PDF';
+  const oleSignature = bytes.length >= 8
+    && bytes.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  const zipSignature = bytes.length >= 4
+    && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+  const excelRequested = /\.xlsx?$/.test(lowerName)
+    || lowerMime.includes('ms-excel')
+    || lowerMime.includes('spreadsheetml');
+
+  if (pdfSignature) {
+    return {
+      kind: 'pdf',
+      contentType: 'application/pdf',
+      parse: async () => parseSupplierConfirmationPages(await extractPdfTextPages(bytes)),
+    };
+  }
+
+  if (excelRequested && (oleSignature || zipSignature)) {
+    return {
+      kind: 'sanmar_excel',
+      contentType: spreadsheetMimeType(fileName, mimeType),
+      parse: async () => {
+        let rows;
+        if (oleSignature) {
+          rows = parseSanMarLegacyXlsRows(bytes);
+        } else {
+          rows = await readXlsxFile(bytes);
+        }
+        return parseSanMarRows(rows, { fileName });
+      },
+    };
+  }
+
+  throw new Error('Choose a supported supplier file: S&S/Momentec PDF or SanMar Excel (.xls/.xlsx).');
 }
 
 function normalizedSupplier(value) {
@@ -123,6 +176,30 @@ async function parseAndMatch(supabase, parsed) {
     return { line, blankId, method, suggested };
   });
 
+  const stylesNeedingBrandInference = [...new Set(preparedLines
+    .filter((entry) => !entry.suggested.brand_id && entry.suggested.product_type_id)
+    .map((entry) => String(entry.suggested.product_type_id)))];
+  if (stylesNeedingBrandInference.length) {
+    const inferredResult = await supabase.from('blank_products')
+      .select('brand_id,product_type_id')
+      .eq('sc_is_archived', false)
+      .in('product_type_id', stylesNeedingBrandInference);
+    if (inferredResult.error) throw inferredResult.error;
+    const brandsByStyle = new Map();
+    for (const row of inferredResult.data || []) {
+      const styleId = String(row.product_type_id || '');
+      const brandId = String(row.brand_id || '');
+      if (!styleId || !brandId) continue;
+      if (!brandsByStyle.has(styleId)) brandsByStyle.set(styleId, new Set());
+      brandsByStyle.get(styleId).add(brandId);
+    }
+    for (const entry of preparedLines) {
+      if (entry.suggested.brand_id || !entry.suggested.product_type_id) continue;
+      const candidates = brandsByStyle.get(String(entry.suggested.product_type_id));
+      if (candidates?.size === 1) entry.suggested.brand_id = [...candidates][0];
+    }
+  }
+
   const mappedIds = [...new Set(preparedLines.map((entry) => entry.blankId).filter(Boolean))];
   const blankById = new Map();
   if (mappedIds.length) {
@@ -207,15 +284,15 @@ export async function handler(event) {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    if (!body.file_base64) throw new Error('Choose an S&S Activewear or Momentec PDF first.');
+    if (!body.file_base64) throw new Error('Choose a supplier confirmation file first.');
     const bytes = Buffer.from(body.file_base64, 'base64');
-    if (!bytes.length || bytes.length > MAX_BYTES) throw new Error('The PDF must be between 1 byte and 12 MB.');
-    if (bytes.subarray(0, 4).toString() !== '%PDF') throw new Error('The selected file is not a valid PDF.');
+    if (!bytes.length || bytes.length > MAX_BYTES) throw new Error('The supplier file must be between 1 byte and 12 MB.');
+    const source = parseUploadedSupplierFile(body, bytes);
     // Validate every table and column used by the receiving workflow before
-    // extracting or uploading the PDF. This prevents orphaned R2 documents
-    // when a database migration is missing or PostgREST has stale metadata.
+    // extracting or uploading the source file. This prevents orphaned R2
+    // documents when a database migration is missing or PostgREST has stale metadata.
     await requireSupplierReceivingContract(auth.supabase);
-    const parsed = parseSupplierConfirmationPages(await extractPdfTextPages(bytes));
+    const parsed = await source.parse();
     const hash = createHash('sha256').update(bytes).digest('hex');
     const objectPath = `operational/receiving/${parsed.supplier_key}/${safeFileName(parsed.order_number)}/${hash.slice(0, 16)}-${safeFileName(body.file_name)}`;
     const lines = await parseAndMatch(auth.supabase, parsed);
@@ -236,7 +313,7 @@ export async function handler(event) {
     // Upload only after parsing, matching, schema validation, and duplicate
     // checks have all succeeded. The hash-based key also makes a retry replace
     // the same R2 object instead of creating an orphaned copy.
-    const stored = await putOperationalObject({ key: objectPath, bytes, contentType: 'application/pdf', makePreview: false });
+    const stored = await putOperationalObject({ key: objectPath, bytes, contentType: source.contentType, makePreview: false });
     return jsonResponse(200, {
       success: true,
       confirmation: {
@@ -245,7 +322,7 @@ export async function handler(event) {
         document_storage_bucket: stored.storage_bucket,
         document_path: stored.storage_path,
         document_size_bytes: stored.file_size_bytes,
-        document_mime_type: 'application/pdf',
+        document_mime_type: source.contentType,
         document_sha256: hash,
         original_file_name: safeFileName(body.file_name),
         duplicate_order: Boolean(existingImport),

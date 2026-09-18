@@ -19,7 +19,7 @@ async function responseBody(response, fallback) {
 export async function parseSupplierConfirmation(file) {
   const fileBase64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('The PDF could not be read from this device.'));
+    reader.onerror = () => reject(new Error('The supplier confirmation file could not be read from this device.'));
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
     reader.readAsDataURL(file);
   });

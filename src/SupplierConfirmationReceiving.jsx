@@ -146,7 +146,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   }
 
   async function parseFile() {
-    if (!file) { setMessage('Choose a supplier confirmation PDF first.'); return; }
+    if (!file) { setMessage('Choose a supplier confirmation file first.'); return; }
     setBusy('parse'); setMessage('');
     try {
       const result = await parseSupplierConfirmation(file);
@@ -360,12 +360,12 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
       <div className="sc-panel-header">
         <div>
           <h3>Import Supplier Order Confirmation</h3>
-          <p>Upload an S&amp;S Activewear or Momentec PDF, review its matches, enter actual quantities received, and then add them to inventory. Supplier colors are matched to the existing WooCommerce color list and active color-pairing rules.</p>
+          <p>Upload an S&amp;S Activewear or Momentec PDF, or a SanMar Excel receipt (.xls/.xlsx), review its matches, enter actual quantities received, and then add them to inventory. Supplier colors are matched to the existing WooCommerce color list and active color-pairing rules.</p>
         </div>
       </div>
       <div className="supplier-upload-row">
-        <label className="sc-field"><span>Order confirmation PDF</span><input type="file" accept="application/pdf,.pdf" onChange={(event) => { setFile(event.target.files?.[0] || null); setReceiveRequestKey(idempotencyKey()); }} /></label>
-        <button className="sc-btn sc-btn-primary" onClick={parseFile} disabled={!file || Boolean(busy)}>{busy === 'parse' ? 'Reading PDF…' : 'Read Confirmation'}</button>
+        <label className="sc-field"><span>Order confirmation file</span><input type="file" accept="application/pdf,.pdf,application/vnd.ms-excel,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" onChange={(event) => { setFile(event.target.files?.[0] || null); setReceiveRequestKey(idempotencyKey()); }} /></label>
+        <button className="sc-btn sc-btn-primary" onClick={parseFile} disabled={!file || Boolean(busy)}>{busy === 'parse' ? 'Reading file…' : 'Read Confirmation'}</button>
       </div>
       {message && <div className="sc-alert">{message}</div>}
 
@@ -435,7 +435,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
               <div><strong>{entry.supplier_name} — Order {entry.order_number}</strong><span className="sc-badge">{statusText(entry.status)}</span></div>
               <p>{entry.received_units} of {entry.ordered_units} units received · {new Date(entry.created_at).toLocaleString()}</p>
               <div className="supplier-history-actions">
-                {entry.document_path && <button className="sc-btn sc-btn-small" onClick={() => openDocument(entry)}>Open Original PDF</button>}
+                {entry.document_path && <button className="sc-btn sc-btn-small" onClick={() => openDocument(entry)}>Open Original File</button>}
                 {(entry.receipts || []).filter((receipt) => receipt.status !== 'rolled_back' && Number(receipt.received_units) > 0).map((receipt) => (
                   <button className="sc-btn sc-btn-danger sc-btn-small" key={receipt.id} disabled={Boolean(busy)} onClick={() => rollback(receipt)}>Rollback {receipt.received_units} units from {new Date(receipt.created_at).toLocaleDateString()}</button>
                 ))}
