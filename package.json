@@ -1,7 +1,7 @@
 {
   "name": "create-product-app",
   "private": true,
-  "version": "1.4.14",
+  "version": "1.4.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,7 @@
     "test:security": "node --test scripts/tests/security-helpers.test.mjs",
     "test:calendar": "node --test scripts/tests/google-calendar.test.mjs",
     "test:mockups": "node --test scripts/tests/mockup-studio.test.mjs scripts/tests/mockup-auto-blank-catalog.test.mjs scripts/tests/warehouse-audit-and-global-addons.test.mjs",
-    "test:supplier-receiving": "node --test scripts/tests/supplier-confirmation-parser.test.mjs",
+    "test:supplier-receiving": "node --test scripts/tests/supplier-confirmation-parser.test.mjs scripts/tests/sanmar-confirmation-parser.test.mjs scripts/tests/sanmar-legacy-xls-parser.test.mjs",
     "test:production-board": "node --test scripts/tests/production-board-active-lines.test.mjs",
     "test:purchasing-demand": "node --test scripts/tests/purchasing-demand-deduplication.test.mjs",
     "test:imports": "node --test scripts/tests/spreadsheet-import-safety.test.mjs",
