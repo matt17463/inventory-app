@@ -2280,6 +2280,28 @@ function mergePullSheetPurchasingIntegrityFallbackRows(
     if (!key) continue;
 
     const existing = rowsById.get(key) || null;
+
+    // A fallback-only row already contains the database-calculated order
+    // quantity. Do not seed `current` with that fallback and then add the same
+    // adjustment to it again. That was the v1.4.17 8 + 8 = 16 regression for
+    // Pull Sheet 270 Black AM (and 7 + 7 = 14 for Black AL).
+    if (!existing) {
+      const fallbackOrderQuantity = mode === 'shortages'
+        ? Number(fallback.need_to_order || 0)
+        : Number(fallback.recommended_order_quantity || 0);
+
+      if (!(fallbackOrderQuantity > 0)) continue;
+
+      const unitCost = Number(fallback.unit_cost ?? 0);
+      rowsById.set(key, {
+        ...fallback,
+        estimated_order_value: fallbackOrderQuantity * unitCost,
+        integrity_fallback: true,
+        purchasing_status: 'integrity_fallback',
+      });
+      continue;
+    }
+
     const adjustment = purchasingIntegrityFallbackAdjustment(
       existing,
       fallback,
@@ -2288,7 +2310,7 @@ function mergePullSheetPurchasingIntegrityFallbackRows(
 
     if (!(adjustment > 0)) continue;
 
-    const current = existing || { ...fallback };
+    const current = existing;
     const currentSources = Array.isArray(current.demand_sources)
       ? current.demand_sources
       : [];

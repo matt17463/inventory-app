@@ -136,3 +136,14 @@ test('SQL 69 lifecycle repair preserves real-row mismatch counting and cleans st
     /update\s+public\.blank_inventory_movements/i
   );
 });
+
+test('fallback-only Purchasing demand is inserted once instead of adding its own adjustment twice', () => {
+  assert.match(
+    inventoryApi,
+    /if \(!existing\)\s*\{[\s\S]*fallbackOrderQuantity[\s\S]*rowsById\.set\(key,[\s\S]*\.\.\.fallback[\s\S]*continue;/
+  );
+  assert.doesNotMatch(
+    inventoryApi,
+    /const current = existing \|\| \{ \.\.\.fallback \};/
+  );
+});
