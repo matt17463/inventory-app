@@ -1,0 +1,26 @@
+Skilled Crafting Inventory App v1.4.16 R3
+Pull Sheet / Purchasing Integrity
+
+MODIFIED BY GUARDED INSTALLER
+- package.json
+- package-lock.json
+- src/PullSheetList.jsx
+- src/PullSheetView.jsx
+- src/lib/inventoryApi.js
+
+ADDED
+- src/lib/pullSheetPurchasingIntegrityApi.js
+- netlify/functions/pullsheet-purchasing-integrity.js
+- deployment/sql/63_PULLSHEET_PURCHASING_INTEGRITY.sql
+- deployment/sql/64_VERIFY_PULLSHEET_PURCHASING_INTEGRITY.sql
+- scripts/tests/pullsheet-purchasing-integrity.test.mjs
+- deployment/DEPLOY_PULLSHEET_PURCHASING_INTEGRITY_v1.4.16_R3.md
+- deployment/RELEASE_NOTES_v1.4.16_R3.md
+- PATCH_MANIFEST_v1.4.16_R3.txt
+
+UNCHANGED
+- src/Purchasing.jsx
+- WooCommerce / WordPress plugins
+- Netlify environment variables
+- physical inventory quantities
+- inventory movement history

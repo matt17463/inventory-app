@@ -386,6 +386,7 @@ export default function PullSheetList() {
                     Select
                   </label>
                 </th>
+                <th>Pull Sheet #</th>
                 <th>Job</th>
                 <th>Order</th>
                 <th>Order Placed</th>
@@ -409,6 +410,7 @@ export default function PullSheetList() {
                       aria-label={`Select pull sheet ${job.job_name || job.id}`}
                     />
                   </td>
+                  <td><Link to={`/pullsheets/${job.id}`}>#{job.id}</Link></td>
                   <td>{job.job_name}</td>
                   <td>{getOrderNumber(job)}</td>
                   <td>{formatDate(getOrderPlacedDate(job))}</td>

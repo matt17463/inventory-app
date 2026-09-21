@@ -1668,6 +1668,22 @@ function applyAuthoritativePurchasingInventory(rows, authoritativeMap, mode) {
     : Number(row.recommended_order_quantity || 0) > 0);
 }
 
+async function getPullSheetPurchasingIntegrityFallbackRows() {
+  const { data, error } = await supabase.rpc(
+    'sc_missing_pullsheet_purchasing_demand_v1'
+  );
+
+  // Preserve the v1.4.15 report during a rolling deploy until SQL 63 is installed.
+  if (error) {
+    if (/could not find|does not exist|schema cache/i.test(error.message || '')) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data || [];
+}
+
 function attachPurchasingDemandSources(rows, sourceMap) {
   return (rows || []).map((row) => {
     const source = sourceMap.get(String(row?.blank_product_id || ''));
@@ -2238,6 +2254,89 @@ function mergePurchasingLineOverrides(
     ));
 }
 
+function mergePullSheetPurchasingIntegrityFallbackRows(
+  rows,
+  fallbackRows,
+  mode
+) {
+  const rowsById = new Map(
+    (rows || []).map((row) => [
+      String(row?.blank_product_id || ''),
+      { ...row },
+    ])
+  );
+
+  for (const fallback of fallbackRows || []) {
+    const key = String(fallback?.blank_product_id || '');
+    if (!key) continue;
+
+    const adjustment = mode === 'shortages'
+      ? Number(fallback.need_to_order || 0)
+      : Number(fallback.recommended_order_quantity || 0);
+
+    if (!(adjustment > 0)) continue;
+
+    const current = rowsById.get(key) || { ...fallback };
+    const currentSources = Array.isArray(current.demand_sources)
+      ? current.demand_sources
+      : [];
+    const fallbackSources = Array.isArray(fallback.demand_sources)
+      ? fallback.demand_sources
+      : [];
+    const demandSources = mergeDemandSourceLists(
+      currentSources,
+      fallbackSources
+    );
+
+    const needToOrder = Number(current.need_to_order || 0)
+      + (mode === 'shortages' ? adjustment : 0);
+    const recommendedOrderQuantity =
+      Number(current.recommended_order_quantity || 0)
+      + (mode === 'recommended' ? adjustment : 0);
+    const orderQuantity = mode === 'shortages'
+      ? needToOrder
+      : recommendedOrderQuantity;
+    const unitCost = Number(current.unit_cost ?? fallback.unit_cost ?? 0);
+
+    rowsById.set(key, {
+      ...fallback,
+      ...current,
+      need_to_order: needToOrder,
+      recommended_order_quantity: recommendedOrderQuantity,
+      estimated_order_value: orderQuantity * unitCost,
+      demand_source_count: demandSources.length,
+      demand_total_quantity: demandSources.reduce(
+        (sum, source) => sum + purchasingSourceQuantity(source),
+        0
+      ),
+      demand_order_numbers:
+        current.demand_order_numbers
+        || fallback.demand_order_numbers
+        || '',
+      demand_pullsheet_numbers:
+        current.demand_pullsheet_numbers
+        || fallback.demand_pullsheet_numbers
+        || '',
+      demand_sources: demandSources,
+      integrity_fallback: true,
+      purchasing_status: 'integrity_fallback',
+    });
+  }
+
+  return [...rowsById.values()]
+    .filter((row) => (
+      mode === 'shortages'
+        ? Number(row.need_to_order || 0) > 0
+        : Number(row.recommended_order_quantity || 0) > 0
+    ))
+    .sort((a, b) => (
+      mode === 'shortages'
+        ? Number(b.need_to_order || 0) - Number(a.need_to_order || 0)
+        : Number(b.recommended_order_quantity || 0)
+          - Number(a.recommended_order_quantity || 0)
+    ));
+}
+
 export async function getPurchasingShortages(search = '') {
   const [
     rowsRes,
@@ -2245,6 +2344,7 @@ export async function getPurchasingShortages(search = '') {
     pendingContext,
     nonInventoryContext,
     authoritativeMap,
+    integrityFallbackRows,
   ] = await Promise.all([
     supabase
       .from('purchasing_shortages')
@@ -2254,6 +2354,7 @@ export async function getPurchasingShortages(search = '') {
     getPendingStockPurchasingContext(),
     getNonInventoryPurchasingContext(),
     getPurchasingAuthoritativeInventoryMap(),
+    getPullSheetPurchasingIntegrityFallbackRows(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
@@ -2266,7 +2367,16 @@ export async function getPurchasingShortages(search = '') {
     'shortages',
     sourceMap
   );
-  const rows = applyAuthoritativePurchasingInventory(mergedRows, authoritativeMap, 'shortages');
+  const authoritativeRows = applyAuthoritativePurchasingInventory(
+    mergedRows,
+    authoritativeMap,
+    'shortages'
+  );
+  const rows = mergePullSheetPurchasingIntegrityFallbackRows(
+    authoritativeRows,
+    integrityFallbackRows,
+    'shortages'
+  );
 
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
@@ -2294,6 +2404,7 @@ export async function getPurchasingRecommendedOrders(search = '') {
     pendingContext,
     nonInventoryContext,
     authoritativeMap,
+    integrityFallbackRows,
   ] = await Promise.all([
     supabase
       .from('purchasing_recommended_orders')
@@ -2303,6 +2414,7 @@ export async function getPurchasingRecommendedOrders(search = '') {
     getPendingStockPurchasingContext(),
     getNonInventoryPurchasingContext(),
     getPurchasingAuthoritativeInventoryMap(),
+    getPullSheetPurchasingIntegrityFallbackRows(),
   ]);
 
   if (rowsRes.error) throw rowsRes.error;
@@ -2315,7 +2427,16 @@ export async function getPurchasingRecommendedOrders(search = '') {
     'recommended',
     sourceMap
   );
-  const rows = applyAuthoritativePurchasingInventory(mergedRows, authoritativeMap, 'recommended');
+  const authoritativeRows = applyAuthoritativePurchasingInventory(
+    mergedRows,
+    authoritativeMap,
+    'recommended'
+  );
+  const rows = mergePullSheetPurchasingIntegrityFallbackRows(
+    authoritativeRows,
+    integrityFallbackRows,
+    'recommended'
+  );
 
   return rows.filter((row) => rowMatchesAllTokens(row, search, purchasingSearchText));
 }
