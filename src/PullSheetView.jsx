@@ -29,6 +29,10 @@ import {
   updatePullSheetStatus,
 } from './lib/inventoryApi';
 import { searchMappingBlanks, setProductBlankMapping } from './lib/productBlankMappingApi';
+import {
+  getPullSheetPurchasingIntegrity,
+  repairPullSheetPurchasingIntegrity,
+} from './lib/pullSheetPurchasingIntegrityApi';
 
 function value(...items) {
   return items.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '—';
@@ -109,6 +113,9 @@ export default function PullSheetView() {
   const [bulkMessage, setBulkMessage] = useState('');
   const [nonInventoryDialog, setNonInventoryDialog] = useState(null);
   const [nonInventorySaving, setNonInventorySaving] = useState(false);
+  const [purchasingIntegrityByLine, setPurchasingIntegrityByLine] = useState({});
+  const [purchasingIntegrityBusy, setPurchasingIntegrityBusy] = useState(false);
+  const [purchasingIntegrityMessage, setPurchasingIntegrityMessage] = useState('');
 
   const fetchJobItemsDirect = useCallback(async () => {
     const direct = await supabase
@@ -208,6 +215,58 @@ export default function PullSheetView() {
       };
     });
   }, [resolvedJobId]);
+
+  const loadPurchasingIntegrity = useCallback(async () => {
+    if (!resolvedJobId) return;
+
+    try {
+      const rows = await getPullSheetPurchasingIntegrity(resolvedJobId);
+      const byLine = {};
+      for (const row of rows || []) {
+        byLine[String(row.job_item_id)] = row;
+      }
+      setPurchasingIntegrityByLine(byLine);
+    } catch (err) {
+      setPurchasingIntegrityMessage(
+        err.message || 'Could not audit Purchasing integrity.'
+      );
+    }
+  }, [resolvedJobId]);
+
+  useEffect(() => {
+    loadPurchasingIntegrity();
+  }, [loadPurchasingIntegrity, items.length]);
+
+  async function repairCurrentPullSheetPurchasing() {
+    if (!resolvedJobId) return;
+
+    const confirmed = window.confirm(
+      `Reconcile Purchasing for Pull Sheet #${resolvedJobId}?\n\n`
+      + 'This can cancel an active reservation tied to the wrong blank, '
+      + 'create or repair a reservation when usable stock exists, or assign '
+      + 'a true shortage to Pending Stock. Physical on-hand inventory is not changed.'
+    );
+
+    if (!confirmed) return;
+
+    setPurchasingIntegrityBusy(true);
+    setPurchasingIntegrityMessage('Reconciling Purchasing…');
+
+    try {
+      const result = await repairPullSheetPurchasingIntegrity(resolvedJobId);
+      setPurchasingIntegrityMessage(
+        result?.message || 'Purchasing reconciliation completed.'
+      );
+      await load();
+      await loadPurchasingIntegrity();
+    } catch (err) {
+      setPurchasingIntegrityMessage(
+        err.message || 'Could not reconcile Purchasing.'
+      );
+    } finally {
+      setPurchasingIntegrityBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -914,6 +973,15 @@ export default function PullSheetView() {
           const isRestoring = restoringLine === key;
           const nonInventory = isNonInventoryLine(row);
           const includedOnPurchasingReport = isIncludedOnPurchasingReport(row);
+          const purchasingIntegrity = purchasingIntegrityByLine[
+            String(pickJobItemId(row) || '')
+          ] || null;
+          const purchasingIntegrityIssue = purchasingIntegrity
+            && ![
+              'ok',
+              'non_inventory',
+              'purchasing_excluded',
+            ].includes(purchasingIntegrity.issue_code);
           const lineStatusLabel = nonInventory
             ? 'No Inventory Required'
             : (outOfStock ? 'Out of Stock — Pending Stock' : (warning ? 'Needs Review' : (row.pairing_status || rowStatus(row) || 'Matched')));
@@ -965,6 +1033,24 @@ export default function PullSheetView() {
               </div>
               {warning ? <div className="sc-warning-callout">{warning}</div> : null}
               {zeroOnHandWarning ? <div className="sc-warning-callout">{zeroOnHandWarning}</div> : null}
+              {purchasingIntegrityIssue ? (
+                <div className="sc-warning-callout">
+                  <strong>Purchasing integrity:</strong>{' '}
+                  {purchasingIntegrity.issue_detail}
+                  <div className="sc-button-row" style={{ marginTop: '0.5rem' }}>
+                    <ActionButton
+                      tone="warning"
+                      disabled={purchasingIntegrityBusy}
+                      onClick={repairCurrentPullSheetPurchasing}
+                    >
+                      {purchasingIntegrityBusy ? 'Reconciling…' : 'Reconcile Purchasing'}
+                    </ActionButton>
+                  </div>
+                </div>
+              ) : null}
+              {purchasingIntegrityMessage ? (
+                <div className="sc-info-callout">{purchasingIntegrityMessage}</div>
+              ) : null}
 
               {nonInventory ? (
                 <div className="sc-non-inventory-line-controls">
