@@ -4,6 +4,7 @@ import { getPendingStockBins } from './pullSheetBinAssignmentApi';
 import {
   normalizePurchasingDemandSourceRow,
   purchasingDemandSourceQuantity,
+  purchasingIntegrityFallbackAdjustment,
   representedPurchasingJobItemIds,
   unrepresentedPurchasingSources,
 } from './purchasingDemandSources';
@@ -1637,11 +1638,19 @@ async function getPurchasingAuthoritativeInventoryMap() {
   const { data, error } = await supabase
     .from('sc_purchasing_authoritative_inventory_v3')
     .select('*');
+
   if (error) {
-    console.warn('Authoritative purchasing inventory view unavailable:', error.message || error);
-    return new Map();
+    // Purchasing must fail closed. Returning an empty map here allows the
+    // Pending Stock override and integrity fallback to count the same line twice.
+    throw new Error(
+      `Authoritative Purchasing inventory unavailable: ${error.message || error}`
+    );
   }
-  return new Map((data || []).map((row) => [String(row.blank_product_id || ''), row]));
+
+  return new Map((data || []).map((row) => [
+    String(row.blank_product_id || ''),
+    row,
+  ]));
 }
 
 function applyAuthoritativePurchasingInventory(rows, authoritativeMap, mode) {
@@ -2270,13 +2279,16 @@ function mergePullSheetPurchasingIntegrityFallbackRows(
     const key = String(fallback?.blank_product_id || '');
     if (!key) continue;
 
-    const adjustment = mode === 'shortages'
-      ? Number(fallback.need_to_order || 0)
-      : Number(fallback.recommended_order_quantity || 0);
+    const existing = rowsById.get(key) || null;
+    const adjustment = purchasingIntegrityFallbackAdjustment(
+      existing,
+      fallback,
+      mode
+    );
 
     if (!(adjustment > 0)) continue;
 
-    const current = rowsById.get(key) || { ...fallback };
+    const current = existing || { ...fallback };
     const currentSources = Array.isArray(current.demand_sources)
       ? current.demand_sources
       : [];

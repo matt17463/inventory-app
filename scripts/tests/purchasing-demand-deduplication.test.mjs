@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   normalizePurchasingDemandSourceRow,
   purchasingDemandSourceQuantity,
+  purchasingIntegrityFallbackAdjustment,
   representedPurchasingJobItemIds,
   unrepresentedPurchasingSources,
 } from '../../src/lib/purchasingDemandSources.js';
@@ -92,4 +93,54 @@ test('SQL compatibility view repairs reservation quantities without changing dat
   assert.match(sql, /source_item->>'job_item_id'/i);
   assert.doesNotMatch(sql, /\b(delete|truncate)\s+from\b/i);
   assert.doesNotMatch(sql, /\bupdate\s+public\./i);
+});
+
+test('integrity fallback does not double-count a Pending Stock line already represented in the current row', () => {
+  const current = {
+    quantity_on_hand: 2,
+    reserved_quantity: 10,
+    need_to_order: 8,
+    recommended_order_quantity: 8,
+    low_stock_threshold: 0,
+    demand_sources: [{ job_item_id: 1150, quantity: 10, pending_stock: true }],
+  };
+  const fallback = {
+    need_to_order: 8,
+    recommended_order_quantity: 8,
+    demand_sources: [{ job_item_id: 1150, quantity: 10 }],
+  };
+
+  assert.equal(
+    purchasingIntegrityFallbackAdjustment(current, fallback, 'shortages'),
+    0
+  );
+  assert.equal(
+    purchasingIntegrityFallbackAdjustment(current, fallback, 'recommended'),
+    0
+  );
+});
+
+test('integrity fallback still adds independent unrepresented pull-sheet demand', () => {
+  const current = {
+    quantity_on_hand: 0,
+    reserved_quantity: 5,
+    need_to_order: 5,
+    recommended_order_quantity: 5,
+    low_stock_threshold: 0,
+    demand_sources: [{ job_item_id: 100, quantity: 5 }],
+  };
+  const fallback = {
+    need_to_order: 3,
+    recommended_order_quantity: 3,
+    demand_sources: [{ job_item_id: 200, quantity: 3 }],
+  };
+
+  assert.equal(
+    purchasingIntegrityFallbackAdjustment(current, fallback, 'shortages'),
+    3
+  );
+  assert.equal(
+    purchasingIntegrityFallbackAdjustment(current, fallback, 'recommended'),
+    3
+  );
 });

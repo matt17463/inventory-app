@@ -188,8 +188,10 @@ begin
   with reservation_rows as (
     select
       r.id::text as reservation_id,
-      coalesce(
-        public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity', 'reserved_quantity'),
+      greatest(
+        coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity_reserved'), 0),
+        coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity'), 0),
+        coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'reserved_quantity'), 0),
         0
       ) as quantity,
       public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'job_item_id')::bigint as job_item_id,
@@ -353,8 +355,10 @@ begin
   with reservation_rows as (
     select
       r.id::text as reservation_id,
-      coalesce(
-        public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity', 'reserved_quantity'),
+      greatest(
+        coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity_reserved'), 0),
+        coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity'), 0),
+        coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'reserved_quantity'), 0),
         0
       ) as quantity,
       public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'job_item_id')::bigint as job_item_id
