@@ -103,3 +103,36 @@ test('verification specifically includes Pull Sheet 272', () => {
     /sc_pullsheet_purchasing_integrity_v1\(272\)/
   );
 });
+
+test('authoritative Purchasing inventory fails closed instead of returning an empty map', () => {
+  assert.match(
+    inventoryApi,
+    /Authoritative Purchasing inventory unavailable/
+  );
+  assert.doesNotMatch(
+    inventoryApi,
+    /Authoritative purchasing inventory view unavailable:[\s\S]{0,220}return new Map\(\)/
+  );
+});
+
+test('SQL 69 lifecycle repair preserves real-row mismatch counting and cleans stale workflow state', () => {
+  const sql69 = fs.readFileSync(
+    'deployment/sql/69_PURCHASING_INTEGRITY_LIFECYCLE_REPAIR.sql',
+    'utf8'
+  );
+
+  assert.match(sql69, /count\(r\.job_item_id\) filter/i);
+  assert.match(sql69, /sc_effective_reservation_quantity_v1/);
+  assert.match(sql69, /sc_backup_stale_reservations_v1417_20260921/);
+  assert.match(sql69, /sc_backup_pending_stock_lines_v1417_20260921/);
+  assert.match(sql69, /pending_stock_cleared/);
+  assert.match(sql69, /v_next_status in \('completed', 'cancelled', 'voided'\)/);
+  assert.doesNotMatch(
+    sql69,
+    /insert\s+into\s+public\.blank_inventory_movements/i
+  );
+  assert.doesNotMatch(
+    sql69,
+    /update\s+public\.blank_inventory_movements/i
+  );
+});

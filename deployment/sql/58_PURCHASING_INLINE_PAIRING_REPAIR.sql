@@ -59,8 +59,10 @@ with active_reservations as (
   select
     r.id as reservation_id,
     r.blank_product_id,
-    coalesce(
-      public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity', 'reserved_quantity'),
+    greatest(
+      coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity_reserved'), 0),
+      coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'quantity'), 0),
+      coalesce(public.sc_purchasing_json_numeric_v1(to_jsonb(r), 'reserved_quantity'), 0),
       0
     ) as quantity,
     public.sc_purchasing_json_text_v1(to_jsonb(r), 'status') as reservation_status,

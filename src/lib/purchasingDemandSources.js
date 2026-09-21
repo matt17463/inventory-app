@@ -66,3 +66,57 @@ export function unrepresentedPurchasingSources(sources, representedIds) {
     || !ids.has(String(source.job_item_id))
   ));
 }
+
+
+export function purchasingIntegrityFallbackAdjustment(currentRow, fallbackRow, mode) {
+  const fallbackAdjustment = mode === 'shortages'
+    ? numericDemandValue(fallbackRow?.need_to_order)
+    : numericDemandValue(fallbackRow?.recommended_order_quantity);
+
+  if (!(fallbackAdjustment > 0)) return 0;
+  if (!currentRow) return fallbackAdjustment;
+
+  const fallbackSources = Array.isArray(fallbackRow?.demand_sources)
+    ? fallbackRow.demand_sources
+    : [];
+
+  // If the DB could not give us line-level source identity, preserve the
+  // database-calculated adjustment rather than guessing.
+  if (!fallbackSources.length) return fallbackAdjustment;
+
+  const representedIds = representedPurchasingJobItemIds(
+    Array.isArray(currentRow?.demand_sources)
+      ? currentRow.demand_sources
+      : []
+  );
+  const unrepresentedSources = unrepresentedPurchasingSources(
+    fallbackSources,
+    representedIds
+  );
+
+  if (!unrepresentedSources.length) return 0;
+
+  const additionalDemand = unrepresentedSources.reduce(
+    (sum, source) => sum + purchasingDemandSourceQuantity(source),
+    0
+  );
+
+  if (!(additionalDemand > 0)) return 0;
+
+  const reserved = numericDemandValue(currentRow?.reserved_quantity);
+  const onHand = Math.max(0, Number(currentRow?.quantity_on_hand || 0));
+  const threshold = Math.max(0, Number(currentRow?.low_stock_threshold || 0));
+  const currentOrderQuantity = mode === 'shortages'
+    ? numericDemandValue(currentRow?.need_to_order)
+    : numericDemandValue(currentRow?.recommended_order_quantity);
+
+  const recomputedOrderQuantity = mode === 'shortages'
+    ? Math.max(0, reserved + additionalDemand - onHand)
+    : Math.max(0, reserved + additionalDemand + threshold - onHand);
+
+  // Never add more than the database fallback itself calculated.
+  return Math.min(
+    fallbackAdjustment,
+    Math.max(0, recomputedOrderQuantity - currentOrderQuantity)
+  );
+}
