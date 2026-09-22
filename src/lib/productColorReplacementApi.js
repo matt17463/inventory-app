@@ -8,7 +8,7 @@ async function request(body) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.message || `Product color replacement failed (HTTP ${response.status}).`);
+    throw new Error(payload?.message || `Product Color Manager failed (HTTP ${response.status}).`);
   }
   return payload;
 }
@@ -24,7 +24,7 @@ export async function inspectWooProductColors(productId) {
 
 export async function previewWooProductColorReplacement({ productId, oldColor, newColor }) {
   const result = await request({
-    action: 'preview',
+    action: 'preview_replace',
     product_id: Number(productId),
     old_color: oldColor,
     new_color: newColor,
@@ -38,15 +38,66 @@ export async function applyWooProductColorReplacement({
   newColor,
   confirmationToken,
   repairOpenPullSheets = true,
-  reason = '',
 }) {
   return request({
-    action: 'apply',
+    action: 'apply_replace',
     product_id: Number(productId),
     old_color: oldColor,
     new_color: newColor,
     confirmation_token: confirmationToken,
     repair_open_pull_sheets: repairOpenPullSheets,
-    reason,
+  });
+}
+
+export async function previewWooProductColorAddition({ productId, templateColor, newColor }) {
+  const result = await request({
+    action: 'preview_add',
+    product_id: Number(productId),
+    template_color: templateColor,
+    new_color: newColor,
+  });
+  return result.preview;
+}
+
+export async function uploadProductColorImage(productId, file) {
+  const prepared = await request({
+    action: 'prepare_image_upload',
+    product_id: Number(productId),
+    filename: file.name || 'variation-image',
+    content_type: file.type || 'application/octet-stream',
+    file_size: file.size,
+  });
+  const response = await fetch(prepared.upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  if (!response.ok) throw new Error(`R2 variation-image upload failed (HTTP ${response.status}).`);
+  return prepared.reference;
+}
+
+export async function cancelProductColorImageUploads(productId, references) {
+  if (!references?.length) return { deleted: 0 };
+  return request({
+    action: 'cancel_image_uploads',
+    product_id: Number(productId),
+    references,
+  });
+}
+
+export async function applyWooProductColorAddition({
+  productId,
+  templateColor,
+  newColor,
+  confirmationToken,
+  uploadedImages,
+}) {
+  return request({
+    action: 'apply_add',
+    product_id: Number(productId),
+    template_color: templateColor,
+    new_color: newColor,
+    confirmation_token: confirmationToken,
+    uploaded_images: uploadedImages,
   });
 }

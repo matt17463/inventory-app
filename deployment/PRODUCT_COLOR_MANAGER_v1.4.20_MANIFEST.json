@@ -1,0 +1,15 @@
+{
+  "version": "1.4.20",
+  "feature": "Product Color Manager: replace existing colors or add new color Size \u00d7 Logo matrices with R2 image uploads",
+  "sql_required": false,
+  "extends": "v1.4.19 merged to main",
+  "new_or_replaced_files": [
+    "src/ProductColorReplacement.jsx",
+    "src/lib/productColorReplacementApi.js",
+    "netlify/functions/product-color-replacement.js",
+    "scripts/tests/product-color-replacement.test.mjs",
+    "scripts/apply_product_color_manager_v1_4_20.py",
+    "deployment/DEPLOY_PRODUCT_COLOR_MANAGER_v1.4.20.md",
+    "deployment/PRODUCT_COLOR_MANAGER_v1.4.20_MANIFEST.json"
+  ]
+}
