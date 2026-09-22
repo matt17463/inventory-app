@@ -48,8 +48,10 @@ import {
 } from './lib/mockupStudioApi';
 import {
   createLocalMockupArchive,
+  createLocalMockupGraphicExport,
   finalizeLocalArchiveManifest,
   localMockupArchiveSupported,
+  localMockupGraphicExportSupported,
   reconnectLocalArchiveFolder,
   restoreLocalMockupArchiveFiles,
   verifyLinkedLocalMockupArchive,
@@ -1149,6 +1151,120 @@ function StorageMigrationPanel({ bundle, refresh, setBusy, setMessage }) {
   );
 }
 
+
+function DownloadGraphicsPanel({ bundle, setBusy, setMessage }) {
+  const project = bundle.project;
+  const supported = localMockupGraphicExportSupported();
+  const [options, setOptions] = useState({
+    blank_photos: true,
+    artwork_originals: true,
+    artwork_prepared: true,
+    generated_mockups: true,
+    production_files: true,
+    previews: false,
+  });
+
+  const counts = {
+    blank_photos: (bundle.blanks || []).filter((row) => row.storage_path).length,
+    artwork_originals: (bundle.artwork || []).filter((row) => row.storage_path).length,
+    artwork_prepared: (bundle.artwork || []).filter((row) => row.prepared_storage_path).length,
+    generated_mockups: (bundle.outputs || []).filter((row) => row.storage_path).length,
+    production_files: (bundle.packets || []).filter((row) => row.storage_path).length,
+    previews: [...(bundle.blanks || []), ...(bundle.artwork || []), ...(bundle.outputs || []), ...(bundle.packets || [])]
+      .filter((row) => row.preview_storage_path).length,
+  };
+
+  const selectedCount = Object.entries(options)
+    .filter(([, enabled]) => enabled)
+    .reduce((total, [key]) => total + Number(counts[key] || 0), 0);
+
+  function toggle(key) {
+    setOptions((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  async function downloadAll() {
+    if (!selectedCount) {
+      setMessage('Choose at least one project-file category to download.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = await createLocalMockupGraphicExport({
+        project,
+        bundle,
+        selections: options,
+        onProgress: ({ message }) => setMessage(message),
+      });
+      setMessage(
+        `Downloaded and verified ${result.file_count} project file${result.file_count === 1 ? '' : 's'} `
+        + `to ${result.folder_hint}. Cloud/R2 files were not changed.`
+        + (result.external_references_not_downloaded
+          ? ` ${result.external_references_not_downloaded} external-only reference${result.external_references_not_downloaded === 1 ? '' : 's'} could not be copied directly; their URLs were saved in the download manifest.`
+          : '')
+      );
+    } catch (error) {
+      setMessage(`${error.message || 'Project graphic download failed.'} Cloud storage was not changed.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Download project graphics"
+      description="Make a non-destructive copy of this project's graphic files on your computer. Unlike Local Image Archive, this never deletes files from R2 or Supabase and does not change the project status."
+    >
+      {!supported ? (
+        <p className="mockup-archive-warning">Use Google Chrome or Microsoft Edge to choose a destination folder for bulk downloads.</p>
+      ) : null}
+
+      {project.status === 'archived' ? (
+        <p className="mockup-archive-warning">This project is archived locally. Restore it to cloud storage first, or use the existing local archive folder.</p>
+      ) : (
+        <>
+          <div className="mockup-upload-queue">
+            <label className="mockup-check">
+              <input type="checkbox" checked={options.blank_photos} onChange={() => toggle('blank_photos')} />
+              Blank photos ({counts.blank_photos})
+            </label>
+            <label className="mockup-check">
+              <input type="checkbox" checked={options.artwork_originals} onChange={() => toggle('artwork_originals')} />
+              Original artwork ({counts.artwork_originals})
+            </label>
+            <label className="mockup-check">
+              <input type="checkbox" checked={options.artwork_prepared} onChange={() => toggle('artwork_prepared')} />
+              Prepared artwork ({counts.artwork_prepared})
+            </label>
+            <label className="mockup-check">
+              <input type="checkbox" checked={options.generated_mockups} onChange={() => toggle('generated_mockups')} />
+              Generated mockups ({counts.generated_mockups})
+            </label>
+            <label className="mockup-check">
+              <input type="checkbox" checked={options.production_files} onChange={() => toggle('production_files')} />
+              Production files ({counts.production_files})
+            </label>
+            <label className="mockup-check">
+              <input type="checkbox" checked={options.previews} onChange={() => toggle('previews')} />
+              Preview derivatives ({counts.previews}) — optional duplicate WebP previews
+            </label>
+          </div>
+
+          <p className="muted-text">
+            Files are organized into Blank Photos, Artwork, Mockups, Production, and optional Previews folders.
+            A JSON manifest with source references, sizes, and SHA-256 checksums is included.
+          </p>
+
+          <ActionButton tone="primary" onClick={downloadAll} disabled={!supported || !selectedCount}>
+            Download Project Graphics ({selectedCount})
+          </ActionButton>
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
+
 function LocalArchivePanel({ bundle, refresh, setBusy, setMessage }) {
   const project = bundle.project;
   const archives = bundle.archives || [];
@@ -1357,6 +1473,7 @@ export default function MockupStudio() {
               {tab === 'production' ? <ProductionTab project={bundle.project} bundle={bundle} /> : null}
             </>
           )}
+          <DownloadGraphicsPanel bundle={bundle} setBusy={setBusy} setMessage={setMessage} />
           <StorageMigrationPanel bundle={bundle} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} />
           <LocalArchivePanel bundle={bundle} refresh={() => loadProject()} setBusy={setBusy} setMessage={setMessage} />
           <SectionCard tone="danger" title="Delete project permanently" description="Deleting a project removes its Mockup Studio records and any Supabase or R2 files that remain. It does not delete a local archive folder or change WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Permanently delete mockup project “${bundle.project.project_name}”? Local archive folders on your computer will not be deleted.`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>

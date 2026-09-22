@@ -1,0 +1,17 @@
+{
+  "version": "1.4.21",
+  "feature": "Mockup Studio non-destructive bulk graphics download",
+  "sql_required": false,
+  "environment_changes": false,
+  "modified_by_installer": [
+    "src/lib/mockupLocalArchive.js",
+    "src/MockupStudio.jsx",
+    "package.json"
+  ],
+  "new_files": [
+    "scripts/tests/mockup-download-all.test.mjs",
+    "scripts/apply_mockup_download_all_v1_4_21.py",
+    "deployment/DEPLOY_MOCKUP_DOWNLOAD_ALL_v1.4.21.md",
+    "deployment/MOCKUP_DOWNLOAD_ALL_v1.4.21_MANIFEST.json"
+  ]
+}
