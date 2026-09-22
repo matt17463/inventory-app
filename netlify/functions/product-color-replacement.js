@@ -1,11 +1,21 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { parseJsonBody, wooCollection, wooRequest } from './_shared/mockupUtils.js';
+import {
+  cleanObjectName,
+  deleteStoredReference,
+  presignedR2Put,
+  r2BucketName,
+  r2Configured,
+  signedStoredAssetUrl,
+} from './_shared/mockupStorage.js';
 
 const FUNCTION_NAME = 'product-color-replacement';
 const WOO_BATCH_SIZE = 25;
 const MAX_SEARCH_RESULTS = 50;
 const MAX_VARIATION_PAGES = 20;
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+const COLOR_IMAGE_META_KEY = '_sc_catalog_color_images';
 
 function text(value) {
   return String(value ?? '').trim();
@@ -31,7 +41,7 @@ function chunks(rows, size = 100) {
 }
 
 function isActiveStatus(status) {
-  return !/(?:complete|completed|cancel|cancelled|canceled|void|deleted|closed)/i.test(text(status));
+  return !/(?:complete|completed|cancel|cancelled|canceled|void|deleted|closed|private|trash)/i.test(text(status));
 }
 
 function isColorAttribute(attribute, colorAttributeId = null) {
@@ -40,6 +50,12 @@ function isColorAttribute(attribute, colorAttributeId = null) {
   const slug = normalized(attribute.slug);
   const name = normalized(attribute.name);
   return slug === 'pa color' || slug === 'color' || name === 'color' || name === 'colour';
+}
+
+function isLogoAttribute(attribute) {
+  if (!attribute) return false;
+  const name = normalized(attribute.name || attribute.slug);
+  return name === 'logo' || name === 'logo selection' || name === 'graphic' || name === 'graphic selection';
 }
 
 function replaceColorAttribute(attributes, colorAttributeId, fromColor, toColor) {
@@ -67,14 +83,30 @@ function variationSignature(attributes, colorAttributeId, replaceFrom = '', repl
     .join('|');
 }
 
-function metaWithBlank(metaData, blankProductId) {
+function variationLogo(variation) {
+  const attribute = (variation?.attributes || []).find(isLogoAttribute);
+  if (attribute?.option) return text(attribute.option);
+  const metadata = (variation?.meta_data || []).find((row) => row.key === '_sc_logo_selection');
+  return text(metadata?.value);
+}
+
+function imageSlotKey(color, logo) {
+  return createHash('sha256')
+    .update(JSON.stringify([normalized(color), normalized(logo || '__default__')]))
+    .digest('hex')
+    .slice(0, 16);
+}
+
+function metaWithBlank(metaData, blankProductId, colorName) {
   const rows = Array.isArray(metaData) ? metaData.map((row) => ({ ...row })) : [];
-  const index = rows.findIndex((row) => row.key === '_sc_blank_product_id');
-  const replacement = index >= 0
-    ? { ...rows[index], value: blankProductId }
-    : { key: '_sc_blank_product_id', value: blankProductId };
-  if (index >= 0) rows[index] = replacement;
-  else rows.push(replacement);
+  function upsert(key, value) {
+    const index = rows.findIndex((row) => row.key === key);
+    const replacement = index >= 0 ? { ...rows[index], value } : { key, value };
+    if (index >= 0) rows[index] = replacement;
+    else rows.push(replacement);
+  }
+  upsert('_sc_blank_product_id', blankProductId);
+  upsert('_sc_blank_color', colorName);
   return rows;
 }
 
@@ -99,6 +131,71 @@ function blankLabel(row) {
 
 function replacementToken(payload) {
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+function skuToken(value) {
+  return text(value).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'COLOR';
+}
+
+function deriveAddedSku(templateSku, templateColor, newColor, signature) {
+  const original = text(templateSku);
+  const oldToken = skuToken(templateColor);
+  const newToken = skuToken(newColor);
+  const hash = createHash('sha256').update(signature).digest('hex').slice(0, 8).toUpperCase();
+
+  let candidate = original;
+  if (candidate && oldToken && candidate.toUpperCase().includes(oldToken)) {
+    candidate = candidate.replace(new RegExp(oldToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), newToken);
+  } else if (candidate) {
+    candidate = `${candidate}-${newToken}`;
+  } else {
+    candidate = `SC-${newToken}`;
+  }
+
+  candidate = candidate.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  if (candidate.length > 90) candidate = candidate.slice(0, 90).replace(/-+$/g, '');
+  return `${candidate}-${hash}`.slice(0, 100);
+}
+
+function copyVariationSettings(template) {
+  const row = {
+    status: template.status === 'private' ? 'publish' : (template.status || 'publish'),
+    regular_price: text(template.regular_price),
+    sale_price: text(template.sale_price),
+    virtual: Boolean(template.virtual),
+    downloadable: Boolean(template.downloadable),
+    tax_class: template.tax_class || '',
+    weight: text(template.weight),
+    dimensions: template.dimensions || undefined,
+    shipping_class: template.shipping_class || '',
+    menu_order: Number(template.menu_order || 0),
+  };
+  Object.keys(row).forEach((key) => {
+    if (row[key] === undefined || row[key] === '') delete row[key];
+  });
+  return row;
+}
+
+function parseColorImageMap(product) {
+  const entries = (product?.meta_data || []).filter((row) => row.key === COLOR_IMAGE_META_KEY);
+  const value = entries.length ? entries[entries.length - 1]?.value : null;
+  if (!value) return {};
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function colorImageMetaRow(product, map) {
+  const existing = (product?.meta_data || []).filter((row) => row.key === COLOR_IMAGE_META_KEY).pop();
+  return {
+    ...(existing?.id ? { id: existing.id } : {}),
+    key: COLOR_IMAGE_META_KEY,
+    value: JSON.stringify(map),
+  };
 }
 
 async function listAttributeTerms(attributeId) {
@@ -136,7 +233,7 @@ async function listVariations(productId) {
     if (next.length < 100) break;
   }
   if (rows.length >= MAX_VARIATION_PAGES * 100) {
-    throw new Error(`Product ${productId} has too many variations for the guarded replacement tool.`);
+    throw new Error(`Product ${productId} has too many variations for the guarded color manager.`);
   }
   return rows;
 }
@@ -151,7 +248,7 @@ async function productSearch(search) {
       const product = await wooRequest(`products/${directId}?context=edit`);
       if (product?.id) rows = [product];
     } catch {
-      // A numeric SKU may not be a product ID, so normal search still runs below.
+      // Numeric SKUs can fall through to the normal search.
     }
   }
   if (!rows.length) {
@@ -160,22 +257,20 @@ async function productSearch(search) {
       'WooCommerce products',
     );
   }
-  return rows
-    .filter((row) => row?.id)
-    .map((row) => ({
-      id: Number(row.id),
-      name: row.name || `Product ${row.id}`,
-      sku: row.sku || '',
-      status: row.status || '',
-      type: row.type || '',
-      permalink: row.permalink || '',
-    }));
+  return rows.filter((row) => row?.id).map((row) => ({
+    id: Number(row.id),
+    name: row.name || `Product ${row.id}`,
+    sku: row.sku || '',
+    status: row.status || '',
+    type: row.type || '',
+    permalink: row.permalink || '',
+  }));
 }
 
 async function inspectProduct(productId) {
   const product = await wooRequest(`products/${Number(productId)}?context=edit`);
   if (!product?.id) throw new Error('WooCommerce product was not found.');
-  if (product.type !== 'variable') throw new Error('Color replacement currently supports variable WooCommerce products only.');
+  if (product.type !== 'variable') throw new Error('The Product Color Manager supports variable WooCommerce products only.');
 
   const { attribute, terms } = await colorAttributeDefinition();
   const parentColor = (product.attributes || []).find((row) => isColorAttribute(row, attribute.id));
@@ -190,6 +285,8 @@ async function inspectProduct(productId) {
     )).filter(Boolean),
   )];
 
+  const logos = [...new Set(variations.map(variationLogo).filter(Boolean))];
+
   return {
     product: {
       id: Number(product.id),
@@ -203,6 +300,7 @@ async function inspectProduct(productId) {
     color_attribute: { id: Number(attribute.id), name: attribute.name, slug: attribute.slug },
     parent_color_options: parentColor.options || [],
     variation_colors: variationColors,
+    variation_logos: logos,
     woo_color_terms: terms.map((row) => ({ id: Number(row.id), name: row.name, slug: row.slug })),
     variation_count: variations.length,
   };
@@ -215,8 +313,7 @@ async function internalColorId(supabase, colorName) {
   const matches = (data || []).filter((row) => (
     normalized(row.name) === wanted || normalized(row.code) === wanted
   ));
-  if (matches.length === 1) return { id: matches[0].id, matches };
-  return { id: null, matches };
+  return matches.length === 1 ? { id: matches[0].id, matches } : { id: null, matches };
 }
 
 async function localProductRows(supabase, variationIds) {
@@ -269,6 +366,53 @@ async function targetBlankRows(supabase, targetColorId) {
   return data || [];
 }
 
+function buildBlankPlanIndex(localRows, currentBlanks, targetBlanks, targetColorId) {
+  const currentBlankMap = new Map(currentBlanks.map((row) => [String(row.id), row]));
+  const targetIndex = new Map();
+  for (const blank of targetBlanks) {
+    const key = blankIdentityKey(blank, targetColorId);
+    targetIndex.set(key, [...(targetIndex.get(key) || []), blank]);
+  }
+  const localByVariation = new Map();
+  for (const row of localRows) {
+    const key = String(row.woocommerce_variation_id || '');
+    if (!key) continue;
+    localByVariation.set(key, [...(localByVariation.get(key) || []), row]);
+  }
+  return { currentBlankMap, targetIndex, localByVariation };
+}
+
+function resolveTargetBlank(variationId, indexes, targetColorId, targetColorName) {
+  const local = indexes.localByVariation.get(String(variationId)) || [];
+  const distinctBlankIds = [...new Set(local.map((row) => row.blank_product_id).filter(Boolean).map(String))];
+  if (!local.length) return { status: 'blocked', issue: 'No synced Supabase product row exists for the template Woo variation.', local };
+  if (distinctBlankIds.length === 0) return { status: 'blocked', issue: 'The template Woo variation has no current blank mapping.', local };
+  if (distinctBlankIds.length > 1) return { status: 'blocked', issue: `Synced product rows disagree on the current blank (${distinctBlankIds.length} different blanks).`, local };
+
+  const currentBlank = indexes.currentBlankMap.get(distinctBlankIds[0]) || null;
+  if (!currentBlank) return { status: 'blocked', issue: 'The current mapped blank record could not be loaded.', local };
+  if (!targetColorId) return { status: 'blocked', issue: `Internal color "${targetColorName}" is unavailable.`, local, currentBlank };
+
+  const candidates = indexes.targetIndex.get(blankIdentityKey(currentBlank, targetColorId)) || [];
+  if (candidates.length === 0) {
+    return {
+      status: 'blocked',
+      issue: `No active ${targetColorName} blank exists for ${blankLabel(currentBlank)}.`,
+      local,
+      currentBlank,
+    };
+  }
+  if (candidates.length > 1) {
+    return {
+      status: 'blocked',
+      issue: `${candidates.length} candidate ${targetColorName} blanks match this blank family and size.`,
+      local,
+      currentBlank,
+    };
+  }
+  return { status: 'ready', issue: '', local, currentBlank, targetBlank: candidates[0] };
+}
+
 async function openPullSheetLines(supabase, variationIds) {
   const itemRows = [];
   for (const batch of chunks(variationIds, 100)) {
@@ -296,51 +440,33 @@ async function openPullSheetLines(supabase, variationIds) {
       const job = jobMap.get(String(row.job_id));
       return job && isActiveStatus(job.status) && isActiveStatus(row.status);
     })
-    .map((row) => {
-      const job = jobMap.get(String(row.job_id));
-      return {
-        ...row,
-        job_status: job?.status || '',
-        woocommerce_order_id: job?.woocommerce_order_id || null,
-      };
-    });
+    .map((row) => ({ ...row, woocommerce_order_id: jobMap.get(String(row.job_id))?.woocommerce_order_id || null }));
 }
 
-async function buildPreview(supabase, productId, oldColorInput, newColorInput) {
+async function buildReplacePreview(supabase, productId, oldColorInput, newColorInput) {
   const product = await wooRequest(`products/${Number(productId)}?context=edit`);
   if (!product?.id) throw new Error('WooCommerce product was not found.');
-  if (product.type !== 'variable') throw new Error('Color replacement currently supports variable WooCommerce products only.');
+  if (product.type !== 'variable') throw new Error('Color replacement supports variable WooCommerce products only.');
 
   const { attribute: colorAttribute, terms } = await colorAttributeDefinition();
-  const oldTerm = terms.find((row) => (
-    normalized(row.name) === normalized(oldColorInput) || normalized(row.slug) === normalized(oldColorInput)
-  ));
-  const newTerm = terms.find((row) => (
-    normalized(row.name) === normalized(newColorInput) || normalized(row.slug) === normalized(newColorInput)
-  ));
+  const oldTerm = terms.find((row) => normalized(row.name) === normalized(oldColorInput) || normalized(row.slug) === normalized(oldColorInput));
+  const newTerm = terms.find((row) => normalized(row.name) === normalized(newColorInput) || normalized(row.slug) === normalized(newColorInput));
   if (!oldTerm) throw new Error(`WooCommerce Color term "${oldColorInput}" was not found.`);
   if (!newTerm) throw new Error(`WooCommerce Color term "${newColorInput}" was not found.`);
-  if (Number(oldTerm.id) === Number(newTerm.id) || normalized(oldTerm.name) === normalized(newTerm.name)) {
-    throw new Error('Choose two different WooCommerce colors.');
-  }
+  if (Number(oldTerm.id) === Number(newTerm.id)) throw new Error('Choose two different WooCommerce colors.');
 
   const parentColor = (product.attributes || []).find((row) => isColorAttribute(row, colorAttribute.id));
-  if (!parentColor) throw new Error('The selected product does not use the global WooCommerce Color attribute.');
-  if (!(parentColor.options || []).some((value) => normalized(value) === normalized(oldTerm.name))) {
+  if (!parentColor || !(parentColor.options || []).some((value) => normalized(value) === normalized(oldTerm.name))) {
     throw new Error(`This product does not currently advertise "${oldTerm.name}" as a Color option.`);
   }
 
   const variations = await listVariations(product.id);
   const affected = variations.filter((variation) => (
-    (variation.attributes || []).some((row) => (
-      isColorAttribute(row, colorAttribute.id) && normalized(row.option) === normalized(oldTerm.name)
-    ))
+    (variation.attributes || []).some((row) => isColorAttribute(row, colorAttribute.id) && normalized(row.option) === normalized(oldTerm.name))
   ));
   if (!affected.length) throw new Error(`No variations currently use "${oldTerm.name}".`);
 
   const blockers = [];
-  const warnings = [];
-
   const affectedIds = new Set(affected.map((row) => Number(row.id)));
   const plannedSignatureOwners = new Map();
   for (const variation of variations) {
@@ -361,99 +487,44 @@ async function buildPreview(supabase, productId, oldColorInput, newColorInput) {
   const localRows = await localProductRows(supabase, variationIds);
   const currentBlankIds = [...new Set(localRows.map((row) => row.blank_product_id).filter(Boolean).map(String))];
   const currentBlanks = await blankRowsByIds(supabase, currentBlankIds);
-  const currentBlankMap = new Map(currentBlanks.map((row) => [String(row.id), row]));
-
   const colorLookup = await internalColorId(supabase, newTerm.name);
   if (!colorLookup.id) {
     blockers.push(colorLookup.matches.length > 1
       ? `Internal color "${newTerm.name}" is ambiguous (${colorLookup.matches.length} records).`
       : `Internal color "${newTerm.name}" does not exist in Supabase colors.`);
   }
-  const newInternalColorId = colorLookup.id;
-  const targetBlanks = newInternalColorId ? await targetBlankRows(supabase, newInternalColorId) : [];
-  const targetIndex = new Map();
-  for (const blank of targetBlanks) {
-    const key = blankIdentityKey(blank, newInternalColorId);
-    targetIndex.set(key, [...(targetIndex.get(key) || []), blank]);
-  }
+  const targetBlanks = colorLookup.id ? await targetBlankRows(supabase, colorLookup.id) : [];
+  const indexes = buildBlankPlanIndex(localRows, currentBlanks, targetBlanks, colorLookup.id);
 
-  const localByVariation = new Map();
-  for (const row of localRows) {
-    const key = String(row.woocommerce_variation_id || '');
-    if (!key) continue;
-    localByVariation.set(key, [...(localByVariation.get(key) || []), row]);
-  }
-
-  const planRows = [];
-  for (const variation of affected) {
-    const local = localByVariation.get(String(variation.id)) || [];
-    const distinctBlankIds = [...new Set(local.map((row) => row.blank_product_id).filter(Boolean).map(String))];
-    let currentBlank = null;
-    let targetBlank = null;
-    let status = 'ready';
-    let issue = '';
-
-    if (!local.length) {
-      status = 'blocked';
-      issue = 'No synced Supabase product row exists for this Woo variation.';
-    } else if (distinctBlankIds.length === 0) {
-      status = 'blocked';
-      issue = 'This Woo variation has no current blank mapping.';
-    } else if (distinctBlankIds.length > 1) {
-      status = 'blocked';
-      issue = `Synced product rows disagree on the current blank (${distinctBlankIds.length} different blanks).`;
-    } else {
-      currentBlank = currentBlankMap.get(distinctBlankIds[0]) || null;
-      if (!currentBlank) {
-        status = 'blocked';
-        issue = 'The current mapped blank record could not be loaded.';
-      } else if (!newInternalColorId) {
-        status = 'blocked';
-        issue = `Internal color "${newTerm.name}" is unavailable.`;
-      } else {
-        const candidates = targetIndex.get(blankIdentityKey(currentBlank, newInternalColorId)) || [];
-        if (candidates.length === 0) {
-          status = 'blocked';
-          issue = `No active ${newTerm.name} blank exists for ${blankLabel(currentBlank)}.`;
-        } else if (candidates.length > 1) {
-          status = 'blocked';
-          issue = `${candidates.length} candidate ${newTerm.name} blanks match this blank family and size.`;
-        } else {
-          targetBlank = candidates[0];
-        }
-      }
-    }
-
+  const rows = affected.map((variation) => {
+    const resolution = resolveTargetBlank(variation.id, indexes, colorLookup.id, newTerm.name);
     const changed = replaceColorAttribute(variation.attributes || [], colorAttribute.id, oldTerm.name, newTerm.name);
+    let status = resolution.status;
+    let issue = resolution.issue;
     if (!changed.changed) {
       status = 'blocked';
       issue = 'The variation Color attribute could not be rewritten.';
     }
     if (status === 'blocked') blockers.push(`Variation ${variation.id}: ${issue}`);
-
-    planRows.push({
+    return {
       variation_id: Number(variation.id),
       sku: text(variation.sku),
-      status: variation.status || '',
       image_id: Number(variation.image?.id || 0) || null,
       old_color: oldTerm.name,
       new_color: newTerm.name,
-      current_blank_product_id: currentBlank?.id || null,
-      current_blank_sku: currentBlank?.sku_base || null,
-      current_blank_label: currentBlank ? blankLabel(currentBlank) : null,
-      target_blank_product_id: targetBlank?.id || null,
-      target_blank_sku: targetBlank?.sku_base || null,
-      target_blank_label: targetBlank ? blankLabel(targetBlank) : null,
-      local_product_rows: local.length,
+      current_blank_product_id: resolution.currentBlank?.id || null,
+      current_blank_sku: resolution.currentBlank?.sku_base || null,
+      target_blank_product_id: resolution.targetBlank?.id || null,
+      target_blank_sku: resolution.targetBlank?.sku_base || null,
       preview_status: status,
       issue,
       attributes_after: changed.attributes,
-      meta_after: targetBlank ? metaWithBlank(variation.meta_data || [], targetBlank.id) : variation.meta_data || [],
-    });
-  }
+      meta_after: resolution.targetBlank ? metaWithBlank(variation.meta_data || [], resolution.targetBlank.id, newTerm.name) : variation.meta_data || [],
+    };
+  });
 
   const openLines = await openPullSheetLines(supabase, variationIds);
-  const planByVariation = new Map(planRows.map((row) => [String(row.variation_id), row]));
+  const planByVariation = new Map(rows.map((row) => [String(row.variation_id), row]));
   const openLineRows = openLines.map((line) => {
     const plan = planByVariation.get(String(line.woocommerce_variation_id));
     return {
@@ -463,25 +534,19 @@ async function buildPreview(supabase, productId, oldColorInput, newColorInput) {
       variation_id: line.woocommerce_variation_id,
       order_sku: line.order_sku || line.sku || '',
       quantity: Number(line.quantity || 0),
-      current_blank_product_id: line.blank_product_id || null,
       target_blank_product_id: plan?.target_blank_product_id || null,
       target_blank_sku: plan?.target_blank_sku || null,
-      pairing_source: line.pairing_source || '',
-      selected_bin_id: line.selected_bin_id || null,
     };
   });
 
   const uniqueBlockers = [...new Set(blockers)];
-  warnings.push('Variation IDs, SKUs, prices, sizes, logo selections, and existing variation image IDs are preserved.');
-  if (openLineRows.length) warnings.push(`${openLineRows.length} active pull-sheet line(s) reference affected variations.`);
-  if (collisions.length) warnings.push('Resolve duplicate target combinations before applying.');
-
   const tokenPayload = {
+    mode: 'replace',
     product_id: Number(product.id),
     product_modified: product.date_modified_gmt || product.date_modified || '',
     old_color_term_id: Number(oldTerm.id),
     new_color_term_id: Number(newTerm.id),
-    rows: planRows.map((row) => ({
+    rows: rows.map((row) => ({
       variation_id: row.variation_id,
       current_blank_product_id: row.current_blank_product_id,
       target_blank_product_id: row.target_blank_product_id,
@@ -490,26 +555,199 @@ async function buildPreview(supabase, productId, oldColorInput, newColorInput) {
   };
 
   return {
-    product: {
-      id: Number(product.id),
-      name: product.name || `Product ${product.id}`,
-      sku: product.sku || '',
-      status: product.status || '',
-      date_modified_gmt: product.date_modified_gmt || product.date_modified || '',
-    },
-    color_attribute: { id: Number(colorAttribute.id), name: colorAttribute.name, slug: colorAttribute.slug },
-    old_color: { id: Number(oldTerm.id), name: oldTerm.name, slug: oldTerm.slug },
-    new_color: { id: Number(newTerm.id), name: newTerm.name, slug: newTerm.slug, internal_color_id: newInternalColorId },
+    mode: 'replace',
+    product: { id: Number(product.id), name: product.name || `Product ${product.id}`, sku: product.sku || '' },
+    color_attribute: { id: Number(colorAttribute.id), name: colorAttribute.name },
+    old_color: { id: Number(oldTerm.id), name: oldTerm.name },
+    new_color: { id: Number(newTerm.id), name: newTerm.name, internal_color_id: colorLookup.id },
     total_variations: variations.length,
-    affected_variations: planRows.length,
-    preserved_image_assignments: planRows.filter((row) => row.image_id).length,
+    affected_variations: rows.length,
+    preserved_image_assignments: rows.filter((row) => row.image_id).length,
     open_pull_sheet_lines: openLineRows,
     collisions,
     blockers: uniqueBlockers,
-    warnings,
-    can_apply: uniqueBlockers.length === 0 && planRows.every((row) => row.preview_status === 'ready'),
+    warnings: [
+      'Variation IDs, SKUs, prices, sizes, logo selections, and existing variation image IDs are preserved.',
+      ...(openLineRows.length ? [`${openLineRows.length} active pull-sheet line(s) reference affected variations.`] : []),
+    ],
+    can_apply: uniqueBlockers.length === 0 && rows.every((row) => row.preview_status === 'ready'),
     confirmation_token: replacementToken(tokenPayload),
-    rows: planRows,
+    rows,
+  };
+}
+
+async function buildAddPreview(supabase, productId, templateColorInput, newColorInput) {
+  const product = await wooRequest(`products/${Number(productId)}?context=edit`);
+  if (!product?.id) throw new Error('WooCommerce product was not found.');
+  if (product.type !== 'variable') throw new Error('Adding a color supports variable WooCommerce products only.');
+
+  const { attribute: colorAttribute, terms } = await colorAttributeDefinition();
+  const templateTerm = terms.find((row) => normalized(row.name) === normalized(templateColorInput) || normalized(row.slug) === normalized(templateColorInput));
+  const newTerm = terms.find((row) => normalized(row.name) === normalized(newColorInput) || normalized(row.slug) === normalized(newColorInput));
+  if (!templateTerm) throw new Error(`Template WooCommerce Color term "${templateColorInput}" was not found.`);
+  if (!newTerm) throw new Error(`Replacement WooCommerce Color term "${newColorInput}" was not found.`);
+  if (Number(templateTerm.id) === Number(newTerm.id)) throw new Error('The new color must differ from the template color.');
+
+  const variations = await listVariations(product.id);
+  const templateVariations = variations.filter((variation) => (
+    isActiveStatus(variation.status)
+    && (variation.attributes || []).some((row) => isColorAttribute(row, colorAttribute.id) && normalized(row.option) === normalized(templateTerm.name))
+  ));
+  if (!templateVariations.length) throw new Error(`No active variations use the template color "${templateTerm.name}".`);
+
+  const existingBySignature = new Map(
+    variations.filter((row) => isActiveStatus(row.status)).map((row) => [
+      variationSignature(row.attributes || [], colorAttribute.id),
+      row,
+    ]),
+  );
+  const existingSkus = new Set(variations.map((row) => text(row.sku)).filter(Boolean).map((value) => value.toUpperCase()));
+
+  const variationIds = templateVariations.map((row) => Number(row.id));
+  const localRows = await localProductRows(supabase, variationIds);
+  const currentBlankIds = [...new Set(localRows.map((row) => row.blank_product_id).filter(Boolean).map(String))];
+  const currentBlanks = await blankRowsByIds(supabase, currentBlankIds);
+
+  const blockers = [];
+  const colorLookup = await internalColorId(supabase, newTerm.name);
+  if (!colorLookup.id) {
+    blockers.push(colorLookup.matches.length > 1
+      ? `Internal color "${newTerm.name}" is ambiguous (${colorLookup.matches.length} records).`
+      : `Internal color "${newTerm.name}" does not exist in Supabase colors.`);
+  }
+  const targetBlanks = colorLookup.id ? await targetBlankRows(supabase, colorLookup.id) : [];
+  const indexes = buildBlankPlanIndex(localRows, currentBlanks, targetBlanks, colorLookup.id);
+
+  const plannedSkus = new Set();
+  const rows = [];
+  let alreadyExists = 0;
+
+  for (const template of templateVariations) {
+    const changed = replaceColorAttribute(template.attributes || [], colorAttribute.id, templateTerm.name, newTerm.name);
+    const targetSignature = variationSignature(changed.attributes, colorAttribute.id);
+    const existingTarget = existingBySignature.get(targetSignature);
+    const logo = variationLogo(template);
+    const slotKey = imageSlotKey(newTerm.name, logo);
+    const resolution = resolveTargetBlank(template.id, indexes, colorLookup.id, newTerm.name);
+
+    let status = resolution.status;
+    let issue = resolution.issue;
+    if (!changed.changed) {
+      status = 'blocked';
+      issue = 'The template variation Color attribute could not be rewritten.';
+    }
+
+    if (existingTarget) {
+      alreadyExists += 1;
+      if (status === 'blocked') blockers.push(`Existing target variation ${existingTarget.id}: ${issue}`);
+      rows.push({
+        template_variation_id: Number(template.id),
+        existing_variation_id: Number(existingTarget.id),
+        action: 'reconcile_existing',
+        logo,
+        image_slot_key: slotKey,
+        template_sku: text(template.sku),
+        sku: text(existingTarget.sku),
+        target_blank_product_id: resolution.targetBlank?.id || null,
+        target_blank_sku: resolution.targetBlank?.sku_base || null,
+        template_blank_sku: resolution.currentBlank?.sku_base || null,
+        attributes_after: existingTarget.attributes || changed.attributes,
+        meta_after: resolution.targetBlank
+          ? metaWithBlank(existingTarget.meta_data || [], resolution.targetBlank.id, newTerm.name)
+          : (existingTarget.meta_data || []),
+        preview_status: status === 'ready' ? 'ready_existing' : status,
+        issue,
+      });
+      continue;
+    }
+
+    let sku = deriveAddedSku(text(template.sku), templateTerm.name, newTerm.name, targetSignature);
+    if (existingSkus.has(sku.toUpperCase()) || plannedSkus.has(sku.toUpperCase())) {
+      const hash = createHash('sha256').update(`${targetSignature}|${template.id}`).digest('hex').slice(0, 10).toUpperCase();
+      sku = `${sku.slice(0, 88).replace(/-+$/g, '')}-${hash}`.slice(0, 100);
+    }
+    if (existingSkus.has(sku.toUpperCase()) || plannedSkus.has(sku.toUpperCase())) {
+      status = 'blocked';
+      issue = `A unique SKU could not be generated from template variation ${template.id}.`;
+    }
+    plannedSkus.add(sku.toUpperCase());
+
+    if (status === 'blocked') blockers.push(`Template variation ${template.id}: ${issue}`);
+
+    rows.push({
+      template_variation_id: Number(template.id),
+      existing_variation_id: null,
+      action: 'create',
+      logo,
+      image_slot_key: slotKey,
+      template_sku: text(template.sku),
+      sku,
+      target_blank_product_id: resolution.targetBlank?.id || null,
+      target_blank_sku: resolution.targetBlank?.sku_base || null,
+      template_blank_sku: resolution.currentBlank?.sku_base || null,
+      attributes_after: changed.attributes,
+      meta_after: resolution.targetBlank ? metaWithBlank(template.meta_data || [], resolution.targetBlank.id, newTerm.name) : template.meta_data || [],
+      settings: copyVariationSettings(template),
+      preview_status: status,
+      issue,
+    });
+  }
+
+  const createRows = rows.filter((row) => row.action === 'create');
+  const imageMap = parseColorImageMap(product);
+  const productImageIds = new Set((product.images || []).map((row) => Number(row.id)).filter(Boolean));
+  const imageSlots = [...new Map(createRows.map((row) => {
+    const key = row.image_slot_key;
+    const saved = Number(imageMap[key] || 0);
+    return [key, {
+      key,
+      logo: row.logo,
+      label: row.logo || 'Default / no logo',
+      existing_image_id: saved && productImageIds.has(saved) ? saved : null,
+    }];
+  })).values()];
+
+  const reconcileRows = rows.filter((row) => row.action === 'reconcile_existing');
+
+  const uniqueBlockers = [...new Set(blockers)];
+  const tokenPayload = {
+    mode: 'add',
+    product_id: Number(product.id),
+    product_modified: product.date_modified_gmt || product.date_modified || '',
+    template_color_term_id: Number(templateTerm.id),
+    new_color_term_id: Number(newTerm.id),
+    rows: createRows.map((row) => ({
+      template_variation_id: row.template_variation_id,
+      target_blank_product_id: row.target_blank_product_id,
+      sku: row.sku,
+      image_slot_key: row.image_slot_key,
+    })).sort((a, b) => a.template_variation_id - b.template_variation_id),
+  };
+
+  return {
+    mode: 'add',
+    product: { id: Number(product.id), name: product.name || `Product ${product.id}`, sku: product.sku || '' },
+    color_attribute: { id: Number(colorAttribute.id), name: colorAttribute.name },
+    template_color: { id: Number(templateTerm.id), name: templateTerm.name },
+    new_color: { id: Number(newTerm.id), name: newTerm.name, internal_color_id: colorLookup.id },
+    total_variations: variations.length,
+    template_variations: templateVariations.length,
+    variations_to_create: createRows.length,
+    already_existing_combinations: alreadyExists,
+    image_slots: imageSlots,
+    blockers: uniqueBlockers,
+    warnings: [
+      'The new color copies the template color’s active Size × Logo combination matrix.',
+      'One uploaded image is required per Logo combination; every size for that logo reuses the same image.',
+      'Template prices and variation-level shipping/tax settings are copied. Inventory quantities are not copied.',
+      'New variations receive new Woo variation IDs and durable variation/SKU → blank mappings.',
+      ...(reconcileRows.length ? [`${reconcileRows.length} existing ${newTerm.name} combination(s) will have their blank metadata/mappings verified or repaired.`] : []),
+    ],
+    can_apply: uniqueBlockers.length === 0
+      && rows.length > 0
+      && rows.every((row) => ['ready', 'ready_existing'].includes(row.preview_status)),
+    confirmation_token: replacementToken(tokenPayload),
+    rows,
   };
 }
 
@@ -541,26 +779,34 @@ function parentAttributesWithColor(product, colorAttributeId, oldColor, newColor
   });
 }
 
-async function rememberMapping(supabase, row, actorId, productName) {
-  const reason = `Product color replacement on ${productName}: ${row.old_color} -> ${row.new_color}`;
+function parentAttributesAddColor(product, colorAttributeId, newColor) {
+  return (product.attributes || []).map((attribute) => {
+    if (!isColorAttribute(attribute, colorAttributeId)) return attribute;
+    const options = Array.isArray(attribute.options) ? [...attribute.options] : [];
+    if (!options.some((value) => normalized(value) === normalized(newColor))) options.push(newColor);
+    return { ...attribute, options };
+  });
+}
+
+async function rememberMapping(supabase, { variationId, sku, blankProductId, notes }, actorId, source = 'catalog_color_manager') {
   const variationResult = await supabase.rpc('sc_set_product_blank_mapping_v1', {
     p_source_kind: 'woocommerce_variation',
-    p_source_key: String(row.variation_id),
-    p_blank_product_id: row.target_blank_product_id,
-    p_mapping_source: 'catalog_color_replacement',
-    p_notes: reason,
+    p_source_key: String(variationId),
+    p_blank_product_id: blankProductId,
+    p_mapping_source: source,
+    p_notes: notes,
     p_propagate_unpaired: true,
     p_actor_id: actorId,
   });
   if (variationResult.error) throw variationResult.error;
 
-  if (row.sku && !/^MANUAL-\d+-LINE-\d+$/i.test(row.sku)) {
+  if (sku && !/^MANUAL-\d+-LINE-\d+$/i.test(sku)) {
     const skuResult = await supabase.rpc('sc_set_product_blank_mapping_v1', {
       p_source_kind: 'woocommerce_sku',
-      p_source_key: row.sku,
-      p_blank_product_id: row.target_blank_product_id,
-      p_mapping_source: 'catalog_color_replacement',
-      p_notes: reason,
+      p_source_key: sku,
+      p_blank_product_id: blankProductId,
+      p_mapping_source: source,
+      p_notes: notes,
       p_propagate_unpaired: true,
       p_actor_id: actorId,
     });
@@ -568,30 +814,126 @@ async function rememberMapping(supabase, row, actorId, productName) {
   }
 }
 
+async function prepareImageUpload(auth, body) {
+  if (!r2Configured()) throw new Error('R2 storage is required for Product Color Manager image uploads.');
+  const productId = Number(body.product_id);
+  if (!Number.isInteger(productId) || productId <= 0) throw new Error('A valid WooCommerce product ID is required.');
+  const size = Number(body.file_size || 0);
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_IMAGE_BYTES) throw new Error('Variation image must be between 1 byte and 50 MB.');
+  const contentType = text(body.content_type).toLowerCase();
+  if (!/^image\/(png|jpeg|webp)$/.test(contentType)) throw new Error('Variation images must be PNG, JPEG, or WebP.');
+  const filename = cleanObjectName(body.filename || 'variation-image');
+  const key = `${auth.user.id}/catalog-color/${productId}/${randomUUID()}-${filename}`;
+  return {
+    upload_url: await presignedR2Put({ key, contentType }),
+    reference: {
+      provider: 'r2',
+      bucket: r2BucketName(),
+      path: key,
+      mime_type: contentType,
+      filename,
+      product_id: productId,
+    },
+  };
+}
+
+function validateUploadReference(auth, productId, reference) {
+  if (!reference || reference.provider !== 'r2' || reference.bucket !== r2BucketName()) {
+    throw new Error('Invalid Product Color Manager image upload reference.');
+  }
+  const prefix = `${auth.user.id}/catalog-color/${productId}/`;
+  if (!text(reference.path).startsWith(prefix)) throw new Error('The variation image upload does not belong to this employee/product.');
+  if (!/^image\/(png|jpeg|webp)$/.test(text(reference.mime_type).toLowerCase())) throw new Error('Invalid uploaded image type.');
+  return reference;
+}
+
+async function cancelImageUploads(auth, body) {
+  const productId = Number(body.product_id);
+  const refs = Array.isArray(body.references) ? body.references : [];
+  let deleted = 0;
+  for (const ref of refs) {
+    const valid = validateUploadReference(auth, productId, ref);
+    await deleteStoredReference(auth.supabase, {
+      provider: valid.provider,
+      bucket: valid.bucket,
+      path: valid.path,
+    });
+    deleted += 1;
+  }
+  return { success: true, deleted };
+}
+
+async function importColorImages(auth, product, preview, uploadedImages) {
+  let currentProduct = product;
+  const savedMap = parseColorImageMap(product);
+  const slotImages = new Map();
+
+  for (const slot of preview.image_slots || []) {
+    if (slot.existing_image_id) {
+      slotImages.set(slot.key, Number(slot.existing_image_id));
+      continue;
+    }
+
+    const upload = (uploadedImages || []).find((row) => row.slot_key === slot.key);
+    if (!upload?.reference) throw new Error(`Upload an image for ${slot.label} before applying the new color.`);
+    const ref = validateUploadReference(auth, product.id, upload.reference);
+    const signedUrl = await signedStoredAssetUrl(auth.supabase, {
+      storage_provider: ref.provider,
+      storage_bucket: ref.bucket,
+      storage_path: ref.path,
+      mime_type: ref.mime_type,
+    }, 3600);
+
+    const beforeIds = new Set((currentProduct.images || []).map((row) => Number(row.id)).filter(Boolean));
+    const imageName = `SC ${preview.new_color.name} - ${slot.label} - ${slot.key}`;
+    const images = [
+      ...(currentProduct.images || []).map((row) => ({ id: Number(row.id), name: row.name, alt: row.alt })).filter((row) => row.id),
+      { src: signedUrl, name: imageName, alt: `${preview.product.name} - ${preview.new_color.name} - ${slot.label}` },
+    ];
+    currentProduct = await wooRequest(`products/${product.id}`, { method: 'PUT', body: { images } });
+    const candidates = (currentProduct.images || []).filter((row) => !beforeIds.has(Number(row.id)));
+    const matched = candidates.find((row) => String(row.name || '').includes(slot.key)) || (candidates.length === 1 ? candidates[0] : null);
+    if (!matched?.id) throw new Error(`WooCommerce did not return a media ID for ${slot.label}.`);
+
+    const imageId = Number(matched.id);
+    slotImages.set(slot.key, imageId);
+    savedMap[slot.key] = imageId;
+
+    // Persist each Color + Logo -> Woo image ID immediately. If a later image
+    // or variation batch fails, re-preview can reuse images already imported.
+    currentProduct = await wooRequest(`products/${product.id}`, {
+      method: 'PUT',
+      body: { meta_data: [colorImageMetaRow(currentProduct, savedMap)] },
+    });
+
+    await deleteStoredReference(auth.supabase, { provider: ref.provider, bucket: ref.bucket, path: ref.path }).catch((error) => {
+      console.warn('Temporary Product Color Manager upload cleanup failed:', error.message);
+    });
+  }
+
+  return { product: currentProduct, slotImages, savedMap };
+}
+
 async function applyReplacement(auth, body) {
   const productId = Number(body.product_id);
-  const preview = await buildPreview(auth.supabase, productId, body.old_color, body.new_color);
-  if (!preview.can_apply) {
-    throw new Error(`Replacement is blocked: ${preview.blockers.slice(0, 6).join(' | ')}`);
-  }
+  const preview = await buildReplacePreview(auth.supabase, productId, body.old_color, body.new_color);
+  if (!preview.can_apply) throw new Error(`Replacement is blocked: ${preview.blockers.slice(0, 6).join(' | ')}`);
   if (!body.confirmation_token || body.confirmation_token !== preview.confirmation_token) {
     throw new Error('The product changed after preview. Preview the replacement again before applying it.');
   }
 
   const product = await wooRequest(`products/${productId}?context=edit`);
-  const phaseOneAttributes = parentAttributesWithColor(
-    product,
-    preview.color_attribute.id,
-    preview.old_color.name,
-    preview.new_color.name,
-    { keepOld: true },
-  );
-
-  // Phase 1 adds the replacement Color to the parent while retaining the old
-  // option. This makes the operation safe to resume after a Woo/API interruption.
   await wooRequest(`products/${productId}`, {
     method: 'PUT',
-    body: { attributes: phaseOneAttributes },
+    body: {
+      attributes: parentAttributesWithColor(
+        product,
+        preview.color_attribute.id,
+        preview.old_color.name,
+        preview.new_color.name,
+        { keepOld: true },
+      ),
+    },
   });
 
   let updated = 0;
@@ -600,36 +942,30 @@ async function applyReplacement(auth, body) {
 
   for (let offset = 0; offset < preview.rows.length; offset += WOO_BATCH_SIZE) {
     const batch = preview.rows.slice(offset, offset + WOO_BATCH_SIZE);
-
-    // Save durable blank mappings BEFORE changing the Woo variation. If a later
-    // Woo batch fails, the remaining old-color variation is still discoverable
-    // on the next preview, while no already-updated Woo variation can be left
-    // mapped to its former physical blank.
     for (const row of batch) {
-      await rememberMapping(auth.supabase, row, auth.user.id, preview.product.name);
+      await rememberMapping(auth.supabase, {
+        variationId: row.variation_id,
+        sku: row.sku,
+        blankProductId: row.target_blank_product_id,
+        notes: `Product color replacement on ${preview.product.name}: ${row.old_color} -> ${row.new_color}`,
+      }, auth.user.id);
     }
-
-    const update = batch.map((row) => ({
-      id: row.variation_id,
-      attributes: row.attributes_after,
-      meta_data: row.meta_after,
-      // Deliberately omit image and sku. Woo keeps the existing variation image
-      // and SKU attached to the same variation ID.
-    }));
 
     const result = await wooRequest(`products/${productId}/variations/batch`, {
       method: 'POST',
-      body: { update },
+      body: {
+        update: batch.map((row) => ({
+          id: row.variation_id,
+          attributes: row.attributes_after,
+          meta_data: row.meta_after,
+        })),
+      },
     });
     const returned = Array.isArray(result?.update) ? result.update : [];
     const failures = returned.filter((row) => row?.error || row?.code || !row?.id);
-    if (failures.length || returned.length !== update.length) {
+    if (failures.length || returned.length !== batch.length) {
       const detail = failures.slice(0, 5).map((row) => row?.error?.message || row?.message || row?.code || 'unknown').join(' | ');
-      throw new Error(
-        `WooCommerce color replacement stopped after ${updated} completed variation(s). `
-        + 'Preview this product again; the operation is resumable and will show the remaining old-color variations. '
-        + (detail || `Expected ${update.length} updates but received ${returned.length}.`),
-      );
+      throw new Error(`WooCommerce replacement stopped after ${updated} completed variation(s). Re-preview to resume. ${detail}`);
     }
 
     for (const returnedRow of returned) {
@@ -637,73 +973,40 @@ async function applyReplacement(auth, body) {
       if (!plan) continue;
       const localUpdate = await auth.supabase
         .from('products')
-        .update({
-          color_id: preview.new_color.internal_color_id,
-          blank_product_id: plan.target_blank_product_id,
-        })
+        .update({ color_id: preview.new_color.internal_color_id, blank_product_id: plan.target_blank_product_id })
         .eq('woocommerce_variation_id', plan.variation_id);
-      if (localUpdate.error) {
-        warnings.push(
-          `Woo variation ${plan.variation_id} was updated and its durable blank mapping was saved, `
-          + `but the local product color field could not be refreshed (${localUpdate.error.message}). Run WooCommerce Sync.`
-        );
-      }
+      if (localUpdate.error) warnings.push(`Run WooCommerce Sync for variation ${plan.variation_id}: ${localUpdate.error.message}`);
       updated += 1;
     }
   }
 
-  const reconciled = await listVariations(productId);
-  const reconciledMap = new Map(reconciled.map((row) => [String(row.id), row]));
-  const failedVerification = preview.rows.filter((plan) => {
-    const variation = reconciledMap.get(String(plan.variation_id));
-    if (!variation) return true;
-    return !(variation.attributes || []).some((attribute) => (
-      isColorAttribute(attribute, preview.color_attribute.id)
-      && normalized(attribute.option) === normalized(preview.new_color.name)
-    ));
-  });
-  if (failedVerification.length) {
-    throw new Error(
-      `WooCommerce verification failed for ${failedVerification.length} variation(s). `
-      + 'Do not recreate variations manually; preview the product again so the tool can show the remaining state.',
-    );
-  }
-
-  try {
-    const finalProduct = await wooRequest(`products/${productId}?context=edit`);
-    const finalAttributes = parentAttributesWithColor(
-      finalProduct,
-      preview.color_attribute.id,
-      preview.old_color.name,
-      preview.new_color.name,
-      { keepOld: false },
-    );
-    await wooRequest(`products/${productId}`, {
-      method: 'PUT',
-      body: { attributes: finalAttributes },
-    });
-  } catch (error) {
-    warnings.push(
-      `All planned variations were updated, but the old parent Color option could not be removed automatically: ${error.message}`
-    );
-  }
+  const finalProduct = await wooRequest(`products/${productId}?context=edit`);
+  await wooRequest(`products/${productId}`, {
+    method: 'PUT',
+    body: {
+      attributes: parentAttributesWithColor(
+        finalProduct,
+        preview.color_attribute.id,
+        preview.old_color.name,
+        preview.new_color.name,
+        { keepOld: false },
+      ),
+    },
+  }).catch((error) => warnings.push(`Old parent Color option was not removed automatically: ${error.message}`));
 
   let repairedOpenLines = 0;
   const repairedJobs = new Set();
-  if (body.repair_open_pull_sheets !== false && preview.open_pull_sheet_lines.length) {
+  if (body.repair_open_pull_sheets !== false) {
     for (const line of preview.open_pull_sheet_lines) {
       const plan = planByVariation.get(String(line.variation_id));
-      if (!plan?.target_blank_product_id) continue;
       const repair = await auth.supabase.rpc('sc_purchasing_fix_pairing_v1', {
         p_job_item_id: Number(line.job_item_id),
-        p_new_blank_product_id: plan.target_blank_product_id,
+        p_new_blank_product_id: plan?.target_blank_product_id,
         p_reason: `Woo product ${productId} color replacement: ${preview.old_color.name} -> ${preview.new_color.name}`,
         p_remember_mapping: true,
       });
       if (repair.error) {
-        warnings.push(
-          `Open pull-sheet line ${line.job_item_id} still needs pairing review: ${repair.error.message}`
-        );
+        warnings.push(`Open pull-sheet line ${line.job_item_id} still needs pairing review: ${repair.error.message}`);
         continue;
       }
       repairedOpenLines += 1;
@@ -714,47 +1017,141 @@ async function applyReplacement(auth, body) {
         p_job_id: jobId,
         p_blank_product_id: null,
       });
-      if (integrity.error) {
-        warnings.push(`Pull sheet ${jobId} needs Purchasing integrity review: ${integrity.error.message}`);
-      }
+      if (integrity.error) warnings.push(`Pull sheet ${jobId} needs integrity review: ${integrity.error.message}`);
     }
-  }
-
-  try {
-    const audit = await auth.supabase.from('sc_core_mutation_audit').insert({
-      action: 'replace_product_color',
-      entity_type: 'woocommerce_product',
-      entity_id_text: String(productId),
-      actor_user_id: auth.user.id,
-      before_snapshot: {
-        color: preview.old_color.name,
-        variation_ids: preview.rows.map((row) => row.variation_id),
-      },
-      after_snapshot: {
-        color: preview.new_color.name,
-        variation_ids: preview.rows.map((row) => row.variation_id),
-        repaired_open_pull_sheet_lines: repairedOpenLines,
-      },
-      reason: text(body.reason) || `Catalog color replacement: ${preview.old_color.name} -> ${preview.new_color.name}`,
-    });
-    if (audit.error) warnings.push(`Audit row could not be saved: ${audit.error.message}`);
-  } catch (error) {
-    warnings.push(`Audit row could not be saved: ${error.message}`);
   }
 
   return {
     success: true,
+    mode: 'replace',
+    product_id: productId,
+    variations_updated: updated,
+    image_assignments_preserved: preview.preserved_image_assignments,
+    open_pull_sheet_lines_repaired: repairedOpenLines,
+    warnings,
+  };
+}
+
+async function applyAddColor(auth, body) {
+  const productId = Number(body.product_id);
+  const preview = await buildAddPreview(auth.supabase, productId, body.template_color, body.new_color);
+  if (!preview.can_apply) throw new Error(`Add-color operation is blocked: ${preview.blockers.slice(0, 6).join(' | ')}`);
+  if (!body.confirmation_token || body.confirmation_token !== preview.confirmation_token) {
+    throw new Error('The product changed after preview. Preview the new color again before applying it.');
+  }
+
+  let product = await wooRequest(`products/${productId}?context=edit`);
+  product = await wooRequest(`products/${productId}`, {
+    method: 'PUT',
+    body: { attributes: parentAttributesAddColor(product, preview.color_attribute.id, preview.new_color.name) },
+  });
+
+  const imported = await importColorImages(auth, product, preview, body.uploaded_images || []);
+  product = imported.product;
+
+  const createRows = preview.rows.filter((row) => row.action === 'create');
+  const reconcileRows = preview.rows.filter((row) => row.action === 'reconcile_existing');
+  let created = 0;
+  let reconciledExisting = 0;
+  const warnings = [];
+  const createdMappings = [];
+
+  // A retry may find variations that Woo created during an earlier partial run
+  // before a mapping write failed. Reconcile those existing combinations first
+  // so retrying repairs metadata/mappings instead of silently skipping them.
+  for (let offset = 0; offset < reconcileRows.length; offset += WOO_BATCH_SIZE) {
+    const batch = reconcileRows.slice(offset, offset + WOO_BATCH_SIZE);
+    const result = await wooRequest(`products/${productId}/variations/batch`, {
+      method: 'POST',
+      body: {
+        update: batch.map((row) => ({
+          id: row.existing_variation_id,
+          meta_data: row.meta_after,
+        })),
+      },
+    });
+    const returned = Array.isArray(result?.update) ? result.update : [];
+    const failures = returned.filter((row) => row?.error || row?.code || !row?.id);
+    if (failures.length || returned.length !== batch.length) {
+      const detail = failures.slice(0, 5).map((row) => row?.error?.message || row?.message || row?.code || 'unknown').join(' | ');
+      throw new Error(`Existing new-color variation reconciliation failed. Re-preview and retry. ${detail}`);
+    }
+
+    for (let index = 0; index < returned.length; index += 1) {
+      const actual = returned[index];
+      const plan = batch[index];
+      await rememberMapping(auth.supabase, {
+        variationId: Number(actual.id),
+        sku: text(actual.sku || plan.sku),
+        blankProductId: plan.target_blank_product_id,
+        notes: `Verified ${preview.new_color.name} on ${preview.product.name} using ${preview.template_color.name} as the variation template.`,
+      }, auth.user.id, 'catalog_color_add');
+      reconciledExisting += 1;
+    }
+  }
+
+  for (let offset = 0; offset < createRows.length; offset += WOO_BATCH_SIZE) {
+    const batch = createRows.slice(offset, offset + WOO_BATCH_SIZE);
+    const create = batch.map((row) => ({
+      ...row.settings,
+      sku: row.sku,
+      attributes: row.attributes_after,
+      image: { id: imported.slotImages.get(row.image_slot_key) },
+      meta_data: row.meta_after,
+    }));
+
+    const result = await wooRequest(`products/${productId}/variations/batch`, {
+      method: 'POST',
+      body: { create },
+    });
+    const returned = Array.isArray(result?.create) ? result.create : [];
+    const failures = returned.filter((row) => row?.error || row?.code || !row?.id);
+    if (failures.length || returned.length !== create.length) {
+      const detail = failures.slice(0, 5).map((row) => row?.error?.message || row?.message || row?.code || 'unknown').join(' | ');
+      throw new Error(
+        `WooCommerce new-color creation stopped after ${created} created variation(s). `
+        + `Re-preview the product to safely resume only the missing combinations. ${detail}`,
+      );
+    }
+
+    for (let index = 0; index < returned.length; index += 1) {
+      const actual = returned[index];
+      const plan = batch[index];
+      await rememberMapping(auth.supabase, {
+        variationId: Number(actual.id),
+        sku: text(actual.sku || plan.sku),
+        blankProductId: plan.target_blank_product_id,
+        notes: `Added ${preview.new_color.name} to ${preview.product.name} using ${preview.template_color.name} as the variation template.`,
+      }, auth.user.id, 'catalog_color_add');
+      createdMappings.push({
+        variation_id: Number(actual.id),
+        sku: text(actual.sku || plan.sku),
+        blank_product_id: plan.target_blank_product_id,
+      });
+      created += 1;
+    }
+  }
+
+  const reconciled = await listVariations(productId);
+  const activeSignatures = new Set(
+    reconciled.filter((row) => isActiveStatus(row.status)).map((row) => variationSignature(row.attributes || [], preview.color_attribute.id)),
+  );
+  const missing = createRows.filter((row) => !activeSignatures.has(variationSignature(row.attributes_after, preview.color_attribute.id)));
+  if (missing.length) warnings.push(`${missing.length} expected new variation combination(s) were not found during final verification.`);
+
+  return {
+    success: true,
+    mode: 'add',
     product_id: productId,
     product_name: preview.product.name,
-    old_color: preview.old_color.name,
+    template_color: preview.template_color.name,
     new_color: preview.new_color.name,
-    variations_updated: updated,
-    variation_ids_preserved: updated,
-    image_assignments_preserved: preview.preserved_image_assignments,
-    skus_preserved: preview.rows.filter((row) => row.sku).length,
-    mappings_updated: updated,
-    open_pull_sheet_lines_repaired: repairedOpenLines,
-    jobs_reconciled: repairedJobs.size,
+    variations_created: created,
+    existing_combinations_reconciled: reconciledExisting,
+    images_uploaded: preview.image_slots.filter((slot) => !slot.existing_image_id).length,
+    image_slots: preview.image_slots.length,
+    mappings_saved: createdMappings.length,
+    run_woo_sync: true,
     warnings,
   };
 }
@@ -773,26 +1170,22 @@ export async function handler(event) {
     const body = parseJsonBody(event);
     const action = text(body.action);
 
-    if (action === 'search') {
-      return jsonResponse(200, { success: true, products: await productSearch(body.search) }, event);
+    if (action === 'search') return jsonResponse(200, { success: true, products: await productSearch(body.search) }, event);
+    if (action === 'inspect') return jsonResponse(200, { success: true, ...(await inspectProduct(body.product_id)) }, event);
+    if (action === 'preview_replace') {
+      return jsonResponse(200, { success: true, preview: await buildReplacePreview(auth.supabase, body.product_id, body.old_color, body.new_color) }, event);
     }
-    if (action === 'inspect') {
-      return jsonResponse(200, { success: true, ...(await inspectProduct(body.product_id)) }, event);
+    if (action === 'apply_replace') return jsonResponse(200, await applyReplacement(auth, body), event);
+    if (action === 'preview_add') {
+      return jsonResponse(200, { success: true, preview: await buildAddPreview(auth.supabase, body.product_id, body.template_color, body.new_color) }, event);
     }
-    if (action === 'preview') {
-      const preview = await buildPreview(auth.supabase, body.product_id, body.old_color, body.new_color);
-      return jsonResponse(200, { success: true, preview }, event);
-    }
-    if (action === 'apply') {
-      return jsonResponse(200, await applyReplacement(auth, body), event);
-    }
+    if (action === 'prepare_image_upload') return jsonResponse(200, { success: true, ...(await prepareImageUpload(auth, body)) }, event);
+    if (action === 'cancel_image_uploads') return jsonResponse(200, await cancelImageUploads(auth, body), event);
+    if (action === 'apply_add') return jsonResponse(200, await applyAddColor(auth, body), event);
 
-    return jsonResponse(400, { success: false, message: 'Unknown product color replacement action.' }, event);
+    return jsonResponse(400, { success: false, message: 'Unknown Product Color Manager action.' }, event);
   } catch (error) {
-    console.error('Product color replacement failed:', error);
-    return jsonResponse(400, {
-      success: false,
-      message: error?.message || 'Product color replacement failed.',
-    }, event);
+    console.error('Product Color Manager failed:', error);
+    return jsonResponse(400, { success: false, message: error?.message || 'Product Color Manager failed.' }, event);
   }
 }

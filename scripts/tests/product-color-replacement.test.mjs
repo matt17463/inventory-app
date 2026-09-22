@@ -10,53 +10,71 @@ const files = {
   nav: await readFile(new URL('../../src/navigationConfig.js', import.meta.url), 'utf8'),
 };
 
-test('product color replacement is authenticated and manager/admin restricted', () => {
+test('Product Color Manager is authenticated and manager/admin restricted', () => {
   assert.match(files.fn, /authorizeEmployee/);
   assert.match(files.fn, /allowedRoles:\s*\['admin', 'manager'\]/);
   assert.match(files.api, /authenticatedFunctionFetch/);
 });
 
-test('existing Woo variation IDs are updated in place and images/SKUs are not replaced', () => {
+test('replace mode updates existing Woo variation IDs in place without replacing image or SKU', () => {
+  assert.match(files.fn, /update:\s*batch\.map/);
   assert.match(files.fn, /id:\s*row\.variation_id/);
+  assert.doesNotMatch(files.fn, /id:\s*row\.variation_id,[\s\S]{0,250}image:/);
+});
+
+test('add mode copies template color Size × Logo matrix and creates missing variations', () => {
+  assert.match(files.fn, /templateVariations/);
+  assert.match(files.fn, /action:\s*'create'/);
   assert.match(files.fn, /variations\/batch/);
-  assert.match(files.fn, /Deliberately omit image and sku/);
-  assert.doesNotMatch(files.fn, /image:\s*row\.image_id/);
+  assert.match(files.fn, /body:\s*\{\s*create\s*\}/);
+  assert.match(files.page, /Add new color/);
+  assert.match(files.page, /Size × Logo/);
 });
 
-test('replacement is resumable and durable blank mapping is saved before each Woo batch', () => {
-  const mappingPosition = files.fn.indexOf('await rememberMapping');
-  const batchPosition = files.fn.indexOf("await wooRequest(`products/${productId}/variations/batch`");
-  assert.ok(mappingPosition >= 0 && batchPosition > mappingPosition);
-  assert.match(files.fn, /operation is resumable/);
+test('add mode requires one uploaded image per logo combination and reuses it across sizes', () => {
+  assert.match(files.fn, /imageSlotKey/);
+  assert.match(files.fn, /variationLogo/);
+  assert.match(files.fn, /slotImages\.get\(row\.image_slot_key\)/);
+  assert.match(files.page, /one new garment\/mockup\s*image per Logo combination/i);
+  assert.match(files.api, /uploadProductColorImage/);
 });
 
-test('replacement uses two-phase parent color update and checks duplicate signatures', () => {
-  assert.match(files.fn, /keepOld:\s*true/);
-  assert.match(files.fn, /keepOld:\s*false/);
-  assert.match(files.fn, /duplicate variation combination/);
+test('variation image uploads use authenticated presigned R2 and supported image types', () => {
+  assert.match(files.fn, /presignedR2Put/);
+  assert.match(files.fn, /R2 storage is required/);
+  assert.match(files.fn, /image\\\/\(png\|jpeg\|webp\)/);
+  assert.match(files.api, /method:\s*'PUT'/);
 });
 
-test('durable variation and SKU blank mappings are saved', () => {
+test('add mode resolves every new combination to a unique physical blank before apply', () => {
+  assert.match(files.fn, /resolveTargetBlank/);
+  assert.match(files.fn, /No active \$\{targetColorName\} blank exists/);
+  assert.match(files.fn, /candidate \$\{targetColorName\} blanks/);
+});
+
+test('new variations receive durable variation and SKU blank mappings', () => {
   assert.match(files.fn, /sc_set_product_blank_mapping_v1/);
   assert.match(files.fn, /woocommerce_variation/);
   assert.match(files.fn, /woocommerce_sku/);
-  assert.match(files.fn, /catalog_color_replacement/);
+  assert.match(files.fn, /catalog_color_add/);
 });
 
-test('active pull sheets can be repaired through existing guarded RPCs', () => {
+test('partial add-color runs are resumable and reconcile mappings for combinations already created', () => {
+  assert.match(files.fn, /reconcile_existing/);
+  assert.match(files.fn, /existing_variation_id/);
+  assert.match(files.fn, /reconciledExisting/);
+  assert.match(files.fn, /Re-preview the product to safely resume only the missing combinations/);
+  assert.match(files.fn, /COLOR_IMAGE_META_KEY/);
+});
+
+test('replace mode still supports guarded pull-sheet repair', () => {
   assert.match(files.fn, /sc_purchasing_fix_pairing_v1/);
   assert.match(files.fn, /sc_repair_pullsheet_purchasing_integrity_v1/);
   assert.match(files.page, /Repair affected active pull-sheet lines/);
 });
 
-test('UI requires preview and confirmation token before apply', () => {
-  assert.match(files.page, /Preview replacement/);
-  assert.match(files.page, /REPLACE COLOR/);
-  assert.match(files.api, /confirmation_token/);
-});
-
-test('route and navigation entry are installed', () => {
+test('route and navigation entry remain installed', () => {
   assert.match(files.app, /ProductColorReplacement/);
   assert.match(files.app, /path="\/product-color-replacement"/);
-  assert.match(files.nav, /Replace Product Color/);
+  assert.match(files.nav, /Product Color/);
 });

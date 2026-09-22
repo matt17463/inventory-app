@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  applyWooProductColorAddition,
   applyWooProductColorReplacement,
+  cancelProductColorImageUploads,
   inspectWooProductColors,
+  previewWooProductColorAddition,
   previewWooProductColorReplacement,
   searchWooProductsForColorReplacement,
+  uploadProductColorImage,
 } from './lib/productColorReplacementApi';
 
 function n(value) {
@@ -12,28 +16,31 @@ function n(value) {
   return Number.isFinite(number) ? number.toLocaleString() : '0';
 }
 
-function productLabel(row) {
-  return [row?.name, row?.sku ? `SKU ${row.sku}` : '', row?.id ? `#${row.id}` : ''].filter(Boolean).join(' · ');
-}
-
 export default function ProductColorReplacement() {
+  const [mode, setMode] = useState('replace');
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [details, setDetails] = useState(null);
   const [oldColor, setOldColor] = useState('');
+  const [templateColor, setTemplateColor] = useState('');
   const [newColor, setNewColor] = useState('');
   const [preview, setPreview] = useState(null);
   const [repairOpenPullSheets, setRepairOpenPullSheets] = useState(true);
-  const [reason, setReason] = useState('');
+  const [imageFiles, setImageFiles] = useState({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const replacementTerms = useMemo(() => {
-    const oldNormalized = oldColor.trim().toLowerCase();
-    return (details?.woo_color_terms || []).filter((row) => row.name?.trim().toLowerCase() !== oldNormalized);
-  }, [details, oldColor]);
+    const excluded = (mode === 'replace' ? oldColor : templateColor).trim().toLowerCase();
+    return (details?.woo_color_terms || []).filter((row) => row.name?.trim().toLowerCase() !== excluded);
+  }, [details, mode, oldColor, templateColor]);
+
+  function resetPreview() {
+    setPreview(null);
+    setImageFiles({});
+  }
 
   async function runSearch(event) {
     event?.preventDefault();
@@ -52,12 +59,10 @@ export default function ProductColorReplacement() {
 
   async function chooseProduct(row) {
     setBusy(true); setError(''); setMessage('');
-    setSelectedProduct(row); setDetails(null); setPreview(null); setOldColor(''); setNewColor('');
+    setSelectedProduct(row); setDetails(null); setOldColor(''); setTemplateColor(''); setNewColor(''); resetPreview();
     try {
       const result = await inspectWooProductColors(row.id);
       setDetails(result);
-      const colors = result.variation_colors || result.parent_color_options || [];
-      if (colors.length === 1) setOldColor(colors[0]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,20 +71,21 @@ export default function ProductColorReplacement() {
   }
 
   async function runPreview() {
-    if (!selectedProduct?.id || !oldColor || !newColor) {
-      setError('Choose a product, the existing color, and the replacement color first.');
+    if (!selectedProduct?.id || !newColor) {
+      setError('Choose a product and the target color first.');
       return;
     }
     setBusy(true); setError(''); setMessage('Building a guarded preview...');
     try {
-      const result = await previewWooProductColorReplacement({
-        productId: selectedProduct.id,
-        oldColor,
-        newColor,
-      });
+      const result = mode === 'replace'
+        ? await previewWooProductColorReplacement({ productId: selectedProduct.id, oldColor, newColor })
+        : await previewWooProductColorAddition({ productId: selectedProduct.id, templateColor, newColor });
       setPreview(result);
+      setImageFiles({});
       setMessage(result.can_apply
-        ? `Ready: ${n(result.affected_variations)} existing variation(s) can be updated in place.`
+        ? (mode === 'replace'
+          ? `Ready: ${n(result.affected_variations)} existing variation(s) can be updated in place.`
+          : `Ready: ${n(result.variations_to_create)} new variation(s) can be created from the ${result.template_color.name} matrix.`)
         : `Preview found ${n(result.blockers?.length)} blocking issue(s). Nothing has been changed.`);
     } catch (err) {
       setPreview(null);
@@ -90,20 +96,13 @@ export default function ProductColorReplacement() {
     }
   }
 
-  async function applyReplacement() {
-    if (!preview?.can_apply) {
-      setError('Preview must pass before the replacement can be applied.');
-      return;
-    }
+  async function applyReplace() {
+    if (!preview?.can_apply) return;
     const typed = window.prompt(
-      `This will change ${preview.affected_variations} existing WooCommerce variation(s) from `
-      + `"${preview.old_color.name}" to "${preview.new_color.name}" while preserving their IDs, SKUs, and current variation images.\n\n`
-      + 'Type REPLACE COLOR to continue.',
+      `Change ${preview.affected_variations} existing variation(s) from "${preview.old_color.name}" `
+      + `to "${preview.new_color.name}" while preserving IDs, SKUs, and current images?\n\nType REPLACE COLOR to continue.`
     );
-    if (typed !== 'REPLACE COLOR') {
-      setMessage('Color replacement cancelled.');
-      return;
-    }
+    if (typed !== 'REPLACE COLOR') { setMessage('Color replacement cancelled.'); return; }
 
     setBusy(true); setError(''); setMessage('Updating WooCommerce variations and durable blank mappings...');
     try {
@@ -113,28 +112,68 @@ export default function ProductColorReplacement() {
         newColor: preview.new_color.name,
         confirmationToken: preview.confirmation_token,
         repairOpenPullSheets,
-        reason,
       });
-      const warningText = (result.warnings || []).length
-        ? ` Warning: ${result.warnings.join(' | ')}`
-        : '';
       setMessage(
-        `Completed: ${n(result.variations_updated)} variation(s) updated in place; `
+        `Completed: ${n(result.variations_updated)} variation(s) updated; `
         + `${n(result.image_assignments_preserved)} image assignment(s) preserved; `
         + `${n(result.open_pull_sheet_lines_repaired)} open pull-sheet line(s) repaired.`
-        + warningText
+        + ((result.warnings || []).length ? ` Warning: ${result.warnings.join(' | ')}` : '')
       );
-      const refreshed = await inspectWooProductColors(selectedProduct.id);
-      setDetails(refreshed);
-      setPreview(null);
-      setOldColor('');
-      setNewColor('');
+      setDetails(await inspectWooProductColors(selectedProduct.id));
+      setOldColor(''); setNewColor(''); resetPreview();
     } catch (err) {
-      setError(
-        `${err.message} If WooCommerce stopped partway through, do not recreate variations manually. `
-        + 'Preview the same product again; the tool is designed to resume from the remaining old-color variations.'
+      setError(`${err.message} Re-preview the same product before making any manual WooCommerce changes.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyAdd() {
+    if (!preview?.can_apply) return;
+    const missingImages = (preview.image_slots || []).filter((slot) => !slot.existing_image_id && !imageFiles[slot.key]);
+    if (missingImages.length) {
+      setError(`Upload an image for: ${missingImages.map((slot) => slot.label).join(', ')}`);
+      return;
+    }
+
+    const typed = window.prompt(
+      `Create ${preview.variations_to_create} new ${preview.new_color.name} variation(s), `
+      + `copying the Size × Logo matrix from ${preview.template_color.name}?\n\nType ADD COLOR to continue.`
+    );
+    if (typed !== 'ADD COLOR') { setMessage('Add-color operation cancelled.'); return; }
+
+    setBusy(true); setError(''); setMessage('Uploading variation images...');
+    const uploadedRefs = [];
+    try {
+      const uploadedImages = [];
+      for (const slot of preview.image_slots || []) {
+        if (slot.existing_image_id) continue;
+        const file = imageFiles[slot.key];
+        const reference = await uploadProductColorImage(selectedProduct.id, file);
+        uploadedRefs.push(reference);
+        uploadedImages.push({ slot_key: slot.key, reference });
+      }
+
+      setMessage('Creating WooCommerce variations and durable blank mappings...');
+      const result = await applyWooProductColorAddition({
+        productId: selectedProduct.id,
+        templateColor: preview.template_color.name,
+        newColor: preview.new_color.name,
+        confirmationToken: preview.confirmation_token,
+        uploadedImages,
+      });
+      setMessage(
+        `Completed: ${n(result.variations_created)} new variation(s), `
+        + `${n(result.existing_combinations_reconciled)} existing combination(s) verified, `
+        + `${n(result.images_uploaded)} new logo image(s), and ${n(result.mappings_saved)} new durable blank mapping(s). `
+        + `Run WooCommerce Sync once to populate the newly created variation rows in Supabase.`
+        + ((result.warnings || []).length ? ` Warning: ${result.warnings.join(' | ')}` : '')
       );
-      setMessage('');
+      setDetails(await inspectWooProductColors(selectedProduct.id));
+      setTemplateColor(''); setNewColor(''); resetPreview();
+    } catch (err) {
+      await cancelProductColorImageUploads(selectedProduct.id, uploadedRefs).catch(() => {});
+      setError(`${err.message} Re-preview this product. The add-color workflow is resumable and will only show combinations still missing.`);
     } finally {
       setBusy(false);
     }
@@ -144,14 +183,14 @@ export default function ProductColorReplacement() {
     <main className="page product-color-replacement-page">
       <section className="hero-card">
         <p className="eyebrow">WooCommerce catalog maintenance</p>
-        <h1>Replace Product Color</h1>
+        <h1>Product Color Manager</h1>
         <p>
-          Change one existing WooCommerce color to another across every matching variation without rebuilding the product.
-          Existing Woo variation IDs, SKUs, prices, logo selections, sizes, and variation image assignments are preserved.
+          Replace an existing product color in place, or add a completely new color by copying an existing
+          Size × Logo variation matrix. Blank mappings and WooCommerce variation images are handled in the same workflow.
         </p>
         <div className="sc-button-row">
           <Link className="secondary-button" to="/product-blank-mappings">Product-to-Blank Mappings</Link>
-          <Link className="secondary-button" to="/color-pairings">Color Pairings</Link>
+          <Link className="secondary-button" to="/woo-sync">WooCommerce Sync</Link>
         </div>
       </section>
 
@@ -159,16 +198,28 @@ export default function ProductColorReplacement() {
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="panel">
-        <h2>1. Choose the existing WooCommerce product</h2>
-        <p>Search by product name, parent SKU, or WooCommerce product ID.</p>
+        <h2>1. Choose workflow</h2>
+        <div className="sc-button-row">
+          <button type="button" className={mode === 'replace' ? 'primary-action' : 'secondary-action'} onClick={() => { setMode('replace'); resetPreview(); }}>
+            Replace existing color
+          </button>
+          <button type="button" className={mode === 'add' ? 'primary-action' : 'secondary-action'} onClick={() => { setMode('add'); resetPreview(); }}>
+            Add new color
+          </button>
+        </div>
+        <p className="muted-text">
+          {mode === 'replace'
+            ? 'Use this when an existing Woo color is wrong and should become another color while keeping the same variation IDs and images.'
+            : 'Use this when the product needs an additional color. Choose an existing color as the template for sizes, logos, pricing, and variation settings.'}
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>2. Choose WooCommerce product</h2>
         <form className="filter-row" onSubmit={runSearch}>
           <label>
             Product search
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="EPO ES Gildan Tee, SKU, or product ID"
-            />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name, SKU, or Woo product ID" />
           </label>
           <button type="submit" disabled={busy || !search.trim()}>Search WooCommerce</button>
         </form>
@@ -194,124 +245,148 @@ export default function ProductColorReplacement() {
 
       {selectedProduct && details ? (
         <section className="panel">
-          <h2>2. Choose the color replacement</h2>
-          <p><strong>{productLabel(selectedProduct)}</strong> · {n(details.variation_count)} total WooCommerce variations</p>
+          <h2>3. Configure {mode === 'replace' ? 'replacement' : 'new color'}</h2>
+          <p><strong>{details.product.name}</strong> · {n(details.variation_count)} current variations</p>
+
           <div className="filter-row">
+            {mode === 'replace' ? (
+              <label>
+                Existing color to replace
+                <select value={oldColor} onChange={(event) => { setOldColor(event.target.value); resetPreview(); }}>
+                  <option value="">Choose existing color</option>
+                  {(details.variation_colors || []).map((color) => <option key={color} value={color}>{color}</option>)}
+                </select>
+              </label>
+            ) : (
+              <label>
+                Template color
+                <select value={templateColor} onChange={(event) => { setTemplateColor(event.target.value); resetPreview(); }}>
+                  <option value="">Choose color to copy</option>
+                  {(details.variation_colors || []).map((color) => <option key={color} value={color}>{color}</option>)}
+                </select>
+              </label>
+            )}
+
             <label>
-              Existing color on this product
-              <select value={oldColor} onChange={(event) => { setOldColor(event.target.value); setPreview(null); }}>
-                <option value="">Choose existing color</option>
-                {(details.variation_colors || []).map((color) => <option key={color} value={color}>{color}</option>)}
-              </select>
-            </label>
-            <label>
-              Replacement WooCommerce color
-              <select value={newColor} onChange={(event) => { setNewColor(event.target.value); setPreview(null); }}>
-                <option value="">Choose replacement color</option>
+              {mode === 'replace' ? 'Replacement color' : 'New color to add'}
+              <select value={newColor} onChange={(event) => { setNewColor(event.target.value); resetPreview(); }}>
+                <option value="">Choose WooCommerce color</option>
                 {replacementTerms.map((row) => <option key={row.id} value={row.name}>{row.name}</option>)}
               </select>
             </label>
           </div>
 
-          <div className="info-banner">
-            <strong>Variation images stay attached automatically.</strong> The tool updates each existing variation ID in place
-            and deliberately does not send a new image or SKU to WooCommerce. The image already assigned to that size/logo
-            variation therefore remains assigned after its color changes.
-          </div>
+          {mode === 'add' ? (
+            <div className="info-banner">
+              The template color supplies the existing Size × Logo combinations and variation-level price/settings.
+              The new physical blank is resolved independently for each size. You will upload <strong>one new garment/mockup
+              image per Logo combination</strong>; all sizes for that logo reuse that image.
+            </div>
+          ) : (
+            <div className="info-banner">
+              Existing variation IDs, SKUs, prices, and images remain attached. Only the Color attribute and physical blank mapping change.
+            </div>
+          )}
 
-          <label>
-            Reason / note
-            <textarea
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Example: EPO products sold as Sport Grey are fulfilled with Gildan Heather Dark Grey."
-            />
-          </label>
-
-          <div className="sc-button-row">
-            <button type="button" onClick={runPreview} disabled={busy || !oldColor || !newColor}>Preview replacement</button>
-          </div>
+          <button
+            type="button"
+            onClick={runPreview}
+            disabled={busy || !newColor || (mode === 'replace' ? !oldColor : !templateColor)}
+          >
+            Preview {mode === 'replace' ? 'replacement' : 'new color'}
+          </button>
         </section>
       ) : null}
 
       {preview ? (
         <section className="panel">
-          <h2>3. Review before applying</h2>
+          <h2>4. Review preview</h2>
           <div className="summary-grid">
-            <div className="metric-card"><strong>{n(preview.affected_variations)}</strong><span>variations changing</span></div>
-            <div className="metric-card"><strong>{n(preview.preserved_image_assignments)}</strong><span>images preserved</span></div>
-            <div className="metric-card"><strong>{n(preview.open_pull_sheet_lines?.length)}</strong><span>open lines affected</span></div>
+            <div className="metric-card">
+              <strong>{n(mode === 'replace' ? preview.affected_variations : preview.variations_to_create)}</strong>
+              <span>{mode === 'replace' ? 'variations changing' : 'variations to create'}</span>
+            </div>
+            <div className="metric-card">
+              <strong>{n(mode === 'replace' ? preview.preserved_image_assignments : preview.image_slots?.length)}</strong>
+              <span>{mode === 'replace' ? 'images preserved' : 'logo image slots'}</span>
+            </div>
+            <div className="metric-card">
+              <strong>{n(mode === 'replace' ? preview.open_pull_sheet_lines?.length : preview.already_existing_combinations)}</strong>
+              <span>{mode === 'replace' ? 'open lines affected' : 'existing combos to verify'}</span>
+            </div>
             <div className="metric-card"><strong>{n(preview.blockers?.length)}</strong><span>blocking issues</span></div>
           </div>
 
           {preview.blockers?.length ? (
-            <div className="error-banner">
-              <strong>Do not apply yet.</strong>
-              <ul>{preview.blockers.map((row) => <li key={row}>{row}</li>)}</ul>
+            <div className="error-banner"><strong>Do not apply yet.</strong><ul>{preview.blockers.map((row) => <li key={row}>{row}</li>)}</ul></div>
+          ) : null}
+          {preview.warnings?.length ? <div className="info-banner"><ul>{preview.warnings.map((row) => <li key={row}>{row}</li>)}</ul></div> : null}
+
+          {mode === 'add' && preview.image_slots?.length ? (
+            <div>
+              <h3>New-color images by Logo combination</h3>
+              <p>Upload one product/mockup image for each logo. The same image will be assigned to every size using that logo.</p>
+              <div className="card-grid">
+                {preview.image_slots.map((slot) => (
+                  <div className="card" key={slot.key}>
+                    <strong>{slot.label}</strong>
+                    {slot.existing_image_id ? (
+                      <p>Previously uploaded Woo image #{slot.existing_image_id} will be reused.</p>
+                    ) : (
+                      <label>
+                        Variation image
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={(event) => setImageFiles((current) => ({ ...current, [slot.key]: event.target.files?.[0] || null }))}
+                        />
+                      </label>
+                    )}
+                    {imageFiles[slot.key] ? <small>{imageFiles[slot.key].name}</small> : null}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
-          {preview.warnings?.length ? (
-            <div className="info-banner">
-              <ul>{preview.warnings.map((row) => <li key={row}>{row}</li>)}</ul>
-            </div>
+          {mode === 'replace' ? (
+            <label>
+              <input type="checkbox" checked={repairOpenPullSheets} onChange={(event) => setRepairOpenPullSheets(event.target.checked)} />
+              Repair affected active pull-sheet lines and reservations
+            </label>
           ) : null}
-
-          <label>
-            <input
-              type="checkbox"
-              checked={repairOpenPullSheets}
-              onChange={(event) => setRepairOpenPullSheets(event.target.checked)}
-            />
-            Repair affected active pull-sheet lines and reservations after the WooCommerce update
-          </label>
 
           <div className="table-scroll">
             <table className="data-table">
               <thead>
-                <tr><th>Variation</th><th>SKU</th><th>Color</th><th>Current blank</th><th>Replacement blank</th><th>Image</th><th>State</th></tr>
+                <tr>
+                  <th>{mode === 'replace' ? 'Variation' : 'Template'}</th>
+                  <th>SKU</th>
+                  <th>Logo</th>
+                  <th>{mode === 'replace' ? 'Current blank' : 'Template blank'}</th>
+                  <th>Target blank</th>
+                  <th>State</th>
+                </tr>
               </thead>
               <tbody>
                 {(preview.rows || []).map((row) => (
-                  <tr key={row.variation_id}>
-                    <td>#{row.variation_id}</td>
-                    <td><code>{row.sku || '—'}</code></td>
-                    <td>{row.old_color} → <strong>{row.new_color}</strong></td>
-                    <td><code>{row.current_blank_sku || '—'}</code></td>
+                  <tr key={`${row.variation_id || row.template_variation_id}-${row.action || 'replace'}`}>
+                    <td>#{row.variation_id || row.template_variation_id}</td>
+                    <td><code>{row.sku || row.template_sku || '—'}</code></td>
+                    <td>{row.logo || '—'}</td>
+                    <td><code>{row.current_blank_sku || row.template_blank_sku || '—'}</code></td>
                     <td><code>{row.target_blank_sku || '—'}</code></td>
-                    <td>{row.image_id ? `Preserve #${row.image_id}` : 'No variation image'}</td>
-                    <td>{row.preview_status === 'ready' ? 'Ready' : row.issue || row.preview_status}</td>
+                    <td>{row.preview_status === 'ready' ? 'Ready to create' : row.preview_status === 'ready_existing' ? 'Exists — mapping will be verified' : row.issue || row.preview_status}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {preview.open_pull_sheet_lines?.length ? (
-            <>
-              <h3>Active pull-sheet lines</h3>
-              <div className="table-scroll">
-                <table className="data-table">
-                  <thead><tr><th>Pull sheet</th><th>Line</th><th>Order</th><th>Variation</th><th>Qty</th><th>New blank</th></tr></thead>
-                  <tbody>
-                    {preview.open_pull_sheet_lines.map((row) => (
-                      <tr key={row.job_item_id}>
-                        <td>#{row.job_id}</td>
-                        <td>{row.job_item_id}</td>
-                        <td>{row.order_id || '—'}</td>
-                        <td>{row.variation_id}</td>
-                        <td>{row.quantity}</td>
-                        <td><code>{row.target_blank_sku || '—'}</code></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : null}
-
           <div className="sc-button-row">
-            <button type="button" onClick={applyReplacement} disabled={busy || !preview.can_apply}>Apply Color Replacement</button>
+            <button type="button" onClick={mode === 'replace' ? applyReplace : applyAdd} disabled={busy || !preview.can_apply}>
+              {mode === 'replace' ? 'Apply Color Replacement' : 'Add Color and Create Variations'}
+            </button>
             <button type="button" className="secondary" onClick={runPreview} disabled={busy}>Refresh Preview</button>
           </div>
         </section>
