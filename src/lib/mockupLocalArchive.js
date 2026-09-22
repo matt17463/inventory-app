@@ -146,6 +146,304 @@ export function localMockupArchiveSupported() {
     && Boolean(globalThis.crypto?.subtle);
 }
 
+
+export function localMockupGraphicExportSupported() {
+  return typeof window !== 'undefined'
+    && typeof window.showDirectoryPicker === 'function'
+    && Boolean(globalThis.crypto?.subtle);
+}
+
+function mockupGraphicExportReference(recordType, row, {
+  field = 'storage_path',
+  folder = 'Files',
+  fileName = '',
+  kind = 'file',
+} = {}) {
+  const path = row?.[field];
+  const preview = field === 'preview_storage_path';
+  const prepared = field === 'prepared_storage_path';
+  const bucket = preview
+    ? (row?.preview_storage_bucket || row?.storage_bucket)
+    : prepared
+      ? (row?.prepared_storage_bucket || row?.storage_bucket)
+      : row?.storage_bucket;
+  const provider = preview
+    ? (row?.preview_storage_provider || row?.storage_provider || 'supabase')
+    : prepared
+      ? (row?.prepared_storage_provider || row?.storage_provider || 'supabase')
+      : (row?.storage_provider || 'supabase');
+
+  if (!bucket || !path) return null;
+
+  return {
+    key: `${provider}:${bucket}/${path}`,
+    provider,
+    bucket,
+    path,
+    mime_type: preview ? 'image/webp' : (row?.mime_type || null),
+    folder,
+    file_name: fileName || path.split('/').pop() || 'asset',
+    kind,
+    references: [{ record_type: recordType, record_id: row.id, field }],
+  };
+}
+
+function mockupGraphicExportName(row, fallback) {
+  return row?.original_file_name
+    || row?.output_name
+    || row?.artwork_name
+    || row?.asset_name
+    || row?.file_name
+    || row?.packet_number
+    || fallback;
+}
+
+export function buildMockupGraphicExportPlan(bundle, selections = {}) {
+  const options = {
+    blank_photos: selections.blank_photos !== false,
+    artwork_originals: selections.artwork_originals !== false,
+    artwork_prepared: selections.artwork_prepared !== false,
+    generated_mockups: selections.generated_mockups !== false,
+    production_files: selections.production_files !== false,
+    previews: Boolean(selections.previews),
+  };
+
+  const references = [];
+  const externalReferences = [];
+  const add = (reference) => {
+    if (reference) references.push(reference);
+  };
+  const external = (recordType, row, label) => {
+    if (!row?.source_url || row?.storage_path) return;
+    externalReferences.push({
+      record_type: recordType,
+      record_id: row.id,
+      label,
+      source_url: row.source_url,
+      reason: 'This asset is referenced by an external URL and is not stored in Mockup Studio cloud storage.',
+    });
+  };
+
+  if (options.blank_photos) {
+    (bundle?.blanks || []).forEach((row) => {
+      add(mockupGraphicExportReference('mockup_blank_assets', row, {
+        folder: 'Blank Photos',
+        fileName: mockupGraphicExportName(row, 'blank-photo'),
+        kind: 'blank_photo',
+      }));
+      external('mockup_blank_assets', row, mockupGraphicExportName(row, 'blank-photo'));
+    });
+  }
+
+  if (options.artwork_originals) {
+    (bundle?.artwork || []).forEach((row) => {
+      add(mockupGraphicExportReference('mockup_artwork_assets', row, {
+        folder: 'Artwork/Originals',
+        fileName: mockupGraphicExportName(row, 'artwork'),
+        kind: 'artwork_original',
+      }));
+      external('mockup_artwork_assets', row, mockupGraphicExportName(row, 'artwork'));
+    });
+  }
+
+  if (options.artwork_prepared) {
+    (bundle?.artwork || []).forEach((row) => {
+      add(mockupGraphicExportReference('mockup_artwork_assets', row, {
+        field: 'prepared_storage_path',
+        folder: 'Artwork/Prepared',
+        fileName: `${row?.artwork_name || row?.original_file_name || 'artwork'}-prepared`,
+        kind: 'artwork_prepared',
+      }));
+    });
+  }
+
+  if (options.generated_mockups) {
+    (bundle?.outputs || []).forEach((row) => {
+      add(mockupGraphicExportReference('mockup_outputs', row, {
+        folder: 'Mockups',
+        fileName: mockupGraphicExportName(row, 'mockup-output'),
+        kind: 'generated_mockup',
+      }));
+    });
+  }
+
+  if (options.production_files) {
+    (bundle?.packets || []).forEach((row) => {
+      add(mockupGraphicExportReference('mockup_production_packets', row, {
+        folder: 'Production',
+        fileName: mockupGraphicExportName(row, `production-${row?.id || 'file'}`),
+        kind: 'production_file',
+      }));
+    });
+  }
+
+  if (options.previews) {
+    [
+      ['mockup_blank_assets', bundle?.blanks || [], 'Previews/Blank Photos', 'blank_preview'],
+      ['mockup_artwork_assets', bundle?.artwork || [], 'Previews/Artwork', 'artwork_preview'],
+      ['mockup_outputs', bundle?.outputs || [], 'Previews/Mockups', 'mockup_preview'],
+      ['mockup_production_packets', bundle?.packets || [], 'Previews/Production', 'production_preview'],
+    ].forEach(([recordType, rows, folder, kind]) => {
+      rows.forEach((row) => {
+        add(mockupGraphicExportReference(recordType, row, {
+          field: 'preview_storage_path',
+          folder,
+          fileName: `${mockupGraphicExportName(row, 'preview')}-preview`,
+          kind,
+        }));
+      });
+    });
+  }
+
+  const unique = new Map();
+  references.forEach((row) => {
+    if (!unique.has(row.key)) unique.set(row.key, row);
+    else unique.get(row.key).references.push(...row.references);
+  });
+
+  return {
+    options,
+    references: [...unique.values()].sort((a, b) => (
+      `${a.folder}/${a.file_name}`.localeCompare(`${b.folder}/${b.file_name}`)
+    )),
+    external_references: externalReferences,
+  };
+}
+
+async function nestedExportDirectory(root, folder) {
+  let current = root;
+  for (const part of String(folder || '').split('/').filter(Boolean)) {
+    current = await current.getDirectoryHandle(safeName(part, 'Files'), { create: true });
+  }
+  return current;
+}
+
+function reserveExportFileName(usedNames, folder, requestedName, sourcePath, mimeType) {
+  const extension = extensionFor(sourcePath, mimeType);
+  const requestedBase = String(requestedName || 'asset').replace(/\.[a-z0-9]{1,8}$/i, '');
+  const base = safeName(requestedBase, 'asset');
+  const folderKey = String(folder || '');
+  if (!usedNames.has(folderKey)) usedNames.set(folderKey, new Set());
+  const used = usedNames.get(folderKey);
+
+  let candidate = `${base}${extension}`;
+  let suffix = 2;
+  while (used.has(candidate.toLowerCase())) {
+    candidate = `${base}-${suffix}${extension}`;
+    suffix += 1;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
+export async function createLocalMockupGraphicExport({
+  project,
+  bundle,
+  selections = {},
+  onProgress = () => {},
+}) {
+  if (!localMockupGraphicExportSupported()) {
+    throw new Error('Downloading all Mockup Studio graphics requires Google Chrome or Microsoft Edge on this computer.');
+  }
+
+  const plan = buildMockupGraphicExportPlan(bundle, selections);
+  if (!plan.references.length) {
+    throw new Error('No stored Mockup Studio files match the selected download categories.');
+  }
+
+  const root = await window.showDirectoryPicker({ id: 'sc-mockup-graphics-downloads', mode: 'readwrite' });
+  if (!await ensurePermission(root)) throw new Error('Read and write access to the selected download folder was not granted.');
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const folderName = `${safeName(project?.project_name)}-graphics-${stamp}`;
+  const directory = await root.getDirectoryHandle(folderName, { create: true });
+  const usedNames = new Map();
+  const files = [];
+  let totalBytes = 0;
+
+  for (let index = 0; index < plan.references.length; index += 1) {
+    const reference = plan.references[index];
+    onProgress({
+      stage: 'download',
+      completed: index,
+      total: plan.references.length,
+      message: `Downloading project graphic ${index + 1} of ${plan.references.length}…`,
+    });
+
+    const blob = await downloadMockupStoredFile(reference);
+    if (!blob) throw new Error(`Could not download ${reference.path}: no file was returned.`);
+
+    const targetDirectory = await nestedExportDirectory(directory, reference.folder);
+    const localName = reserveExportFileName(
+      usedNames,
+      reference.folder,
+      reference.file_name,
+      reference.path,
+      reference.mime_type || blob.type,
+    );
+    const checksum = await sha256(blob);
+    const fileHandle = await writeFile(targetDirectory, localName, blob);
+    const savedFile = await fileHandle.getFile();
+
+    if (savedFile.size !== blob.size || await sha256(savedFile) !== checksum) {
+      throw new Error(`Local download verification failed for ${reference.path}. Cloud storage was not changed.`);
+    }
+
+    totalBytes += blob.size;
+    files.push({
+      kind: reference.kind,
+      local_file: `${reference.folder}/${localName}`,
+      source_key: reference.key,
+      size: blob.size,
+      sha256: checksum,
+      mime_type: reference.mime_type || blob.type || null,
+      references: reference.references,
+    });
+  }
+
+  const manifest = {
+    format: 'skilled-crafting-mockup-graphics-download',
+    export_version: 1,
+    project_id: project?.id || null,
+    project_name: project?.project_name || null,
+    created_at: new Date().toISOString(),
+    folder_hint: `${root.name}/${directory.name}`,
+    cloud_files_changed: false,
+    selections: plan.options,
+    file_count: files.length,
+    total_bytes: totalBytes,
+    files,
+    external_references_not_downloaded: plan.external_references,
+  };
+
+  await writeFile(directory, 'mockup-graphics-download-manifest.json', JSON.stringify(manifest, null, 2));
+  if (plan.external_references.length) {
+    await writeFile(
+      directory,
+      'external-references-not-downloaded.json',
+      JSON.stringify(plan.external_references, null, 2),
+    );
+  }
+
+  onProgress({
+    stage: 'complete',
+    completed: files.length,
+    total: files.length,
+    message: `${files.length} project file${files.length === 1 ? '' : 's'} downloaded and verified. Cloud storage was not changed.`,
+  });
+
+  return {
+    directory,
+    folder_name: directory.name,
+    folder_hint: manifest.folder_hint,
+    file_count: files.length,
+    total_bytes: totalBytes,
+    external_references_not_downloaded: plan.external_references.length,
+    manifest,
+  };
+}
+
+
 export async function createLocalMockupArchive({ project, bundle, onProgress = () => {} }) {
   if (!localMockupArchiveSupported()) {
     throw new Error('Local folder archives require Google Chrome or Microsoft Edge on this computer.');
