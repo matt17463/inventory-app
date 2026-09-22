@@ -55,6 +55,7 @@ const ProductIntegrityCenter = lazy(() => import('./ProductIntegrityCenter'));
 const ProductMappingRepair = lazy(() => import('./ProductMappingRepair'));
 const ProductTypeManager = lazy(() => import('./ProductTypeManager'));
 const ProductBlankMappings = lazy(() => import('./ProductBlankMappings'));
+const ProductColorReplacement = lazy(() => import('./ProductColorReplacement'));
 const ProductionBoard = lazy(() => import('./ProductionBoard'));
 const ProductionCalendar = lazy(() => import('./ProductionCalendar'));
 const ProductionEstimator = lazy(() => import('./ProductionEstimator'));
@@ -151,6 +152,7 @@ function EmployeeRoutes() {
       <Route path="/color-pairings" element={<ColorAliasReview />} />
       <Route path="/mapping-repair" element={<ProductMappingRepair />} />
       <Route path="/product-blank-mappings" element={<ProductBlankMappings />} />
+      <Route path="/product-color-replacement" element={<ProductColorReplacement />} />
       <Route path="/product-type-manager" element={<ProductTypeManager />} />
       <Route path="/bulk-pairing-repair" element={<BulkPairingRepair />} />
       <Route path="/non-inventory-rules" element={<NonInventoryRules />} />

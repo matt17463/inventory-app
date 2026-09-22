@@ -1,0 +1,18 @@
+{
+  "version": "1.4.19",
+  "feature": "Guarded WooCommerce existing-product color replacement",
+  "sql_required": false,
+  "new_files": [
+    "src/ProductColorReplacement.jsx",
+    "src/lib/productColorReplacementApi.js",
+    "netlify/functions/product-color-replacement.js",
+    "scripts/tests/product-color-replacement.test.mjs",
+    "scripts/apply_product_color_replacement_v1_4_19.py",
+    "deployment/DEPLOY_PRODUCT_COLOR_REPLACEMENT_v1.4.19.md"
+  ],
+  "modified_by_installer": [
+    "src/App.jsx",
+    "src/navigationConfig.js",
+    "package.json"
+  ]
+}
