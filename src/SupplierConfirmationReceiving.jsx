@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActionButton } from './components/UIPrimitives';
 import {
   getSupplierReceivingHistory,
   parseSupplierConfirmation,
@@ -47,6 +48,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   const [reviewOnly, setReviewOnly] = useState(false);
   const [bulkChoice, setBulkChoice] = useState({ bin_id: '', color_id: '', size_id: '' });
   const [receiveRequestKey, setReceiveRequestKey] = useState(() => idempotencyKey());
+  const [receiveProgress, setReceiveProgress] = useState(null);
 
   async function loadHistory({ quiet = false } = {}) {
     try {
@@ -145,9 +147,13 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
     );
   }
 
-  async function parseFile() {
-    if (!file) { setMessage('Choose a supplier confirmation file first.'); return; }
-    setBusy('parse'); setMessage('');
+  async function parseFile({ showResultMessage = true, manageBusy = true } = {}) {
+    if (!file) {
+      if (showResultMessage) setMessage('Choose a supplier confirmation file first.');
+      return;
+    }
+    if (manageBusy) setBusy('parse');
+    if (showResultMessage) setMessage('');
     try {
       const result = await parseSupplierConfirmation(file);
       const parsed = result.confirmation;
@@ -164,13 +170,16 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
         action: 'save_draft', confirmation: parsed,
         rows: (parsed.lines || []).map((row) => ({ ...row, receive_now: Number(row.remaining_quantity || 0) })),
       });
-      setMessage(parsed.duplicate_order
-        ? `Order ${parsed.order_number} was imported before. Previously received quantities are shown; only remaining units can be received.`
-        : `${parsed.total_lines} lines and ${parsed.total_units} units were read. Review yellow/red rows before receiving.`);
+      if (showResultMessage) {
+        setMessage(parsed.duplicate_order
+          ? `Order ${parsed.order_number} was imported before. Previously received quantities are shown; only remaining units can be received.`
+          : `${parsed.total_lines} lines and ${parsed.total_units} units were read. Review yellow/red rows before receiving.`);
+      }
     } catch (error) {
-      setMessage(error.message);
+      if (showResultMessage) setMessage(error.message);
+      else throw error;
     } finally {
-      setBusy('');
+      if (manageBusy) setBusy('');
     }
   }
 
@@ -183,7 +192,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
 
   async function receiveSelected() {
     if (!confirmation) return;
-    setBusy('receive'); setMessage('');
+    setBusy('receive'); setMessage(''); setReceiveProgress(0);
     try {
       if (selectedIssues.length) {
         const examples = selectedIssues.slice(0, 5)
@@ -257,6 +266,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
           const completedUnits =
             Number(current.completed_units || 0);
 
+          setReceiveProgress(progressTotal > 0 ? (progressCurrent / progressTotal) * 100 : 0);
           setMessage(
             `Receiving in background… ${progressCurrent}/${progressTotal} line(s) processed` +
             `${completedUnits ? ` · ${completedUnits} unit(s) received` : ''}.`
@@ -306,13 +316,15 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
 
       setReceiveRequestKey(idempotencyKey());
 
-      setMessage(
+      const completionMessage =
         `${finalStatus.duplicate_request ? 'This receiving request was already processed. ' : ''}` +
         `${received} unit(s) received into inventory.` +
         `${createdLookups.length ? ` Created ${createdLookups.map((item) => `${item.type} ${item.name}`).join(', ')}.` : ''}` +
         `${finalErrors.length ? ` Review: ${finalErrors.join('; ')}` : ''}` +
-        `${finalWarnings.length ? ` Mapping warnings: ${finalWarnings.join('; ')}` : ''}`
-      );
+        `${finalWarnings.length ? ` Mapping warnings: ${finalWarnings.join('; ')}` : ''}`;
+
+      setReceiveProgress(100);
+      setMessage(completionMessage);
 
       await loadHistory({ quiet: true });
 
@@ -323,9 +335,12 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
       if (initialImportId) {
         await resumeDraft(initialImportId, { quiet: true });
       } else if (file) {
-        await parseFile();
+        await parseFile({ showResultMessage: false, manageBusy: false });
       }
+
+      setMessage(completionMessage);
     } catch (error) {
+      setReceiveProgress(null);
       setMessage(error.message);
     } finally {
       setBusy('');
@@ -421,7 +436,17 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
               <strong>{readySelected.length} selected row(s) ready · {readyUnits} unit(s)</strong>
               {selectedIssues.length > 0 && <small>{selectedIssues.length} selected row(s) still need review</small>}
             </div>
-            <button className="sc-btn sc-btn-primary" onClick={receiveSelected} disabled={!selected.length || Boolean(busy)}>{busy === 'receive' ? 'Receiving…' : `Receive ${selectedUnits} Selected Unit(s)`}</button>
+            <ActionButton
+              tone="primary"
+              onClick={receiveSelected}
+              disabled={!selected.length || Boolean(busy)}
+              status={busy === 'receive' ? 'working' : (receiveProgress === 100 ? 'completed' : '')}
+              progress={busy === 'receive' ? receiveProgress : undefined}
+              workingLabel="Receiving…"
+              completedLabel="Received"
+            >
+              {busy === 'receive' ? 'Receiving…' : `Receive ${selectedUnits} Selected Unit(s)`}
+            </ActionButton>
           </div>
         </>
       )}

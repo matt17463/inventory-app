@@ -48,6 +48,7 @@ const NonInventoryRules = lazy(() => import('./NonInventoryRules'));
 const NotFound = lazy(() => import('./NotFound'));
 const OrderRiskDashboard = lazy(() => import('./OrderRiskDashboard'));
 const OnsiteSales = lazy(() => import('./OnsiteSales'));
+const ApplicationGuide = lazy(() => import('./ApplicationGuide'));
 const ApplicationIntegrityCenter = lazy(() => import('./ApplicationIntegrityCenter'));
 const PricingRules = lazy(() => import('./PricingRules'));
 const ProductDataHealth = lazy(() => import('./ProductDataHealth'));
@@ -174,6 +175,7 @@ function EmployeeRoutes() {
       <Route path="/return-finished" element={<ReturnFinishedInventory />} />
       <Route path="/finished/create" element={<CreateFinishedFromBlank />} />
       <Route path="/audit/warehouse" element={<WarehouseAuditReport />} />
+      <Route path="/application-guide" element={<ApplicationGuide />} />
       <Route path="/deployment-health" element={<DeploymentHealth />} />
       <Route path="/asset-storage-health" element={<AssetStorageHealth />} />
       <Route path="/google-calendar" element={<GoogleCalendarIntegration />} />

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useTheme } from '../ui/themeContext';
 
 export function PageHeader({ eyebrow, title, description, actions, children }) {
@@ -57,8 +57,80 @@ export function StatusBadge({ status, tone }) {
   return <span className={`sc-status-badge sc-status-badge--${derivedTone}`}>{String(status || 'Unknown').replace(/_/g, ' ')}</span>;
 }
 
-export function ActionButton({ children, tone = 'secondary', size = 'md', ...props }) {
-  return <button type="button" className={`sc-action-button sc-action-button--${tone} sc-action-button--${size}`} {...props}>{children}</button>;
+export function ActionButton({
+  children,
+  tone = 'secondary',
+  size = 'md',
+  status,
+  progress,
+  completedLabel = 'Completed',
+  workingLabel = 'Working…',
+  onClick,
+  ...props
+}) {
+  const [internalStatus, setInternalStatus] = useState('');
+  const completionTimerRef = useRef(null);
+  const effectiveStatus = status || internalStatus;
+  const numericProgress = Number(progress);
+  const hasProgress = Number.isFinite(numericProgress) && numericProgress >= 0;
+  const clampedProgress = hasProgress ? Math.min(100, Math.max(0, numericProgress)) : null;
+
+  async function handleClick(event) {
+    if (!onClick) return;
+    clearTimeout(completionTimerRef.current);
+    setInternalStatus('working');
+    try {
+      const result = onClick(event);
+      if (result && typeof result.then === 'function') await result;
+      setInternalStatus('completed');
+      completionTimerRef.current = setTimeout(() => setInternalStatus(''), 4500);
+    } catch (error) {
+      setInternalStatus('error');
+      completionTimerRef.current = setTimeout(() => setInternalStatus(''), 6000);
+      throw error;
+    }
+  }
+
+  const disabled = props.disabled || effectiveStatus === 'working';
+
+  return (
+    <span className="sc-action-status-wrap">
+      <button
+        type="button"
+        className={`sc-action-button sc-action-button--${tone} sc-action-button--${size}`}
+        {...props}
+        disabled={disabled}
+        onClick={onClick ? handleClick : undefined}
+      >
+        {children}
+      </button>
+      {effectiveStatus ? (
+        <span
+          className={`sc-action-status sc-action-status--${effectiveStatus}`}
+          role="status"
+          aria-live="polite"
+        >
+          {effectiveStatus === 'working' ? (
+            <>
+              <span className="sc-action-status__spinner" aria-hidden="true" />
+              <span>{hasProgress ? `${workingLabel} ${Math.round(clampedProgress)}%` : workingLabel}</span>
+            </>
+          ) : effectiveStatus === 'completed' ? (
+            <><span aria-hidden="true">✓</span><span>{completedLabel}</span></>
+          ) : effectiveStatus === 'error' ? (
+            <><span aria-hidden="true">!</span><span>Needs attention</span></>
+          ) : (
+            <span>{effectiveStatus}</span>
+          )}
+          {effectiveStatus === 'working' && hasProgress ? (
+            <span className="sc-action-status__bar" aria-hidden="true">
+              <span style={{ width: `${clampedProgress}%` }} />
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 export function MetricCard({ label, value, note, tone = 'default' }) {

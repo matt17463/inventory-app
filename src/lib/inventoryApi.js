@@ -3557,7 +3557,10 @@ export async function getPhase5CommandCenter() {
 export async function getPhase5RiskDashboard(search = '') {
   const { data, error } = await supabase.rpc('phase5_get_job_risk_dashboard', { p_search: String(search || '').trim() || null });
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((row) => {
+    const status = String(row?.status || '').trim().toLowerCase();
+    return !['closed', 'completed'].includes(status);
+  });
 }
 
 export async function getPhase5Employees() {
