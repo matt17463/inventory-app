@@ -441,7 +441,29 @@ export default function PullSheetView() {
     try {
       // The privileged catalog search enforces sc_is_archived = false and searches
       // Brand, Style, Color, Size, SKU, and name across the full blank catalog.
-      setBlankResults(await searchMappingBlanks(blankSearch, 100));
+      const matches = await searchMappingBlanks(blankSearch, 100);
+      const ids = (matches || []).map((row) => row.id).filter(Boolean);
+
+      let quantityByBlank = {};
+      if (ids.length) {
+        const inventoryResult = await supabase
+          .from('bin_blank_inventory_contents')
+          .select('blank_product_id,quantity_on_hand')
+          .in('blank_product_id', ids);
+
+        if (!inventoryResult.error) {
+          quantityByBlank = (inventoryResult.data || []).reduce((acc, row) => {
+            const key = String(row.blank_product_id || '');
+            acc[key] = Number(acc[key] || 0) + Number(row.quantity_on_hand || 0);
+            return acc;
+          }, {});
+        }
+      }
+
+      setBlankResults((matches || []).map((row) => ({
+        ...row,
+        inventory_quantity: Number(quantityByBlank[String(row.id)] || 0),
+      })));
     } catch (error) { alert(error.message); }
   }
 
@@ -1230,7 +1252,10 @@ export default function PullSheetView() {
                         onClick={() => applyOverride(blankProduct.id)}
                       >
                         <strong>{blankProduct.sku_base || blankProduct.name}</strong>
-                        <span>{[blankProduct.brands?.name || blankProduct.brand, blankProduct.product_types?.name || blankProduct.style, blankProduct.colors?.name || blankProduct.color, blankProduct.sizes?.name || blankProduct.size].filter(Boolean).join(' / ') || blankProduct.name}</span>
+                        <span>
+                          {[blankProduct.brands?.name || blankProduct.brand, blankProduct.product_types?.name || blankProduct.style, blankProduct.colors?.name || blankProduct.color, blankProduct.sizes?.name || blankProduct.size].filter(Boolean).join(' / ') || blankProduct.name}
+                          {' · '}Inventory: {Number(blankProduct.inventory_quantity || 0)}
+                        </span>
                       </button>
                     ))}
                     {!blankResults.length ? (
