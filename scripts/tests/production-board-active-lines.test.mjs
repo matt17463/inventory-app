@@ -10,6 +10,14 @@ const deploymentSql = fs.readFileSync(
   new URL('../../deployment/sql/20_ACTIVE_PULLSHEET_OPERATIONAL_ROWS.sql', import.meta.url),
   'utf8',
 );
+const volatilityRepairMigration = fs.readFileSync(
+  new URL('../../supabase/migrations/202609291845_production_board_readonly_fix.sql', import.meta.url),
+  'utf8',
+);
+const volatilityRepairDeployment = fs.readFileSync(
+  new URL('../../deployment/sql/71_PRODUCTION_BOARD_READONLY_FIX.sql', import.meta.url),
+  'utf8',
+);
 const productionApi = fs.readFileSync(
   new URL('../../src/lib/productionStatusApi.js', import.meta.url),
   'utf8',
@@ -37,4 +45,17 @@ test('manual production status controls the board column without removing blocke
   assert.match(migration, /v_manual/);
   assert.match(migration, /Manual production status selected/);
   assert.match(migration, /blocking_issues/);
+});
+
+
+test('production board wrapper remains volatile because legacy board reconciliation can write', () => {
+  assert.equal(volatilityRepairDeployment, volatilityRepairMigration);
+  assert.match(
+    volatilityRepairMigration,
+    /alter function public\.sc_list_order_status_board_v2\([\s\S]*text,[\s\S]*text,[\s\S]*integer[\s\S]*\)\s*volatile;/i,
+  );
+  assert.doesNotMatch(
+    volatilityRepairMigration,
+    /alter function public\.sc_list_order_status_board_v2\([\s\S]*\)\s*stable;/i,
+  );
 });
