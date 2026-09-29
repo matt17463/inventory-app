@@ -290,3 +290,29 @@ test('parses Momentec rows whose line number and SKU share a PDF cell', () => {
   assert.equal(result.lines[0].color, 'BLACK');
   assert.equal(result.lines[0].audience, 'youth');
 });
+
+
+test('supplier receiving reuses one deterministic active blank instead of creating a duplicate', async () => {
+  const source = await fs.readFile(new URL('../../src/AddItemToBin.jsx', import.meta.url), 'utf8');
+  const receivingPage = await fs.readFile(new URL('../../src/SupplierConfirmationReceiving.jsx', import.meta.url), 'utf8');
+
+  assert.match(source, /resolveProductIdentity/);
+  assert.match(source, /confidence \|\| 0\) >= 95/);
+  assert.match(source, /findActiveBlankById/);
+  assert.match(source, /multiple high-confidence blank matches were found/);
+  assert.match(receivingPage, /source_system: confirmation\.supplier_key/);
+});
+
+test('supplier receiving reconciles partial receipts and blocks unresolved retry lines', async () => {
+  const parser = await fs.readFile(new URL('../../netlify/functions/supplier-confirmation-parse.js', import.meta.url), 'utf8');
+  const server = await fs.readFile(new URL('../../netlify/functions/supplier-receiving-action.js', import.meta.url), 'utf8');
+  const receivingPage = await fs.readFile(new URL('../../src/SupplierConfirmationReceiving.jsx', import.meta.url), 'utf8');
+
+  assert.match(parser, /sc_supplier_receiving_receipt_lines/);
+  assert.match(parser, /Math\.max\(summaryReceived, completedReceived\)/);
+  assert.match(parser, /receive_blocked_reason/);
+  assert.match(server, /supplierReceiptLineState/);
+  assert.match(server, /unresolvedQuantity > 0/);
+  assert.match(server, /effectiveReceived \+ item\.quantity/);
+  assert.match(receivingPage, /receiveBlockedReason/);
+});
