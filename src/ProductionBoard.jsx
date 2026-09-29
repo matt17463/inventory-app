@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import './ProductionBoard.css';
 import {
   MANUAL_PRODUCTION_STATUSES,
   PRODUCTION_BOARD_COLUMNS,
@@ -71,6 +72,7 @@ export default function ProductionBoard() {
   const [wooStatusByOrder, setWooStatusByOrder] = useState({});
   const [selectedStatusByJob, setSelectedStatusByJob] = useState({});
   const [statusFeedbackByJob, setStatusFeedbackByJob] = useState({});
+  const [density, setDensity] = useState('comfortable');
 
   async function loadBoard(options = {}) {
     const nextSearch = options.search !== undefined ? options.search : search;
@@ -239,14 +241,27 @@ export default function ProductionBoard() {
           </label>
           <button className="sc-btn" type="submit">Search</button>
         </form>
-        <div className="sc-production-legend">
-          <span><strong>Woo Status</strong> = customer/order/payment state</span>
-          <span><strong>Production Status</strong> = saved manual status when selected; otherwise calculated from the pull sheet</span>
-          <span><strong>Blocker warning</strong> = unresolved pairing or inventory work that still needs attention</span>
+        <div className="sc-production-toolbar">
+          <div className="sc-production-legend">
+            <span><strong>Woo Status</strong> = customer/order/payment state</span>
+            <span><strong>Production Status</strong> = saved manual status when selected; otherwise calculated from the pull sheet</span>
+            <span><strong>Blocker warning</strong> = unresolved pairing or inventory work that still needs attention</span>
+          </div>
+          <div className="sc-density-toggle" aria-label="Production board density">
+            <span>Board density</span>
+            <div>
+              <button type="button" className={density === 'comfortable' ? 'active' : ''} onClick={() => setDensity('comfortable')}>
+                Comfortable
+              </button>
+              <button type="button" className={density === 'compact' ? 'active' : ''} onClick={() => setDensity('compact')}>
+                Compact
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
-      <div className="sc-kanban-board sc-production-kanban">
+      <div className={`sc-kanban-board sc-production-kanban sc-production-kanban--${density}`}>
         {PRODUCTION_BOARD_COLUMNS.map((column) => {
           const columnRows = grouped[column.key] || [];
           return (
@@ -292,19 +307,26 @@ export default function ProductionBoard() {
                         <span>Last Woo Sync: {formatDateTime(row.last_woo_sync_at)}</span>
                       </div>
 
-                      <div className="sc-production-line-counts">
-                        <span>Total lines <strong>{row.total_lines || 0}</strong></span>
-                        <span>Required <strong>{row.inventory_required_lines || 0}</strong></span>
-                        <span>Non-inventory <strong>{row.non_inventory_lines || 0}</strong></span>
-                        <span>Unpaired <strong>{row.unpaired_required_lines || 0}</strong></span>
-                        <span>Resolved <strong>{row.resolved_lines || 0}</strong></span>
+                      <div className="sc-production-line-summary">
+                        <strong>{row.total_lines || 0} item{Number(row.total_lines || 0) === 1 ? '' : 's'}</strong>
+                        {Number(row.inventory_required_lines || 0) > 0 ? <span>{row.inventory_required_lines} inventory</span> : null}
+                        {Number(row.non_inventory_lines || 0) > 0 ? <span>{row.non_inventory_lines} non-inventory</span> : null}
+                        {Number(row.unpaired_required_lines || 0) > 0 ? <span className="sc-production-metric-alert">{row.unpaired_required_lines} unpaired</span> : null}
+                        {Number(row.resolved_lines || 0) > 0 ? <span>{row.resolved_lines} resolved</span> : null}
                       </div>
 
-                      {blockers ? <div className="sc-warning-callout sc-production-reason">{blockers}</div> : null}
+                      {blockers ? (
+                        <div className="sc-warning-callout sc-production-reason">
+                          <strong>Needs attention</strong>
+                          <span>{blockers}</span>
+                        </div>
+                      ) : Number(row.inventory_required_lines || 0) > 0 && Number(row.unpaired_required_lines || 0) === 0 ? (
+                        <div className="sc-production-ready-note">✓ Inventory ready</div>
+                      ) : null}
 
                       {row.job_id ? (
                         <label className="sc-field sc-production-status-select">
-                          <span>Move Production Status</span>
+                          <span>Move to</span>
                           <select
                             value={selectedStatusByJob[row.job_id] || ''}
                             onChange={(event) => {
@@ -315,9 +337,11 @@ export default function ProductionBoard() {
                             disabled={busyKey === busyStatusKey}
                           >
                             <option value="">{busyKey === busyStatusKey ? 'Updating…' : 'Choose status…'}</option>
-                            {MANUAL_PRODUCTION_STATUSES.map((status) => (
-                              <option key={status.value} value={status.value}>{status.label}</option>
-                            ))}
+                            {MANUAL_PRODUCTION_STATUSES
+                              .filter((status) => status.value !== effectiveProductionStatus)
+                              .map((status) => (
+                                <option key={status.value} value={status.value}>{status.label}</option>
+                              ))}
                           </select>
                           {statusFeedback ? (
                             <small className={`sc-status-feedback sc-status-feedback--${statusFeedback.tone}`} role="status">
