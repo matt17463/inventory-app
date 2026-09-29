@@ -267,8 +267,12 @@ export function supplierSizeCandidates(size, audience = '') {
         ? 'A'
         : '';
 
+  const audienceSpecific = audiencePrefix && !base.startsWith(audiencePrefix)
+    ? `${audiencePrefix}${base}`
+    : base;
+
   const candidates = audiencePrefix
-    ? [`${audiencePrefix}${base}`, raw, base]
+    ? [audienceSpecific, raw, base]
     : [raw, base];
 
   return [...new Set(candidates.filter(Boolean))];
