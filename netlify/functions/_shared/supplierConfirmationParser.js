@@ -255,12 +255,53 @@ export function parseSupplierConfirmationPages(pages) {
 export function supplierSizeCandidates(size, audience = '') {
   const raw = clean(size).toUpperCase();
   if (!raw) return [];
+
   const base = raw === 'ONE SIZE' || raw === 'OSFA' ? 'OS' : raw;
-  const candidates = [raw, base];
-  if (audience === 'youth') candidates.push(`Y${base}`);
-  if (audience === 'womens') candidates.push(`W${base}`);
-  if (audience === 'adult') candidates.push(`A${base}`);
+  if (base === 'OS') return ['OS', 'ONE SIZE', 'OSFA'];
+
+  const audiencePrefix = audience === 'youth'
+    ? 'Y'
+    : audience === 'womens'
+      ? 'W'
+      : audience === 'adult'
+        ? 'A'
+        : '';
+
+  const candidates = audiencePrefix
+    ? [`${audiencePrefix}${base}`, raw, base]
+    : [raw, base];
+
   return [...new Set(candidates.filter(Boolean))];
+}
+
+export function preferredSupplierLookup(rows, values) {
+  for (const value of values || []) {
+    const key = supplierMatchKey(value);
+    if (!key) continue;
+    const matches = (rows || []).filter((row) => (
+      [row.name, row.code].some((candidate) => supplierMatchKey(candidate) === key)
+    ));
+    if (matches.length) return matches;
+  }
+  return [];
+}
+
+export function supplierIdentityConflictFields(blank = {}, suggested = {}, canonicalColorBySource = new Map()) {
+  const conflicts = [];
+  const blankColorId = String(blank.color_id || '');
+  const canonicalBlankColorId = canonicalColorBySource.get(blankColorId) || blankColorId;
+
+  const comparisons = [
+    ['brand_id', String(blank.brand_id || ''), String(suggested.brand_id || '')],
+    ['product_type_id', String(blank.product_type_id || ''), String(suggested.product_type_id || '')],
+    ['color_id', canonicalBlankColorId, String(suggested.color_id || '')],
+    ['size_id', String(blank.size_id || ''), String(suggested.size_id || '')],
+  ];
+
+  for (const [field, actual, expected] of comparisons) {
+    if (expected && actual && actual !== expected) conflicts.push(field);
+  }
+  return conflicts;
 }
 
 export function supplierMatchKey(value) {
