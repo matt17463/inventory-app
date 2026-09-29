@@ -32,6 +32,7 @@ function missingReceivingFields(row) {
   if (String(row.unit_cost ?? '').trim() !== '' && (!Number.isFinite(Number(row.unit_cost)) || Number(row.unit_cost) < 0)) {
     missing.push('Valid Unit Cost');
   }
+  if (row.mapping_conflict_message) missing.push('Confirm corrected supplier mapping');
   return missing;
 }
 
@@ -135,7 +136,14 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
   }, [rows, rowFilter, reviewOnly]);
 
   function updateRow(index, patch) {
-    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+    const confirmsIdentity = ['brand_id', 'product_type_id', 'color_id', 'size_id']
+      .some((field) => Object.prototype.hasOwnProperty.call(patch, field));
+    const appliedPatch = confirmsIdentity
+      ? { ...patch, mapping_conflict_fields: [], mapping_conflict_message: '' }
+      : patch;
+    setRows((current) => current.map((row, rowIndex) => (
+      rowIndex === index ? { ...row, ...appliedPatch } : row
+    )));
   }
 
   function select(value, onChange, list, placeholder, type = 'lookup') {
@@ -417,7 +425,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
                 return (
                   <tr key={`${row.supplier_line_key}-${index}`} className={`supplier-match-${ready ? 'matched' : row.match_status}`}>
                     <td><input type="checkbox" checked={Boolean(row.selected)} disabled={remaining <= 0} onChange={(event) => updateRow(index, { selected: event.target.checked })} /></td>
-                    <td><span className={`sc-badge ${ready ? 'success' : row.match_status === 'review' && !receiveBlockedReason ? 'warning' : 'danger'}`}>{ready ? 'ready' : receiveBlockedReason ? 'blocked' : row.match_status}</span><small>{ready ? 'ready to receive' : receiveBlockedReason || `Missing: ${missingFields.join(', ') || statusText(row.match_method)}`}</small></td>
+                    <td><span className={`sc-badge ${ready ? 'success' : row.match_status === 'review' && !receiveBlockedReason ? 'warning' : 'danger'}`}>{ready ? 'ready' : receiveBlockedReason ? 'blocked' : row.match_status}</span><small>{row.mapping_conflict_message || (ready ? 'ready to receive' : receiveBlockedReason || `Missing: ${missingFields.join(', ') || statusText(row.match_method)}`)}</small></td>
                     <td><strong>{row.supplier_sku}</strong><small>{row.description}</small></td>
                     <td>{select(row.brand_id, (value) => updateRow(index, { brand_id: value, blank_product_id: '' }), lookups.brands, row.brand || 'Choose brand')}{select(row.product_type_id, (value) => updateRow(index, { product_type_id: value, blank_product_id: '' }), lookups.product_types, row.style || 'Choose style')}</td>
                     <td>{select(row.color_id, (value) => updateRow(index, { color_id: value, blank_product_id: '', color_match_method: value ? 'manual pairing — will be remembered' : 'choose existing WooCommerce color' }), lookups.colors, row.color || 'Choose color')}<small>{row.color_match_method || 'choose existing WooCommerce color'}</small>{select(row.size_id, (value) => updateRow(index, { size_id: value, blank_product_id: '' }), lookups.sizes, row.size || 'Choose size')}</td>

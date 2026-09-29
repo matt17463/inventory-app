@@ -52,7 +52,7 @@ test('bulk graphics download does not invoke archive cleanup or cloud deletion',
 
 test('download-all feature is wired into the full application test suite', async () => {
   const packageJson = JSON.parse(await read('package.json'));
-  assert.equal(packageJson.version, '1.4.22');
+  assert.equal(packageJson.version, '1.4.23');
   assert.equal(packageJson.scripts['test:mockup-downloads'], 'node --test scripts/tests/mockup-download-all.test.mjs');
   assert.match(packageJson.scripts.test, /npm run test:mockup-downloads/);
 });
