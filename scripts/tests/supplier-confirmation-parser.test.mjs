@@ -4,7 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { installPdfTextRuntimeCompatibility } from '../../netlify/functions/_shared/pdfTextExtractor.js';
-import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from '../../netlify/functions/_shared/supplierConfirmationParser.js';
+import { parseSupplierConfirmationPages, preferredSupplierLookup, supplierIdentityConflictFields, supplierMatchKey, supplierSizeCandidates } from '../../netlify/functions/_shared/supplierConfirmationParser.js';
 import { matchSupplierColor } from '../../netlify/functions/_shared/supplierColorMatcher.js';
 import { parseOptionalUnitCost, requireUnitCost } from '../../src/lib/unitCost.js';
 
@@ -128,10 +128,75 @@ test('supplier receiving creates only missing brand and style lookups', async ()
   assert.match(client, /Create missing Brands and Styles when receiving/);
 });
 
-test('normalizes supplier matching aliases', () => {
+test('normalizes supplier matching aliases and prioritizes audience-specific sizes', () => {
   assert.equal(supplierMatchKey('Dark Heather Grey'), 'darkheathergray');
   assert.equal(supplierMatchKey('S&S Activewear'), 'sandsactivewear');
-  assert.deepEqual(supplierSizeCandidates('M', 'youth'), ['M', 'YM']);
+  assert.deepEqual(supplierSizeCandidates('M', 'youth'), ['YM', 'M']);
+  assert.deepEqual(supplierSizeCandidates('M', 'adult'), ['AM', 'M']);
+  assert.deepEqual(supplierSizeCandidates('M', 'womens'), ['WM', 'M']);
+  assert.deepEqual(supplierSizeCandidates('OSFA', ''), ['OS', 'ONE SIZE', 'OSFA']);
+
+  const sizes = [
+    { id: 1, name: 'Medium', code: 'M' },
+    { id: 2, name: 'Youth Medium', code: 'YM' },
+    { id: 3, name: 'Adult Medium', code: 'AM' },
+  ];
+  assert.deepEqual(
+    preferredSupplierLookup(sizes, supplierSizeCandidates('M', 'youth')).map((row) => row.id),
+    [2],
+  );
+  assert.deepEqual(
+    preferredSupplierLookup(sizes, supplierSizeCandidates('M', 'adult')).map((row) => row.id),
+    [3],
+  );
+});
+
+test('rejects a saved supplier mapping when resolved identity conflicts with its blank', () => {
+  const conflict = supplierIdentityConflictFields(
+    {
+      brand_id: 'brand-gildan',
+      product_type_id: 'style-18500b',
+      color_id: 'black',
+      size_id: 'ys',
+    },
+    {
+      brand_id: 'brand-gildan',
+      product_type_id: 'style-18500b',
+      color_id: 'black',
+      size_id: 'ym',
+    },
+  );
+  assert.deepEqual(conflict, ['size_id']);
+
+  const aliasedColorConflict = supplierIdentityConflictFields(
+    {
+      brand_id: 'brand',
+      product_type_id: 'style',
+      color_id: 'royal-source',
+      size_id: 'am',
+    },
+    {
+      brand_id: 'brand',
+      product_type_id: 'style',
+      color_id: 'royal-blue',
+      size_id: 'am',
+    },
+    new Map([['royal-source', 'royal-blue']]),
+  );
+  assert.deepEqual(aliasedColorConflict, []);
+});
+
+test('supplier receiving parser includes mapping-conflict review safeguards', async () => {
+  const [parser, page] = await Promise.all([
+    fs.readFile(new URL('../../netlify/functions/supplier-confirmation-parse.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../src/SupplierConfirmationReceiving.jsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(parser, /supplierIdentityConflictFields/);
+  assert.match(parser, /saved_vendor_sku.*identity_conflict_review/);
+  assert.match(parser, /mapping_conflict_message/);
+  assert.match(page, /Confirm corrected supplier mapping/);
+  assert.match(page, /mapping_conflict_message/);
 });
 
 test('matches supplier colors to an existing WooCommerce color', () => {
