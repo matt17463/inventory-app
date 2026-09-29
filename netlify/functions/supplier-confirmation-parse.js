@@ -294,7 +294,9 @@ async function parseAndMatch(supabase, parsed) {
       ...line,
       ...ids,
       blank_product_id: blankId,
-      match_status: blankId ? 'matched' : (matchedLookupCount >= 3 ? 'review' : 'unmatched'),
+      match_status: mappingConflictFields.length
+        ? 'review'
+        : (blankId ? 'matched' : (matchedLookupCount >= 3 ? 'review' : 'unmatched')),
       match_method: method || 'manual_review',
       mapping_conflict_fields: mappingConflictFields,
       mapping_conflict_message: mappingConflictFields.length
