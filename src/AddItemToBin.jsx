@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import SupplierConfirmationReceiving from './SupplierConfirmationReceiving';
 import { createBlankProduct, updateBlankProduct } from './lib/inventoryApi';
+import { resolveProductIdentity } from './lib/applicationIntegrityApi';
 import { requireUnitCost } from './lib/unitCost';
 
 const lineTemplate = {
@@ -227,6 +228,20 @@ export default function AddItemToBin() {
     return Array.isArray(data) ? data[0] : null;
   }
 
+  async function findActiveBlankById(blankProductId) {
+    if (!blankProductId) return null;
+
+    const { data, error } = await supabase
+      .from('blank_products')
+      .select('id, sku_base, name, brand_id, product_type_id, color_id, size_id')
+      .eq('sc_is_archived', false)
+      .eq('id', blankProductId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  }
+
   async function updateBlankAttributes(blank, line, skuBase, name) {
     const patch = {
       sku_base: blank.sku_base || skuBase,
@@ -282,6 +297,42 @@ export default function AddItemToBin() {
       // Guarded creation may report a concurrent or pre-existing product.
       const retry = await findBlankBySku(skuBase);
       if (retry?.id) return updateBlankAttributes(retry, line, skuBase, name);
+
+      const candidates = await resolveProductIdentity({
+        source_system: line.source_system || line.supplier_key || '',
+        supplier_sku: line.supplier_sku || '',
+        sku: skuBase,
+        brand: lookupName(lookups.brands, line.brand_id) || line.brand || '',
+        style: lookupName(lookups.product_types, line.product_type_id) || line.style || '',
+        color: lookupName(lookups.colors, line.color_id) || line.color || '',
+        size: lookupName(lookups.sizes, line.size_id) || line.size || '',
+        limit: 10,
+      });
+
+      const deterministicIds = [
+        ...new Set(
+          (Array.isArray(candidates) ? candidates : [])
+            .filter((candidate) => Number(candidate.confidence || 0) >= 95)
+            .map((candidate) => String(candidate.blank_product_id_text || ''))
+            .filter(Boolean)
+        ),
+      ];
+
+      if (deterministicIds.length === 1) {
+        const resolved = await findActiveBlankById(deterministicIds[0]);
+        if (resolved?.id) return updateBlankAttributes(resolved, line, skuBase, name);
+
+        throw new Error(
+          `${line.supplier_sku || skuBase}: a matching blank exists in Product Integrity but is archived or otherwise inactive. Review that product before receiving this line.`
+        );
+      }
+
+      if (deterministicIds.length > 1) {
+        throw new Error(
+          `${line.supplier_sku || skuBase}: multiple high-confidence blank matches were found. Review the duplicate products in Product Integrity before receiving this line.`
+        );
+      }
+
       throw error;
     }
   }
