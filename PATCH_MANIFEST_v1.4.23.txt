@@ -1,0 +1,26 @@
+v1.4.23 Supplier Pairing Hardening
+
+BRANCH
+feature/supplier-pairing-hardening-v1.4.23
+
+MODIFIED
+- netlify/functions/_shared/supplierConfirmationParser.js
+- netlify/functions/supplier-confirmation-parse.js
+- src/SupplierConfirmationReceiving.jsx
+- scripts/tests/supplier-confirmation-parser.test.mjs
+- package.json
+- package-lock.json
+
+ADDED
+- deployment/DEPLOY_SUPPLIER_PAIRING_HARDENING_v1.4.23.md
+- PATCH_MANIFEST_v1.4.23.txt
+
+DATABASE
+- No new SQL migration required.
+
+PRIMARY FIXES
+- Audience-aware supplier size precedence.
+- Saved supplier mapping identity validation.
+- Canonical color alias compatibility.
+- Manual confirmation requirement after a mapping conflict.
+- Regression coverage for S&S 18500B Black Youth M mapping to YS.
