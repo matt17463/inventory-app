@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import readXlsxFile from 'read-excel-file/node';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { extractPdfTextPages } from './_shared/pdfTextExtractor.js';
-import { parseSupplierConfirmationPages, supplierMatchKey, supplierSizeCandidates } from './_shared/supplierConfirmationParser.js';
+import { parseSupplierConfirmationPages, preferredSupplierLookup, supplierIdentityConflictFields, supplierMatchKey, supplierSizeCandidates } from './_shared/supplierConfirmationParser.js';
 import { parseSanMarRows } from './_shared/sanmarConfirmationParser.js';
 import { parseSanMarLegacyXlsRows } from './_shared/sanmarLegacyXlsParser.js';
 import { matchSupplierColor } from './_shared/supplierColorMatcher.js';
@@ -80,7 +80,10 @@ function lookupMatches(line, lookups) {
   const brand = line.brand ? matchOne(lookups.brands, [line.brand]) : [];
   const style = matchOne(lookups.productTypes, [line.style, line.description]);
   const color = matchSupplierColor(line.color, lookups.colors, lookups.colorPairingRules, lookups.importColorAliases, lookups.supplierKey);
-  const size = matchOne(lookups.sizes, supplierSizeCandidates(line.size, line.audience));
+  const size = preferredSupplierLookup(
+    lookups.sizes,
+    supplierSizeCandidates(line.size, line.audience),
+  );
   return {
     brand_id: brand.length === 1 ? String(brand[0].id) : '',
     product_type_id: style.length === 1 ? String(style[0].id) : '',
@@ -214,6 +217,22 @@ async function parseAndMatch(supabase, parsed) {
     if (entry.blankId && !blankById.has(String(entry.blankId))) {
       entry.method = `${entry.method || 'saved_vendor_sku'}_missing_blank_review`;
       entry.blankId = '';
+      return;
+    }
+
+    if (!entry.blankId) return;
+
+    const mappedBlank = blankById.get(String(entry.blankId));
+    const conflictFields = supplierIdentityConflictFields(
+      mappedBlank,
+      entry.suggested,
+      canonicalColorBySource,
+    );
+
+    if (conflictFields.length) {
+      entry.mappingConflictFields = conflictFields;
+      entry.method = `${entry.method || 'saved_vendor_sku'}_identity_conflict_review`;
+      entry.blankId = '';
     }
   });
 
@@ -235,7 +254,13 @@ async function parseAndMatch(supabase, parsed) {
   });
   candidateResults.forEach(([key, candidates]) => identityMatches.set(key, candidates));
 
-  return preparedLines.map(({ line, blankId: initialBlankId, method: initialMethod, suggested }) => {
+  return preparedLines.map(({
+    line,
+    blankId: initialBlankId,
+    method: initialMethod,
+    suggested,
+    mappingConflictFields = [],
+  }) => {
     let blankId = initialBlankId;
     let method = initialMethod;
     if (!blankId) {
@@ -271,6 +296,17 @@ async function parseAndMatch(supabase, parsed) {
       blank_product_id: blankId,
       match_status: blankId ? 'matched' : (matchedLookupCount >= 3 ? 'review' : 'unmatched'),
       match_method: method || 'manual_review',
+      mapping_conflict_fields: mappingConflictFields,
+      mapping_conflict_message: mappingConflictFields.length
+        ? `Saved supplier mapping rejected because the incoming ${mappingConflictFields
+          .map((field) => ({
+            brand_id: 'brand',
+            product_type_id: 'style',
+            color_id: 'color',
+            size_id: 'size',
+          })[field] || field)
+          .join(', ')} did not match the mapped blank. Re-resolved from the supplier file.`
+        : '',
       color_match_method: blankId ? 'matched blank WooCommerce color' : suggested.color_match_method,
     };
   });
