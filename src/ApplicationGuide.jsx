@@ -1,101 +1,264 @@
-import { PageHeader, SectionCard, StatusBadge } from './components/UIPrimitives';
+import { useMemo, useState } from 'react';
+import { PageHeader } from './components/UIPrimitives';
+import { navSections } from './navigationConfig';
+import {
+  GUIDE_VERSION,
+  guideChapters,
+  guideSearchText,
+} from './application-guide/guideData';
+import './application-guide/ApplicationGuide.css';
 
-const Step = ({ n, title, children }) => (
-  <li style={{ marginBottom: '0.85rem' }}>
-    <strong>{n}. {title}</strong>
-    <div className="sc-muted" style={{ marginTop: '0.2rem' }}>{children}</div>
-  </li>
+const normalize = (value) => String(value || '').trim().toLowerCase();
+
+const routeLabelMap = new Map(
+  navSections.flatMap((navSection) =>
+    navSection.items.map((item) => [item.path, `${navSection.label} → ${item.label}`])
+  )
 );
 
-export default function ApplicationGuide() {
+function GuideDetail({ chapter, item }) {
   return (
-    <main className="sc-page sc-page-stack">
+    <article className="sc-guide-detail" id={item.id}>
+      <div className="sc-guide-detail-heading">
+        <div>
+          <p className="sc-guide-kicker">{chapter.title}</p>
+          <h3>{item.title}</h3>
+        </div>
+        <a className="sc-guide-anchor" href={`#${item.id}`} aria-label={`Link to ${item.title}`}>
+          #
+        </a>
+      </div>
+
+      <p className="sc-guide-summary">{item.summary}</p>
+
+      {item.useWhen?.length ? (
+        <div className="sc-guide-block">
+          <h4>Use this when</h4>
+          <ul>
+            {item.useWhen.map((value) => <li key={value}>{value}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {item.scenario ? (
+        <div className="sc-guide-scenario">
+          <strong>Skilled Crafting scenario</strong>
+          <p>{item.scenario}</p>
+        </div>
+      ) : null}
+
+      {item.steps?.length ? (
+        <div className="sc-guide-block">
+          <h4>How to use it</h4>
+          <ol>
+            {item.steps.map((value) => <li key={value}>{value}</li>)}
+          </ol>
+        </div>
+      ) : null}
+
+      {item.tips?.length ? (
+        <div className="sc-guide-callout sc-guide-callout-info">
+          <strong>Business-use notes</strong>
+          <ul>
+            {item.tips.map((value) => <li key={value}>{value}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {item.warnings?.length ? (
+        <div className="sc-guide-callout sc-guide-callout-warning">
+          <strong>Important cautions</strong>
+          <ul>
+            {item.warnings.map((value) => <li key={value}>{value}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {item.relatedRoutes?.length ? (
+        <div className="sc-guide-related">
+          <strong>Related application pages</strong>
+          <div className="sc-guide-route-list">
+            {item.relatedRoutes.map((route) => (
+              <a key={route} href={route}>
+                {routeLabelMap.get(route) || route}
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function ScreenReference() {
+  return (
+    <section className="sc-guide-chapter" id="screen-reference">
+      <div className="sc-guide-chapter-heading">
+        <div>
+          <p className="sc-guide-kicker">REFERENCE</p>
+          <h2>Complete Application Screen Reference</h2>
+          <p>
+            This list is generated from the same navigation configuration used by the application.
+            It provides a current inventory of visible pages even when the detailed guide text has not
+            yet been expanded for a newly added screen.
+          </p>
+        </div>
+      </div>
+
+      <div className="sc-guide-screen-grid">
+        {navSections.map((navSection) => (
+          <div className="sc-guide-screen-group" key={navSection.id}>
+            <h3>{navSection.icon} {navSection.label}</h3>
+            <ul>
+              {navSection.items.map((item) => (
+                <li key={item.path}>
+                  <a href={item.path}>{item.label}</a>
+                  {item.keywords ? <span>{item.keywords}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function ApplicationGuide() {
+  const [query, setQuery] = useState('');
+  const [activeChapter, setActiveChapter] = useState('all');
+
+  const filteredChapters = useMemo(() => {
+    const search = normalize(query);
+
+    return guideChapters
+      .filter((chapter) => activeChapter === 'all' || chapter.id === activeChapter)
+      .map((chapter) => {
+        if (!search) return chapter;
+        const chapterMatch = normalize(`${chapter.title} ${chapter.description}`).includes(search);
+        const sections = chapter.sections.filter((item) =>
+          chapterMatch || guideSearchText(chapter, item).includes(search)
+        );
+        return { ...chapter, sections };
+      })
+      .filter((chapter) => chapter.sections.length > 0);
+  }, [activeChapter, query]);
+
+  const resultCount = filteredChapters.reduce((sum, chapter) => sum + chapter.sections.length, 0);
+
+  return (
+    <main className="sc-page sc-guide-page">
       <PageHeader
-        eyebrow="HELP & TRAINING"
-        title="Skilled Crafting Application Guide"
-        description="Administrative reference and day-to-day workflow guide for inventory, purchasing, production, on-site sales, artwork, and system maintenance."
+        eyebrow="HELP, TRAINING & OPERATIONS"
+        title="Skilled Crafting Application & Plugin Guide"
+        description="Living operating manual for inventory, WooCommerce, purchasing, production, artwork, custom plugins, administration, troubleshooting, and real Skilled Crafting workflows."
       />
 
-      <SectionCard title="Daily workflow — the shortest version">
-        <ol>
-          <Step n="1" title="Receive blank garments">Inventory → Add Item to Bin. Receive manually or import a supplier confirmation. Confirm the destination bin and actual received quantity.</Step>
-          <Step n="2" title="Review incoming jobs">Production → Pull Sheets and Order Risk. Confirm due dates, blank pairings, inventory availability, and any Pending Stock items.</Step>
-          <Step n="3" title="Purchase shortages">Purchasing → Purchasing Report. Review true shortages, correct a bad pairing before ordering, and exclude non-inventory items.</Step>
-          <Step n="4" title="Pull and produce">Open the pull sheet, choose the physical source bin, pull the blank, apply artwork, and use Complete + Deduct when production is finished.</Step>
-          <Step n="5" title="Handle finished stock when appropriate">Return a completed item to finished inventory only when it is intentionally being held for later sale or fulfillment.</Step>
-        </ol>
-      </SectionCard>
+      <section className="sc-guide-hero">
+        <div>
+          <span className="sc-guide-version">Guide v{GUIDE_VERSION}</span>
+          <h2>One source of truth for how the system works and how Skilled Crafting uses it.</h2>
+          <p>
+            Search by task, symptom, screen name, product type, or workflow. Each major section explains
+            what the feature does, when to use it, and how it applies to actual work in the business.
+          </p>
+        </div>
+        <div className="sc-guide-hero-stats">
+          <div><strong>{guideChapters.length}</strong><span>guide chapters</span></div>
+          <div><strong>{guideChapters.reduce((sum, chapter) => sum + chapter.sections.length, 0)}</strong><span>detailed topics</span></div>
+          <div><strong>{navSections.reduce((sum, nav) => sum + nav.items.length, 0)}</strong><span>application screens referenced</span></div>
+        </div>
+      </section>
 
-      <SectionCard title="Receiving inventory">
-        <p><strong>Manual receiving:</strong> Use Inventory → Add Item to Bin. Set receiving defaults, enter size/quantity rows, and choose Receive All Complete Lines.</p>
-        <p><strong>Supplier confirmation import:</strong> Upload the supplier PDF or spreadsheet, review yellow/red rows, correct Brand / Style / Color / Size where needed, confirm the bin, then receive selected units.</p>
-        <p><strong>Duplicate supplier orders:</strong> A previously imported order may be reopened safely. The screen shows what was already received and permits only remaining quantities.</p>
-        <p><strong>Missing blanks:</strong> Keep automatic blank creation enabled only when the supplier row contains enough reliable product identity data. If the match is questionable, correct the attributes before receiving.</p>
-      </SectionCard>
+      <section className="sc-guide-tools" aria-label="Guide search and chapter filter">
+        <label className="sc-guide-search">
+          <span>Search the guide</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Try: wrong blank, receiving, R2, packing slip, on-site sales..."
+          />
+        </label>
 
-      <SectionCard title="Pull sheets and production">
-        <p>Pull sheets are the operational bridge between the customer order and physical blank inventory. Opening a pull sheet should not deduct inventory.</p>
-        <ul>
-          <li><strong>Override Blank Pairing:</strong> Use when the app selected the wrong blank. Search results include the current on-hand inventory quantity.</li>
-          <li><strong>Remember mapping:</strong> Leave enabled when the correction should apply to future orders using the same WooCommerce variation/SKU.</li>
-          <li><strong>Pending Stock:</strong> Means the item is required but not currently on hand. Receive the item before completing and deducting the line.</li>
-          <li><strong>Complete + Deduct:</strong> Use only after the garment has actually been pulled/produced. This reduces physical blank inventory.</li>
-          <li><strong>Mark complete only:</strong> Changes job status without changing inventory. Use intentionally.</li>
-        </ul>
-      </SectionCard>
+        <label className="sc-guide-filter">
+          <span>Chapter</span>
+          <select value={activeChapter} onChange={(event) => setActiveChapter(event.target.value)}>
+            <option value="all">All chapters</option>
+            {guideChapters.map((chapter) => (
+              <option key={chapter.id} value={chapter.id}>{chapter.title}</option>
+            ))}
+          </select>
+        </label>
 
-      <SectionCard title="Purchasing">
-        <p>The Purchasing Report should represent inventory that must actually be ordered. Before placing an order:</p>
-        <ul>
-          <li>Correct any obviously wrong blank pairing.</li>
-          <li>Exclude fees, services, customer-supplied items, and other non-inventory lines.</li>
-          <li>Confirm shortages assigned to Pending Stock are genuine shortages.</li>
-          <li>Use inline pairing repair when the suggested product is not the blank you intend to purchase.</li>
-        </ul>
-      </SectionCard>
+        <div className="sc-guide-results" aria-live="polite">
+          {resultCount} topic{resultCount === 1 ? '' : 's'} shown
+        </div>
+      </section>
 
-      <SectionCard title="Order priority and due-date risk">
-        <p>Production → Order Risk highlights active jobs that need attention because of due dates, shortages, production progress, or open tasks. Closed and completed jobs are excluded from risk consideration.</p>
-        <p>Use the risk page as a work queue, not as an order-history page. Historical/completed work belongs in pull-sheet history, activity, and audit views.</p>
-      </SectionCard>
+      <div className="sc-guide-layout">
+        <aside className="sc-guide-sidebar">
+          <div className="sc-guide-sidebar-card">
+            <strong>Guide chapters</strong>
+            <a href="#guide-top" onClick={() => setActiveChapter('all')}>Overview</a>
+            {guideChapters.map((chapter) => (
+              <a
+                key={chapter.id}
+                href={`#${chapter.id}`}
+                onClick={() => setActiveChapter('all')}
+              >
+                {chapter.title}
+              </a>
+            ))}
+            <a href="#screen-reference">Application Screen Reference</a>
+          </div>
 
-      <SectionCard title="On-site sales">
-        <p>Use Production → On-site Sales for event sales where blank garments are decorated while the customer waits. Choose the active WooCommerce category, then select only in-stock blank/product options.</p>
-        <p><strong>Test Mode</strong> should be used for practice transactions so inventory is not reduced. Confirm the device layout before the event and print a test label before customer traffic begins.</p>
-      </SectionCard>
+          <div className="sc-guide-sidebar-card sc-guide-sidebar-help">
+            <strong>Recommended starting points</strong>
+            <a href="#daily-rhythm">Daily manager routine</a>
+            <a href="#add-item">Receive inventory</a>
+            <a href="#pull-sheets">Correct a pull sheet</a>
+            <a href="#purchasing-report">Purchase shortages</a>
+            <a href="#mockup-studio">Mockup Studio</a>
+            <a href="#plugin-product-options">SC Product Options</a>
+            <a href="#plugin-documents">Invoices / packing slips</a>
+            <a href="#woo-invalid-json">Woo/API failures</a>
+          </div>
+        </aside>
 
-      <SectionCard title="Artwork and Mockup Studio">
-        <p>Artwork Requests collects customer requirements and files. Mockup Studio is used to prepare visual mockups, approvals, product images, production dimensions, and the production packet.</p>
-        <p>Do not delete source artwork merely because a local copy has been downloaded. Project graphics stored in R2/Supabase are part of the project record.</p>
-      </SectionCard>
+        <div className="sc-guide-content" id="guide-top">
+          {filteredChapters.length ? (
+            filteredChapters.map((chapter) => (
+              <section className="sc-guide-chapter" id={chapter.id} key={chapter.id}>
+                <div className="sc-guide-chapter-heading">
+                  <div>
+                    <p className="sc-guide-kicker">CHAPTER</p>
+                    <h2>{chapter.title}</h2>
+                    <p>{chapter.description}</p>
+                  </div>
+                  <a className="sc-guide-anchor" href={`#${chapter.id}`} aria-label={`Link to ${chapter.title}`}>#</a>
+                </div>
 
-      <SectionCard title="Administrative maintenance">
-        <ul>
-          <li><strong>WooCommerce Sync:</strong> Run after catalog/product changes that must be reflected in the application.</li>
-          <li><strong>Product-to-Blank Mappings:</strong> Maintain durable Woo variation/SKU → physical blank relationships.</li>
-          <li><strong>Color Pairings:</strong> Normalize supplier/manufacturer color names to the canonical WooCommerce color list.</li>
-          <li><strong>Product Type Manager:</strong> Maintain Tee, Hoodie, Sweatshirt, Bag, and other type classifications used by On-site Sales and catalog workflows.</li>
-          <li><strong>Non-Inventory Rules:</strong> Maintain repeatable rules for fees/services that should not create purchasing demand.</li>
-          <li><strong>Operations Integrity / Product Integrity:</strong> Use for duplicate/mapping/reconciliation problems before making manual database changes.</li>
-          <li><strong>Deployment Health / Asset Storage Health:</strong> Check after deployments or when WooCommerce, database functions, or artwork storage appear unavailable.</li>
-        </ul>
-      </SectionCard>
+                <div className="sc-guide-topic-list">
+                  {chapter.sections.map((item) => (
+                    <GuideDetail chapter={chapter} item={item} key={item.id} />
+                  ))}
+                </div>
+              </section>
+            ))
+          ) : (
+            <section className="sc-guide-empty">
+              <h2>No guide topics matched “{query}”.</h2>
+              <p>Try a broader term such as inventory, mapping, artwork, purchasing, WooCommerce, or printing.</p>
+              <button type="button" onClick={() => { setQuery(''); setActiveChapter('all'); }}>
+                Clear search
+              </button>
+            </section>
+          )}
 
-      <SectionCard title="Understanding action status">
-        <p>Save/update controls show their processing status next to the action that started the work.</p>
-        <p><StatusBadge status="Working" tone="info" /> means the action is still processing. Long-running operations show a real percentage when measurable progress is available.</p>
-        <p><StatusBadge status="Completed" tone="success" /> means the action finished successfully. A warning/error notice remains near the relevant item when follow-up is required.</p>
-      </SectionCard>
-
-      <SectionCard title="Recommended troubleshooting order">
-        <ol>
-          <Step n="1" title="Read the status beside the action">Determine whether the request is still working, completed, or needs attention.</Step>
-          <Step n="2" title="Refresh the affected page">Confirm the saved state rather than repeating the same operation immediately.</Step>
-          <Step n="3" title="Check the integrity/health pages">Use Operations Integrity, Product Integrity, Deployment Health, or Asset Storage Health depending on the symptom.</Step>
-          <Step n="4" title="Verify WooCommerce sync">If the problem involves products, variations, colors, sizes, or newly created catalog data, verify the Woo sync.</Step>
-          <Step n="5" title="Avoid direct database edits unless necessary">Prefer the application repair tools so reservations, purchasing, mappings, and audit data remain synchronized.</Step>
-        </ol>
-      </SectionCard>
+          {!query && activeChapter === 'all' ? <ScreenReference /> : null}
+        </div>
+      </div>
     </main>
   );
 }
