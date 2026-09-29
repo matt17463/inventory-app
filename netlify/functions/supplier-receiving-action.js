@@ -690,6 +690,29 @@ async function commitStatus(supabase, idempotencyKey) {
   };
 }
 
+async function supplierReceiptLineState(supabase, importLine) {
+  const receiptLines = await supabase
+    .from('sc_supplier_receiving_receipt_lines')
+    .select('quantity,status')
+    .eq('import_line_id', importLine.id);
+
+  if (receiptLines.error) throw receiptLines.error;
+
+  let completedQuantity = 0;
+  let unresolvedQuantity = 0;
+
+  for (const receiptLine of receiptLines.data || []) {
+    const quantity = number(receiptLine.quantity);
+    if (receiptLine.status === 'completed') completedQuantity += quantity;
+    else if (receiptLine.status === 'pending') unresolvedQuantity += quantity;
+  }
+
+  return {
+    effectiveReceived: Math.max(number(importLine.received_quantity), completedQuantity),
+    unresolvedQuantity,
+  };
+}
+
 export async function commitReceipt(supabase, body, userId) {
   const confirmation = body.confirmation || {};
   const rows = Array.isArray(body.rows) ? body.rows.filter((row) => number(row.receive_now) > 0) : [];
@@ -733,9 +756,17 @@ export async function commitReceipt(supabase, body, userId) {
     if (!clean(row.blank_product_id) || !clean(row.bin_id)) throw new Error(`Complete the blank mapping and bin for ${row.supplier_sku || row.supplier_line_key}.`);
     const importLine = await ensureImportLine(supabase, receivingImport.id, row);
     const quantity = number(row.receive_now);
-    const remaining = number(importLine.ordered_quantity) - number(importLine.received_quantity);
+    const receiptState = await supplierReceiptLineState(supabase, importLine);
+
+    if (receiptState.unresolvedQuantity > 0) {
+      throw new Error(
+        `${row.supplier_sku}: a prior receipt for ${receiptState.unresolvedQuantity} unit(s) is still unresolved. Do not retry this line until the prior receipt is reconciled in Operations Integrity.`
+      );
+    }
+
+    const remaining = Math.max(0, number(importLine.ordered_quantity) - receiptState.effectiveReceived);
     if (quantity <= 0 || quantity > remaining) throw new Error(`${row.supplier_sku}: Receive Now must be between 1 and ${remaining}.`);
-    prepared.push({ row, importLine, quantity });
+    prepared.push({ row, importLine, quantity, effectiveReceived: receiptState.effectiveReceived });
   }
 
   let receiptResult = await supabase.from('sc_supplier_receiving_receipts').insert({
@@ -780,7 +811,7 @@ export async function commitReceipt(supabase, body, userId) {
       continue;
     }
     const importLineUpdate = await supabase.from('sc_supplier_receiving_lines').update({
-      received_quantity: number(item.importLine.received_quantity) + item.quantity,
+      received_quantity: item.effectiveReceived + item.quantity,
       blank_product_id_text: clean(item.row.blank_product_id), updated_at: new Date().toISOString(),
     }).eq('id', item.importLine.id);
     if (importLineUpdate.error) {

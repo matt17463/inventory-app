@@ -305,10 +305,46 @@ export async function handler(event) {
     }
     const existingImport = existingImports?.[0] || null;
     const previousByKey = new Map();
+    const unresolvedByKey = new Map();
     if (existingImport?.id) {
-      const prior = await auth.supabase.from('sc_supplier_receiving_lines').select('supplier_line_key,received_quantity').eq('import_id', existingImport.id);
+      const prior = await auth.supabase
+        .from('sc_supplier_receiving_lines')
+        .select('id,supplier_line_key,received_quantity')
+        .eq('import_id', existingImport.id);
       if (prior.error) throw prior.error;
-      (prior.data || []).forEach((line) => previousByKey.set(line.supplier_line_key, Number(line.received_quantity || 0)));
+
+      const priorLines = prior.data || [];
+      const priorIds = priorLines.map((line) => line.id).filter(Boolean);
+      const completedByLineId = new Map();
+      const pendingByLineId = new Map();
+
+      if (priorIds.length) {
+        const receiptLines = await auth.supabase
+          .from('sc_supplier_receiving_receipt_lines')
+          .select('import_line_id,quantity,status')
+          .in('import_line_id', priorIds);
+        if (receiptLines.error) throw receiptLines.error;
+
+        for (const receiptLine of receiptLines.data || []) {
+          const lineId = String(receiptLine.import_line_id || '');
+          const quantity = Number(receiptLine.quantity || 0);
+          if (receiptLine.status === 'completed') {
+            completedByLineId.set(lineId, (completedByLineId.get(lineId) || 0) + quantity);
+          } else if (receiptLine.status === 'pending') {
+            pendingByLineId.set(lineId, (pendingByLineId.get(lineId) || 0) + quantity);
+          }
+        }
+      }
+
+      for (const line of priorLines) {
+        const lineId = String(line.id || '');
+        const summaryReceived = Number(line.received_quantity || 0);
+        const completedReceived = Number(completedByLineId.get(lineId) || 0);
+        previousByKey.set(line.supplier_line_key, Math.max(summaryReceived, completedReceived));
+
+        const unresolvedQuantity = Number(pendingByLineId.get(lineId) || 0);
+        if (unresolvedQuantity > 0) unresolvedByKey.set(line.supplier_line_key, unresolvedQuantity);
+      }
     }
     // Upload only after parsing, matching, schema validation, and duplicate
     // checks have all succeeded. The hash-based key also makes a retry replace
@@ -329,7 +365,15 @@ export async function handler(event) {
         existing_status: existingImport?.status || '',
         lines: lines.map((line) => {
           const received = previousByKey.get(line.supplier_line_key) || 0;
-          return { ...line, previously_received: received, remaining_quantity: Math.max(0, line.ordered_quantity - received) };
+          const unresolvedQuantity = unresolvedByKey.get(line.supplier_line_key) || 0;
+          return {
+            ...line,
+            previously_received: received,
+            remaining_quantity: unresolvedQuantity > 0 ? 0 : Math.max(0, line.ordered_quantity - received),
+            receive_blocked_reason: unresolvedQuantity > 0
+              ? `A prior receipt for ${unresolvedQuantity} unit(s) is still unresolved. Do not receive this line again until the prior receipt is reconciled.`
+              : '',
+          };
         }),
       },
     }, event);
