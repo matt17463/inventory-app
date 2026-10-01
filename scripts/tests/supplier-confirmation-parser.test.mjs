@@ -340,6 +340,58 @@ test('parses a representative S&S confirmation row', () => {
   assert.equal(result.lines[0].color, 'Black');
 });
 
+test('parses an S&S Activewear invoice and preserves the supplier order number', () => {
+  const pages = [{ pageNumber: 1, cells: [
+    { x: 100, y: 760, str: 'S&S Activewear' },
+    { x: 340, y: 750, str: 'Invoice: 103439074' },
+    { x: 340, y: 730, str: 'Order: 76637831' },
+    { x: 500, y: 730, str: 'Order Date: 9/30/2026 7:54 PM PT' },
+    { x: 32, y: 568, str: '22060583' },
+    { x: 80, y: 568, str: 'Gildan - Unisex Heavy Blend Hooded Sweatshirt - 18500' },
+    { x: 355, y: 568, str: 'Sport Grey' },
+    { x: 435, y: 568, str: 'S' },
+    { x: 505, y: 568, str: '4' },
+    { x: 530, y: 568, str: '10.09' },
+    { x: 570, y: 568, str: '40.36' },
+  ] }];
+
+  const result = parseSupplierConfirmationPages(pages);
+  assert.equal(result.supplier_key, 'ss_activewear');
+  assert.equal(result.document_type, 'invoice');
+  assert.equal(result.invoice_number, '103439074');
+  assert.equal(result.order_number, '76637831');
+  assert.equal(result.order_date, '9/30/2026');
+  assert.equal(result.po_number, '');
+  assert.equal(result.total_lines, 1);
+  assert.equal(result.total_units, 4);
+  assert.equal(result.subtotal, 40.36);
+  assert.equal(result.lines[0].supplier_sku, '22060583');
+  assert.equal(result.lines[0].style, '18500');
+  assert.equal(result.lines[0].color, 'Sport Grey');
+  assert.equal(result.lines[0].size, 'S');
+});
+
+test('continues to parse S&S order confirmations after invoice support is added', () => {
+  const pages = [{ pageNumber: 1, cells: [
+    { x: 100, y: 760, str: 'S&S Activewear' },
+    { x: 340, y: 750, str: 'Order Confirmation: 75436493' },
+    { x: 370, y: 700, str: '8/20/2026' },
+    { x: 32, y: 568, str: '22060504' },
+    { x: 80, y: 568, str: 'Gildan - Unisex Heavy Blend Hooded Sweatshirt - 18500' },
+    { x: 355, y: 565, str: 'Black' },
+    { x: 435, y: 568, str: 'M' },
+    { x: 505, y: 568, str: '2' },
+    { x: 530, y: 568, str: '10.30' },
+    { x: 570, y: 568, str: '20.60' },
+  ] }];
+
+  const result = parseSupplierConfirmationPages(pages);
+  assert.equal(result.document_type, 'order_confirmation');
+  assert.equal(result.invoice_number, '');
+  assert.equal(result.order_number, '75436493');
+  assert.equal(result.total_units, 2);
+});
+
 test('parses Momentec rows whose line number and SKU share a PDF cell', () => {
   const pages = [{ pageNumber: 1, cells: [
     { x: 100, y: 760, str: 'ORDER CONFIRMATION' }, { x: 100, y: 740, str: 'momentecbrands.com' },
