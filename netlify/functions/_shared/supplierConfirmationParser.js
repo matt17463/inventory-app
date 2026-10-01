@@ -128,17 +128,44 @@ function parseSsActivewear(pages) {
     });
   }
 
-  const confirmationLabel = pages.flatMap(pageCells).find((cell) => /Order Confirmation:\s*\d+/i.test(cell.str));
-  const orderNumber = clean(confirmationLabel?.str.match(/Order Confirmation:\s*(\d+)/i)?.[1]);
-  // S&S leaves this field blank on some confirmations. Only accept a value on
-  // the PO label's own row so a nearby address/order value is never mistaken for a PO.
-  const poNumber = sameRowValue(pages, /^PO Number:/i, /[A-Z0-9-]{3,}/i);
+  const headerCells = pages.flatMap(pageCells);
+  const confirmationLabel = headerCells.find((cell) => /Order Confirmation:\s*\d+/i.test(cell.str));
+  const invoiceLabel = headerCells.find((cell) => /Invoice:\s*\d+/i.test(cell.str));
+  const orderLabel = headerCells.find((cell) => /^Order:\s*\d+/i.test(cell.str));
+
+  const confirmationOrderNumber = clean(
+    confirmationLabel?.str.match(/Order Confirmation:\s*(\d+)/i)?.[1],
+  );
+  const invoiceOrderNumber = clean(orderLabel?.str.match(/^Order:\s*(\d+)/i)?.[1])
+    || sameRowValue(pages, /^Order:\s*$/i, /^\d+$/);
+  const orderNumber = confirmationOrderNumber || invoiceOrderNumber;
+
+  const inlineOrderDate = clean(
+    headerCells
+      .map((cell) => cell.str.match(/Order Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)?.[1])
+      .find(Boolean),
+  );
+  const orderDate = confirmationOrderNumber
+    ? findHeaderValue(pages, /Order Confirmation:/i, /\d{1,2}\/\d{1,2}\/\d{4}/)
+    : inlineOrderDate || sameRowValue(pages, /^Order Date:\s*$/i, /^\d{1,2}\/\d{1,2}\/\d{4}$/)
+      || findHeaderValue(pages, /^Order Date:/i, /\d{1,2}\/\d{1,2}\/\d{4}/);
+
+  // S&S leaves PO blank on some documents. Only accept a standalone value on
+  // the PO label's own row so nearby header labels cannot be mistaken for a PO.
+  const poNumber = sameRowValue(
+    pages,
+    confirmationOrderNumber ? /^PO Number:/i : /^PO:/i,
+    /^(?!.*:)[A-Z0-9-]{3,}$/i,
+  );
+
   return {
     supplier_key: 'ss_activewear',
     supplier_name: 'S&S Activewear',
     order_number: orderNumber,
     po_number: poNumber,
-    order_date: findHeaderValue(pages, /Order Confirmation:/i, /\d{1,2}\/\d{1,2}\/\d{4}/),
+    order_date: orderDate,
+    document_type: invoiceLabel ? 'invoice' : 'order_confirmation',
+    invoice_number: clean(invoiceLabel?.str.match(/Invoice:\s*(\d+)/i)?.[1]),
     lines,
   };
 }
@@ -236,12 +263,17 @@ function parseMomentec(pages) {
 export function parseSupplierConfirmationPages(pages) {
   const allText = pages.flatMap(pageCells).map((cell) => cell.str).join(' ');
   let parsed;
-  if (/S&S Activewear/i.test(allText) && /Order Confirmation:/i.test(allText)) parsed = parseSsActivewear(pages);
-  else if (/momentecbrands\.com|PO Box 14939/i.test(allText) && /ORDER CONFIRMATION/i.test(allText)) parsed = parseMomentec(pages);
-  else throw new Error('This PDF is not a recognized S&S Activewear or Momentec order confirmation.');
+  const isSsOrderConfirmation = /S&S Activewear/i.test(allText) && /Order Confirmation:\s*\d+/i.test(allText);
+  const isSsInvoice = /S&S Activewear/i.test(allText)
+    && /Invoice:\s*\d+/i.test(allText)
+    && /Order:\s*\d+/i.test(allText);
 
-  if (!parsed.order_number) throw new Error('The supplier order number could not be read from this confirmation.');
-  if (!parsed.lines.length) throw new Error('No receiving line items could be read from this confirmation.');
+  if (isSsOrderConfirmation || isSsInvoice) parsed = parseSsActivewear(pages);
+  else if (/momentecbrands\.com|PO Box 14939/i.test(allText) && /ORDER CONFIRMATION/i.test(allText)) parsed = parseMomentec(pages);
+  else throw new Error('This PDF is not a recognized S&S Activewear order confirmation/invoice or Momentec order confirmation.');
+
+  if (!parsed.order_number) throw new Error('The supplier order number could not be read from this supplier document.');
+  if (!parsed.lines.length) throw new Error('No receiving line items could be read from this supplier document.');
   const duplicateKeys = parsed.lines.filter((line, index, rows) => rows.findIndex((candidate) => candidate.supplier_line_key === line.supplier_line_key) !== index);
   if (duplicateKeys.length) throw new Error('The confirmation contains duplicate supplier line identifiers and needs review before import.');
   return {
