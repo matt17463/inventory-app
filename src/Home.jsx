@@ -5,6 +5,24 @@ import { supabase } from './supabaseClient';
 const money = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 const number = (value) => new Intl.NumberFormat('en-US').format(Number(value || 0));
 
+const artworkEventLabels = {
+  artwork_request_created: 'New artwork request',
+  artwork_request_updated: 'Artwork request updated',
+  artwork_status_changed: 'Artwork status changed',
+  artwork_mockup_uploaded: 'Mockup uploaded',
+  artwork_mockup_updated: 'Mockup details updated',
+  artwork_mockup_replaced: 'Mockup replaced',
+  artwork_mockup_deleted: 'Mockup deleted',
+  artwork_changes_requested: 'Artwork changes requested',
+  artwork_approved: 'Artwork approved',
+  approved_artwork: 'Artwork approved',
+  artwork_saved_to_vault: 'Artwork saved to vault',
+};
+
+function artworkActivityLabel(row) {
+  return artworkEventLabels[row?.event_type] || String(row?.event_type || 'Artwork activity').replace(/_/g, ' ');
+}
+
 function HomeLogo() {
   return (
     <div className="sc-home-logo-wrap" aria-label="Skilled Crafting logo">
@@ -22,21 +40,50 @@ export default function Home() {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [artworkActivity, setArtworkActivity] = useState([]);
+  const [artworkSeenAt, setArtworkSeenAt] = useState('');
 
   async function loadStats() {
     setLoading(true);
     setError('');
-    const { data, error } = await supabase.rpc('sc_home_dashboard_stats');
-    if (error) {
-      setError(error.message);
+    const [statsResult, activityResult] = await Promise.all([
+      supabase.rpc('sc_home_dashboard_stats'),
+      supabase
+        .from('sc_artwork_system_handoffs')
+        .select('id,event_type,source_type,source_id,received_at,payload')
+        .eq('source_type', 'request')
+        .order('received_at', { ascending: false })
+        .limit(8),
+    ]);
+
+    if (statsResult.error) {
+      setError(statsResult.error.message);
       setStats({});
     } else {
-      setStats(data || {});
+      setStats(statsResult.data || {});
+    }
+
+    if (activityResult.error) {
+      setError((current) => current || `Artwork activity could not load: ${activityResult.error.message}`);
+      setArtworkActivity([]);
+    } else {
+      setArtworkActivity(activityResult.data || []);
     }
     setLoading(false);
   }
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    try { setArtworkSeenAt(window.localStorage.getItem('sc-artwork-activity-seen-at') || ''); } catch (_) { /* local storage is optional */ }
+    loadStats();
+  }, []);
+
+  const unreadArtworkActivity = artworkActivity.filter((row) => !artworkSeenAt || new Date(row.received_at).getTime() > new Date(artworkSeenAt).getTime()).length;
+
+  function markArtworkActivityViewed() {
+    const newest = artworkActivity[0]?.received_at || new Date().toISOString();
+    setArtworkSeenAt(newest);
+    try { window.localStorage.setItem('sc-artwork-activity-seen-at', newest); } catch (_) { /* local storage is optional */ }
+  }
 
   const cards = [
     {
@@ -123,6 +170,35 @@ export default function Home() {
         <div className="sc-alert sc-alert-warning">
           Dashboard values could not load: {error}. Confirm that the latest home color/artwork SQL has been run in Supabase.
         </div>
+      )}
+
+      {artworkActivity.length > 0 && (
+        <section className="sc-panel sc-panel-color-left">
+          <div className="sc-panel-header">
+            <div>
+              <div className="sc-kicker">Artwork Notifications</div>
+              <h3>{unreadArtworkActivity > 0 ? `${unreadArtworkActivity} artwork update${unreadArtworkActivity === 1 ? '' : 's'} need attention` : 'Recent artwork activity'}</h3>
+              <p>New requests and meaningful Artwork System changes appear here as soon as WordPress sends the webhook.</p>
+            </div>
+            <div className="sc-hero-actions">
+              <Link className="sc-btn sc-btn-purple" to="/artwork-requests">Open Artwork Queue</Link>
+              {unreadArtworkActivity > 0 && <button className="sc-btn" type="button" onClick={markArtworkActivityViewed}>Mark viewed</button>}
+            </div>
+          </div>
+          <div className="sc-workflow-list sc-workflow-list-colored">
+            {artworkActivity.slice(0, 5).map((row) => {
+              const request = row.payload?.artwork_request || {};
+              const project = request.organization || request.customer_name || request.project_type || `Artwork request #${row.source_id}`;
+              const isUnread = !artworkSeenAt || new Date(row.received_at).getTime() > new Date(artworkSeenAt).getTime();
+              return (
+                <div key={row.id} style={{ padding: '10px 0' }}>
+                  <strong>{isUnread ? 'NEW · ' : ''}{artworkActivityLabel(row)}</strong>
+                  <span style={{ display: 'block' }}>{project} · WordPress #{row.source_id} · {new Date(row.received_at).toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       <section className="sc-stat-grid sc-stat-grid-home">
