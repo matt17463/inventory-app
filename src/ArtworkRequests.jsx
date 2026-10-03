@@ -5,6 +5,7 @@ import {
   getArtworkSystemHandoffs,
   updateArtworkSystemRequestStatus,
   updateArtworkSystemReorderStatus,
+  downloadArtworkRequestMockup,
 } from './lib/artworkSystemApi';
 
 const statusOptions = [
@@ -38,6 +39,7 @@ export default function ArtworkRequests() {
   const [selected, setSelected] = useState(null);
   const [message, setMessage] = useState('');
   const [savingId, setSavingId] = useState('');
+  const [downloadingMockup, setDownloadingMockup] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -90,6 +92,29 @@ export default function ArtworkRequests() {
     if (!prompt) return;
     navigator.clipboard?.writeText(prompt);
     setMessage('Prompt copied.');
+  }
+
+  async function downloadMockup(row, mockup, index) {
+    const key = `${row.id}:${index}`;
+    try {
+      setDownloadingMockup(key);
+      setMessage('');
+      const result = await downloadArtworkRequestMockup(row.id, index);
+      const anchor = document.createElement('a');
+      anchor.href = result.url;
+      anchor.download = result.filename || mockup?.original_file_name || mockup?.file_name || `artwork-mockup-${index + 1}`;
+      anchor.rel = 'noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setMessage(result.provider === 'r2'
+        ? 'Mockup download started from private R2 storage.'
+        : 'Mockup download opened from the legacy Artwork System file URL.');
+    } catch (err) {
+      setMessage(err.message || 'Could not download the selected mockup.');
+    } finally {
+      setDownloadingMockup('');
+    }
   }
 
   return (
@@ -206,7 +231,33 @@ export default function ArtworkRequests() {
                   {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
                 {(selected.chatgpt_prompt || selected.generated_prompt) && <button className="secondary-button" onClick={() => copyPrompt(selected)}>Copy Prompt</button>}
-                {Array.isArray(selected.mockups) && selected.mockups.length > 0 && <div><h3>Mockups</h3>{selected.mockups.map((m, idx) => <p key={idx}><a href={m.file_url} target="_blank" rel="noreferrer">{m.title || `Mockup ${idx + 1}`}</a><br /><small>{m.placement} {m.garment_color}</small></p>)}</div>}
+                {Array.isArray(selected.mockups) && selected.mockups.length > 0 && (
+                  <div>
+                    <h3>Mockups</h3>
+                    {selected.mockups.map((m, idx) => {
+                      const downloadKey = `${selected.id}:${idx}`;
+                      const label = m.title || m.original_file_name || m.file_name || `Mockup ${idx + 1}`;
+                      return (
+                        <div key={idx} className="artwork-mockup-download-row">
+                          <p>
+                            <strong>{label}</strong><br />
+                            <small>{[m.placement, m.garment_color].filter(Boolean).join(' ') || 'Uploaded mockup'}</small>
+                          </p>
+                          <div className="button-row">
+                            {m.file_url && <a className="secondary-button" href={m.file_url} target="_blank" rel="noreferrer">Open</a>}
+                            <button
+                              className="secondary-button"
+                              onClick={() => downloadMockup(selected, m, idx)}
+                              disabled={Boolean(downloadingMockup)}
+                            >
+                              {downloadingMockup === downloadKey ? 'Preparing Download…' : 'Download Original'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             )}
           </aside>
