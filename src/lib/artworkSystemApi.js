@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 
 export async function getArtworkSystemRequests(status = 'open') {
   let query = supabase
@@ -63,4 +64,23 @@ export async function updateArtworkSystemReorderStatus(id, appStatus, appNotes =
   });
   if (error) throw error;
   return data;
+}
+
+
+export async function downloadArtworkRequestMockup(requestId, mockupIndex) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/artwork-request-file-download', {
+    method: 'POST',
+    body: JSON.stringify({
+      request_id: requestId,
+      mockup_index: Number(mockupIndex),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || payload?.message || 'Could not prepare artwork mockup download.');
+  }
+
+  if (!payload.url) throw new Error('The mockup download did not return a file URL.');
+  return payload;
 }
