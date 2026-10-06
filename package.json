@@ -1,7 +1,7 @@
 {
   "name": "create-product-app",
   "private": true,
-  "version": "1.4.29",
+  "version": "1.4.30",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -28,7 +28,7 @@
     "test:new-product-line": "node --test scripts/tests/new-product-line-setup.test.mjs",
     "test:onsite-sales": "node --test scripts/tests/onsite-sales-and-reconciliation.test.mjs",
     "migrate:r2-assets": "node scripts/migrate-operational-assets-to-r2.mjs",
-    "test": "npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:mockup-downloads && npm run test:supplier-receiving && npm run test:production-board && npm run test:purchasing-demand && npm run test:imports && npm run test:integrity && npm run test:r2-egress && npm run test:product-blank-mappings && npm run test:new-product-line && npm run test:onsite-sales && npm run test:artwork-r2 && npm run test:product-types && npm run test:pullsheet-purchasing-integrity && npm run test:product-color-replacement && npm run test:artwork-notifications && npm run test:artwork-downloads && npm run test:operations-client-orders && npm run test:client-order-pricing-conversion",
+    "test": "npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:mockup-downloads && npm run test:supplier-receiving && npm run test:production-board && npm run test:purchasing-demand && npm run test:imports && npm run test:integrity && npm run test:r2-egress && npm run test:product-blank-mappings && npm run test:new-product-line && npm run test:onsite-sales && npm run test:artwork-r2 && npm run test:product-types && npm run test:pullsheet-purchasing-integrity && npm run test:product-color-replacement && npm run test:artwork-notifications && npm run test:artwork-downloads && npm run test:operations-client-orders && npm run test:client-order-pricing-conversion && npm run test:client-order-test-mode",
     "functions:esm": "node scripts/validate_netlify_esm.mjs",
     "validate:steps6-14": "node scripts/validate_steps6_14.mjs",
     "check": "npm run functions:esm && npm run test && npm run lint && npm run build",
@@ -42,7 +42,8 @@
     "test:artwork-notifications": "node --test scripts/tests/artwork-home-notifications.test.mjs",
     "test:artwork-downloads": "node --test scripts/tests/artwork-mockup-download.test.mjs",
     "test:operations-client-orders": "node --test scripts/tests/operations-calendar-client-orders.test.mjs",
-    "test:client-order-pricing-conversion": "node --test scripts/tests/client-order-pricing-conversion.test.mjs"
+    "test:client-order-pricing-conversion": "node --test scripts/tests/client-order-pricing-conversion.test.mjs",
+    "test:client-order-test-mode": "node --test scripts/tests/client-order-test-mode.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
