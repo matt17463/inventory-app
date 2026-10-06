@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { assignOutOfStockJobItemsToPendingStock } from './pullSheetBinAssignmentApi';
 import { findUniqueExactBlankMatch } from './manualInvoicePairing';
+import { SALES_TAX_PERCENT, calculateSalesTax } from './salesTax';
 
 function clean(value) {
   return String(value ?? '').trim();
@@ -47,6 +48,90 @@ function normalizeSearchArgs(input = '') {
     color: clean(input.color),
     size: clean(input.size),
     limit: Number(input.limit || 150),
+  };
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function quickBooksDate(value) {
+  const text = clean(value);
+  if (!text) return '';
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return text;
+  return `${match[2]}/${match[3]}/${match[1]}`;
+}
+
+export function buildQuickBooksInvoiceCsv(order, items = []) {
+  const invoiceNumber = clean(order.invoice_number) || `MANUAL-${order.id || ''}`;
+  const customer = clean(order.organization) || clean(order.customer_name);
+  const invoiceDate = quickBooksDate(order.order_date || order.created_at);
+  const dueDate = quickBooksDate(order.due_date || order.order_date || order.created_at);
+  const shipping = Number(order.shipping_amount || 0);
+  const subtotal = (items || []).reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.price_per_item || 0),
+    0
+  );
+  const taxAmount = calculateSalesTax(subtotal);
+
+  const headers = [
+    'InvoiceNo',
+    'Customer',
+    'InvoiceDate',
+    'DueDate',
+    'Terms',
+    'Memo',
+    'Item (Product/Service)',
+    'Item Description',
+    'Item Qty',
+    'Item Rate',
+    'ItemAmount',
+    'Taxable',
+    'Tax Rate',
+    'Currency',
+    'Shipping Charge',
+  ];
+
+  const rows = (items || []).map((item, index) => {
+    const description = [
+      clean(item.item_name),
+      [item.brand, item.style, item.color, item.size].map(clean).filter(Boolean).join(' '),
+      item.placement ? `Placement: ${clean(item.placement)}` : '',
+      item.decoration_size ? `Decoration: ${clean(item.decoration_size)}` : '',
+      item.artwork_note ? `Artwork: ${clean(item.artwork_note)}` : '',
+      item.notes ? clean(item.notes) : '',
+    ].filter(Boolean).join(' · ');
+    const quantity = Number(item.quantity || 0);
+    const rate = Number(item.price_per_item || 0);
+    return [
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      '',
+      clean(order.notes),
+      '',
+      description || clean(item.sku_base),
+      quantity,
+      rate.toFixed(2),
+      (quantity * rate).toFixed(2),
+      'Y',
+      `${SALES_TAX_PERCENT}%`,
+      'USD',
+      index === 0 && shipping > 0 ? shipping.toFixed(2) : '',
+    ];
+  });
+
+  return {
+    csv: [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n'),
+    invoiceNumber,
+    subtotal: Number(subtotal.toFixed(2)),
+    taxAmount,
+    shipping: Number(shipping.toFixed(2)),
+    total: Number((subtotal + taxAmount + shipping).toFixed(2)),
+    taxRatePercent: SALES_TAX_PERCENT,
   };
 }
 
