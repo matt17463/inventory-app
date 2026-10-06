@@ -188,7 +188,7 @@ export async function convertClientOrderToProduction(request, items, options = {
     payment_received: true,
     tax_amount: Number(request.tax_amount || 0),
     shipping_amount: Number(request.shipping_amount || 0),
-    total_payment_amount: Number(request.quote_total || 0),
+    total_payment_amount: (items || []).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0) + Number(request.shipping_amount || 0) + Number(request.tax_amount || 0),
     notes: [
       `Converted from client request ${request.order_number}.`,
       clean(request.quote_notes),
