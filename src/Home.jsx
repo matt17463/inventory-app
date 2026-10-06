@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import HomeClientOrderNotice from './HomeClientOrderNotice';
+import HomeUpcomingCommitments from './HomeUpcomingCommitments';
 
 const money = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 const number = (value) => new Intl.NumberFormat('en-US').format(Number(value || 0));
@@ -174,6 +175,7 @@ export default function Home() {
       )}
 
       <HomeClientOrderNotice />
+      <HomeUpcomingCommitments />
 
       {artworkActivity.length > 0 && (
         <section className="sc-panel sc-panel-color-left">
