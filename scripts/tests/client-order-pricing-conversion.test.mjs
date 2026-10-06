@@ -28,7 +28,7 @@ test('client order workflow maps and prices before creating production demand',(
   assert.match(api,/markClientOrderApproved/);
   assert.match(api,/markClientOrderPaid/);
   assert.match(api,/convertClientOrderToProduction/);
-  assert.match(api,/createManualInvoiceOrder\(manualHeader, manualItems, true\)/);
+  assert.match(api,/createManualInvoiceOrder\(payload\.manualHeader, payload\.manualItems, true\)/);
   assert.match(api,/Record payment before converting/);
   assert.match(api,/Map every line to a blank product before conversion/);
 });
