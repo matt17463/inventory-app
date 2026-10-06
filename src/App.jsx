@@ -19,6 +19,7 @@ const BlankInventory = lazy(() => import('./BlankInventory'));
 const BulkPairingRepair = lazy(() => import('./BulkPairingRepair'));
 const CampaignForecast = lazy(() => import('./CampaignForecast'));
 const CapacityPlanning = lazy(() => import('./CapacityPlanning'));
+const ClientOrders = lazy(() => import('./ClientOrders'));
 const ColorAliasReview = lazy(() => import('./ColorAliasReview'));
 const CreateFinishedFromBlank = lazy(() => import('./CreateFinishedFromBlank'));
 const CustomerPortal = lazy(() => import('./CustomerPortal'));
@@ -48,6 +49,7 @@ const NonInventoryRules = lazy(() => import('./NonInventoryRules'));
 const NotFound = lazy(() => import('./NotFound'));
 const OrderRiskDashboard = lazy(() => import('./OrderRiskDashboard'));
 const OnsiteSales = lazy(() => import('./OnsiteSales'));
+const OperationsCalendar = lazy(() => import('./OperationsCalendar'));
 const ApplicationGuide = lazy(() => import('./ApplicationGuide'));
 const ApplicationIntegrityCenter = lazy(() => import('./ApplicationIntegrityCenter'));
 const PricingRules = lazy(() => import('./PricingRules'));
@@ -61,6 +63,7 @@ const ProductionBoard = lazy(() => import('./ProductionBoard'));
 const ProductionCalendar = lazy(() => import('./ProductionCalendar'));
 const ProductionEstimator = lazy(() => import('./ProductionEstimator'));
 const ProductionPhotoProof = lazy(() => import('./ProductionPhotoProof'));
+const PublicClientOrderForm = lazy(() => import('./PublicClientOrderForm'));
 const PullSheetDueDateEditor = lazy(() => import('./PullSheetDueDateEditor'));
 const PullSheetList = lazy(() => import('./PullSheetList'));
 const PullSheetView = lazy(() => import('./PullSheetView'));
@@ -125,6 +128,7 @@ function EmployeeRoutes() {
       <Route path="/waiting-on" element={<WaitingOn />} />
       <Route path="/campaign-forecast" element={<CampaignForecast />} />
       <Route path="/customer-reorders" element={<CustomerReorderIntelligence />} />
+      <Route path="/client-orders" element={<ClientOrders />} />
       <Route path="/job-costing" element={<JobCosting />} />
       <Route path="/artwork-requests" element={<ArtworkRequests />} />
       <Route path="/shop-tv" element={<ShopTvMode />} />
@@ -133,6 +137,7 @@ function EmployeeRoutes() {
       <Route path="/vendor-prices" element={<VendorPriceComparison />} />
       <Route path="/capacity-planning" element={<CapacityPlanning />} />
       <Route path="/production-calendar" element={<ProductionCalendar />} />
+      <Route path="/operations-calendar" element={<OperationsCalendar />} />
       <Route path="/production-estimator" element={<ProductionEstimator />} />
       <Route path="/pricing-rules" element={<PricingRules />} />
       <Route path="/quote-builder" element={<QuoteBuilder />} />
@@ -192,6 +197,7 @@ export default function App() {
       <Suspense fallback={<RouteLoading />}>
         <Routes>
           <Route path="/customer-portal" element={<CustomerPortal />} />
+          <Route path="/team-order" element={<PublicClientOrderForm />} />
           <Route path="/mockup-review" element={<MockupCustomerReview />} />
           <Route
             path="*"
