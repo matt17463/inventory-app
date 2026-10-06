@@ -59,6 +59,7 @@ export default function PublicClientOrderForm() {
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [submitted,setSubmitted]=useState('');
+  const [detailView,setDetailView]=useState('compact');
 
   const totalQty=useMemo(()=>items.reduce((sum,row)=>sum+(Number(row.quantity)||0),0),[items]);
   const patch=(key,value)=>setForm((prev)=>({...prev,[key]:value}));
@@ -160,29 +161,69 @@ export default function PublicClientOrderForm() {
         </section>
 
         <section className="sc-form-section">
-          <div className="sc-section-heading">
+          <div className="sc-section-heading sc-order-details-heading">
             <div><h2>3. Order details</h2><p>Add one row per recipient/item. Pricing is intentionally not requested here.</p></div>
-            <label className="sc-file-button">Import CSV<input type="file" accept=".csv,text/csv" onChange={pickCsv} /></label>
+            <div className="sc-order-detail-tools">
+              <div className="sc-view-mode-toggle" role="group" aria-label="Order row view">
+                <button type="button" className={detailView==='compact'?'active':''} onClick={()=>setDetailView('compact')}>Compact</button>
+                <button type="button" className={detailView==='cards'?'active':''} onClick={()=>setDetailView('cards')}>Cards</button>
+                <button type="button" className={detailView==='sheet'?'active':''} onClick={()=>setDetailView('sheet')}>Spreadsheet</button>
+              </div>
+              <label className="sc-file-button">Import CSV<input type="file" accept=".csv,text/csv" onChange={pickCsv} /></label>
+            </div>
           </div>
-          <div className="sc-order-line-list">
-            {items.map((row,index)=>(
-              <article className="sc-order-line" key={index}>
-                <div className="sc-order-line-title"><strong>Line {index+1}</strong><div><button type="button" className="secondary-button" onClick={()=>duplicateLine(index)}>Duplicate</button><button type="button" className="secondary-button" onClick={()=>removeLine(index)}>Remove</button></div></div>
-                <div className="sc-form-grid sc-line-grid">
-                  <label>Player / recipient<input value={row.recipient_name} onChange={(e)=>patchLine(index,'recipient_name',e.target.value)} /></label>
-                  <label>Garment / item<input value={row.garment_type} onChange={(e)=>patchLine(index,'garment_type',e.target.value)} placeholder="Hoodie, tee, polo…" /></label>
-                  <label>Size<select value={row.size} onChange={(e)=>patchLine(index,'size',e.target.value)}><option value="">Select</option>{sizes.map((size)=><option key={size}>{size}</option>)}</select></label>
-                  <label>Garment color<input value={row.garment_color} onChange={(e)=>patchLine(index,'garment_color',e.target.value)} /></label>
-                  <label>Name on back<input value={row.name_on_back} onChange={(e)=>patchLine(index,'name_on_back',e.target.value)} /></label>
-                  <label>Name text color<input value={row.name_text_color} onChange={(e)=>patchLine(index,'name_text_color',e.target.value)} /></label>
-                  <label>Jersey / employee #<input value={row.jersey_number} onChange={(e)=>patchLine(index,'jersey_number',e.target.value)} /></label>
-                  <label>Qty<input type="number" min="1" max="999" value={row.quantity} onChange={(e)=>patchLine(index,'quantity',e.target.value)} /></label>
-                </div>
-                <label>Line notes<input value={row.notes} onChange={(e)=>patchLine(index,'notes',e.target.value)} /></label>
-              </article>
-            ))}
+
+          {detailView==='sheet' ? (
+            <div className="sc-order-sheet-wrap">
+              <table className="sc-order-sheet">
+                <thead>
+                  <tr><th>#</th><th>Recipient</th><th>Garment</th><th>Size</th><th>Color</th><th>Back name</th><th>Text color</th><th>#</th><th>Qty</th><th>Notes</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {items.map((row,index)=>(
+                    <tr key={index}>
+                      <td className="sc-order-sheet-line">{index+1}</td>
+                      <td><input aria-label={'Recipient line '+(index+1)} value={row.recipient_name} onChange={(e)=>patchLine(index,'recipient_name',e.target.value)} /></td>
+                      <td><input aria-label={'Garment line '+(index+1)} value={row.garment_type} onChange={(e)=>patchLine(index,'garment_type',e.target.value)} placeholder="Hoodie, tee…" /></td>
+                      <td><select aria-label={'Size line '+(index+1)} value={row.size} onChange={(e)=>patchLine(index,'size',e.target.value)}><option value="">Size</option>{sizes.map((size)=><option key={size}>{size}</option>)}</select></td>
+                      <td><input aria-label={'Garment color line '+(index+1)} value={row.garment_color} onChange={(e)=>patchLine(index,'garment_color',e.target.value)} /></td>
+                      <td><input aria-label={'Name on back line '+(index+1)} value={row.name_on_back} onChange={(e)=>patchLine(index,'name_on_back',e.target.value)} /></td>
+                      <td><input aria-label={'Name text color line '+(index+1)} value={row.name_text_color} onChange={(e)=>patchLine(index,'name_text_color',e.target.value)} /></td>
+                      <td><input aria-label={'Jersey or employee number line '+(index+1)} value={row.jersey_number} onChange={(e)=>patchLine(index,'jersey_number',e.target.value)} /></td>
+                      <td><input aria-label={'Quantity line '+(index+1)} type="number" min="1" max="999" value={row.quantity} onChange={(e)=>patchLine(index,'quantity',e.target.value)} /></td>
+                      <td><input aria-label={'Notes line '+(index+1)} value={row.notes} onChange={(e)=>patchLine(index,'notes',e.target.value)} /></td>
+                      <td><div className="sc-order-sheet-actions"><button type="button" title="Duplicate row" aria-label={'Duplicate line '+(index+1)} onClick={()=>duplicateLine(index)}>＋</button><button type="button" title="Remove row" aria-label={'Remove line '+(index+1)} onClick={()=>removeLine(index)}>×</button></div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className={'sc-order-line-list sc-order-view-'+detailView}>
+              {items.map((row,index)=>(
+                <article className="sc-order-line" key={index}>
+                  <div className="sc-order-line-title"><strong>Line {index+1}{row.recipient_name ? ' · '+row.recipient_name : ''}</strong><div><button type="button" className="secondary-button" onClick={()=>duplicateLine(index)}>Duplicate</button><button type="button" className="secondary-button" onClick={()=>removeLine(index)}>Remove</button></div></div>
+                  <div className="sc-form-grid sc-line-grid">
+                    <label>Player / recipient<input value={row.recipient_name} onChange={(e)=>patchLine(index,'recipient_name',e.target.value)} /></label>
+                    <label>Garment / item<input value={row.garment_type} onChange={(e)=>patchLine(index,'garment_type',e.target.value)} placeholder="Hoodie, tee, polo…" /></label>
+                    <label>Size<select value={row.size} onChange={(e)=>patchLine(index,'size',e.target.value)}><option value="">Select</option>{sizes.map((size)=><option key={size}>{size}</option>)}</select></label>
+                    <label>Garment color<input value={row.garment_color} onChange={(e)=>patchLine(index,'garment_color',e.target.value)} /></label>
+                    <label>Name on back<input value={row.name_on_back} onChange={(e)=>patchLine(index,'name_on_back',e.target.value)} /></label>
+                    <label>Name text color<input value={row.name_text_color} onChange={(e)=>patchLine(index,'name_text_color',e.target.value)} /></label>
+                    <label>Jersey / employee #<input value={row.jersey_number} onChange={(e)=>patchLine(index,'jersey_number',e.target.value)} /></label>
+                    <label>Qty<input type="number" min="1" max="999" value={row.quantity} onChange={(e)=>patchLine(index,'quantity',e.target.value)} /></label>
+                  </div>
+                  <label className="sc-line-notes">Line notes<input value={row.notes} onChange={(e)=>patchLine(index,'notes',e.target.value)} /></label>
+                </article>
+              ))}
+            </div>
+          )}
+
+          <div className="sc-order-line-footer">
+            <button type="button" className="sc-add-row-button" onClick={addLine}>+ Add another row</button>
+            <span className="sc-row-count">{items.length} row{items.length===1?'':'s'}</span>
+            <strong>Total quantity: {totalQty}</strong>
           </div>
-          <div className="sc-order-line-footer"><button type="button" onClick={addLine}>+ Add row</button><strong>Total quantity: {totalQty}</strong></div>
         </section>
 
         <section className="sc-form-section">
