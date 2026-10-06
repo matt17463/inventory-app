@@ -133,32 +133,43 @@ function uniqueBlankRows(rows = []) {
 }
 
 export async function searchClientOrderBlankProducts(item, search = '') {
-  const term = clean(search || item?.garment_type);
+  const explicitTerm = clean(search);
+  const fallbackTerm = clean(item?.garment_type);
+  const term = explicitTerm || fallbackTerm;
   const color = clean(item?.garment_color);
   const rawSize = clean(item?.size);
   const normalizedSize = normalizeClientOrderSize(rawSize);
 
-  // Customer intake uses friendly labels such as "Youth S" while the inventory
-  // catalog commonly stores canonical sizes such as "S". Try the most specific
-  // lookup first, then progressively relax only the intake-derived filters.
-  const attempts = [
-    { search: term, color, size: rawSize },
-    ...(normalizedSize && normalizedSize !== rawSize
-      ? [{ search: term, color, size: normalizedSize }]
-      : []),
-    { search: term, color, size: '' },
-    { search: term, color: '', size: normalizedSize || rawSize },
-    { search: term, color: '', size: '' },
-    ...(term ? [{ search: '', color, size: normalizedSize || rawSize }] : []),
-  ];
+  // Preserve an operator-entered search term. The prior fallback could drop the
+  // term entirely and return dozens of unrelated items that only matched color/size.
+  // Instead, progressively relax only intake-derived filters while keeping the
+  // product/style intent. For long searches, also try a style/SKU-like token.
+  const searchTerms = [term];
+  if (explicitTerm) {
+    const tokens = explicitTerm.split(/\s+/).filter(Boolean);
+    const styleLike = tokens.find((token) => /\d/.test(token));
+    if (styleLike && !searchTerms.includes(styleLike)) searchTerms.push(styleLike);
+  }
 
-  for (const attempt of attempts) {
-    const rows = await searchManualInvoiceProducts({
-      productSource: 'blank',
-      ...attempt,
-      limit: 100,
-    });
-    if (rows.length) return uniqueBlankRows(rows);
+  for (const searchTerm of searchTerms.filter(Boolean)) {
+    const attempts = [
+      { search: searchTerm, color, size: rawSize },
+      ...(normalizedSize && normalizedSize !== rawSize
+        ? [{ search: searchTerm, color, size: normalizedSize }]
+        : []),
+      { search: searchTerm, color, size: '' },
+      { search: searchTerm, color: '', size: normalizedSize || rawSize },
+      { search: searchTerm, color: '', size: '' },
+    ];
+
+    for (const attempt of attempts) {
+      const rows = await searchManualInvoiceProducts({
+        productSource: 'blank',
+        ...attempt,
+        limit: 100,
+      });
+      if (rows.length) return uniqueBlankRows(rows);
+    }
   }
 
   return [];
