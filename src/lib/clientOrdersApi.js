@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { createManualInvoiceOrder, searchManualInvoiceProducts } from './manualOrdersApi';
 import { shouldSimulateWrites } from './testingMode';
+import { calculateSalesTax } from './salesTax';
 
 const clean = (value) => String(value ?? '').trim();
 
@@ -132,32 +133,43 @@ function uniqueBlankRows(rows = []) {
 }
 
 export async function searchClientOrderBlankProducts(item, search = '') {
-  const term = clean(search || item?.garment_type);
+  const explicitTerm = clean(search);
+  const fallbackTerm = clean(item?.garment_type);
+  const term = explicitTerm || fallbackTerm;
   const color = clean(item?.garment_color);
   const rawSize = clean(item?.size);
   const normalizedSize = normalizeClientOrderSize(rawSize);
 
-  // Customer intake uses friendly labels such as "Youth S" while the inventory
-  // catalog commonly stores canonical sizes such as "S". Try the most specific
-  // lookup first, then progressively relax only the intake-derived filters.
-  const attempts = [
-    { search: term, color, size: rawSize },
-    ...(normalizedSize && normalizedSize !== rawSize
-      ? [{ search: term, color, size: normalizedSize }]
-      : []),
-    { search: term, color, size: '' },
-    { search: term, color: '', size: normalizedSize || rawSize },
-    { search: term, color: '', size: '' },
-    ...(term ? [{ search: '', color, size: normalizedSize || rawSize }] : []),
-  ];
+  // Preserve an operator-entered search term. The prior fallback could drop the
+  // term entirely and return dozens of unrelated items that only matched color/size.
+  // Instead, progressively relax only intake-derived filters while keeping the
+  // product/style intent. For long searches, also try a style/SKU-like token.
+  const searchTerms = [term];
+  if (explicitTerm) {
+    const tokens = explicitTerm.split(/\s+/).filter(Boolean);
+    const styleLike = tokens.find((token) => /\d/.test(token));
+    if (styleLike && !searchTerms.includes(styleLike)) searchTerms.push(styleLike);
+  }
 
-  for (const attempt of attempts) {
-    const rows = await searchManualInvoiceProducts({
-      productSource: 'blank',
-      ...attempt,
-      limit: 100,
-    });
-    if (rows.length) return uniqueBlankRows(rows);
+  for (const searchTerm of searchTerms.filter(Boolean)) {
+    const attempts = [
+      { search: searchTerm, color, size: rawSize },
+      ...(normalizedSize && normalizedSize !== rawSize
+        ? [{ search: searchTerm, color, size: normalizedSize }]
+        : []),
+      { search: searchTerm, color, size: '' },
+      { search: searchTerm, color: '', size: normalizedSize || rawSize },
+      { search: searchTerm, color: '', size: '' },
+    ];
+
+    for (const attempt of attempts) {
+      const rows = await searchManualInvoiceProducts({
+        productSource: 'blank',
+        ...attempt,
+        limit: 100,
+      });
+      if (rows.length) return uniqueBlankRows(rows);
+    }
   }
 
   return [];
@@ -235,6 +247,8 @@ export function buildClientOrderProductionPayload(request, items, options = {}) 
   }
 
   const invoiceNumber = clean(options.invoiceNumber || request.external_invoice_number || request.order_number);
+  const lineSubtotal = (items || []).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0);
+  const taxAmount = calculateSalesTax(lineSubtotal);
   const manualHeader = {
     invoice_number: invoiceNumber,
     customer_name: clean(request.contact_name),
@@ -245,9 +259,9 @@ export function buildClientOrderProductionPayload(request, items, options = {}) 
     due_date: request.desired_completion_date || null,
     invoice_sent: Boolean(request.quote_sent_at),
     payment_received: true,
-    tax_amount: Number(request.tax_amount || 0),
+    tax_amount: taxAmount,
     shipping_amount: Number(request.shipping_amount || 0),
-    total_payment_amount: (items || []).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0) + Number(request.shipping_amount || 0) + Number(request.tax_amount || 0),
+    total_payment_amount: lineSubtotal + Number(request.shipping_amount || 0) + taxAmount,
     notes: [
       `Converted from client request ${request.order_number}.`,
       clean(request.quote_notes),
@@ -338,6 +352,65 @@ export async function convertClientOrderToProduction(request, items, options = {
 function csvCell(value) {
   const text = String(value ?? '');
   return `"${text.replaceAll('"', '""')}"`;
+}
+
+export function buildClientOrderQuickBooksCsv(request, items) {
+  const subtotal = (items || []).reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+    0
+  );
+  const shipping = Number(request.shipping_amount || 0);
+  const tax = calculateSalesTax(subtotal);
+  const invoiceNumber = clean(request.external_invoice_number || request.order_number);
+  const customer = clean(request.organization || request.contact_name);
+  const invoiceDate = new Date().toISOString().slice(0, 10);
+  const dueDate = clean(request.desired_completion_date || invoiceDate);
+
+  const headers = [
+    'InvoiceNo','Customer','InvoiceDate','DueDate','Memo',
+    'Item (Product/Service)','Item Description','Item Qty','Item Rate',
+    'ItemAmount','Taxable','Tax Rate','Currency','Shipping Charge',
+  ];
+
+  const rows = (items || []).map((item, index) => {
+    const description = [
+      item.mapped_item_name || item.garment_type,
+      item.mapped_color || item.garment_color,
+      item.mapped_size || item.size,
+      item.recipient_name ? `Recipient: ${item.recipient_name}` : '',
+      item.name_on_back ? `Name: ${item.name_on_back}` : '',
+      item.jersey_number ? `#${item.jersey_number}` : '',
+      item.placement ? `Placement: ${item.placement}` : '',
+      item.artwork_note ? `Artwork: ${item.artwork_note}` : '',
+    ].filter(Boolean).join(' · ');
+    const qty = Number(item.quantity || 0);
+    const rate = Number(item.unit_price || 0);
+    return [
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      clean(request.quote_notes),
+      '',
+      description,
+      qty,
+      rate.toFixed(2),
+      (qty * rate).toFixed(2),
+      'Y',
+      '9.2%',
+      'USD',
+      index === 0 && shipping > 0 ? shipping.toFixed(2) : '',
+    ];
+  });
+
+  return {
+    csv: [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n'),
+    invoiceNumber,
+    subtotal: Number(subtotal.toFixed(2)),
+    tax,
+    shipping: Number(shipping.toFixed(2)),
+    total: Number((subtotal + tax + shipping).toFixed(2)),
+  };
 }
 
 export function buildClientOrderInvoiceCsv(request, items) {

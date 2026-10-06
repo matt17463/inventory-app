@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   buildClientOrderInvoiceCsv,
+  buildClientOrderQuickBooksCsv,
   convertClientOrderToProduction,
   getClientOrderItems,
   listClientOrderAttachments,
@@ -16,6 +17,7 @@ import {
   updateClientOrderItem,
 } from './lib/clientOrdersApi';
 import { getTestingModeSettings, testingModeLabel } from './lib/testingMode';
+import { calculateSalesTax, SALES_TAX_PERCENT } from './lib/salesTax';
 import './operationsFeatures.css';
 
 const statuses=['submitted','review','pricing','quote_sent','awaiting_approval','awaiting_payment','artwork','ready_for_production','production','ready_pickup','completed','cancelled'];
@@ -40,14 +42,18 @@ function quoteSummary(request,items){
     const description=[item.mapped_item_name||item.garment_type,item.mapped_color||item.garment_color,item.mapped_size||item.size].filter(Boolean).join(' · ');
     return `${item.quantity} × ${description} @ ${money(item.unit_price)} = ${money(Number(item.quantity||0)*Number(item.unit_price||0))}`;
   });
+  const subtotal=items.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unit_price||0),0);
+  const shipping=Number(request.shipping_amount||0);
+  const tax=calculateSalesTax(subtotal);
+  const total=subtotal+shipping+tax;
   return [
     `Skilled Crafting ${request.order_number}`,
     request.organization||request.contact_name,
     ...lines,
-    `Subtotal: ${money(request.quote_subtotal)}`,
-    `Shipping: ${money(request.shipping_amount)}`,
-    `Tax: ${money(request.tax_amount)}`,
-    `Total: ${money(request.quote_total)}`,
+    `Subtotal: ${money(subtotal)}`,
+    `Shipping: ${money(shipping)}`,
+    `Tax: ${money(tax)}`,
+    `Total: ${money(total)}`,
   ].join('\n');
 }
 
@@ -142,7 +148,7 @@ export default function ClientOrders(){
       internal_notes:selected.internal_notes||'',
       quote_notes:selected.quote_notes||'',
       shipping_amount:Number(selected.shipping_amount||0),
-      tax_amount:Number(selected.tax_amount||0),
+      tax_amount:localTax,
       external_invoice_number:clean(invoiceNumber)||null,
     };
     if(simulateWrites){
@@ -312,7 +318,7 @@ export default function ClientOrders(){
         internal_notes:selected.internal_notes||'',
         quote_notes:selected.quote_notes||'',
         shipping_amount:Number(selected.shipping_amount||0),
-        tax_amount:Number(selected.tax_amount||0),
+        tax_amount:localTax,
         external_invoice_number:clean(invoiceNumber)||selected.order_number,
       });
       const result=await convertClientOrderToProduction({...selected,...savedRequest,external_invoice_number:invoiceNumber},savedItems,{invoiceNumber});
@@ -320,6 +326,21 @@ export default function ClientOrders(){
       setMessage(`Converted successfully. Manual order #${result.manualOrderId}${result.jobId?`, production job #${result.jobId}`:''}.`);
     }catch(error){setMessage(error.message||String(error));}
     finally{setBusy(false);}
+  }
+
+  function downloadQuickBooksCsv(){
+    if(!selected) return;
+    const exportData=buildClientOrderQuickBooksCsv({...selected,external_invoice_number:invoiceNumber},items);
+    const blob=new Blob([exportData.csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`${exportData.invoiceNumber||selected.order_number}-quickbooks-online.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`QuickBooks Online CSV created. Tax: ${money(exportData.tax)} at 9.2%.`);
   }
 
   function downloadInvoiceCsv(){
@@ -344,7 +365,8 @@ export default function ClientOrders(){
   }
 
   const localSubtotal=items.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unit_price||0),0);
-  const localTotal=localSubtotal+Number(selected?.shipping_amount||0)+Number(selected?.tax_amount||0);
+  const localTax=calculateSalesTax(localSubtotal);
+  const localTotal=localSubtotal+Number(selected?.shipping_amount||0)+localTax;
   const mappedCount=items.filter((item)=>item.blank_product_id).length;
   const pricedCount=items.filter((item)=>Number(item.unit_price||0)>0).length;
 
@@ -436,15 +458,16 @@ export default function ClientOrders(){
             <div className="section-heading-row wrap-row"><div><h3>Quote + invoice handoff</h3><p className="muted">Use your saved pricing above, then send the quote/invoice through your normal customer and QuickBooks process.</p></div><strong className="sc-quote-total">{money(localTotal)}</strong></div>
             <div className="sc-pricing-grid">
               <label>Shipping<input type="number" step="0.01" value={selected.shipping_amount??0} onChange={(e)=>setSelected({...selected,shipping_amount:e.target.value})}/></label>
-              <label>Tax<input type="number" step="0.01" value={selected.tax_amount??0} onChange={(e)=>setSelected({...selected,tax_amount:e.target.value})}/></label>
+              <label>Tax ({SALES_TAX_PERCENT}%)<input type="number" step="0.01" value={localTax} readOnly /></label>
               <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>setInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
             </div>
-            <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax:</strong> {money(selected.tax_amount)} · <strong>Total:</strong> {money(localTotal)}</p>
+            <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax ({SALES_TAX_PERCENT}%):</strong> {money(localTax)} · <strong>Total:</strong> {money(localTotal)}</p>
             <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>setSelected({...selected,quote_notes:e.target.value})}/></label>
             <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>setSelected({...selected,internal_notes:e.target.value})}/></label>
             <div className="button-row">
               <button disabled={busy} onClick={saveRequest}>Save quote details</button>
               <button type="button" className="secondary-button" onClick={downloadInvoiceCsv}>Download invoice CSV</button>
+              <button type="button" className="secondary-button" onClick={downloadQuickBooksCsv}>QBO CSV</button>
               <button type="button" className="secondary-button" onClick={copyQuote}>Copy quote summary</button>
               <a className="secondary-button" href={'mailto:'+selected.contact_email+'?subject='+encodeURIComponent('Skilled Crafting '+selected.order_number)}>Email customer</a>
             </div>

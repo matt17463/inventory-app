@@ -16,8 +16,10 @@ import {
   previewVoidManualInvoiceOrder,
   voidManualInvoiceOrder,
   syncManualInvoiceGeneratedPullsheet,
+  buildQuickBooksInvoiceCsv,
 } from './lib/manualOrdersApi';
 import { TableInlineEditorRow } from './components/UIPrimitives';
+import { calculateSalesTax, SALES_TAX_PERCENT } from './lib/salesTax';
 
 const blankLine = () => ({
   manual_order_item_id: '',
@@ -582,11 +584,16 @@ export default function ManualInvoicedOrders() {
   }, [editingOrderId, receiveDefaults.bin_id, loadReceiptSummaryForCurrentOrder]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.price_per_item || 0)), 0), [items]);
-  const calculatedTotal = subtotal + Number(order.tax_amount || 0) + Number(order.shipping_amount || 0);
+  const calculatedTax = calculateSalesTax(subtotal);
+  const calculatedTotal = subtotal + calculatedTax + Number(order.shipping_amount || 0);
 
   useEffect(() => {
-    setOrder((prev) => ({ ...prev, total_payment_amount: Number(calculatedTotal.toFixed(2)) }));
-  }, [calculatedTotal]);
+    setOrder((prev) => ({
+      ...prev,
+      tax_amount: calculatedTax,
+      total_payment_amount: Number(calculatedTotal.toFixed(2)),
+    }));
+  }, [calculatedTax, calculatedTotal]);
 
   function updateLine(index, next) {
     setItems((current) => current.map((line, i) => (i === index ? next : line)));
@@ -1097,6 +1104,26 @@ export default function ManualInvoicedOrders() {
     }
   }
 
+  async function downloadQuickBooksCsv(row) {
+    setError('');
+    try {
+      const lineItems = await getManualInvoiceOrderItems(row.id);
+      const exportData = buildQuickBooksInvoiceCsv(row, lineItems);
+      const blob = new Blob([exportData.csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${exportData.invoiceNumber || `MANUAL-${row.id}`}-quickbooks-online.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessage(`QuickBooks Online CSV created for ${exportData.invoiceNumber}. Tax uses ${exportData.taxRatePercent}% (${money(exportData.taxAmount)}).`);
+    } catch (err) {
+      setError(err.message || String(err));
+    }
+  }
+
   async function togglePayment(row, field) {
     const invoiceSent = field === 'invoice_sent' ? !row.invoice_sent : row.invoice_sent;
     const paymentReceived = field === 'payment_received' ? !row.payment_received : row.payment_received;
@@ -1393,7 +1420,7 @@ export default function ManualInvoicedOrders() {
           <div className="sc-panel-header"><div><h2>Totals + Payment</h2><p>Confirm tax, shipping, payment status, and whether this should immediately generate a production job.</p></div></div>
           <div className="sc-form-grid sc-form-grid-4">
             <label className="sc-field"><span>Subtotal</span><input value={money(subtotal)} readOnly /></label>
-            <label className="sc-field"><span>Tax</span><input type="number" step="0.01" min="0" value={order.tax_amount} onChange={(e) => setOrder({ ...order, tax_amount: e.target.value })} /></label>
+            <label className="sc-field"><span>Tax ({SALES_TAX_PERCENT}%)</span><input type="number" step="0.01" min="0" value={calculatedTax} readOnly /></label>
             <label className="sc-field"><span>Shipping</span><input type="number" step="0.01" min="0" value={order.shipping_amount} onChange={(e) => setOrder({ ...order, shipping_amount: e.target.value })} /></label>
             <label className="sc-field"><span>Total Payment Amount</span><input type="number" step="0.01" min="0" value={order.total_payment_amount} onChange={(e) => setOrder({ ...order, total_payment_amount: e.target.value })} /></label>
           </div>
@@ -1540,6 +1567,7 @@ export default function ManualInvoicedOrders() {
                       <div className="manual-order-row-actions">
                         <button className="sc-btn" type="button" onClick={() => editExisting(row)} disabled={rowVoided}>Edit Order</button>
                         <button className="sc-btn" type="button" onClick={() => receiveExisting(row)} disabled={rowVoided}>Receive Blanks</button>
+                        <button className="sc-btn" type="button" onClick={() => downloadQuickBooksCsv(row)} disabled={rowVoided}>QBO CSV</button>
                         {!row.generated_job_id && !rowVoided && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
                         {row.generated_job_id && !rowVoided && (
                           <button
