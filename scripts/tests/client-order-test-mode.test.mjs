@@ -42,3 +42,15 @@ test('testing mode settings describe Client Orders support',()=>{
   assert.match(settings,/Client Orders conversion/);
   assert.match(settings,/fully non-mutating browser simulation/);
 });
+
+
+test('client order blank search normalizes customer-friendly sizes and reports inline results',()=>{
+  const api=read('src/lib/clientOrdersApi.js');
+  const page=read('src/ClientOrders.jsx');
+  assert.match(api,/normalizeClientOrderSize/);
+  assert.match(api,/replace\(\/\^youth/);
+  assert.match(api,/progressively relax only the intake-derived filters/);
+  assert.match(page,/Searching inventory…/);
+  assert.match(page,/possible blank match/);
+  assert.match(page,/No blank matches found/);
+});
