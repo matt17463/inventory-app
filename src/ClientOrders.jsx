@@ -40,14 +40,18 @@ function quoteSummary(request,items){
     const description=[item.mapped_item_name||item.garment_type,item.mapped_color||item.garment_color,item.mapped_size||item.size].filter(Boolean).join(' · ');
     return `${item.quantity} × ${description} @ ${money(item.unit_price)} = ${money(Number(item.quantity||0)*Number(item.unit_price||0))}`;
   });
+  const subtotal=items.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unit_price||0),0);
+  const shipping=Number(request.shipping_amount||0);
+  const tax=Number(request.tax_amount||0);
+  const total=subtotal+shipping+tax;
   return [
     `Skilled Crafting ${request.order_number}`,
     request.organization||request.contact_name,
     ...lines,
-    `Subtotal: ${money(request.quote_subtotal)}`,
-    `Shipping: ${money(request.shipping_amount)}`,
-    `Tax: ${money(request.tax_amount)}`,
-    `Total: ${money(request.quote_total)}`,
+    `Subtotal: ${money(subtotal)}`,
+    `Shipping: ${money(shipping)}`,
+    `Tax: ${money(tax)}`,
+    `Total: ${money(total)}`,
   ].join('\n');
 }
 
