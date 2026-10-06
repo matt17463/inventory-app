@@ -222,7 +222,35 @@ export default function ClientOrders(){
     if(!window.confirm('Convert this paid request into a Manual Invoiced Order, create its production job, and create inventory demand/reservations?')) return;
     setBusy(true);
     try{
-      const result=await convertClientOrderToProduction({...selected,external_invoice_number:invoiceNumber},items,{invoiceNumber});
+      const savedItems=[];
+      for(const item of items){
+        savedItems.push(await updateClientOrderItem(item.id,{
+          blank_product_id:item.blank_product_id||null,
+          sku_base:item.sku_base||'',
+          mapped_item_name:item.mapped_item_name||'',
+          brand:item.brand||'',
+          style:item.style||'',
+          mapped_color:item.mapped_color||'',
+          mapped_size:item.mapped_size||'',
+          unit_cost:Number(item.unit_cost||0),
+          decoration_cost:Number(item.decoration_cost||0),
+          labor_cost:Number(item.labor_cost||0),
+          unit_price:Number(item.unit_price||0),
+          pricing_rule_id:item.pricing_rule_id||null,
+          pricing_rule_name:item.pricing_rule_name||'',
+          placement:item.placement||'',
+          decoration_size:item.decoration_size||'',
+          artwork_note:item.artwork_note||'',
+        }));
+      }
+      const savedRequest=await updateClientOrder(selected.id,{
+        internal_notes:selected.internal_notes||'',
+        quote_notes:selected.quote_notes||'',
+        shipping_amount:Number(selected.shipping_amount||0),
+        tax_amount:Number(selected.tax_amount||0),
+        external_invoice_number:clean(invoiceNumber)||selected.order_number,
+      });
+      const result=await convertClientOrderToProduction({...selected,...savedRequest,external_invoice_number:invoiceNumber},savedItems,{invoiceNumber});
       await refreshSelected();
       setMessage(`Converted successfully. Manual order #${result.manualOrderId}${result.jobId?`, production job #${result.jobId}`:''}.`);
     }catch(error){setMessage(error.message||String(error));}
