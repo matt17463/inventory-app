@@ -363,16 +363,25 @@ export function buildClientOrderQuickBooksCsv(request, items) {
   const tax = calculateSalesTax(subtotal);
   const invoiceNumber = clean(request.external_invoice_number || request.order_number);
   const customer = clean(request.organization || request.contact_name);
-  const invoiceDate = new Date().toISOString().slice(0, 10);
-  const dueDate = clean(request.desired_completion_date || invoiceDate);
+  const invoiceDateIso = new Date().toISOString().slice(0, 10);
+  const invoiceDate = invoiceDateIso.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3/$1');
+  const dueDateIso = clean(request.desired_completion_date || invoiceDateIso);
+  const dueDate = dueDateIso.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3/$1');
 
   const headers = [
-    'InvoiceNo','Customer','InvoiceDate','DueDate','Memo',
-    'Item (Product/Service)','Item Description','Item Qty','Item Rate',
-    'ItemAmount','Taxable','Tax Rate','Currency','Shipping Charge',
+    'Invoice No.',
+    'Customer',
+    'Invoice Date',
+    'Due Date',
+    'Item (Product/Service)',
+    'Description',
+    'Quantity',
+    'Rate',
+    'Amount',
+    'Memo',
   ];
 
-  const rows = (items || []).map((item, index) => {
+  const baseRows = (items || []).map((item) => {
     const description = [
       item.mapped_item_name || item.garment_type,
       item.mapped_color || item.garment_color,
@@ -390,26 +399,55 @@ export function buildClientOrderQuickBooksCsv(request, items) {
       customer,
       invoiceDate,
       dueDate,
-      clean(request.quote_notes),
       '',
       description,
       qty,
       rate.toFixed(2),
       (qty * rate).toFixed(2),
-      'Y',
-      '9.2%',
-      'USD',
-      index === 0 && shipping > 0 ? shipping.toFixed(2) : '',
+      clean(request.quote_notes),
     ];
   });
 
+  const extraRows = [];
+  if (shipping > 0) {
+    extraRows.push([
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      'Shipping',
+      'Shipping',
+      1,
+      shipping.toFixed(2),
+      shipping.toFixed(2),
+      clean(request.quote_notes),
+    ]);
+  }
+
+  if (tax > 0) {
+    extraRows.push([
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      'Sales Tax',
+      '9.2% Sales Tax',
+      1,
+      tax.toFixed(2),
+      tax.toFixed(2),
+      clean(request.quote_notes),
+    ]);
+  }
+
   return {
-    csv: [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n'),
+    csv: [headers, ...baseRows, ...extraRows].map((row) => row.map(csvCell).join(',')).join('\n'),
     invoiceNumber,
     subtotal: Number(subtotal.toFixed(2)),
     tax,
     shipping: Number(shipping.toFixed(2)),
     total: Number((subtotal + tax + shipping).toFixed(2)),
+    salesTaxItemName: 'Sales Tax',
+    shippingItemName: shipping > 0 ? 'Shipping' : '',
   };
 }
 
