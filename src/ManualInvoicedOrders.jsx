@@ -1118,7 +1118,7 @@ export default function ManualInvoicedOrders() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      setMessage(`QuickBooks Online CSV created for ${exportData.invoiceNumber}. Tax uses ${exportData.taxRatePercent}% (${money(exportData.taxAmount)}).`);
+      setMessage(`QuickBooks Online CSV created for ${exportData.invoiceNumber}. Sales tax is exported as a separate "Sales Tax" service-item line for ${money(exportData.taxAmount)}. Ensure QBO has a Product/Service named Sales Tax mapped to Sales Tax Payable.`);
     } catch (err) {
       setError(err.message || String(err));
     }
@@ -1540,7 +1540,7 @@ export default function ManualInvoicedOrders() {
 
 
       <section className="sc-panel">
-        <div className="sc-panel-header"><div><h2>Recent Manual Invoiced Orders</h2><p>Track manual invoice orders, payment status, and generated production jobs.</p></div></div>
+        <div className="sc-panel-header"><div><h2>Recent Manual Invoiced Orders</h2><p>Track manual invoice orders, payment status, and generated production jobs. QBO CSV exports sales tax as a separate <strong>Sales Tax</strong> Product/Service line; create that service item in QuickBooks and map it to Sales Tax Payable before importing.</p></div></div>
         <div className="table-wrap sc-table-wrap">
           <table className="sc-table">
             <thead>
@@ -1567,7 +1567,7 @@ export default function ManualInvoicedOrders() {
                       <div className="manual-order-row-actions">
                         <button className="sc-btn" type="button" onClick={() => editExisting(row)} disabled={rowVoided}>Edit Order</button>
                         <button className="sc-btn" type="button" onClick={() => receiveExisting(row)} disabled={rowVoided}>Receive Blanks</button>
-                        <button className="sc-btn" type="button" onClick={() => downloadQuickBooksCsv(row)} disabled={rowVoided}>QBO CSV</button>
+                        <button className="sc-btn" type="button" onClick={() => downloadQuickBooksCsv(row)} disabled={rowVoided} title="Exports tax as a Sales Tax service-item line so QBO's native tax engine is bypassed.">QBO CSV</button>
                         {!row.generated_job_id && !rowVoided && <button className="sc-btn" type="button" onClick={() => generateExisting(row.id)}>Generate Job</button>}
                         {row.generated_job_id && !rowVoided && (
                           <button
