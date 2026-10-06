@@ -340,7 +340,7 @@ export default function ClientOrders(){
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setMessage(`QuickBooks Online CSV created. Tax: ${money(exportData.tax)} at 9.2%.`);
+    setMessage(`QuickBooks Online CSV created. Sales tax is exported as a separate "Sales Tax" service-item line for ${money(exportData.tax)}. Ensure QBO has a Product/Service named Sales Tax mapped to Sales Tax Payable.`);
   }
 
   function downloadInvoiceCsv(){
@@ -462,12 +462,13 @@ export default function ClientOrders(){
               <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>setInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
             </div>
             <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax ({SALES_TAX_PERCENT}%):</strong> {money(localTax)} · <strong>Total:</strong> {money(localTotal)}</p>
+            <p className="muted">QBO CSV workaround: sales tax is exported as a separate <strong>Sales Tax</strong> Product/Service line, not through QuickBooks' native tax engine. Create that service item in QBO and map it to Sales Tax Payable before importing.</p>
             <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>setSelected({...selected,quote_notes:e.target.value})}/></label>
             <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>setSelected({...selected,internal_notes:e.target.value})}/></label>
             <div className="button-row">
               <button disabled={busy} onClick={saveRequest}>Save quote details</button>
               <button type="button" className="secondary-button" onClick={downloadInvoiceCsv}>Download invoice CSV</button>
-              <button type="button" className="secondary-button" onClick={downloadQuickBooksCsv}>QBO CSV</button>
+              <button type="button" className="secondary-button" onClick={downloadQuickBooksCsv} title="Exports tax as a Sales Tax service-item line so the native QBO sales-tax engine is not used.">QBO CSV</button>
               <button type="button" className="secondary-button" onClick={copyQuote}>Copy quote summary</button>
               <a className="secondary-button" href={'mailto:'+selected.contact_email+'?subject='+encodeURIComponent('Skilled Crafting '+selected.order_number)}>Email customer</a>
             </div>
