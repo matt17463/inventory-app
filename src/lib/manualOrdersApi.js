@@ -264,6 +264,12 @@ export async function searchFinishedForManualInvoice(input = '') {
 }
 
 export async function createManualInvoiceOrder(order, items, generateJob = true) {
+  const orderSubtotal = (items || []).reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.price_per_item || 0),
+    0
+  );
+  const taxAmount = calculateSalesTax(orderSubtotal);
+  const shippingAmount = Number(order.shipping_amount || 0);
   const header = {
     order_source: 'manual_invoice',
     invoice_number: clean(order.invoice_number),
@@ -276,9 +282,9 @@ export async function createManualInvoiceOrder(order, items, generateJob = true)
     status: 'entered',
     invoice_sent: Boolean(order.invoice_sent),
     payment_received: Boolean(order.payment_received),
-    tax_amount: Number(order.tax_amount || 0),
-    shipping_amount: Number(order.shipping_amount || 0),
-    total_payment_amount: Number(order.total_payment_amount || 0),
+    tax_amount: taxAmount,
+    shipping_amount: shippingAmount,
+    total_payment_amount: Number((orderSubtotal + taxAmount + shippingAmount).toFixed(2)),
     notes: clean(order.notes),
   };
 
@@ -371,6 +377,12 @@ export async function syncManualInvoiceGeneratedPullsheet(manualOrderId, options
 }
 
 export async function updateManualInvoiceOrder(manualOrderId, order, items, options = {}) {
+  const orderSubtotal = (items || []).reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.price_per_item || 0),
+    0
+  );
+  const taxAmount = calculateSalesTax(orderSubtotal);
+  const shippingAmount = Number(order.shipping_amount || 0);
   const header = {
     order_source: 'manual_invoice',
     invoice_number: clean(order.invoice_number),
@@ -383,9 +395,9 @@ export async function updateManualInvoiceOrder(manualOrderId, order, items, opti
     status: clean(order.status || 'entered') || 'entered',
     invoice_sent: Boolean(order.invoice_sent),
     payment_received: Boolean(order.payment_received),
-    tax_amount: Number(order.tax_amount || 0),
-    shipping_amount: Number(order.shipping_amount || 0),
-    total_payment_amount: Number(order.total_payment_amount || 0),
+    tax_amount: taxAmount,
+    shipping_amount: shippingAmount,
+    total_payment_amount: Number((orderSubtotal + taxAmount + shippingAmount).toFixed(2)),
     notes: clean(order.notes),
   };
 
