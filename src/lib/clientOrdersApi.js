@@ -415,7 +415,7 @@ export function buildClientOrderQuickBooksCsv(request, items) {
       customer,
       invoiceDate,
       dueDate,
-      'Shipping',
+      '',
       'Shipping',
       1,
       shipping.toFixed(2),
@@ -447,7 +447,7 @@ export function buildClientOrderQuickBooksCsv(request, items) {
     shipping: Number(shipping.toFixed(2)),
     total: Number((subtotal + tax + shipping).toFixed(2)),
     salesTaxItemName: 'Sales Tax',
-    shippingItemName: shipping > 0 ? 'Shipping' : '',
+    shippingItemName: '',
   };
 }
 
