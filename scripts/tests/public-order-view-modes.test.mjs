@@ -31,3 +31,10 @@ test('compact public order rows reduce density for larger orders',()=>{
   assert.match(css,/grid-template-columns:1\.35fr 1\.15fr/);
   assert.match(css,/padding:10px 12px/);
 });
+
+
+test('public order size selector includes One Size and NA',()=>{
+  const form=read('src/PublicClientOrderForm.jsx');
+  assert.match(form,/One Size/);
+  assert.match(form,/'NA'/);
+});
