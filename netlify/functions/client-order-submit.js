@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import { createServiceClient, jsonResponse, getHeader } from './_shared/security.js';
+import { createServiceClient, getHeader } from './_shared/security.js';
+import { putOperationalObject } from './_shared/operationalStorage.js';
 
 const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -23,6 +24,15 @@ function publicHeaders(event) {
 }
 function reply(statusCode, payload, event) {
   return { statusCode, headers: publicHeaders(event), body: JSON.stringify(payload) };
+}
+
+function normalizeAttachments(files) {
+  if (!Array.isArray(files)) return [];
+  return files.slice(0, 3).map((file) => ({
+    name: clean(file?.name, 180).replace(/[^a-zA-Z0-9._ -]/g, '_') || 'attachment',
+    type: clean(file?.type, 120) || 'application/octet-stream',
+    data: String(file?.data || ''),
+  })).filter((file) => file.data);
 }
 
 function normalizeItems(items) {
@@ -54,6 +64,7 @@ export async function handler(event) {
     const contactName = clean(body.contact_name, 160);
     const contactEmail = clean(body.contact_email, 200).toLowerCase();
     const items = normalizeItems(body.items);
+    const attachments = normalizeAttachments(body.attachments);
     if (!organization || !contactName || !emailOk(contactEmail)) {
       return reply(400, { success: false, error: 'Organization, contact name, and a valid email are required.' }, event);
     }
@@ -97,6 +108,28 @@ export async function handler(event) {
       await supabase.from('sc_client_order_requests').delete().eq('id', created.data.id);
       throw inserted.error;
     }
+    for (const file of attachments) {
+      const bytes = Buffer.from(file.data, 'base64');
+      if (!bytes.length || bytes.length > 4 * 1024 * 1024) continue;
+      const safeName = file.name.replace(/\s+/g, '-');
+      const stored = await putOperationalObject({
+        key: `operational/client-orders/${created.data.id}/${crypto.randomUUID()}-${safeName}`,
+        bytes,
+        contentType: file.type,
+        makePreview: false,
+      });
+      const saved = await supabase.from('sc_client_order_attachments').insert({
+        request_id: created.data.id,
+        file_name: file.name,
+        mime_type: file.type,
+        file_size_bytes: stored.file_size_bytes,
+        storage_provider: stored.storage_provider,
+        storage_bucket: stored.storage_bucket,
+        storage_path: stored.storage_path,
+      });
+      if (saved.error) throw saved.error;
+    }
+
     await supabase.from('sc_client_order_submission_guard').insert({ ip_hash: ipHash });
 
     return reply(200, {
