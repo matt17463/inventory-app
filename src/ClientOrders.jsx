@@ -63,6 +63,7 @@ export default function ClientOrders(){
   const [busy,setBusy]=useState(false);
   const [mappingSearch,setMappingSearch]=useState({});
   const [mappingResults,setMappingResults]=useState({});
+  const [mappingStatus,setMappingStatus]=useState({});
   const [invoiceNumber,setInvoiceNumber]=useState('');
   const [testingSettings,setTestingSettings]=useState(getTestingModeSettings());
   const [simulationPreview,setSimulationPreview]=useState(null);
@@ -97,6 +98,7 @@ export default function ClientOrders(){
     setInvoiceNumber(row.external_invoice_number||row.order_number||'');
     setMessage('');
     setMappingResults({});
+    setMappingStatus({});
     setSimulationPreview(null);
     try{
       const [lineRows,fileRows]=await Promise.all([getClientOrderItems(row.id),listClientOrderAttachments(row.id)]);
@@ -195,12 +197,21 @@ export default function ClientOrders(){
 
   async function findBlank(item){
     setBusy(true);
+    setMappingStatus((current)=>({...current,[item.id]:'Searching inventory…'}));
     try{
       const results=await searchClientOrderBlankProducts(item,mappingSearch[item.id]||'');
       setMappingResults((current)=>({...current,[item.id]:results}));
+      setMappingStatus((current)=>({
+        ...current,
+        [item.id]:results.length
+          ? `${results.length} possible blank match${results.length===1?'':'es'} found. Select the correct product below.`
+          : 'No blank matches found. Try SKU, brand, style, or a broader garment search.',
+      }));
       if(!results.length) setMessage(`No blank matches found for line ${item.line_number}. Try a broader search.`);
-    }catch(error){setMessage(error.message||String(error));}
-    finally{setBusy(false);}
+    }catch(error){
+      setMappingStatus((current)=>({...current,[item.id]:error.message||'Blank search failed.'}));
+      setMessage(error.message||String(error));
+    }finally{setBusy(false);}
   }
 
   async function chooseBlank(item,match){
@@ -216,6 +227,7 @@ export default function ClientOrders(){
     };
     editItem(item.id,patch);
     setMappingResults((current)=>({...current,[item.id]:[]}));
+    setMappingStatus((current)=>({...current,[item.id]:`Mapped to ${patch.sku_base||patch.mapped_item_name||'selected blank'}.`}));
     setMessage(`Line ${item.line_number} mapped. Review pricing, then save the line.`);
   }
 
@@ -388,8 +400,9 @@ export default function ClientOrders(){
 
               <div className="sc-map-row">
                 <input value={mappingSearch[item.id]||''} onChange={(e)=>setMappingSearch({...mappingSearch,[item.id]:e.target.value})} placeholder={item.garment_type||'Search SKU, brand, style…'} />
-                <button type="button" className="secondary-button" disabled={busy} onClick={()=>findBlank(item)}>Find blank</button>
+                <button type="button" className="secondary-button" disabled={busy} onClick={()=>findBlank(item)}>{busy&&mappingStatus[item.id]==='Searching inventory…'?'Searching…':'Find blank'}</button>
               </div>
+              {mappingStatus[item.id]&&<p className={(mappingResults[item.id]||[]).length?'sc-map-status success':'sc-map-status'}>{mappingStatus[item.id]}</p>}
 
               {(mappingResults[item.id]||[]).length>0&&<div className="sc-match-results">
                 {(mappingResults[item.id]||[]).slice(0,8).map((match,index)=><button type="button" key={match.blank_product_id||match.product_id||match.id||index} onClick={()=>chooseBlank(item,match)}><strong>{matchLabel(match)}</strong>{match.quantity_on_hand!=null&&<small>On hand: {match.quantity_on_hand}</small>}</button>)}
