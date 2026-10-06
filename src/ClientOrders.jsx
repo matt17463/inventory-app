@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   buildClientOrderInvoiceCsv,
+  buildClientOrderQuickBooksCsv,
   convertClientOrderToProduction,
   getClientOrderItems,
   listClientOrderAttachments,
@@ -327,6 +328,21 @@ export default function ClientOrders(){
     finally{setBusy(false);}
   }
 
+  function downloadQuickBooksCsv(){
+    if(!selected) return;
+    const exportData=buildClientOrderQuickBooksCsv({...selected,external_invoice_number:invoiceNumber},items);
+    const blob=new Blob([exportData.csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`${exportData.invoiceNumber||selected.order_number}-quickbooks-online.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`QuickBooks Online CSV created. Tax: ${money(exportData.tax)} at 9.2%.`);
+  }
+
   function downloadInvoiceCsv(){
     if(!selected) return;
     const csv=buildClientOrderInvoiceCsv({...selected,external_invoice_number:invoiceNumber},items);
@@ -451,6 +467,7 @@ export default function ClientOrders(){
             <div className="button-row">
               <button disabled={busy} onClick={saveRequest}>Save quote details</button>
               <button type="button" className="secondary-button" onClick={downloadInvoiceCsv}>Download invoice CSV</button>
+              <button type="button" className="secondary-button" onClick={downloadQuickBooksCsv}>QBO CSV</button>
               <button type="button" className="secondary-button" onClick={copyQuote}>Copy quote summary</button>
               <a className="secondary-button" href={'mailto:'+selected.contact_email+'?subject='+encodeURIComponent('Skilled Crafting '+selected.order_number)}>Email customer</a>
             </div>
