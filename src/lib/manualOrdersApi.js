@@ -76,25 +76,24 @@ export function buildQuickBooksInvoiceCsv(order, items = []) {
   );
   const taxAmount = calculateSalesTax(subtotal);
 
+  // QBO's native invoice CSV importer can reject files when its sales-tax
+  // engine is enabled. To avoid that path, tax is exported as a normal Service
+  // Item line named "Sales Tax". Create that Product/Service in QBO and map it
+  // to Sales Tax Payable (liability), not an income account.
   const headers = [
-    'InvoiceNo',
+    'Invoice No.',
     'Customer',
-    'InvoiceDate',
-    'DueDate',
-    'Terms',
-    'Memo',
+    'Invoice Date',
+    'Due Date',
     'Item (Product/Service)',
-    'Item Description',
-    'Item Qty',
-    'Item Rate',
-    'ItemAmount',
-    'Taxable',
-    'Tax Rate',
-    'Currency',
-    'Shipping Charge',
+    'Description',
+    'Quantity',
+    'Rate',
+    'Amount',
+    'Memo',
   ];
 
-  const rows = (items || []).map((item, index) => {
+  const baseRows = (items || []).map((item) => {
     const description = [
       clean(item.item_name),
       [item.brand, item.style, item.color, item.size].map(clean).filter(Boolean).join(' '),
@@ -111,27 +110,55 @@ export function buildQuickBooksInvoiceCsv(order, items = []) {
       invoiceDate,
       dueDate,
       '',
-      clean(order.notes),
-      '',
       description || clean(item.sku_base),
       quantity,
       rate.toFixed(2),
       (quantity * rate).toFixed(2),
-      'Y',
-      `${SALES_TAX_PERCENT}%`,
-      'USD',
-      index === 0 && shipping > 0 ? shipping.toFixed(2) : '',
+      clean(order.notes),
     ];
   });
 
+  const extraRows = [];
+  if (shipping > 0) {
+    extraRows.push([
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      'Shipping',
+      'Shipping',
+      1,
+      shipping.toFixed(2),
+      shipping.toFixed(2),
+      clean(order.notes),
+    ]);
+  }
+
+  if (taxAmount > 0) {
+    extraRows.push([
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      'Sales Tax',
+      `${SALES_TAX_PERCENT}% Sales Tax`,
+      1,
+      taxAmount.toFixed(2),
+      taxAmount.toFixed(2),
+      clean(order.notes),
+    ]);
+  }
+
   return {
-    csv: [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n'),
+    csv: [headers, ...baseRows, ...extraRows].map((row) => row.map(csvCell).join(',')).join('\n'),
     invoiceNumber,
     subtotal: Number(subtotal.toFixed(2)),
     taxAmount,
     shipping: Number(shipping.toFixed(2)),
     total: Number((subtotal + taxAmount + shipping).toFixed(2)),
     taxRatePercent: SALES_TAX_PERCENT,
+    salesTaxItemName: 'Sales Tax',
+    shippingItemName: shipping > 0 ? 'Shipping' : '',
   };
 }
 
