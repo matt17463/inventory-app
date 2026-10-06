@@ -354,6 +354,65 @@ function csvCell(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+export function buildClientOrderQuickBooksCsv(request, items) {
+  const subtotal = (items || []).reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+    0
+  );
+  const shipping = Number(request.shipping_amount || 0);
+  const tax = calculateSalesTax(subtotal);
+  const invoiceNumber = clean(request.external_invoice_number || request.order_number);
+  const customer = clean(request.organization || request.contact_name);
+  const invoiceDate = new Date().toISOString().slice(0, 10);
+  const dueDate = clean(request.desired_completion_date || invoiceDate);
+
+  const headers = [
+    'InvoiceNo','Customer','InvoiceDate','DueDate','Memo',
+    'Item (Product/Service)','Item Description','Item Qty','Item Rate',
+    'ItemAmount','Taxable','Tax Rate','Currency','Shipping Charge',
+  ];
+
+  const rows = (items || []).map((item, index) => {
+    const description = [
+      item.mapped_item_name || item.garment_type,
+      item.mapped_color || item.garment_color,
+      item.mapped_size || item.size,
+      item.recipient_name ? `Recipient: ${item.recipient_name}` : '',
+      item.name_on_back ? `Name: ${item.name_on_back}` : '',
+      item.jersey_number ? `#${item.jersey_number}` : '',
+      item.placement ? `Placement: ${item.placement}` : '',
+      item.artwork_note ? `Artwork: ${item.artwork_note}` : '',
+    ].filter(Boolean).join(' · ');
+    const qty = Number(item.quantity || 0);
+    const rate = Number(item.unit_price || 0);
+    return [
+      invoiceNumber,
+      customer,
+      invoiceDate,
+      dueDate,
+      clean(request.quote_notes),
+      '',
+      description,
+      qty,
+      rate.toFixed(2),
+      (qty * rate).toFixed(2),
+      'Y',
+      '9.2%',
+      'USD',
+      index === 0 && shipping > 0 ? shipping.toFixed(2) : '',
+    ];
+  });
+
+  return {
+    csv: [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n'),
+    invoiceNumber,
+    subtotal: Number(subtotal.toFixed(2)),
+    tax,
+    shipping: Number(shipping.toFixed(2)),
+    total: Number((subtotal + tax + shipping).toFixed(2)),
+  };
+}
+
 export function buildClientOrderInvoiceCsv(request, items) {
   const headers = [
     'Customer', 'Email', 'Invoice/Reference', 'Request', 'Description',
