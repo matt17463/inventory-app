@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { createManualInvoiceOrder, searchManualInvoiceProducts } from './manualOrdersApi';
+import { shouldSimulateWrites } from './testingMode';
 
 const clean = (value) => String(value ?? '').trim();
 
@@ -155,7 +156,7 @@ function conversionIds(result) {
   };
 }
 
-export async function convertClientOrderToProduction(request, items, options = {}) {
+export function buildClientOrderProductionPayload(request, items, options = {}) {
   if (!request?.id) throw new Error('Select a client order first.');
   if (request.manual_order_id) {
     throw new Error(`This request is already converted to manual order #${request.manual_order_id}.`);
@@ -221,7 +222,43 @@ export async function convertClientOrderToProduction(request, items, options = {
     ].filter(Boolean).join(' · '),
   }));
 
-  const result = await createManualInvoiceOrder(manualHeader, manualItems, true);
+  return {
+    invoiceNumber,
+    manualHeader,
+    manualItems,
+    totalQuantity: manualItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+  };
+}
+
+export function previewClientOrderProductionConversion(request, items, options = {}) {
+  const payload = buildClientOrderProductionPayload(request, items, options);
+  return {
+    simulated: true,
+    manualOrderId: null,
+    jobId: null,
+    request: { ...request, status: 'production' },
+    preview: {
+      ...payload,
+      wouldCreateManualOrder: true,
+      wouldCreateProductionJob: true,
+      wouldCreateInventoryReservations: true,
+      wouldEvaluatePurchasingDemand: true,
+      inventoryChanged: false,
+      databaseChanged: false,
+    },
+  };
+}
+
+export async function convertClientOrderToProduction(request, items, options = {}) {
+  const payload = buildClientOrderProductionPayload(request, items, options);
+
+  // Hard safety boundary: in simulated-write Testing Mode, this function
+  // validates and builds the exact live conversion payload but performs no writes.
+  if (shouldSimulateWrites()) {
+    return previewClientOrderProductionConversion(request, items, options);
+  }
+
+  const result = await createManualInvoiceOrder(payload.manualHeader, payload.manualItems, true);
   const ids = conversionIds(result);
 
   if (!ids.manualOrderId) {
@@ -229,7 +266,7 @@ export async function convertClientOrderToProduction(request, items, options = {
   }
 
   const updated = await updateClientOrder(request.id, {
-    external_invoice_number: invoiceNumber,
+    external_invoice_number: payload.invoiceNumber,
     manual_order_id: ids.manualOrderId,
     generated_job_id: ids.jobId,
     converted_at: new Date().toISOString(),
@@ -237,7 +274,7 @@ export async function convertClientOrderToProduction(request, items, options = {
     status: 'production',
   });
 
-  return { result, request: updated, ...ids };
+  return { result, request: updated, ...ids, simulated: false };
 }
 
 function csvCell(value) {
