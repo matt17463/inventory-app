@@ -47,7 +47,7 @@ export default function TestingMode() {
             disabled={!settings.enabled}
             onChange={(event) => update({ simulateWrites: event.target.checked })}
           />
-          <span><strong>Simulate supported writes</strong><small>Supported actions, such as pull sheet cancellation, log a test event instead of changing live records.</small></span>
+          <span><strong>Simulate supported writes</strong><small>Supported actions, including Client Orders conversion and pull sheet cancellation, are simulated instead of changing live production records.</small></span>
         </label>
 
         <label className="toggle-row">
@@ -73,7 +73,7 @@ export default function TestingMode() {
 
       <section className="card elevated-card">
         <h2>Recommended use</h2>
-        <p>For everyday testing, enable testing mode and simulated writes before trying a workflow. For full end-to-end testing, the safest option is a separate Netlify deploy connected to a separate Supabase test project.</p>
+        <p>For everyday testing, enable testing mode and simulated writes before trying a workflow. Client Orders now supports a fully non-mutating browser simulation through mapping, pricing, approval, payment, and production conversion. For broader application testing, a separate Netlify deploy connected to a separate Supabase test project remains the safest option.</p>
         <ol className="simple-steps">
           <li>Turn on testing mode.</li>
           <li>Turn on simulated writes.</li>
