@@ -16,6 +16,7 @@ import {
   updateClientOrderItem,
 } from './lib/clientOrdersApi';
 import { getTestingModeSettings, testingModeLabel } from './lib/testingMode';
+import { calculateSalesTax, SALES_TAX_PERCENT } from './lib/salesTax';
 import './operationsFeatures.css';
 
 const statuses=['submitted','review','pricing','quote_sent','awaiting_approval','awaiting_payment','artwork','ready_for_production','production','ready_pickup','completed','cancelled'];
@@ -42,7 +43,7 @@ function quoteSummary(request,items){
   });
   const subtotal=items.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unit_price||0),0);
   const shipping=Number(request.shipping_amount||0);
-  const tax=Number(request.tax_amount||0);
+  const tax=calculateSalesTax(subtotal);
   const total=subtotal+shipping+tax;
   return [
     `Skilled Crafting ${request.order_number}`,
@@ -146,7 +147,7 @@ export default function ClientOrders(){
       internal_notes:selected.internal_notes||'',
       quote_notes:selected.quote_notes||'',
       shipping_amount:Number(selected.shipping_amount||0),
-      tax_amount:Number(selected.tax_amount||0),
+      tax_amount:localTax,
       external_invoice_number:clean(invoiceNumber)||null,
     };
     if(simulateWrites){
@@ -316,7 +317,7 @@ export default function ClientOrders(){
         internal_notes:selected.internal_notes||'',
         quote_notes:selected.quote_notes||'',
         shipping_amount:Number(selected.shipping_amount||0),
-        tax_amount:Number(selected.tax_amount||0),
+        tax_amount:localTax,
         external_invoice_number:clean(invoiceNumber)||selected.order_number,
       });
       const result=await convertClientOrderToProduction({...selected,...savedRequest,external_invoice_number:invoiceNumber},savedItems,{invoiceNumber});
@@ -348,7 +349,8 @@ export default function ClientOrders(){
   }
 
   const localSubtotal=items.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unit_price||0),0);
-  const localTotal=localSubtotal+Number(selected?.shipping_amount||0)+Number(selected?.tax_amount||0);
+  const localTax=calculateSalesTax(localSubtotal);
+  const localTotal=localSubtotal+Number(selected?.shipping_amount||0)+localTax;
   const mappedCount=items.filter((item)=>item.blank_product_id).length;
   const pricedCount=items.filter((item)=>Number(item.unit_price||0)>0).length;
 
@@ -440,10 +442,10 @@ export default function ClientOrders(){
             <div className="section-heading-row wrap-row"><div><h3>Quote + invoice handoff</h3><p className="muted">Use your saved pricing above, then send the quote/invoice through your normal customer and QuickBooks process.</p></div><strong className="sc-quote-total">{money(localTotal)}</strong></div>
             <div className="sc-pricing-grid">
               <label>Shipping<input type="number" step="0.01" value={selected.shipping_amount??0} onChange={(e)=>setSelected({...selected,shipping_amount:e.target.value})}/></label>
-              <label>Tax<input type="number" step="0.01" value={selected.tax_amount??0} onChange={(e)=>setSelected({...selected,tax_amount:e.target.value})}/></label>
+              <label>Tax ({SALES_TAX_PERCENT}%)<input type="number" step="0.01" value={localTax} readOnly /></label>
               <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>setInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
             </div>
-            <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax:</strong> {money(selected.tax_amount)} · <strong>Total:</strong> {money(localTotal)}</p>
+            <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax ({SALES_TAX_PERCENT}%):</strong> {money(localTax)} · <strong>Total:</strong> {money(localTotal)}</p>
             <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>setSelected({...selected,quote_notes:e.target.value})}/></label>
             <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>setSelected({...selected,internal_notes:e.target.value})}/></label>
             <div className="button-row">
