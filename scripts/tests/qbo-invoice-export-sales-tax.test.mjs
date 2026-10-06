@@ -45,3 +45,23 @@ test('manual invoiced orders expose a QuickBooks Online CSV export',()=>{
   assert.match(api,/Tax Rate/);
   assert.match(api,/SALES_TAX_PERCENT/);
 });
+
+
+test('Client Orders QBO export is available before conversion',()=>{
+  const page=read('src/ClientOrders.jsx');
+  const api=read('src/lib/clientOrdersApi.js');
+  assert.match(page,/QBO CSV/);
+  assert.match(page,/buildClientOrderQuickBooksCsv/);
+  assert.match(api,/buildClientOrderQuickBooksCsv/);
+  assert.match(api,/'9\.2%'/);
+});
+
+test('explicit client-order blank searches never discard the typed product term',()=>{
+  const api=read('src/lib/clientOrdersApi.js');
+  const start=api.indexOf('export async function searchClientOrderBlankProducts');
+  const end=api.indexOf('export function priceClientOrderItem',start);
+  const fn=api.slice(start,end);
+  assert.match(fn,/const explicitTerm = clean\(search\)/);
+  assert.match(fn,/styleLike/);
+  assert.doesNotMatch(fn,/search: ''/);
+});
