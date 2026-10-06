@@ -115,3 +115,5 @@
 
 /* v1.4.30 client order testing mode */
 .sc-client-test-mode{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-radius:12px;border:1px solid rgba(120,140,160,.28);background:rgba(255,193,7,.08)}.sc-client-test-mode.active{border-color:rgba(46,125,50,.35);background:rgba(46,125,50,.09)}.sc-client-test-mode.warning{border-color:rgba(211,154,44,.45);background:rgba(211,154,44,.12)}.sc-client-test-mode p{margin:.3rem 0 0}.sc-simulation-preview{margin-top:16px;padding:14px 16px;border:2px dashed rgba(46,125,50,.48);border-radius:12px;background:rgba(46,125,50,.07)}.sc-simulation-preview>strong{display:block;margin-bottom:10px}.sc-simulation-preview p:last-child{margin-bottom:0;font-weight:700}@media(max-width:700px){.sc-client-test-mode{align-items:stretch;flex-direction:column}}
+
+.sc-map-status{margin:-4px 0 10px;padding:8px 10px;border-radius:8px;background:rgba(211,154,44,.10);font-size:.85rem}.sc-map-status.success{background:rgba(46,125,50,.09)}
