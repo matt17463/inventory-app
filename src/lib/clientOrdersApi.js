@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { createManualInvoiceOrder, searchManualInvoiceProducts } from './manualOrdersApi';
 import { shouldSimulateWrites } from './testingMode';
+import { calculateSalesTax } from './salesTax';
 
 const clean = (value) => String(value ?? '').trim();
 
@@ -235,6 +236,8 @@ export function buildClientOrderProductionPayload(request, items, options = {}) 
   }
 
   const invoiceNumber = clean(options.invoiceNumber || request.external_invoice_number || request.order_number);
+  const lineSubtotal = (items || []).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0);
+  const taxAmount = calculateSalesTax(lineSubtotal);
   const manualHeader = {
     invoice_number: invoiceNumber,
     customer_name: clean(request.contact_name),
@@ -245,9 +248,9 @@ export function buildClientOrderProductionPayload(request, items, options = {}) 
     due_date: request.desired_completion_date || null,
     invoice_sent: Boolean(request.quote_sent_at),
     payment_received: true,
-    tax_amount: Number(request.tax_amount || 0),
+    tax_amount: taxAmount,
     shipping_amount: Number(request.shipping_amount || 0),
-    total_payment_amount: (items || []).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0) + Number(request.shipping_amount || 0) + Number(request.tax_amount || 0),
+    total_payment_amount: lineSubtotal + Number(request.shipping_amount || 0) + taxAmount,
     notes: [
       `Converted from client request ${request.order_number}.`,
       clean(request.quote_notes),
