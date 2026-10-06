@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import './operationsFeatures.css';
 
-const sizes = ['YXS','YS','YM','YL','YXL','AXS','AS','AM','AL','AXL','A2XL','A3XL','A4XL'];
+const sizes = ['YXS','YS','YM','YL','YXL','AXS','AS','AM','AL','AXL','A2XL','A3XL','A4XL','One Size','NA'];
 const emptyLine = () => ({ recipient_name:'', garment_type:'', size:'', garment_color:'', name_on_back:'', name_text_color:'', jersey_number:'', quantity:1, notes:'' });
 
 function csvRows(text) {
