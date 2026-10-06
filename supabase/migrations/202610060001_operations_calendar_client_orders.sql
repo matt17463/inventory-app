@@ -46,6 +46,18 @@ create table if not exists public.sc_client_order_request_items (
   unique (request_id, line_number)
 );
 
+create table if not exists public.sc_client_order_attachments (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.sc_client_order_requests(id) on delete cascade,
+  file_name text not null,
+  mime_type text,
+  file_size_bytes bigint,
+  storage_provider text not null default 'r2',
+  storage_bucket text not null,
+  storage_path text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.sc_client_order_submission_guard (
   id bigint generated always as identity primary key,
   ip_hash text not null,
@@ -58,13 +70,16 @@ create index if not exists sc_client_order_requests_status_due_idx
 
 alter table public.sc_client_order_requests enable row level security;
 alter table public.sc_client_order_request_items enable row level security;
+alter table public.sc_client_order_attachments enable row level security;
 alter table public.sc_client_order_submission_guard enable row level security;
 
 revoke all on public.sc_client_order_requests from anon;
 revoke all on public.sc_client_order_request_items from anon;
+revoke all on public.sc_client_order_attachments from anon;
 revoke all on public.sc_client_order_submission_guard from anon;
 grant select, update on public.sc_client_order_requests to authenticated;
 grant select on public.sc_client_order_request_items to authenticated;
+grant select on public.sc_client_order_attachments to authenticated;
 
 drop policy if exists sc_client_orders_employee_select on public.sc_client_order_requests;
 create policy sc_client_orders_employee_select on public.sc_client_order_requests
@@ -91,6 +106,15 @@ for update to authenticated using (
 
 drop policy if exists sc_client_order_items_employee_select on public.sc_client_order_request_items;
 create policy sc_client_order_items_employee_select on public.sc_client_order_request_items
+for select to authenticated using (
+  exists (
+    select 1 from public.sc_app_user_roles r
+    where r.user_id = auth.uid() and r.is_active = true
+  )
+);
+
+drop policy if exists sc_client_order_attachments_employee_select on public.sc_client_order_attachments;
+create policy sc_client_order_attachments_employee_select on public.sc_client_order_attachments
 for select to authenticated using (
   exists (
     select 1 from public.sc_app_user_roles r
