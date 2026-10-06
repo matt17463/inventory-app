@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { createManualInvoiceOrder, searchManualInvoiceProducts } from './manualOrdersApi';
+import { shouldSimulateWrites } from './testingMode';
 
 const clean = (value) => String(value ?? '').trim();
 
@@ -94,14 +95,72 @@ export async function listClientPricingRules() {
   return (legacy.data || []).map(normalizeRule).filter((row) => row.active !== false);
 }
 
-export async function searchClientOrderBlankProducts(item, search = '') {
-  return searchManualInvoiceProducts({
-    productSource: 'blank',
-    search: clean(search || item?.garment_type),
-    color: clean(item?.garment_color),
-    size: clean(item?.size),
-    limit: 100,
+function normalizeClientOrderSize(value) {
+  const raw = clean(value);
+  if (!raw) return '';
+  const normalized = raw
+    .replace(/^youth\s+/i, '')
+    .replace(/^adult\s+/i, '')
+    .replace(/^kids?\s+/i, '')
+    .trim();
+  const aliases = {
+    'extra small': 'XS',
+    'x-small': 'XS',
+    'small': 'S',
+    'medium': 'M',
+    'large': 'L',
+    'extra large': 'XL',
+    'x-large': 'XL',
+    '2xl': '2XL',
+    'xxl': '2XL',
+    '3xl': '3XL',
+    'xxxl': '3XL',
+  };
+  return aliases[normalized.toLowerCase()] || normalized;
+}
+
+function uniqueBlankRows(rows = []) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = String(row.blank_product_id || row.product_id || row.id || [
+      row.sku_base, row.sku, row.brand, row.style, row.color, row.size,
+    ].join('|'));
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
+
+export async function searchClientOrderBlankProducts(item, search = '') {
+  const term = clean(search || item?.garment_type);
+  const color = clean(item?.garment_color);
+  const rawSize = clean(item?.size);
+  const normalizedSize = normalizeClientOrderSize(rawSize);
+
+  // Customer intake uses friendly labels such as "Youth S" while the inventory
+  // catalog commonly stores canonical sizes such as "S". Try the most specific
+  // lookup first, then progressively relax only the intake-derived filters.
+  const attempts = [
+    { search: term, color, size: rawSize },
+    ...(normalizedSize && normalizedSize !== rawSize
+      ? [{ search: term, color, size: normalizedSize }]
+      : []),
+    { search: term, color, size: '' },
+    { search: term, color: '', size: normalizedSize || rawSize },
+    { search: term, color: '', size: '' },
+    ...(term ? [{ search: '', color, size: normalizedSize || rawSize }] : []),
+  ];
+
+  for (const attempt of attempts) {
+    const rows = await searchManualInvoiceProducts({
+      productSource: 'blank',
+      ...attempt,
+      limit: 100,
+    });
+    if (rows.length) return uniqueBlankRows(rows);
+  }
+
+  return [];
 }
 
 export function priceClientOrderItem(item, rule) {
@@ -155,7 +214,7 @@ function conversionIds(result) {
   };
 }
 
-export async function convertClientOrderToProduction(request, items, options = {}) {
+export function buildClientOrderProductionPayload(request, items, options = {}) {
   if (!request?.id) throw new Error('Select a client order first.');
   if (request.manual_order_id) {
     throw new Error(`This request is already converted to manual order #${request.manual_order_id}.`);
@@ -221,7 +280,43 @@ export async function convertClientOrderToProduction(request, items, options = {
     ].filter(Boolean).join(' · '),
   }));
 
-  const result = await createManualInvoiceOrder(manualHeader, manualItems, true);
+  return {
+    invoiceNumber,
+    manualHeader,
+    manualItems,
+    totalQuantity: manualItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+  };
+}
+
+export function previewClientOrderProductionConversion(request, items, options = {}) {
+  const payload = buildClientOrderProductionPayload(request, items, options);
+  return {
+    simulated: true,
+    manualOrderId: null,
+    jobId: null,
+    request: { ...request, status: 'production' },
+    preview: {
+      ...payload,
+      wouldCreateManualOrder: true,
+      wouldCreateProductionJob: true,
+      wouldCreateInventoryReservations: true,
+      wouldEvaluatePurchasingDemand: true,
+      inventoryChanged: false,
+      databaseChanged: false,
+    },
+  };
+}
+
+export async function convertClientOrderToProduction(request, items, options = {}) {
+  const payload = buildClientOrderProductionPayload(request, items, options);
+
+  // Hard safety boundary: in simulated-write Testing Mode, this function
+  // validates and builds the exact live conversion payload but performs no writes.
+  if (shouldSimulateWrites()) {
+    return previewClientOrderProductionConversion(request, items, options);
+  }
+
+  const result = await createManualInvoiceOrder(payload.manualHeader, payload.manualItems, true);
   const ids = conversionIds(result);
 
   if (!ids.manualOrderId) {
@@ -229,7 +324,7 @@ export async function convertClientOrderToProduction(request, items, options = {
   }
 
   const updated = await updateClientOrder(request.id, {
-    external_invoice_number: invoiceNumber,
+    external_invoice_number: payload.invoiceNumber,
     manual_order_id: ids.manualOrderId,
     generated_job_id: ids.jobId,
     converted_at: new Date().toISOString(),
@@ -237,7 +332,7 @@ export async function convertClientOrderToProduction(request, items, options = {
     status: 'production',
   });
 
-  return { result, request: updated, ...ids };
+  return { result, request: updated, ...ids, simulated: false };
 }
 
 function csvCell(value) {

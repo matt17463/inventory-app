@@ -15,6 +15,7 @@ import {
   updateClientOrder,
   updateClientOrderItem,
 } from './lib/clientOrdersApi';
+import { getTestingModeSettings, testingModeLabel } from './lib/testingMode';
 import './operationsFeatures.css';
 
 const statuses=['submitted','review','pricing','quote_sent','awaiting_approval','awaiting_payment','artwork','ready_for_production','production','ready_pickup','completed','cancelled'];
@@ -62,7 +63,11 @@ export default function ClientOrders(){
   const [busy,setBusy]=useState(false);
   const [mappingSearch,setMappingSearch]=useState({});
   const [mappingResults,setMappingResults]=useState({});
+  const [mappingStatus,setMappingStatus]=useState({});
   const [invoiceNumber,setInvoiceNumber]=useState('');
+  const [testingSettings,setTestingSettings]=useState(getTestingModeSettings());
+  const [simulationPreview,setSimulationPreview]=useState(null);
+  const simulateWrites=Boolean(testingSettings.enabled&&testingSettings.simulateWrites);
 
   async function load(){
     setLoading(true); setMessage('');
@@ -82,12 +87,19 @@ export default function ClientOrders(){
   }
 
   useEffect(()=>{load();},[]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{
+    const handler=(event)=>setTestingSettings(event.detail||getTestingModeSettings());
+    window.addEventListener('sc-testing-mode-change',handler);
+    return ()=>window.removeEventListener('sc-testing-mode-change',handler);
+  },[]);
 
   async function open(row){
     setSelected(row);
     setInvoiceNumber(row.external_invoice_number||row.order_number||'');
     setMessage('');
     setMappingResults({});
+    setMappingStatus({});
+    setSimulationPreview(null);
     try{
       const [lineRows,fileRows]=await Promise.all([getClientOrderItems(row.id),listClientOrderAttachments(row.id)]);
       setItems(lineRows);
@@ -109,9 +121,16 @@ export default function ClientOrders(){
 
   async function changeStatus(next){
     if(!selected) return;
+    const patch={status:next,reviewed_at:selected.reviewed_at||(next!=='submitted'?new Date().toISOString():null)};
+    if(simulateWrites){
+      setSelected((current)=>({...current,...patch}));
+      setRows((current)=>current.map((row)=>row.id===selected.id?{...row,...patch}:row));
+      setMessage('TEST MODE — status change simulated in this browser only. No database record changed.');
+      return;
+    }
     setBusy(true);
     try{
-      await updateClientOrder(selected.id,{status:next, reviewed_at:selected.reviewed_at||(next!=='submitted'?new Date().toISOString():null)});
+      await updateClientOrder(selected.id,patch);
       await refreshSelected();
     }catch(error){setMessage(error.message||String(error));}
     finally{setBusy(false);}
@@ -119,15 +138,21 @@ export default function ClientOrders(){
 
   async function saveRequest(){
     if(!selected) return;
+    const patch={
+      internal_notes:selected.internal_notes||'',
+      quote_notes:selected.quote_notes||'',
+      shipping_amount:Number(selected.shipping_amount||0),
+      tax_amount:Number(selected.tax_amount||0),
+      external_invoice_number:clean(invoiceNumber)||null,
+    };
+    if(simulateWrites){
+      setSelected((current)=>({...current,...patch}));
+      setMessage('TEST MODE — quote details simulated in this browser only. No database record changed.');
+      return;
+    }
     setBusy(true);
     try{
-      await updateClientOrder(selected.id,{
-        internal_notes:selected.internal_notes||'',
-        quote_notes:selected.quote_notes||'',
-        shipping_amount:Number(selected.shipping_amount||0),
-        tax_amount:Number(selected.tax_amount||0),
-        external_invoice_number:clean(invoiceNumber)||null,
-      });
+      await updateClientOrder(selected.id,patch);
       await refreshSelected();
       setMessage('Client order notes and quote totals saved.');
     }catch(error){setMessage(error.message||String(error));}
@@ -139,6 +164,10 @@ export default function ClientOrders(){
   }
 
   async function saveItem(item){
+    if(simulateWrites){
+      setMessage(`TEST MODE — line ${item.line_number} save simulated in this browser only. No database record changed.`);
+      return;
+    }
     setBusy(true);
     try{
       const updated=await updateClientOrderItem(item.id,{
@@ -168,12 +197,21 @@ export default function ClientOrders(){
 
   async function findBlank(item){
     setBusy(true);
+    setMappingStatus((current)=>({...current,[item.id]:'Searching inventory…'}));
     try{
       const results=await searchClientOrderBlankProducts(item,mappingSearch[item.id]||'');
       setMappingResults((current)=>({...current,[item.id]:results}));
+      setMappingStatus((current)=>({
+        ...current,
+        [item.id]:results.length
+          ? `${results.length} possible blank match${results.length===1?'':'es'} found. Select the correct product below.`
+          : 'No blank matches found. Try SKU, brand, style, or a broader garment search.',
+      }));
       if(!results.length) setMessage(`No blank matches found for line ${item.line_number}. Try a broader search.`);
-    }catch(error){setMessage(error.message||String(error));}
-    finally{setBusy(false);}
+    }catch(error){
+      setMappingStatus((current)=>({...current,[item.id]:error.message||'Blank search failed.'}));
+      setMessage(error.message||String(error));
+    }finally{setBusy(false);}
   }
 
   async function chooseBlank(item,match){
@@ -189,6 +227,7 @@ export default function ClientOrders(){
     };
     editItem(item.id,patch);
     setMappingResults((current)=>({...current,[item.id]:[]}));
+    setMappingStatus((current)=>({...current,[item.id]:`Mapped to ${patch.sku_base||patch.mapped_item_name||'selected blank'}.`}));
     setMessage(`Line ${item.line_number} mapped. Review pricing, then save the line.`);
   }
 
@@ -206,6 +245,22 @@ export default function ClientOrders(){
       setMessage('Map and price every line before advancing the customer workflow.');
       return;
     }
+    if(simulateWrites){
+      const now=new Date().toISOString();
+      const patch=action==='quote'
+        ? {status:'quote_sent',quote_sent_at:now}
+        : action==='approve'
+          ? {status:'awaiting_payment',approved_at:now}
+          : {status:'ready_for_production',payment_received_at:now};
+      setSelected((current)=>({...current,...patch}));
+      setRows((current)=>current.map((row)=>row.id===selected.id?{...row,...patch}:row));
+      setMessage(action==='quote'
+        ? 'TEST MODE — quote-sent step simulated. No database record changed.'
+        : action==='approve'
+          ? 'TEST MODE — customer approval simulated. No database record changed.'
+          : 'TEST MODE — payment simulated. You can now test production conversion with zero production writes.');
+      return;
+    }
     setBusy(true);
     try{
       if(action==='quote') await markClientOrderQuoteSent(selected.id);
@@ -219,9 +274,19 @@ export default function ClientOrders(){
 
   async function convert(){
     if(!selected) return;
-    if(!window.confirm('Convert this paid request into a Manual Invoiced Order, create its production job, and create inventory demand/reservations?')) return;
+    const prompt=simulateWrites
+      ? 'TEST MODE: simulate the full production conversion? No manual order, job, reservation, purchasing demand, or inventory movement will be created.'
+      : 'Convert this paid request into a Manual Invoiced Order, create its production job, and create inventory demand/reservations?';
+    if(!window.confirm(prompt)) return;
     setBusy(true);
     try{
+      if(simulateWrites){
+        const result=await convertClientOrderToProduction({...selected,external_invoice_number:invoiceNumber},items,{invoiceNumber});
+        setSimulationPreview(result.preview||null);
+        setMessage('TEST MODE — production conversion completed as a dry run. Zero database, inventory, reservation, purchasing, or job records were changed.');
+        return;
+      }
+
       const savedItems=[];
       for(const item of items){
         savedItems.push(await updateClientOrderItem(item.id,{
@@ -292,6 +357,7 @@ export default function ClientOrders(){
 
   return <main className="page sc-page-stack">
     <section className="page-header"><div><p className="eyebrow">Orders</p><h1>Client Orders</h1><p>Review, map, price, invoice, approve, and deliberately convert online requests into production work.</p></div><div className="button-row"><a className="secondary-button" href="/team-order" target="_blank" rel="noreferrer">Open public form</a><button onClick={load}>Refresh</button></div></section>
+    {testingSettings.enabled&&<section className={simulateWrites?'sc-client-test-mode active':'sc-client-test-mode warning'}><div><strong>{testingModeLabel()}</strong><p>{simulateWrites?'Client Orders is fully non-mutating in this browser: saves, status changes, approval/payment, and production conversion are simulated only.':'Testing Mode is enabled, but simulated writes are OFF. Client Order actions can still change production data.'}</p></div><a className="secondary-button" href="/testing-mode">Testing Mode settings</a></section>}
     {message&&<p className="message">{message}</p>}
 
     <section className="metric-grid">
@@ -334,8 +400,9 @@ export default function ClientOrders(){
 
               <div className="sc-map-row">
                 <input value={mappingSearch[item.id]||''} onChange={(e)=>setMappingSearch({...mappingSearch,[item.id]:e.target.value})} placeholder={item.garment_type||'Search SKU, brand, style…'} />
-                <button type="button" className="secondary-button" disabled={busy} onClick={()=>findBlank(item)}>Find blank</button>
+                <button type="button" className="secondary-button" disabled={busy} onClick={()=>findBlank(item)}>{busy&&mappingStatus[item.id]==='Searching inventory…'?'Searching…':'Find blank'}</button>
               </div>
+              {mappingStatus[item.id]&&<p className={(mappingResults[item.id]||[]).length?'sc-map-status success':'sc-map-status'}>{mappingStatus[item.id]}</p>}
 
               {(mappingResults[item.id]||[]).length>0&&<div className="sc-match-results">
                 {(mappingResults[item.id]||[]).slice(0,8).map((match,index)=><button type="button" key={match.blank_product_id||match.product_id||match.id||index} onClick={()=>chooseBlank(item,match)}><strong>{matchLabel(match)}</strong>{match.quantity_on_hand!=null&&<small>On hand: {match.quantity_on_hand}</small>}</button>)}
@@ -390,9 +457,21 @@ export default function ClientOrders(){
               <button type="button" disabled={busy||Boolean(selected.quote_sent_at)} onClick={()=>workflow('quote')}>{selected.quote_sent_at?'Quote sent ✓':'Mark quote sent'}</button>
               <button type="button" disabled={busy||!selected.quote_sent_at||Boolean(selected.approved_at)} onClick={()=>workflow('approve')}>{selected.approved_at?'Approved ✓':'Record customer approval'}</button>
               <button type="button" disabled={busy||!selected.approved_at||Boolean(selected.payment_received_at)} onClick={()=>workflow('paid')}>{selected.payment_received_at?'Paid ✓':'Record payment'}</button>
-              <button type="button" className="button primary" disabled={busy||!selected.payment_received_at||Boolean(selected.manual_order_id)} onClick={convert}>{selected.manual_order_id?`Converted · Manual #${selected.manual_order_id}`:'Convert to Production'}</button>
+              <button type="button" className="button primary" disabled={busy||!selected.payment_received_at||Boolean(selected.manual_order_id)} onClick={convert}>{selected.manual_order_id?`Converted · Manual #${selected.manual_order_id}`:simulateWrites?'Simulate Production Conversion':'Convert to Production'}</button>
             </div>
             {selected.generated_job_id&&<p><strong>Production job:</strong> <a href={'/pullsheets/'+selected.generated_job_id}>Open pull sheet #{selected.generated_job_id}</a></p>}
+            {simulationPreview&&<div className="sc-simulation-preview">
+              <strong>TEST MODE conversion preview — nothing below was written</strong>
+              <div className="sc-detail-grid">
+                <p><strong>Invoice/reference</strong><br/>{simulationPreview.invoiceNumber}</p>
+                <p><strong>Customer</strong><br/>{simulationPreview.manualHeader?.organization||simulationPreview.manualHeader?.customer_name}</p>
+                <p><strong>Production lines</strong><br/>{simulationPreview.manualItems?.length||0}</p>
+                <p><strong>Total units</strong><br/>{simulationPreview.totalQuantity||0}</p>
+                <p><strong>Order total</strong><br/>{money(simulationPreview.manualHeader?.total_payment_amount)}</p>
+                <p><strong>Due date</strong><br/>{date(simulationPreview.manualHeader?.due_date)}</p>
+              </div>
+              <p>No Manual Invoiced Order, job, reservation, purchasing demand, inventory movement, or client-order database update was created.</p>
+            </div>}
           </section>
 
           {attachments.length>0&&<><h3>Attachments</h3><div className="sc-attachment-list">{attachments.map((file)=><button key={file.id} type="button" className="secondary-button" onClick={()=>openClientOrderAttachment(file.id)}>{file.file_name}</button>)}</div></>}
