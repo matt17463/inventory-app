@@ -24,6 +24,7 @@ const ALLOWED_PREFIXES = [
   'operational/production/',
   'operational/receiving/',
   'operational/supplier-cache/',
+  'operational/client-orders/',
 ];
 
 function env(name) {
