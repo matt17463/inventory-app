@@ -5,7 +5,7 @@ export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
   if (event.httpMethod !== 'POST') return jsonResponse(405, { success: false, error: 'Method not allowed.' }, event);
 
-  const auth = await authorizeEmployee(event, { functionName: 'client-order-file', allowedRoles: ['admin','manager','employee'] });
+  const auth = await authorizeEmployee(event, { functionName: 'client-order-file', allowedRoles: [] });
   if (!auth.ok) return jsonResponse(auth.statusCode, { success: false, error: auth.message }, event);
 
   try {
