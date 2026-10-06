@@ -95,14 +95,72 @@ export async function listClientPricingRules() {
   return (legacy.data || []).map(normalizeRule).filter((row) => row.active !== false);
 }
 
-export async function searchClientOrderBlankProducts(item, search = '') {
-  return searchManualInvoiceProducts({
-    productSource: 'blank',
-    search: clean(search || item?.garment_type),
-    color: clean(item?.garment_color),
-    size: clean(item?.size),
-    limit: 100,
+function normalizeClientOrderSize(value) {
+  const raw = clean(value);
+  if (!raw) return '';
+  const normalized = raw
+    .replace(/^youth\s+/i, '')
+    .replace(/^adult\s+/i, '')
+    .replace(/^kids?\s+/i, '')
+    .trim();
+  const aliases = {
+    'extra small': 'XS',
+    'x-small': 'XS',
+    'small': 'S',
+    'medium': 'M',
+    'large': 'L',
+    'extra large': 'XL',
+    'x-large': 'XL',
+    '2xl': '2XL',
+    'xxl': '2XL',
+    '3xl': '3XL',
+    'xxxl': '3XL',
+  };
+  return aliases[normalized.toLowerCase()] || normalized;
+}
+
+function uniqueBlankRows(rows = []) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = String(row.blank_product_id || row.product_id || row.id || [
+      row.sku_base, row.sku, row.brand, row.style, row.color, row.size,
+    ].join('|'));
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
+
+export async function searchClientOrderBlankProducts(item, search = '') {
+  const term = clean(search || item?.garment_type);
+  const color = clean(item?.garment_color);
+  const rawSize = clean(item?.size);
+  const normalizedSize = normalizeClientOrderSize(rawSize);
+
+  // Customer intake uses friendly labels such as "Youth S" while the inventory
+  // catalog commonly stores canonical sizes such as "S". Try the most specific
+  // lookup first, then progressively relax only the intake-derived filters.
+  const attempts = [
+    { search: term, color, size: rawSize },
+    ...(normalizedSize && normalizedSize !== rawSize
+      ? [{ search: term, color, size: normalizedSize }]
+      : []),
+    { search: term, color, size: '' },
+    { search: term, color: '', size: normalizedSize || rawSize },
+    { search: term, color: '', size: '' },
+    ...(term ? [{ search: '', color, size: normalizedSize || rawSize }] : []),
+  ];
+
+  for (const attempt of attempts) {
+    const rows = await searchManualInvoiceProducts({
+      productSource: 'blank',
+      ...attempt,
+      limit: 100,
+    });
+    if (rows.length) return uniqueBlankRows(rows);
+  }
+
+  return [];
 }
 
 export function priceClientOrderItem(item, rule) {
