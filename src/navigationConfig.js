@@ -63,6 +63,7 @@ export const navSections = [
       { label: 'Order Risk', path: '/order-risk', keywords: 'risk due date priority blocked critical' },
       { label: 'Production Time Estimator', path: '/production-estimator', keywords: 'time estimate labor press setup qc pack' },
       { label: 'Production Calendar', path: '/production-calendar', keywords: 'calendar schedule due date production' },
+      { label: 'Operations Calendar', path: '/operations-calendar', keywords: 'calendar order commitments client requests artwork purchasing tasks due dates' },
       { label: 'Capacity Planning', path: '/capacity-planning', keywords: 'capacity hours workload schedule' },
     ],
   },
@@ -92,6 +93,7 @@ export const navSections = [
       { label: 'Pricing Rules', path: '/pricing-rules', keywords: 'markup rule margin decoration setup fees' },
       { label: 'Quote to Order', path: '/quote-to-order', keywords: 'quote convert order job approved customer' },
       { label: 'Manual Invoiced Orders', path: '/manual-orders', keywords: 'manual invoice quickbooks external order non woocommerce create order' },
+      { label: 'Client Orders', path: '/client-orders', keywords: 'client team business online order requests pricing intake form' },
     ],
   },
 
@@ -102,6 +104,7 @@ export const navSections = [
     items: [
       { label: 'Customer Portal Admin', path: '/customer-portal-admin', keywords: 'customer portal token status order artwork portal links' },
       { label: 'Customer Portal Preview', path: '/customer-portal-preview', keywords: 'public customer portal preview token' },
+      { label: 'Public Team Order Form', path: '/team-order', keywords: 'public order form team business client intake link' },
     ],
   },
   {
