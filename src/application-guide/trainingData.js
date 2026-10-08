@@ -44,7 +44,7 @@ export const trainingTutorials = [
       step('Open Add Item to Bin', 'Use manual receiving for a small shipment or local purchase.', { route: '/add-item', verify: 'You can identify destination bin, product, quantity, and notes fields.' }),
       step('Find the exact blank', 'Search by SKU or Brand + Style + Color + Size. Never choose a near match just to continue.', { warning: 'If the exact item cannot be found, stop and ask a manager before creating a new blank.' }),
       step('Choose the real destination bin', 'Select the bin where the garment will physically be stored.', { warning: 'Pending Stock is not a physical bin and must never be used for receiving.' }),
-      step('Enter actual quantity received', 'Use what physically arrived, not what the supplier invoice says should have arrived.' }),
+      step('Enter actual quantity received', 'Use what physically arrived, not what the supplier invoice says should have arrived.'),
       step('Complete receiving and put away immediately', 'Finish the receiving action, then place the goods in the selected bin.', { verify: 'Inventory Overview and Bin Contents show the new quantity in the same physical location.' }),
     ],
     coachNotes: ['First live receipt should be supervised.', 'Use a small 1–3 line receipt before allowing bulk supplier receiving.'],
