@@ -120,6 +120,7 @@ export default function TestingMode() {
           <div className="button-row">
             <button type="button" className="primary-button" onClick={beginGuidedTraining}>{trainingSession.active?'Restart guided training':'Start guided training now'}</button>
             {trainingSession.active&&<button type="button" onClick={()=>navigate('/application-guide')}>Resume current training</button>}
+            <button type="button" onClick={()=>navigate('/application-guide')}>Open Employee Training Center</button>
           </div>
           <p className="muted"><strong>Training safety:</strong> starting guided training automatically keeps Testing Mode, simulated writes, and extra confirmations enabled. Workflows without a true simulator are taught as read-only observation steps rather than pretending they are fully sandboxed.</p>
         </section>
