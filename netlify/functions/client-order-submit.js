@@ -69,6 +69,7 @@ export async function handler(event) {
       return reply(400, { success: false, error: 'Organization, contact name, and a valid email are required.' }, event);
     }
     if (!items.length) return reply(400, { success: false, error: 'Add at least one garment/order line.' }, event);
+    if (body.customer_confirmation?.approved !== true) return reply(400, { success: false, error: 'Review and approve the order details before submitting.' }, event);
 
     const supabase = createServiceClient();
     const forwarded = getHeader(event, 'x-forwarded-for').split(',')[0].trim() || 'unknown';

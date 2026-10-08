@@ -100,7 +100,7 @@ export function buildQuickBooksInvoiceCsv(order, items = []) {
       item.placement ? `Placement: ${clean(item.placement)}` : '',
       item.decoration_size ? `Decoration: ${clean(item.decoration_size)}` : '',
       item.artwork_note ? `Artwork: ${clean(item.artwork_note)}` : '',
-      item.notes ? clean(item.notes) : '',
+      item.notes ? `Details: ${clean(item.notes)}` : '',
     ].filter(Boolean).join(' · ');
     const quantity = Number(item.quantity || 0);
     const rate = Number(item.price_per_item || 0);
