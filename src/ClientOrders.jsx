@@ -3,6 +3,7 @@ import {
   buildClientOrderInvoiceCsv,
   buildClientOrderQuickBooksCsv,
   convertClientOrderToProduction,
+  deleteClientOrder,
   getClientOrderItems,
   listClientOrderAttachments,
   listClientOrders,
@@ -25,6 +26,27 @@ const label=(value)=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>
 const date=(value)=>value?new Date(value+'T12:00:00').toLocaleDateString():'—';
 const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
 const clean=(value)=>String(value??'').trim();
+
+function lineSavePatch(item){
+  return {
+    blank_product_id:item.blank_product_id||null,
+    sku_base:item.sku_base||'',
+    mapped_item_name:item.mapped_item_name||'',
+    brand:item.brand||'',
+    style:item.style||'',
+    mapped_color:item.mapped_color||'',
+    mapped_size:item.mapped_size||'',
+    unit_cost:Number(item.unit_cost||0),
+    decoration_cost:Number(item.decoration_cost||0),
+    labor_cost:Number(item.labor_cost||0),
+    unit_price:Number(item.unit_price||0),
+    pricing_rule_id:item.pricing_rule_id||null,
+    pricing_rule_name:item.pricing_rule_name||'',
+    placement:item.placement||'',
+    decoration_size:item.decoration_size||'',
+    artwork_note:item.artwork_note||'',
+  };
+}
 
 function matchLabel(row){
   return [
@@ -73,6 +95,7 @@ export default function ClientOrders(){
   const [invoiceNumber,setInvoiceNumber]=useState('');
   const [testingSettings,setTestingSettings]=useState(getTestingModeSettings());
   const [simulationPreview,setSimulationPreview]=useState(null);
+  const [hasUnsavedChanges,setHasUnsavedChanges]=useState(false);
   const simulateWrites=Boolean(testingSettings.enabled&&testingSettings.simulateWrites);
 
   async function load(){
@@ -99,6 +122,12 @@ export default function ClientOrders(){
     return ()=>window.removeEventListener('sc-testing-mode-change',handler);
   },[]);
 
+  useEffect(()=>{
+    if(!hasUnsavedChanges||!selected||simulateWrites) return undefined;
+    const timer=window.setTimeout(()=>{ saveRequest(); },1200);
+    return ()=>window.clearTimeout(timer);
+  },[hasUnsavedChanges,items,selected?.shipping_amount,selected?.quote_notes,selected?.internal_notes,invoiceNumber,simulateWrites]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function open(row){
     setSelected(row);
     setInvoiceNumber(row.external_invoice_number||row.order_number||'');
@@ -106,6 +135,7 @@ export default function ClientOrders(){
     setMappingResults({});
     setMappingStatus({});
     setSimulationPreview(null);
+    setHasUnsavedChanges(false);
     try{
       const [lineRows,fileRows]=await Promise.all([getClientOrderItems(row.id),listClientOrderAttachments(row.id)]);
       setItems(lineRows);
@@ -153,20 +183,36 @@ export default function ClientOrders(){
     };
     if(simulateWrites){
       setSelected((current)=>({...current,...patch}));
-      setMessage('TEST MODE — quote details simulated in this browser only. No database record changed.');
+      setHasUnsavedChanges(false);
+      setMessage('TEST MODE — all client-order edits simulated in this browser only. No database record changed.');
       return;
     }
     setBusy(true);
     try{
+      const savedItems=[];
+      for(const item of items) savedItems.push(await updateClientOrderItem(item.id,lineSavePatch(item)));
       await updateClientOrder(selected.id,patch);
+      setItems(savedItems);
       await refreshSelected();
-      setMessage('Client order notes and quote totals saved.');
+      setHasUnsavedChanges(false);
+      setMessage('All client order changes saved, including mapping, pricing, production details, shipping, invoice number, and notes.');
     }catch(error){setMessage(error.message||String(error));}
     finally{setBusy(false);}
   }
 
   function editItem(itemId,patch){
     setItems((current)=>current.map((item)=>item.id===itemId?{...item,...patch}:item));
+    setHasUnsavedChanges(true);
+  }
+
+  function editRequest(patch){
+    setSelected((current)=>current?{...current,...patch}:current);
+    setHasUnsavedChanges(true);
+  }
+
+  function editInvoiceNumber(value){
+    setInvoiceNumber(value);
+    setHasUnsavedChanges(true);
   }
 
   async function saveItem(item){
@@ -176,24 +222,7 @@ export default function ClientOrders(){
     }
     setBusy(true);
     try{
-      const updated=await updateClientOrderItem(item.id,{
-        blank_product_id:item.blank_product_id||null,
-        sku_base:item.sku_base||'',
-        mapped_item_name:item.mapped_item_name||'',
-        brand:item.brand||'',
-        style:item.style||'',
-        mapped_color:item.mapped_color||'',
-        mapped_size:item.mapped_size||'',
-        unit_cost:Number(item.unit_cost||0),
-        decoration_cost:Number(item.decoration_cost||0),
-        labor_cost:Number(item.labor_cost||0),
-        unit_price:Number(item.unit_price||0),
-        pricing_rule_id:item.pricing_rule_id||null,
-        pricing_rule_name:item.pricing_rule_name||'',
-        placement:item.placement||'',
-        decoration_size:item.decoration_size||'',
-        artwork_note:item.artwork_note||'',
-      });
+      const updated=await updateClientOrderItem(item.id,lineSavePatch(item));
       setItems((current)=>current.map((row)=>row.id===item.id?updated:row));
       await refreshSelected();
       setMessage(`Line ${item.line_number} saved.`);
@@ -295,24 +324,7 @@ export default function ClientOrders(){
 
       const savedItems=[];
       for(const item of items){
-        savedItems.push(await updateClientOrderItem(item.id,{
-          blank_product_id:item.blank_product_id||null,
-          sku_base:item.sku_base||'',
-          mapped_item_name:item.mapped_item_name||'',
-          brand:item.brand||'',
-          style:item.style||'',
-          mapped_color:item.mapped_color||'',
-          mapped_size:item.mapped_size||'',
-          unit_cost:Number(item.unit_cost||0),
-          decoration_cost:Number(item.decoration_cost||0),
-          labor_cost:Number(item.labor_cost||0),
-          unit_price:Number(item.unit_price||0),
-          pricing_rule_id:item.pricing_rule_id||null,
-          pricing_rule_name:item.pricing_rule_name||'',
-          placement:item.placement||'',
-          decoration_size:item.decoration_size||'',
-          artwork_note:item.artwork_note||'',
-        }));
+        savedItems.push(await updateClientOrderItem(item.id,lineSavePatch(item)));
       }
       const savedRequest=await updateClientOrder(selected.id,{
         internal_notes:selected.internal_notes||'',
@@ -324,6 +336,40 @@ export default function ClientOrders(){
       const result=await convertClientOrderToProduction({...selected,...savedRequest,external_invoice_number:invoiceNumber},savedItems,{invoiceNumber});
       await refreshSelected();
       setMessage(`Converted successfully. Manual order #${result.manualOrderId}${result.jobId?`, production job #${result.jobId}`:''}.`);
+    }catch(error){setMessage(error.message||String(error));}
+    finally{setBusy(false);}
+  }
+
+  async function removeSelectedOrder(){
+    if(!selected) return;
+    if(selected.manual_order_id||selected.generated_job_id||selected.converted_at){
+      setMessage('This request has already been converted to production and cannot be deleted here. Void/cancel the downstream manual order and production records instead.');
+      return;
+    }
+    const confirmation=window.prompt(`Delete ${selected.order_number}? This permanently removes the client request, its line items, and attachments. Type ${selected.order_number} to confirm.`);
+    if(confirmation===null) return;
+    if(clean(confirmation)!==clean(selected.order_number)){
+      setMessage(`Deletion cancelled. Type ${selected.order_number} exactly to confirm.`);
+      return;
+    }
+    if(simulateWrites){
+      setRows((current)=>current.filter((row)=>row.id!==selected.id));
+      setSelected(null);
+      setItems([]);
+      setAttachments([]);
+      setMessage('TEST MODE — deletion simulated in this browser only. No database record or attachment changed.');
+      return;
+    }
+    setBusy(true);
+    try{
+      const result=await deleteClientOrder(selected.id,confirmation);
+      setSelected(null);
+      setItems([]);
+      setAttachments([]);
+      setInvoiceNumber('');
+      await load();
+      const warningCount=result.attachment_cleanup_warnings?.length||0;
+      setMessage(`${result.order_number} deleted.${warningCount?` ${warningCount} attachment cleanup warning(s) were returned; review storage health.`:''}`);
     }catch(error){setMessage(error.message||String(error));}
     finally{setBusy(false);}
   }
@@ -455,23 +501,31 @@ export default function ClientOrders(){
           </div>
 
           <section className="sc-quote-panel">
-            <div className="section-heading-row wrap-row"><div><h3>Quote + invoice handoff</h3><p className="muted">Use your saved pricing above, then send the quote/invoice through your normal customer and QuickBooks process.</p></div><strong className="sc-quote-total">{money(localTotal)}</strong></div>
+            <div className="section-heading-row wrap-row"><div><h3>Quote + invoice handoff</h3><p className="muted">Pricing, mapping, production details, shipping, invoice number, and notes automatically save after you stop editing. Use Save all changes any time you want to force an immediate save.</p>{hasUnsavedChanges&&<p className="sc-client-save-status">Unsaved changes — auto-saving…</p>}</div><strong className="sc-quote-total">{money(localTotal)}</strong></div>
             <div className="sc-pricing-grid">
-              <label>Shipping<input type="number" step="0.01" value={selected.shipping_amount??0} onChange={(e)=>setSelected({...selected,shipping_amount:e.target.value})}/></label>
+              <label>Shipping<input type="number" step="0.01" value={selected.shipping_amount??0} onChange={(e)=>editRequest({shipping_amount:e.target.value})}/></label>
               <label>Tax ({SALES_TAX_PERCENT}%)<input type="number" step="0.01" value={localTax} readOnly /></label>
-              <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>setInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
+              <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>editInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
             </div>
             <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax ({SALES_TAX_PERCENT}%):</strong> {money(localTax)} · <strong>Total:</strong> {money(localTotal)}</p>
             <p className="muted">QBO CSV workaround: sales tax is exported as a separate <strong>Sales Tax</strong> Product/Service line, not through QuickBooks' native tax engine. Create that service item in QBO and map it to Sales Tax Payable before importing.</p>
-            <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>setSelected({...selected,quote_notes:e.target.value})}/></label>
-            <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>setSelected({...selected,internal_notes:e.target.value})}/></label>
+            <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>editRequest({quote_notes:e.target.value})}/></label>
+            <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>editRequest({internal_notes:e.target.value})}/></label>
             <div className="button-row">
-              <button disabled={busy} onClick={saveRequest}>Save quote details</button>
+              <button disabled={busy} onClick={saveRequest}>Save all changes</button>
               <button type="button" className="secondary-button" onClick={downloadInvoiceCsv}>Download invoice CSV</button>
               <button type="button" className="secondary-button" onClick={downloadQuickBooksCsv} title="Exports tax as a Sales Tax service-item line so the native QBO sales-tax engine is not used.">QBO CSV</button>
               <button type="button" className="secondary-button" onClick={copyQuote}>Copy quote summary</button>
               <a className="secondary-button" href={'mailto:'+selected.contact_email+'?subject='+encodeURIComponent('Skilled Crafting '+selected.order_number)}>Email customer</a>
             </div>
+          </section>
+
+          <section className="sc-client-delete-panel">
+            <div>
+              <h3>Delete client order</h3>
+              <p className="muted">{selected.manual_order_id||selected.generated_job_id||selected.converted_at?'This request has already created downstream production records and cannot be deleted from Client Orders.':'Use this for duplicate, test, or abandoned requests that have not been converted to production. Attachments are removed from storage when possible.'}</p>
+            </div>
+            <button type="button" className="sc-danger-button" disabled={busy||Boolean(selected.manual_order_id||selected.generated_job_id||selected.converted_at)} onClick={removeSelectedOrder}>Delete {selected.order_number}</button>
           </section>
 
           <section className="sc-workflow-panel">
