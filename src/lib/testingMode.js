@@ -5,6 +5,8 @@ const DEFAULT_SETTINGS = {
   simulateWrites: false,
   requireConfirmation: true,
   showBanner: true,
+  guidedTraining: false,
+  trainingRole: 'new-employee',
 };
 
 export function getTestingModeSettings() {
@@ -44,4 +46,14 @@ export function testingModeLabel() {
   if (!settings.enabled) return 'Live Mode';
   if (settings.simulateWrites) return 'Testing Mode: Simulated Writes';
   return 'Testing Mode: Live Writes With Extra Confirmation';
+}
+
+
+export function isGuidedTrainingEnabled() {
+  const settings = getTestingModeSettings();
+  return Boolean(settings.enabled && settings.guidedTraining);
+}
+
+export function guidedTrainingRole() {
+  return getTestingModeSettings().trainingRole || 'new-employee';
 }
