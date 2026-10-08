@@ -95,6 +95,7 @@ export default function ClientOrders(){
   const [invoiceNumber,setInvoiceNumber]=useState('');
   const [testingSettings,setTestingSettings]=useState(getTestingModeSettings());
   const [simulationPreview,setSimulationPreview]=useState(null);
+  const [hasUnsavedChanges,setHasUnsavedChanges]=useState(false);
   const simulateWrites=Boolean(testingSettings.enabled&&testingSettings.simulateWrites);
 
   async function load(){
@@ -120,6 +121,12 @@ export default function ClientOrders(){
     window.addEventListener('sc-testing-mode-change',handler);
     return ()=>window.removeEventListener('sc-testing-mode-change',handler);
   },[]);
+
+  useEffect(()=>{
+    if(!hasUnsavedChanges||!selected||simulateWrites) return undefined;
+    const timer=window.setTimeout(()=>{ saveRequest(); },1200);
+    return ()=>window.clearTimeout(timer);
+  },[hasUnsavedChanges,items,selected?.shipping_amount,selected?.quote_notes,selected?.internal_notes,invoiceNumber,simulateWrites]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function open(row){
     setSelected(row);
@@ -185,6 +192,7 @@ export default function ClientOrders(){
       await updateClientOrder(selected.id,patch);
       setItems(savedItems);
       await refreshSelected();
+      setHasUnsavedChanges(false);
       setMessage('All client order changes saved, including mapping, pricing, production details, shipping, invoice number, and notes.');
     }catch(error){setMessage(error.message||String(error));}
     finally{setBusy(false);}
@@ -192,6 +200,17 @@ export default function ClientOrders(){
 
   function editItem(itemId,patch){
     setItems((current)=>current.map((item)=>item.id===itemId?{...item,...patch}:item));
+    setHasUnsavedChanges(true);
+  }
+
+  function editRequest(patch){
+    setSelected((current)=>current?{...current,...patch}:current);
+    setHasUnsavedChanges(true);
+  }
+
+  function editInvoiceNumber(value){
+    setInvoiceNumber(value);
+    setHasUnsavedChanges(true);
   }
 
   async function saveItem(item){
@@ -480,16 +499,16 @@ export default function ClientOrders(){
           </div>
 
           <section className="sc-quote-panel">
-            <div className="section-heading-row wrap-row"><div><h3>Quote + invoice handoff</h3><p className="muted">Use your saved pricing above, then send the quote/invoice through your normal customer and QuickBooks process.</p></div><strong className="sc-quote-total">{money(localTotal)}</strong></div>
+            <div className="section-heading-row wrap-row"><div><h3>Quote + invoice handoff</h3><p className="muted">Pricing, mapping, production details, shipping, invoice number, and notes automatically save after you stop editing. Use Save all changes any time you want to force an immediate save.</p>{hasUnsavedChanges&&<p className="sc-client-save-status">Unsaved changes — auto-saving…</p>}</div><strong className="sc-quote-total">{money(localTotal)}</strong></div>
             <div className="sc-pricing-grid">
-              <label>Shipping<input type="number" step="0.01" value={selected.shipping_amount??0} onChange={(e)=>setSelected({...selected,shipping_amount:e.target.value})}/></label>
+              <label>Shipping<input type="number" step="0.01" value={selected.shipping_amount??0} onChange={(e)=>editRequest({shipping_amount:e.target.value})}/></label>
               <label>Tax ({SALES_TAX_PERCENT}%)<input type="number" step="0.01" value={localTax} readOnly /></label>
-              <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>setInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
+              <label className="sc-span-2">QuickBooks / external invoice number<input value={invoiceNumber} onChange={(e)=>editInvoiceNumber(e.target.value)} placeholder={selected.order_number}/></label>
             </div>
             <p><strong>Subtotal:</strong> {money(localSubtotal)} · <strong>Shipping:</strong> {money(selected.shipping_amount)} · <strong>Tax ({SALES_TAX_PERCENT}%):</strong> {money(localTax)} · <strong>Total:</strong> {money(localTotal)}</p>
             <p className="muted">QBO CSV workaround: sales tax is exported as a separate <strong>Sales Tax</strong> Product/Service line, not through QuickBooks' native tax engine. Create that service item in QBO and map it to Sales Tax Payable before importing.</p>
-            <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>setSelected({...selected,quote_notes:e.target.value})}/></label>
-            <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>setSelected({...selected,internal_notes:e.target.value})}/></label>
+            <label>Quote / pricing notes<textarea rows="3" value={selected.quote_notes||''} onChange={(e)=>editRequest({quote_notes:e.target.value})}/></label>
+            <label>Internal review notes<textarea rows="4" value={selected.internal_notes||''} onChange={(e)=>editRequest({internal_notes:e.target.value})}/></label>
             <div className="button-row">
               <button disabled={busy} onClick={saveRequest}>Save all changes</button>
               <button type="button" className="secondary-button" onClick={downloadInvoiceCsv}>Download invoice CSV</button>
