@@ -45,11 +45,15 @@ export function fullApplicationTour(){
 }
 
 export function guidedProgramForRole(role='new-employee'){
-  const roleTutorials=tutorialsForRole(role);
-  const ordered=role==='new-employee'
-    ? [...roleTutorials,fullApplicationTour()]
-    : [...roleTutorials,fullApplicationTour()];
-  return ordered;
+  const roleTutorials=tutorialsForRole(role).map((tutorial)=>({
+    ...tutorial,
+    steps:(tutorial.steps||[]).map((trainingStep)=>({
+      ...trainingStep,
+      readOnly: trainingStep.readOnly
+        || !['read-only','read-only-first','simulated-supported'].includes(tutorial.safeMode),
+    })),
+  }));
+  return [...roleTutorials,fullApplicationTour()];
 }
 
 export function trainingRoleLabel(role){
