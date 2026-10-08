@@ -138,6 +138,7 @@ export const navSections = [
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
       { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
       { label: 'Application Guide', path: '/application-guide', keywords: 'help training guide workflow admin instructions how to use' },
+      { label: 'Testing & Guided Training', path: '/testing-mode', keywords: 'testing mode employee training tutorial onboarding simulated writes practice' },
       { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
       { label: 'Asset Storage Health', path: '/asset-storage-health', keywords: 'r2 cloudflare supabase storage egress images migration files' },
       { label: 'Google Calendar', path: '/google-calendar', keywords: 'google calendar due dates purchase orders owner tasks reminders schedule sync' },
