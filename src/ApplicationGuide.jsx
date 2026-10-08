@@ -7,6 +7,7 @@ import {
   guideSearchText,
 } from './application-guide/guideData';
 import { TRAINING_VERSION, trainingRoles, tutorialsForRole } from './application-guide/trainingData';
+import { startGuidedTraining } from './lib/guidedTraining';
 import './application-guide/ApplicationGuide.css';
 
 const normalize = (value) => String(value || '').trim().toLowerCase();
@@ -171,7 +172,10 @@ function EmployeeTraining(){
       <div className="sc-training-role-picker">
         <div><strong>Choose the employee's role</strong><p>{selectedRole?.description}</p></div>
         <select value={role} onChange={e=>setRole(e.target.value)}>{trainingRoles.map(item=><option value={item.id} key={item.id}>{item.label}</option>)}</select>
-        <button type="button" className="secondary-button" onClick={reset}>Reset training progress</button>
+        <div className="button-row">
+          <button type="button" className="primary-button" onClick={()=>startGuidedTraining(role)}>Start online guided training</button>
+          <button type="button" className="secondary-button" onClick={reset}>Reset checklist</button>
+        </div>
       </div>
       <div className="sc-training-tutorial-list">{tutorials.map(tutorial=><TrainingTutorial key={tutorial.id} tutorial={tutorial} progress={progress[tutorial.id]} onToggle={toggle}/>)}</div>
       <section className="sc-training-signoff">
