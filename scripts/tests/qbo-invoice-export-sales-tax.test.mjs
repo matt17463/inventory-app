@@ -38,7 +38,7 @@ test('manual invoiced orders expose a QuickBooks Online CSV export',()=>{
   const api=read('src/lib/manualOrdersApi.js');
   assert.match(page,/QBO CSV/);
   assert.match(page,/buildQuickBooksInvoiceCsv/);
-  assert.match(api,/Invoice No\\./);
+  assert.match(api,/Invoice No\./);
   assert.match(api,/Item \(Product\/Service\)/);
   assert.match(api,/Sales Tax/);
   assert.doesNotMatch(api,/Taxable/);
@@ -53,7 +53,7 @@ test('Client Orders QBO export is available before conversion',()=>{
   assert.match(page,/QBO CSV/);
   assert.match(page,/buildClientOrderQuickBooksCsv/);
   assert.match(api,/buildClientOrderQuickBooksCsv/);
-  assert.match(api,/'9\.2%'/);
+  assert.match(api,/9\.2% Sales Tax/);
 });
 
 test('explicit client-order blank searches never discard the typed product term',()=>{

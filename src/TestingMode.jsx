@@ -69,7 +69,40 @@ export default function TestingMode() {
           />
           <span><strong>Show testing banner</strong><small>Displays a visible reminder that this browser is in testing mode.</small></span>
         </label>
+
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={Boolean(settings.guidedTraining)}
+            disabled={!settings.enabled}
+            onChange={(event) => update({ guidedTraining: event.target.checked })}
+          />
+          <span><strong>Guided employee training</strong><small>Marks this browser as being used for onboarding and directs the employee to role-based tutorials. It does not make unsupported workflows non-mutating.</small></span>
+        </label>
+
+        {settings.enabled&&settings.guidedTraining&&(
+          <label className="sc-field" style={{marginTop:12}}>
+            <span>Training role</span>
+            <select value={settings.trainingRole||'new-employee'} onChange={(event)=>update({trainingRole:event.target.value})}>
+              <option value="new-employee">New Employee</option>
+              <option value="warehouse">Receiving / Warehouse</option>
+              <option value="production">Production</option>
+              <option value="artwork">Artwork / Customer Admin</option>
+              <option value="manager">Manager</option>
+              <option value="owner-admin">Owner / Admin</option>
+            </select>
+          </label>
+        )}
       </section>
+
+      {settings.enabled&&settings.guidedTraining&&(
+        <section className="card elevated-card">
+          <h2>Guided training is active</h2>
+          <p>Open the Employee Training Center and follow the tutorials for this role. Training progress is saved in this browser.</p>
+          <div className="button-row"><a className="primary-button" href="/application-guide#employee-training">Open Employee Training Center</a></div>
+          <p className="muted"><strong>Important:</strong> simulated writes currently protect only workflows that explicitly support simulation. A training banner is not a sandbox for the entire production application.</p>
+        </section>
+      )}
 
       <section className="card elevated-card">
         <h2>Recommended use</h2>

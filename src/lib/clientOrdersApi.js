@@ -158,6 +158,7 @@ export async function searchClientOrderBlankProducts(item, search = '') {
 
   // Preserve an operator-entered search term. The prior fallback could drop the
   // term entirely and return dozens of unrelated items that only matched color/size.
+  // We progressively relax only the intake-derived filters.
   // Instead, progressively relax only intake-derived filters while keeping the
   // product/style intent. For long searches, also try a style/SKU-like token.
   const searchTerms = [term];
