@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getTestingModeSettings, saveTestingModeSettings, testingModeLabel } from './lib/testingMode';
+import { getGuidedTrainingSession, startGuidedTraining, trainingRoleLabel } from './lib/guidedTraining';
 
 export default function TestingMode() {
+  const navigate = useNavigate();
   const [settings, setSettings] = useState(getTestingModeSettings());
+  const [trainingSession,setTrainingSession]=useState(getGuidedTrainingSession());
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -10,6 +14,20 @@ export default function TestingMode() {
     window.addEventListener('sc-testing-mode-change', handler);
     return () => window.removeEventListener('sc-testing-mode-change', handler);
   }, []);
+
+  useEffect(() => {
+    const handler = (event) => setTrainingSession(event.detail || getGuidedTrainingSession());
+    window.addEventListener('sc-guided-training-change', handler);
+    return () => window.removeEventListener('sc-guided-training-change', handler);
+  }, []);
+
+  function beginGuidedTraining() {
+    const session = startGuidedTraining(settings.trainingRole || 'new-employee');
+    setTrainingSession(session);
+    setSettings(getTestingModeSettings());
+    setMessage(`Guided training started for ${trainingRoleLabel(session.role)}. The training coach will stay on screen as the employee moves through the app.`);
+    navigate('/application-guide');
+  }
 
   function update(patch) {
     const next = saveTestingModeSettings({ ...settings, ...patch });
@@ -97,10 +115,13 @@ export default function TestingMode() {
 
       {settings.enabled&&settings.guidedTraining&&(
         <section className="card elevated-card">
-          <h2>Guided training is active</h2>
-          <p>Open the Employee Training Center and follow the tutorials for this role. Training progress is saved in this browser.</p>
-          <div className="button-row"><a className="primary-button" href="/application-guide#employee-training">Open Employee Training Center</a></div>
-          <p className="muted"><strong>Important:</strong> simulated writes currently protect only workflows that explicitly support simulation. A training banner is not a sandbox for the entire production application.</p>
+          <h2>Online guided training</h2>
+          <p>This launches an on-screen training coach that follows the employee from page to page, tells them what to look at, explains the workflow, and requires them to confirm each training step before advancing.</p>
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={beginGuidedTraining}>{trainingSession.active?'Restart guided training':'Start guided training now'}</button>
+            {trainingSession.active&&<button type="button" onClick={()=>navigate('/application-guide')}>Resume current training</button>}
+          </div>
+          <p className="muted"><strong>Training safety:</strong> starting guided training automatically keeps Testing Mode, simulated writes, and extra confirmations enabled. Workflows without a true simulator are taught as read-only observation steps rather than pretending they are fully sandboxed.</p>
         </section>
       )}
 
