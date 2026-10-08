@@ -1,4 +1,4 @@
-export const GUIDE_VERSION = '1.4.25';
+export const GUIDE_VERSION = '1.4.37';
 
 const section = (id, title, summary, options = {}) => ({
   id,
