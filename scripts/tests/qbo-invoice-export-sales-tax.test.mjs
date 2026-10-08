@@ -38,7 +38,7 @@ test('manual invoiced orders expose a QuickBooks Online CSV export',()=>{
   const api=read('src/lib/manualOrdersApi.js');
   assert.match(page,/QBO CSV/);
   assert.match(page,/buildQuickBooksInvoiceCsv/);
-  assert.match(api,/Invoice No\\./);
+  assert.match(api,/Invoice No\./);
   assert.match(api,/Item \(Product\/Service\)/);
   assert.match(api,/Sales Tax/);
   assert.doesNotMatch(api,/Taxable/);
