@@ -135,6 +135,7 @@ export default function ClientOrders(){
     setMappingResults({});
     setMappingStatus({});
     setSimulationPreview(null);
+    setHasUnsavedChanges(false);
     try{
       const [lineRows,fileRows]=await Promise.all([getClientOrderItems(row.id),listClientOrderAttachments(row.id)]);
       setItems(lineRows);
@@ -182,6 +183,7 @@ export default function ClientOrders(){
     };
     if(simulateWrites){
       setSelected((current)=>({...current,...patch}));
+      setHasUnsavedChanges(false);
       setMessage('TEST MODE — all client-order edits simulated in this browser only. No database record changed.');
       return;
     }
