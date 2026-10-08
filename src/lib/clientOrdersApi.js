@@ -528,3 +528,16 @@ export async function openClientOrderAttachment(attachmentId) {
   }
   window.open(payload.url, '_blank', 'noopener,noreferrer');
 }
+
+
+export async function deleteClientOrder(requestId, confirmation) {
+  const response = await authenticatedFunctionFetch('/.netlify/functions/client-order-delete', {
+    method: 'POST',
+    body: JSON.stringify({ request_id: requestId, confirmation }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.error || 'Client order could not be deleted.');
+  }
+  return payload;
+}
