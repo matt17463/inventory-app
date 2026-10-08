@@ -53,7 +53,7 @@ test('Client Orders QBO export is available before conversion',()=>{
   assert.match(page,/QBO CSV/);
   assert.match(page,/buildClientOrderQuickBooksCsv/);
   assert.match(api,/buildClientOrderQuickBooksCsv/);
-  assert.match(api,/'9\.2%'/);
+  assert.match(api,/9\.2% Sales Tax/);
 });
 
 test('explicit client-order blank searches never discard the typed product term',()=>{
