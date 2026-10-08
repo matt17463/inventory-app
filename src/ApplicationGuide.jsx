@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from './components/UIPrimitives';
 import { navSections } from './navigationConfig';
 import {
@@ -6,6 +6,7 @@ import {
   guideChapters,
   guideSearchText,
 } from './application-guide/guideData';
+import { TRAINING_VERSION, trainingRoles, trainingTutorials, tutorialsForRole } from './application-guide/trainingData';
 import './application-guide/ApplicationGuide.css';
 
 const normalize = (value) => String(value || '').trim().toLowerCase();
@@ -90,6 +91,97 @@ function GuideDetail({ chapter, item }) {
   );
 }
 
+const TRAINING_PROGRESS_KEY='sc_employee_training_progress_v1';
+
+function loadTrainingProgress(){
+  try{return JSON.parse(window.localStorage.getItem(TRAINING_PROGRESS_KEY)||'{}')||{};}catch{return {};}
+}
+
+function TrainingTutorial({tutorial,progress,onToggle}){
+  const completedSteps=Object.values(progress?.steps||{}).filter(Boolean).length;
+  const complete=Boolean(progress?.complete);
+  return (
+    <article className={`sc-training-tutorial ${complete?'complete':''}`} id={`training-${tutorial.id}`}>
+      <div className="sc-training-title-row">
+        <div>
+          <div className="sc-training-badges"><span>{tutorial.level}</span><span>{tutorial.minutes} min</span><span>{tutorial.safeMode}</span></div>
+          <h3>{tutorial.title}</h3>
+          <p>{tutorial.summary}</p>
+        </div>
+        <div className="sc-training-progress-ring"><strong>{completedSteps}/{tutorial.steps.length}</strong><span>steps</span></div>
+      </div>
+      <div className="sc-training-outcome"><strong>Training goal</strong><p>{tutorial.outcome}</p></div>
+      <ol className="sc-training-steps">
+        {tutorial.steps.map((item,index)=>{
+          const checked=Boolean(progress?.steps?.[index]);
+          return <li key={item.title} className={checked?'done':''}>
+            <label className="sc-training-step-check">
+              <input type="checkbox" checked={checked} onChange={()=>onToggle(tutorial,index)} />
+              <span><strong>Step {index+1}: {item.title}</strong><small>{item.instruction}</small></span>
+            </label>
+            {item.route&&<a className="sc-training-open" href={item.route}>Open this page →</a>}
+            {item.verify&&<div className="sc-training-verify"><strong>Verify:</strong> {item.verify}</div>}
+            {item.warning&&<div className="sc-training-warning"><strong>Stop / caution:</strong> {item.warning}</div>}
+          </li>;
+        })}
+      </ol>
+      {tutorial.coachNotes?.length?<div className="sc-training-coach"><strong>Trainer notes</strong><ul>{tutorial.coachNotes.map(note=><li key={note}>{note}</li>)}</ul></div>:null}
+      <div className="sc-training-finish">
+        <label><input type="checkbox" checked={complete} onChange={()=>onToggle(tutorial,'complete')} /><span>Trainer/employee confirms this tutorial is complete</span></label>
+      </div>
+    </article>
+  );
+}
+
+function EmployeeTraining(){
+  const [role,setRole]=useState('new-employee');
+  const [progress,setProgress]=useState(loadTrainingProgress);
+  const tutorials=useMemo(()=>tutorialsForRole(role),[role]);
+  const completed=tutorials.filter(t=>progress[t.id]?.complete).length;
+  const totalSteps=tutorials.reduce((sum,t)=>sum+t.steps.length,0);
+  const checkedSteps=tutorials.reduce((sum,t)=>sum+Object.values(progress[t.id]?.steps||{}).filter(Boolean).length,0);
+
+  useEffect(()=>{window.localStorage.setItem(TRAINING_PROGRESS_KEY,JSON.stringify(progress));},[progress]);
+
+  function toggle(tutorial,index){
+    setProgress(current=>{
+      const record=current[tutorial.id]||{steps:{},complete:false};
+      if(index==='complete') return {...current,[tutorial.id]:{...record,complete:!record.complete}};
+      return {...current,[tutorial.id]:{...record,steps:{...record.steps,[index]:!record.steps?.[index]}}};
+    });
+  }
+
+  function reset(){
+    if(!window.confirm('Reset all training progress saved in this browser?')) return;
+    setProgress({});
+  }
+
+  const selectedRole=trainingRoles.find(item=>item.id===role);
+  return (
+    <section className="sc-training-workspace" id="employee-training">
+      <div className="sc-training-hero">
+        <div><span className="sc-guide-version">Training v{TRAINING_VERSION}</span><h2>Employee Training Center</h2><p>Role-based, step-by-step instruction for employees who are new to Skilled Crafting. Use the checkboxes as an onboarding checklist. Progress is stored only in this browser.</p></div>
+        <div className="sc-training-summary"><div><strong>{completed}/{tutorials.length}</strong><span>tutorials complete</span></div><div><strong>{checkedSteps}/{totalSteps}</strong><span>steps checked</span></div></div>
+      </div>
+      <div className="sc-training-safety">
+        <strong>Training rule: when unsure, stop before changing data.</strong>
+        <p>New employees should begin with read-only tutorials. Any tutorial marked supervised-live should be completed with a manager until the employee is signed off. Testing Mode only simulates writes on workflows that explicitly support simulation.</p>
+        <div className="sc-guide-route-list"><a href="/testing-mode">Open Testing Mode</a><a href="#safety-rules">Read operational safety rules</a></div>
+      </div>
+      <div className="sc-training-role-picker">
+        <div><strong>Choose the employee's role</strong><p>{selectedRole?.description}</p></div>
+        <select value={role} onChange={e=>setRole(e.target.value)}>{trainingRoles.map(item=><option value={item.id} key={item.id}>{item.label}</option>)}</select>
+        <button type="button" className="secondary-button" onClick={reset}>Reset training progress</button>
+      </div>
+      <div className="sc-training-tutorial-list">{tutorials.map(tutorial=><TrainingTutorial key={tutorial.id} tutorial={tutorial} progress={progress[tutorial.id]} onToggle={toggle}/>)}</div>
+      <section className="sc-training-signoff">
+        <h3>Recommended employee sign-off</h3>
+        <p>Before an employee works independently, have a manager observe one real task in each assigned core workflow and confirm that the employee can explain what data changes, how to verify success, and when to stop and escalate.</p>
+      </section>
+    </section>
+  );
+}
+
 function ScreenReference() {
   return (
     <section className="sc-guide-chapter" id="screen-reference">
@@ -127,6 +219,7 @@ function ScreenReference() {
 export default function ApplicationGuide() {
   const [query, setQuery] = useState('');
   const [activeChapter, setActiveChapter] = useState('all');
+  const [guideMode,setGuideMode]=useState('training');
 
   const filteredChapters = useMemo(() => {
     const search = normalize(query);
@@ -170,7 +263,12 @@ export default function ApplicationGuide() {
         </div>
       </section>
 
-      <section className="sc-guide-tools" aria-label="Guide search and chapter filter">
+      <section className="sc-guide-mode-switch" aria-label="Guide mode">
+        <button type="button" className={guideMode==='training'?'active':''} onClick={()=>setGuideMode('training')}><strong>Employee Training</strong><span>Guided onboarding + checklists</span></button>
+        <button type="button" className={guideMode==='reference'?'active':''} onClick={()=>setGuideMode('reference')}><strong>Owner / Manager Reference</strong><span>Full application operating manual</span></button>
+      </section>
+
+      {guideMode==='reference'&&<section className="sc-guide-tools" aria-label="Guide search and chapter filter">
         <label className="sc-guide-search">
           <span>Search the guide</span>
           <input
@@ -194,9 +292,9 @@ export default function ApplicationGuide() {
         <div className="sc-guide-results" aria-live="polite">
           {resultCount} topic{resultCount === 1 ? '' : 's'} shown
         </div>
-      </section>
+      </section>}
 
-      <div className="sc-guide-layout">
+      {guideMode==='training'?<EmployeeTraining/>:<div className="sc-guide-layout">
         <aside className="sc-guide-sidebar">
           <div className="sc-guide-sidebar-card">
             <strong>Guide chapters</strong>
@@ -258,7 +356,7 @@ export default function ApplicationGuide() {
 
           {!query && activeChapter === 'all' ? <ScreenReference /> : null}
         </div>
-      </div>
+      </div>}
     </main>
   );
 }
