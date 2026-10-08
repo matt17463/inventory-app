@@ -6,6 +6,22 @@ import { calculateSalesTax } from './salesTax';
 
 const clean = (value) => String(value ?? '').trim();
 
+function clientCustomizationParts(item = {}) {
+  return [
+    ['Recipient', item.recipient_name],
+    ['Garment Color', item.garment_color],
+    ['Size', item.size],
+    ['Name on Back', item.name_on_back],
+    ['Name Text Color', item.name_text_color],
+    ['Jersey / Employee #', item.jersey_number],
+  ].filter(([, value]) => clean(value)).map(([label, value]) => `${label}: ${clean(value)}`);
+}
+
+function clientCustomizationText(item = {}, separator = ' | ') {
+  const parts = clientCustomizationParts(item);
+  return parts.length ? `Client personalization — ${parts.join(separator)}` : '';
+}
+
 export async function listClientOrders() {
   const { data, error } = await supabase
     .from('sc_client_order_requests_detail')
@@ -286,11 +302,8 @@ export function buildClientOrderProductionPayload(request, items, options = {}) 
     placement: clean(item.placement),
     decoration_size: clean(item.decoration_size),
     notes: [
-      item.recipient_name ? `Recipient: ${item.recipient_name}` : '',
-      item.name_on_back ? `Name: ${item.name_on_back}` : '',
-      item.jersey_number ? `Number: ${item.jersey_number}` : '',
-      item.name_text_color ? `Personalization color: ${item.name_text_color}` : '',
-      clean(item.notes),
+      clientCustomizationText(item),
+      clean(item.notes) ? `Client line note: ${clean(item.notes)}` : '',
     ].filter(Boolean).join(' · '),
   }));
 
@@ -384,14 +397,11 @@ export function buildClientOrderQuickBooksCsv(request, items) {
   const baseRows = (items || []).map((item) => {
     const description = [
       item.mapped_item_name || item.garment_type,
-      item.mapped_color || item.garment_color,
-      item.mapped_size || item.size,
-      item.recipient_name ? `Recipient: ${item.recipient_name}` : '',
-      item.name_on_back ? `Name: ${item.name_on_back}` : '',
-      item.jersey_number ? `#${item.jersey_number}` : '',
+      clientCustomizationText(item, '; '),
       item.placement ? `Placement: ${item.placement}` : '',
       item.artwork_note ? `Artwork: ${item.artwork_note}` : '',
-    ].filter(Boolean).join(' · ');
+      item.notes ? `Line Note: ${clean(item.notes)}` : '',
+    ].filter(Boolean).join(' | ');
     const qty = Number(item.quantity || 0);
     const rate = Number(item.unit_price || 0);
     return [
@@ -459,12 +469,9 @@ export function buildClientOrderInvoiceCsv(request, items) {
   const rows = (items || []).map((item) => {
     const description = [
       item.mapped_item_name || item.garment_type,
-      item.mapped_color || item.garment_color,
-      item.mapped_size || item.size,
-      item.recipient_name ? `Recipient: ${item.recipient_name}` : '',
-      item.name_on_back ? `Name: ${item.name_on_back}` : '',
-      item.jersey_number ? `#${item.jersey_number}` : '',
-    ].filter(Boolean).join(' · ');
+      clientCustomizationText(item, '; '),
+      item.notes ? `Line Note: ${clean(item.notes)}` : '',
+    ].filter(Boolean).join(' | ');
     const qty = Number(item.quantity || 0);
     const rate = Number(item.unit_price || 0);
     return [
