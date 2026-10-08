@@ -361,6 +361,7 @@ function ManualLineRow({ line, index, onChange, onRemove, canRemove }) {
           ) : (
             <span className="manual-line-missing-label">Choose {source === 'finished' ? 'finished product' : 'blank product'}</span>
           )}
+          {line.notes && <span className="manual-line-client-details">{line.notes}</span>}
         </div>
         <div className="manual-line-row-actions">
           <button type="button" className="sc-btn sc-btn-muted" onClick={() => setDetailsOpen((v) => !v)}>
