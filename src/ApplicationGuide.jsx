@@ -6,7 +6,7 @@ import {
   guideChapters,
   guideSearchText,
 } from './application-guide/guideData';
-import { TRAINING_VERSION, trainingRoles, trainingTutorials, tutorialsForRole } from './application-guide/trainingData';
+import { TRAINING_VERSION, trainingRoles, tutorialsForRole } from './application-guide/trainingData';
 import './application-guide/ApplicationGuide.css';
 
 const normalize = (value) => String(value || '').trim().toLowerCase();
