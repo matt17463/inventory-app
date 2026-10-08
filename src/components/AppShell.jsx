@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import * as navConfig from '../navigationConfig';
 import DarkModeToggle from './DarkModeToggle';
+import GuidedTrainingOverlay from './GuidedTrainingOverlay';
 
 function normalizeNavigation(raw) {
   const candidate = raw?.navigationSections || raw?.NAVIGATION_SECTIONS || raw?.sections || raw?.navSections || raw?.default || raw;
@@ -103,6 +104,7 @@ export default function AppShell({ children }) {
 
   return (
     <div className="sc-app-shell">
+      <GuidedTrainingOverlay />
       <div className="sc-desktop-sidebar">{sidebar}</div>
       {drawerOpen && <div className="sc-drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
       <div className={`sc-mobile-drawer ${drawerOpen ? 'open' : ''}`}>{sidebar}</div>
