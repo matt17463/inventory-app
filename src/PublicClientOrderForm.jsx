@@ -60,6 +60,8 @@ export default function PublicClientOrderForm() {
   const [message,setMessage]=useState('');
   const [submitted,setSubmitted]=useState('');
   const [detailView,setDetailView]=useState('compact');
+  const [reviewing,setReviewing]=useState(false);
+  const [confirmationApproved,setConfirmationApproved]=useState(false);
 
   const totalQty=useMemo(()=>items.reduce((sum,row)=>sum+(Number(row.quantity)||0),0),[items]);
   const patch=(key,value)=>setForm((prev)=>({...prev,[key]:value}));
@@ -93,12 +95,25 @@ export default function PublicClientOrderForm() {
     return out;
   }
 
+  function reviewOrder(event) {
+    event.preventDefault();
+    setMessage('');
+    setConfirmationApproved(false);
+    setReviewing(true);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
   async function submit(event) {
-    event.preventDefault(); setBusy(true); setMessage('');
+    event?.preventDefault?.();
+    if (!confirmationApproved) {
+      setMessage('Please confirm that you reviewed all personalization, spelling, capitalization, sizes, colors, names, and numbers before submitting.');
+      return;
+    }
+    setBusy(true); setMessage('');
     try {
       const response=await fetch('/.netlify/functions/client-order-submit',{
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({...form, items, attachments:await filePayloads()})
+        body:JSON.stringify({...form, items, customer_confirmation:{approved:true,approved_at:new Date().toISOString(),statement:'Names and numbers will be printed exactly as entered; customer reviewed spelling, capitalization, garment color, size, name text color, and jersey number.'}, attachments:await filePayloads()})
       });
       const payload=await response.json().catch(()=>({}));
       if(!response.ok || payload.success===false) throw new Error(payload.error||'Submission failed.');
@@ -108,6 +123,65 @@ export default function PublicClientOrderForm() {
     } catch(error) { setMessage(error.message||String(error)); }
     finally { setBusy(false); }
   }
+
+  if (reviewing && !submitted) return (
+    <main className="sc-public-order-page">
+      <section className="sc-public-order-shell sc-public-order-confirmation">
+        <header className="sc-public-order-header">
+          <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" className="sc-public-order-logo" />
+          <div><p className="eyebrow">Final review required</p><h1>Confirm Your Order Details</h1><p>Please review every item before submitting your request.</p></div>
+        </header>
+
+        <section className="sc-confirmation-warning" role="alert">
+          <strong>Names and numbers will be printed exactly as entered.</strong>
+          <p>Check spelling, capitalization, garment color, size, name on back, name text color, and jersey/employee number for every line. Skilled Crafting will use the information below as your approved personalization instructions.</p>
+        </section>
+
+        {message && <div className="sc-form-message">{message}</div>}
+
+        <section className="sc-form-section">
+          <div className="sc-confirmation-summary">
+            <div><span>Organization</span><strong>{form.organization}</strong></div>
+            <div><span>Contact</span><strong>{form.contact_name}</strong></div>
+            <div><span>Email</span><strong>{form.contact_email}</strong></div>
+            <div><span>Total quantity</span><strong>{totalQty}</strong></div>
+          </div>
+        </section>
+
+        <section className="sc-form-section">
+          <div className="sc-section-heading"><div><h2>Order item confirmation</h2><p>{items.length} row{items.length===1?'':'s'} to review</p></div></div>
+          <div className="sc-confirmation-items">
+            {items.map((row,index)=>(
+              <article className="sc-confirmation-item" key={index}>
+                <div className="sc-confirmation-item-heading"><strong>Line {index+1}</strong><span>Qty {row.quantity}</span></div>
+                <div className="sc-confirmation-item-grid">
+                  <div><span>Recipient</span><strong>{row.recipient_name||'—'}</strong></div>
+                  <div><span>Garment / item</span><strong>{row.garment_type||'—'}</strong></div>
+                  <div><span>Garment color</span><strong>{row.garment_color||'—'}</strong></div>
+                  <div><span>Size</span><strong>{row.size||'—'}</strong></div>
+                  <div><span>Name on back</span><strong className="sc-confirmation-personalization">{row.name_on_back||'—'}</strong></div>
+                  <div><span>Name text color</span><strong>{row.name_text_color||'—'}</strong></div>
+                  <div><span>Jersey / employee #</span><strong className="sc-confirmation-personalization">{row.jersey_number||'—'}</strong></div>
+                  <div><span>Line notes</span><strong>{row.notes||'—'}</strong></div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="sc-form-section sc-confirmation-approval">
+          <label className="sc-confirmation-check">
+            <input type="checkbox" checked={confirmationApproved} onChange={(e)=>setConfirmationApproved(e.target.checked)} />
+            <span>I have reviewed every item above. I understand that names and numbers will be printed exactly as entered, including spelling and capitalization, and I approve these details for my order request.</span>
+          </label>
+          <div className="sc-confirmation-actions">
+            <button type="button" className="sc-confirmation-back" disabled={busy} onClick={()=>{setReviewing(false);setMessage('');window.scrollTo({top:0,behavior:'smooth'});}}>← Back to edit order</button>
+            <button type="button" className="sc-confirmation-submit" disabled={busy||!confirmationApproved} onClick={submit}>{busy?'Submitting…':'Approve & submit order request'}</button>
+          </div>
+        </section>
+      </section>
+    </main>
+  );
 
   if (submitted) return (
     <main className="sc-public-order-page">
@@ -124,7 +198,7 @@ export default function PublicClientOrderForm() {
 
   return (
     <main className="sc-public-order-page">
-      <form className="sc-public-order-shell" onSubmit={submit}>
+      <form className="sc-public-order-shell" onSubmit={reviewOrder}>
         <header className="sc-public-order-header">
           <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" className="sc-public-order-logo" />
           <div><p className="eyebrow">Online order request</p><h1>Team & Business Apparel Order</h1><p>Submit the details you know today. Pricing is added after Skilled Crafting reviews the request.</p></div>
@@ -236,7 +310,7 @@ export default function PublicClientOrderForm() {
 
         <footer className="sc-public-order-submit">
           <p>Submitting this form creates an order request, not a final priced order. Skilled Crafting will review availability, artwork, and pricing with you before production.</p>
-          <button disabled={busy} type="submit">{busy?'Submitting…':'Submit order request'}</button>
+          <button disabled={busy} type="submit">Review order before submitting</button>
         </footer>
       </form>
     </main>
