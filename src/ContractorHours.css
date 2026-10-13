@@ -1,0 +1,44 @@
+.sc-contractor-hours { max-width: 1550px; margin: 0 auto; }
+.sc-contractor-heading, .sc-contractor-report-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.sc-contractor-heading h1 { margin:0; }
+.sc-contractor-heading p { max-width:850px; }
+.sc-contractor-grid { display:grid; grid-template-columns:minmax(270px,1fr) minmax(320px,2fr); gap:16px; margin:20px 0; }
+.sc-contractor-card { background:var(--sc-panel); color:var(--sc-text); border:1px solid var(--sc-border); border-radius:var(--sc-radius,12px); padding:18px; margin-bottom:18px; min-width:0; }
+.sc-contractor-card h2 { margin:0 0 10px; font-size:1.22rem; }
+.sc-contractor-card h2 small { font-size:0.74rem; color:var(--sc-muted); }
+.sc-contractor-card p { color:var(--sc-muted); }
+.sc-contractor-card > small { display:block; margin-top:14px; color:var(--sc-muted); }
+.sc-contractor-card label { font-weight:650; font-size:0.89rem; display:flex; flex-direction:column; gap:5px; min-width:0; }
+.sc-contractor-card input,.sc-contractor-card select,.sc-contractor-card textarea { width:100%; padding:9px 10px; border:1px solid var(--sc-border); background:var(--sc-panel-2); color:var(--sc-text); border-radius:8px; min-height:39px; }
+.sc-contractor-card textarea { min-height:65px; resize:vertical; }
+.sc-contractor-card button,.sc-contractor-heading button { min-height:40px; }
+.sc-contractor-form { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:end; }
+.sc-contractor-wide,.sc-contractor-actions { grid-column:1/-1; }
+.sc-contractor-actions { display:flex; gap:10px; }
+.sc-contractor-active { color:var(--sc-success) !important; font-weight:800; }
+.sc-contractor-dot { display:inline-block; width:9px; height:9px; background:var(--sc-success); border-radius:50%; margin-right:8px; box-shadow:0 0 9px var(--sc-success); }
+.sc-contractor-message { margin:12px 0; border:1px solid var(--sc-border); padding:10px; border-radius:8px; background:var(--sc-panel-2); }
+.sc-contractor-admin-forms { display:grid; grid-template-columns:1fr 1.4fr; gap:22px; }
+.sc-contractor-admin-forms form { display:flex; align-items:end; flex-wrap:wrap; gap:10px; }
+.sc-contractor-admin-forms label { flex:1 1 145px; }
+.sc-contractor-filters { display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:14px; }
+.sc-contractor-filters label { flex:1 1 145px; max-width:290px; }
+.sc-contractor-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin:18px 0; }
+.sc-contractor-metrics>div { background:var(--sc-panel-2); border:1px solid var(--sc-border); border-radius:10px; padding:13px; display:flex; flex-direction:column; gap:8px; }
+.sc-contractor-metrics small { color:var(--sc-muted); font-size:0.78rem; }
+.sc-contractor-metrics strong { font-size:1.45rem; color:var(--sc-primary); font-variant-numeric:tabular-nums; }
+.sc-contractor-table-wrap { overflow:auto; max-width:100%; }
+.sc-contractor-table { width:100%; border-collapse:collapse; min-width:880px; }
+.sc-contractor-table td,.sc-contractor-table th { text-align:left; padding:10px 9px; border-bottom:1px solid var(--sc-border); vertical-align:top; overflow-wrap:anywhere; }
+.sc-contractor-table th { background:var(--sc-panel-2); color:var(--sc-text); position:sticky; top:0; }
+.sc-contractor-row-actions { display:flex; gap:5px; flex-wrap:wrap; min-width:120px; }
+.sc-contractor-row-actions button { padding:5px 8px; min-height:34px; font-size:0.78rem; }
+.sc-contractor-status { display:inline-flex; padding:4px 8px; border-radius:20px; font-size:0.75rem; font-weight:800; border:1px solid currentColor; text-transform:capitalize; }
+.sc-contractor-status-open { color:#15a9cf; }
+.sc-contractor-status-submitted { color:#cf8b19; }
+.sc-contractor-status-approved { color:#219f6d; }
+.sc-contractor-status-paid { color:#1987ba; }
+.sc-contractor-status-rejected { color:#c34c55; }
+.sc-contractor-status-void { color:#7b8794; }
+@media(max-width:850px) { .sc-contractor-grid,.sc-contractor-admin-forms { grid-template-columns:1fr; } .sc-contractor-form {grid-template-columns:repeat(2,minmax(0,1fr));} }
+@media(max-width:500px) { .sc-contractor-form {grid-template-columns:1fr;} }

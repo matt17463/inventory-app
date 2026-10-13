@@ -101,7 +101,7 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const setPreset = useCallback((preset) => {
-    updatePreferences({ preset });
+    updatePreferences({ preset, ...(preset === 'midnight-industrial' ? { mode: 'dark' } : {}) });
   }, [updatePreferences]);
 
   const setMode = useCallback((mode) => {

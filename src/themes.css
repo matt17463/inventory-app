@@ -2830,3 +2830,116 @@ html[data-preset='industrial-command'] .sc-nav-section-title {
   .sc-action-status__spinner { animation: none; }
   .sc-action-status__bar > span { transition: none; }
 }
+
+
+/* Midnight Industrial — additional opt-in theme inspired by workshop telemetry. */
+html[data-preset='midnight-industrial'] {
+  --sc-bg: #08111e;
+  --sc-panel: #122338;
+  --sc-panel-2: #172c43;
+  --sc-text: #f1f7fc;
+  --sc-muted: #a5c0d0;
+  --sc-border: #2b4860;
+  --sc-primary: #42c9eb;
+  --sc-primary-2: #2eaccb;
+  --sc-success: #61d5c0;
+  --sc-warning: #edbb68;
+  --sc-danger: #ff8d93;
+  --sc-logo-blue: #42c9eb;
+  --sc-logo-navy: #182e45;
+  --sc-logo-teal: #61d5c0;
+  --sc-soft-blue: #16384e;
+  --sc-soft-teal: #173b3f;
+  --sc-soft-orange: #463726;
+  --sc-soft-green: #193a39;
+  --sc-surface-gradient: radial-gradient(ellipse at 80% 0, #132d47, transparent 50%), #08111e;
+  --sc-card-gradient: linear-gradient(160deg, #172b42, #102034);
+  --sc-sidebar-bg: linear-gradient(180deg, #07111e, #0d1c2c);
+  --sc-sidebar-text: #e9f6ff;
+  --sc-sidebar-muted: #9ebcce;
+  --sc-sidebar-hover: rgba(66, 201, 235, 0.12);
+  --sc-sidebar-active: linear-gradient(110deg, #124a6a, #12637a);
+  --sc-topbar-bg: #0b1929f5;
+  --sc-primary-gradient: linear-gradient(135deg, #278cb3, #39bdd7);
+  --sc-secondary-bg: #18394e;
+  --sc-secondary-text: #d9f5ff;
+  --sc-table-header-bg: #19334b;
+  --sc-table-header-text: #e4f3fc;
+  --sc-page-header-bg: linear-gradient(125deg, #172e46, #0d1c2d);
+  --sc-card-border: #2b4860;
+  --sc-control-border: #41647c;
+  --sc-row-hover: #1c3b52;
+  --sc-focus-ring: #42c9eb90;
+  --sc-radius: 12px;
+  --sc-panel-shadow: 0 14px 30px #00000040;
+  --sc-header-shadow: 0 14px 30px #00000040;
+  color-scheme: dark;
+}
+html[data-preset='midnight-industrial'] .sc-sidebar {
+  background: var(--sc-sidebar-bg);
+  box-shadow: 8px 0 24px #0006;
+  border-right: 1px solid #2c4961;
+}
+html[data-preset='midnight-industrial'] .sc-topbar {
+  background: var(--sc-topbar-bg);
+  border-bottom-color: #2b4860;
+}
+html[data-preset='midnight-industrial'] .sc-nav-link.active {
+  background: var(--sc-sidebar-active);
+  border-left: 2px solid #42c9eb;
+}
+html[data-preset='midnight-industrial'] .sc-nav-section-title {
+  color: #9ebcce;
+  letter-spacing: .12em;
+}
+html[data-preset='midnight-industrial'] .sc-page-shell,
+html[data-preset='midnight-industrial'] .sc-app-shell { background: var(--sc-surface-gradient); }
+html[data-preset='midnight-industrial'] .sc-card,
+html[data-preset='midnight-industrial'] .sc-section-card,
+html[data-preset='midnight-industrial'] .sc-metric-card {
+  background: var(--sc-card-gradient);
+  border: 1px solid var(--sc-card-border);
+  box-shadow: var(--sc-panel-shadow);
+}
+html[data-preset='midnight-industrial'] input,
+html[data-preset='midnight-industrial'] textarea,
+html[data-preset='midnight-industrial'] select {
+  background: #0e2033;
+  color: #f1f7fc;
+  border-color: #41647c;
+}
+html[data-preset='midnight-industrial'] .sc-contractor-card,
+html[data-preset='midnight-industrial'] .sc-nav-editor-group {
+  background: var(--sc-card-gradient);
+  border-color: var(--sc-card-border);
+}
+
+/* Midnight Industrial retains its layout when a user explicitly chooses Light. */
+html[data-preset='midnight-industrial'][data-theme='light'] {
+  --sc-bg: #e9f2f8;
+  --sc-panel: #ffffff;
+  --sc-panel-2: #eaf4fb;
+  --sc-text: #12283d;
+  --sc-muted: #405a6c;
+  --sc-border: #abc5d4;
+  --sc-primary: #086d99;
+  --sc-primary-2: #0a5c81;
+  --sc-success: #137d6d;
+  --sc-warning: #996415;
+  --sc-danger: #ad3149;
+  --sc-surface-gradient: linear-gradient(130deg, #eef7fa, #dbeaf3);
+  --sc-card-gradient: linear-gradient(145deg, #ffffff, #f0f7fa);
+  --sc-card-border: #b3cbd8;
+  --sc-control-border: #92b4c6;
+  --sc-table-header-bg: #dceef7;
+  --sc-table-header-text: #183649;
+  --sc-topbar-bg: #f7fbfeef;
+  color-scheme: light;
+}
+html[data-preset='midnight-industrial'][data-theme='light'] input,
+html[data-preset='midnight-industrial'][data-theme='light'] textarea,
+html[data-preset='midnight-industrial'][data-theme='light'] select {
+  background: #fff;
+  color: #142e41;
+  border-color: #92b4c6;
+}
