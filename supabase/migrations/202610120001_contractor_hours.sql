@@ -267,7 +267,7 @@ end $$;
 create or replace function public.sc_contractor_resolve_open(p_entry_id uuid, p_hours numeric, p_reason text)
 returns void language plpgsql security definer set search_path = ''
 as $$
-declare v_row public.sc_contractor_time_entries%rowtype; v_end timestamptz := clock_timestamp();
+declare v_row public.sc_contractor_time_entries%rowtype;
 begin
   if coalesce(public.sc_current_app_role() in ('admin','manager'),false) = false then
     raise exception 'Manager permission required'; end if;
@@ -276,8 +276,10 @@ begin
     raise exception 'Specify 0.01 to 24 hours and a correction reason'; end if;
   select * into v_row from public.sc_contractor_time_entries where id=p_entry_id for update;
   if not found or v_row.status <> 'open' then raise exception 'No open shift found'; end if;
+  -- The verified duration is known, but the actual clock-out timestamp is not.
+  -- Retain ended_at=NULL rather than inventing a time the contractor did not record.
   update public.sc_contractor_time_entries
-    set ended_at=v_end,hours=round(p_hours,2),status='submitted',
+    set ended_at=null,hours=round(p_hours,2),status='submitted',
       notes=left(notes||' [Manager duration correction: '||trim(p_reason)||']',2000),
       updated_at=now() where id=p_entry_id;
 end $$;
@@ -286,12 +288,17 @@ create or replace function public.sc_contractor_audit_rate_change()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
-  insert into public.sc_contractor_rate_audit
-    (contractor_id,effective_on,actor_id,old_rate,new_rate)
-  values (new.contractor_id,new.effective_on,auth.uid(),
-    case when tg_op = 'INSERT' then null else old.hourly_rate end, new.hourly_rate);
+  if tg_op='INSERT' then
+    insert into public.sc_contractor_rate_audit
+      (contractor_id,effective_on,actor_id,new_rate)
+      values (new.contractor_id,new.effective_on,auth.uid(),new.hourly_rate);
+  else
+    insert into public.sc_contractor_rate_audit
+      (contractor_id,effective_on,actor_id,old_rate,new_rate)
+      values (new.contractor_id,new.effective_on,auth.uid(),old.hourly_rate,new.hourly_rate);
+  end if;
   return new;
-end $$;
+end $;
 drop trigger if exists sc_contractor_rate_audit_trigger on public.sc_contractor_hourly_rates;
 create trigger sc_contractor_rate_audit_trigger after insert or update
   on public.sc_contractor_hourly_rates for each row execute function public.sc_contractor_audit_rate_change();
