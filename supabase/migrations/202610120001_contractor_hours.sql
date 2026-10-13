@@ -266,7 +266,7 @@ end $$;
 -- Managers can resolve a forgotten clock-out without fabricating a precise shift duration.
 create or replace function public.sc_contractor_resolve_open(p_entry_id uuid, p_hours numeric, p_reason text)
 returns void language plpgsql security definer set search_path = ''
-as $
+as $$
 declare v_row public.sc_contractor_time_entries%rowtype; v_end timestamptz := clock_timestamp();
 begin
   if coalesce(public.sc_current_app_role() in ('admin','manager'),false) = false then
@@ -280,18 +280,18 @@ begin
     set ended_at=v_end,hours=round(p_hours,2),status='submitted',
       notes=left(notes||' [Manager duration correction: '||trim(p_reason)||']',2000),
       updated_at=now() where id=p_entry_id;
-end $;
+end $$;
 
 create or replace function public.sc_contractor_audit_rate_change()
 returns trigger language plpgsql security definer set search_path = ''
-as $
+as $$
 begin
   insert into public.sc_contractor_rate_audit
     (contractor_id,effective_on,actor_id,old_rate,new_rate)
   values (new.contractor_id,new.effective_on,auth.uid(),
     case when tg_op = 'INSERT' then null else old.hourly_rate end, new.hourly_rate);
   return new;
-end $;
+end $$;
 drop trigger if exists sc_contractor_rate_audit_trigger on public.sc_contractor_hourly_rates;
 create trigger sc_contractor_rate_audit_trigger after insert or update
   on public.sc_contractor_hourly_rates for each row execute function public.sc_contractor_audit_rate_change();
@@ -314,7 +314,7 @@ begin
       values (old.id,auth.uid(),tg_op,to_jsonb(old));
     return old;
   end if;
-end $;
+end $$;
 drop trigger if exists sc_contractor_time_audit_trigger on public.sc_contractor_time_entries;
 create trigger sc_contractor_time_audit_trigger after insert or update or delete
   on public.sc_contractor_time_entries for each row execute function public.sc_contractor_audit_change();
