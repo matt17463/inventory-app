@@ -7,7 +7,7 @@ const ACTIVITIES = ['Production', 'Artwork', 'Inventory', 'Shipping', 'Equipment
 const currency = (value) => value === null || value === undefined ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 const displayHours = (value) => value == null ? '—' : Number(value).toFixed(2);
 function errorText(error) {
-  if (/sc_contractor_|does not exist|schema cache/i.test(error?.message || '')) {
+  if (error?.code === 'PGRST202' || /Could not find the function|relation .* does not exist|schema cache/i.test(error?.message || '')) {
     return 'Contractor database migration is not installed yet. Ask the administrator to apply the reviewed Supabase migration.';
   }
   return error?.message || 'Unable to complete the request.';
