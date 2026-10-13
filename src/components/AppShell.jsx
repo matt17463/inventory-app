@@ -3,11 +3,15 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import * as navConfig from '../navigationConfig';
 import DarkModeToggle from './DarkModeToggle';
 import GuidedTrainingOverlay from './GuidedTrainingOverlay';
+import { supabase } from '../supabaseClient';
+import { NavigationContext } from '../lib/navigationContext';
+import { defaultNavigationLayout, materializeNavigation, navigationStorageKey, sanitizeNavigationLayout } from '../lib/navigationPreferences';
 
 function normalizeNavigation(raw) {
   const candidate = raw?.navigationSections || raw?.NAVIGATION_SECTIONS || raw?.sections || raw?.navSections || raw?.default || raw;
   const arr = Array.isArray(candidate) ? candidate : [];
   return arr.map((section) => ({
+    id: section.id || (section.title || section.label || section.name || 'Section').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
     title: section.title || section.label || section.name || 'Section',
     icon: section.icon || '',
     items: Array.isArray(section.items) ? section.items.map((item) => ({
@@ -61,10 +65,42 @@ export default function AppShell({ children }) {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const nav = useMemo(() => {
+  const baseNav = useMemo(() => {
     const configured = normalizeNavigation(navConfig);
     return configured.length ? configured : fallbackNav;
   }, []);
+  const [layout, setLayout] = useState(() => defaultNavigationLayout(baseNav));
+  const [accountId, setAccountId] = useState('');
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+      const userId = data?.user?.id || '';
+      setAccountId(userId);
+      try {
+        const saved = userId ? JSON.parse(window.localStorage.getItem(navigationStorageKey(userId)) || 'null') : null;
+        setLayout(sanitizeNavigationLayout(baseNav, saved));
+      } catch {
+        setLayout(defaultNavigationLayout(baseNav));
+      }
+    });
+    return () => { active = false; };
+  }, [baseNav]);
+  const updateLayout = (updater) => setLayout((current) => {
+    const candidate = typeof updater === 'function' ? updater(current) : updater;
+    const safe = sanitizeNavigationLayout(baseNav, candidate);
+    if (accountId) {
+      try { window.localStorage.setItem(navigationStorageKey(accountId), JSON.stringify(safe)); } catch { /* private browser mode */ }
+    }
+    return safe;
+  });
+  const resetLayout = () => {
+    if (accountId) {
+      try { window.localStorage.removeItem(navigationStorageKey(accountId)); } catch { /* storage restricted */ }
+    }
+    setLayout(defaultNavigationLayout(baseNav));
+  };
+  const nav = useMemo(() => materializeNavigation(baseNav, layout), [baseNav, layout]);
 
   const allItems = nav.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
   const filtered = search.trim()
@@ -103,6 +139,7 @@ export default function AppShell({ children }) {
   );
 
   return (
+    <NavigationContext.Provider value={{ layout, updateLayout, resetLayout, baseNav }}>
     <div className="sc-app-shell">
       <GuidedTrainingOverlay />
       <div className="sc-desktop-sidebar">{sidebar}</div>
@@ -139,6 +176,7 @@ export default function AppShell({ children }) {
                 </div>
               )}
             </div>
+            <Link className="sc-theme-settings-link" to="/menu-manager" aria-label="Customize left navigation">☷ Menu</Link>
             <Link className="sc-theme-settings-link" to="/theme-settings" aria-label="Open visual theme settings">
               <span aria-hidden="true">🎨</span>
               <span>Themes</span>
@@ -149,5 +187,6 @@ export default function AppShell({ children }) {
         <main className="sc-page-shell">{children}</main>
       </div>
     </div>
+    </NavigationContext.Provider>
   );
 }
