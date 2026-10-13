@@ -101,7 +101,7 @@ returns uuid language plpgsql security definer set search_path = ''
 as $$
 declare v_user uuid; v_name text;
 begin
-  if public.sc_current_app_role() not in ('admin','manager') then raise exception 'Manager permission required'; end if;
+  if coalesce(public.sc_current_app_role() in ('admin','manager'),false) = false then raise exception 'Manager permission required'; end if;
   select u.id, coalesce(nullif(trim(p_name),''),u.email) into v_user,v_name
     from auth.users u join public.sc_app_user_roles r on r.user_id=u.id and r.is_active
     where lower(u.email)=lower(trim(p_email)) limit 1;
@@ -117,7 +117,7 @@ create or replace function public.sc_contractor_set_rate(
 returns void language plpgsql security definer set search_path = ''
 as $$
 begin
-  if public.sc_current_app_role() not in ('admin','manager') then raise exception 'Manager permission required'; end if;
+  if coalesce(public.sc_current_app_role() in ('admin','manager'),false) = false then raise exception 'Manager permission required'; end if;
   if p_effective_on is null or p_hourly_rate is null or p_hourly_rate < 0 or p_hourly_rate > 10000 then
     raise exception 'Invalid effective date or hourly rate';
   end if;
@@ -142,7 +142,7 @@ begin
   if p_work_date is null or p_hours is null or p_hours <= 0 or p_hours > 24
     or length(trim(coalesce(p_activity,''))) not between 1 and 80
     or length(coalesce(p_notes,'')) > 2000 then raise exception 'Invalid manual time entry'; end if;
-  perform public.sc_contractor_initialize() where v_contractor=auth.uid();
+  if v_contractor=auth.uid() then perform public.sc_contractor_initialize(); end if;
   if not exists (select 1 from public.sc_contractors where user_id=v_contractor) then
     raise exception 'Contractor profile not found'; end if;
   insert into public.sc_contractor_time_entries
@@ -214,7 +214,7 @@ returns void language plpgsql security definer set search_path = ''
 as $$
 declare v_row public.sc_contractor_time_entries%rowtype;
 begin
-  if public.sc_current_app_role() not in ('admin','manager') then raise exception 'Manager permission required'; end if;
+  if coalesce(public.sc_current_app_role() in ('admin','manager'),false) = false then raise exception 'Manager permission required'; end if;
   select * into v_row from public.sc_contractor_time_entries where id=p_entry_id for update;
   if not found then raise exception 'Time entry not found'; end if;
   if (p_status='approved' and v_row.status not in ('submitted','rejected'))
@@ -250,12 +250,20 @@ create or replace function public.sc_contractor_audit_change()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
-  insert into public.sc_contractor_time_audit(entry_id,actor_id,action,before_value,after_value)
-    values (coalesce(new.id,old.id),auth.uid(),tg_op,
-      case when tg_op='INSERT' then null else to_jsonb(old) end,
-      case when tg_op='DELETE' then null else to_jsonb(new) end);
-  return coalesce(new,old);
-end $$;
+  if tg_op='INSERT' then
+    insert into public.sc_contractor_time_audit(entry_id,actor_id,action,after_value)
+      values (new.id,auth.uid(),tg_op,to_jsonb(new));
+    return new;
+  elsif tg_op='UPDATE' then
+    insert into public.sc_contractor_time_audit(entry_id,actor_id,action,before_value,after_value)
+      values (new.id,auth.uid(),tg_op,to_jsonb(old),to_jsonb(new));
+    return new;
+  else
+    insert into public.sc_contractor_time_audit(entry_id,actor_id,action,before_value)
+      values (old.id,auth.uid(),tg_op,to_jsonb(old));
+    return old;
+  end if;
+end $;
 drop trigger if exists sc_contractor_time_audit_trigger on public.sc_contractor_time_entries;
 create trigger sc_contractor_time_audit_trigger after insert or update or delete
   on public.sc_contractor_time_entries for each row execute function public.sc_contractor_audit_change();
