@@ -76,7 +76,7 @@ export default function ContractorHours() {
         peopleQuery,
         timeQuery,
         admin ? supabase.from('sc_contractor_hourly_rates').select('contractor_id,effective_on,hourly_rate') : Promise.resolve({ data: [], error: null }),
-        supabase.from('sc_contractor_time_entries').select('*').eq('contractor_id', user.id).eq('status', 'open'),
+        supabase.from('sc_contractor_time_entries').select('*').eq('status', 'open'),
       ]);
       for (const response of [peopleResult,timeResult,rateResult,activeResult]) if (response.error) throw response.error;
       const records = timeResult.data || [];
@@ -96,10 +96,10 @@ export default function ContractorHours() {
 
   const names = useMemo(() => Object.fromEntries(profiles.map((p) => [p.user_id,p.display_name])), [profiles]);
   const filtered = useMemo(() => entries.filter((row) =>
-    (row.work_date >= range.start && row.work_date <= range.end || row.status === 'open' && row.contractor_id === user?.id)
+    (row.work_date >= range.start && row.work_date <= range.end || row.status === 'open' && (admin || row.contractor_id === user?.id))
     && (contractorFilter === 'all' || row.contractor_id === contractorFilter)
     && (statusFilter === 'all' || row.status === statusFilter)
-  ), [entries, contractorFilter, statusFilter, range.start, range.end, user]);
+  ), [entries, contractorFilter, statusFilter, range.start, range.end, user, admin]);
   const report = useMemo(() => contractorReport(filtered, rates), [filtered, rates]);
   const ownOpen = entries.find((row) => row.contractor_id === user?.id && row.status === 'open');
 
@@ -262,6 +262,12 @@ export default function ContractorHours() {
                 <td>{row.notes || '—'}</td>
                 <td><div className="sc-contractor-row-actions">
                   {row.method === 'manual' && ['submitted','rejected'].includes(row.status) && <button type="button" disabled={busy} onClick={() => beginEdit(row)}>Edit</button>}
+                  {admin && row.status === 'open' && <button type="button" disabled={busy} onClick={() => {
+                    const corrected = window.prompt('Verified hours worked for this open shift (0.01–24):');
+                    if (corrected === null) return;
+                    const reason = window.prompt('Explain the forgotten clock-out correction:');
+                    if (reason !== null) run('sc_contractor_resolve_open', { p_entry_id: row.id, p_hours: Number(corrected), p_reason: reason }, 'Open shift corrected and submitted.');
+                  }}>Resolve shift</button>}
                   {admin && ['submitted','rejected'].includes(row.status) && <button type="button" disabled={busy} onClick={() => run('sc_contractor_review', { p_entry_id: row.id, p_status: 'approved' }, 'Hours approved.')}>Approve</button>}
                   {admin && ['submitted','approved'].includes(row.status) && <button type="button" disabled={busy} onClick={() => run('sc_contractor_review', { p_entry_id: row.id, p_status: 'rejected' }, 'Hours rejected.')}>Reject</button>}
                   {admin && row.status === 'approved' && <button type="button" disabled={busy} onClick={() => window.confirm('Mark this entry paid? This cannot be reversed from this screen.') && run('sc_contractor_review', { p_entry_id: row.id, p_status: 'paid' }, 'Entry marked paid.')}>Mark paid</button>}
