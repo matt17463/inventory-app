@@ -85,6 +85,8 @@ const SupplierCatalogReview = lazy(() => import('./SupplierCatalogReview'));
 const TestTag = lazy(() => import('./TestTag'));
 const TestingMode = lazy(() => import('./TestingMode'));
 const ThemeSettings = lazy(() => import('./ThemeSettings'));
+const MenuManager = lazy(() => import('./MenuManager'));
+const ContractorHours = lazy(() => import('./ContractorHours'));
 const TransferInventory = lazy(() => import('./TransferInventory'));
 const VendorPriceComparison = lazy(() => import('./VendorPriceComparison'));
 const WaitingOn = lazy(() => import('./WaitingOn'));
@@ -107,6 +109,8 @@ function EmployeeRoutes() {
       <Route path="/create-product" element={<Navigate replace to="/inventory/edit-blanks" />} />
       <Route path="/testing-mode" element={<TestingMode />} />
       <Route path="/theme-settings" element={<ThemeSettings />} />
+      <Route path="/menu-manager" element={<MenuManager />} />
+      <Route path="/contractor-hours" element={<ContractorHours />} />
       <Route path="/inventory/blanks" element={<BlankInventory />} />
       <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
       <Route path="/inventory/import" element={<InventoryImport />} />
