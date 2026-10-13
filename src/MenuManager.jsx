@@ -30,6 +30,19 @@ export default function MenuManager() {
   const updateGroup = (id, value) => save((current) => ({
     ...current, groups: current.groups.map((group) => group.id === id ? { ...group, title: value } : group),
   }));
+  const removeGroup = (id) => {
+    if (layout.groups.length < 2) return;
+    const removing = layout.groups.find((group) => group.id === id);
+    if (!removing || !window.confirm('Remove group "' + removing.title + '"? Its pages will move into another group.')) return;
+    save((current) => {
+      const survivor = current.groups.find((group) => group.id !== id);
+      return {
+        ...current,
+        groups: current.groups.filter((group) => group.id !== id)
+          .map((group) => group.id === survivor.id ? { ...group, paths: [...group.paths, ...removing.paths] } : group),
+      };
+    });
+  };
   const addGroup = (event) => {
     event.preventDefault();
     if (!newGroup.trim()) return;
@@ -80,6 +93,7 @@ export default function MenuManager() {
               <input id={'sc-group-' + group.id} maxLength={60} value={group.title} onChange={(e) => updateGroup(group.id, e.target.value)} />
               <button type="button" aria-label={'Move ' + group.title + ' up'} disabled={groupIndex === 0} onClick={() => moveGroup(groupIndex, -1)}>↑</button>
               <button type="button" aria-label={'Move ' + group.title + ' down'} disabled={groupIndex === layout.groups.length - 1} onClick={() => moveGroup(groupIndex, 1)}>↓</button>
+              <button type="button" aria-label={'Remove group ' + group.title} disabled={layout.groups.length < 2} onClick={() => removeGroup(group.id)}>Remove</button>
             </div>
             {group.paths.length === 0 && <p className="helper-text">This group is empty. Move a page here using another group's selector.</p>}
             {group.paths.map((path, index) => {
