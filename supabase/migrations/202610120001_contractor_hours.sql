@@ -298,7 +298,7 @@ begin
       values (new.contractor_id,new.effective_on,auth.uid(),old.hourly_rate,new.hourly_rate);
   end if;
   return new;
-end $;
+end $$;
 drop trigger if exists sc_contractor_rate_audit_trigger on public.sc_contractor_hourly_rates;
 create trigger sc_contractor_rate_audit_trigger after insert or update
   on public.sc_contractor_hourly_rates for each row execute function public.sc_contractor_audit_rate_change();
