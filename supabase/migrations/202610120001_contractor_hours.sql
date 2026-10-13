@@ -101,7 +101,8 @@ as $$
 declare v_role text; v_name text;
 begin
   v_role := public.sc_current_app_role();
-  if auth.uid() is null or v_role is null then raise exception 'Active app access required'; end if;
+  if auth.uid() is null or coalesce(v_role in ('admin','manager','operator'),false) = false
+    then raise exception 'Active contractor access required'; end if;
   select coalesce(nullif(trim(u.raw_user_meta_data->>'full_name'), ''), u.email, 'Contractor')
     into v_name from auth.users u where u.id = auth.uid();
   insert into public.sc_contractors(user_id, display_name)
@@ -148,7 +149,8 @@ as $$
 declare v_id uuid; v_contractor uuid := coalesce(p_contractor_id, auth.uid()); v_role text;
 begin
   v_role := public.sc_current_app_role();
-  if v_role is null then raise exception 'Active app access required'; end if;
+  if coalesce(v_role in ('admin','manager','operator'),false) = false
+    then raise exception 'Active contractor access required'; end if;
   if v_contractor <> auth.uid() and v_role not in ('admin','manager') then
     raise exception 'Cannot enter another contractor''s time';
   end if;
@@ -188,7 +190,8 @@ returns uuid language plpgsql security definer set search_path = ''
 as $$
 declare v_row public.sc_contractor_time_entries%rowtype; v_end timestamptz := clock_timestamp(); v_hours numeric;
 begin
-  if public.sc_current_app_role() is null then raise exception 'Active app access required'; end if;
+  if coalesce(public.sc_current_app_role() in ('admin','manager','operator'),false) = false
+    then raise exception 'Active contractor access required'; end if;
   select * into v_row from public.sc_contractor_time_entries
     where contractor_id=auth.uid() and status='open' for update;
   if not found then raise exception 'No active clock-in'; end if;
@@ -207,7 +210,8 @@ returns void language plpgsql security definer set search_path = ''
 as $$
 declare v_row public.sc_contractor_time_entries%rowtype; v_role text := public.sc_current_app_role();
 begin
-  if v_role is null then raise exception 'Active app access required'; end if;
+  if coalesce(v_role in ('admin','manager','operator'),false) = false
+    then raise exception 'Active contractor access required'; end if;
   select * into v_row from public.sc_contractor_time_entries where id=p_entry_id for update;
   if not found or (v_row.contractor_id <> auth.uid() and v_role not in ('admin','manager'))
     then raise exception 'Entry unavailable'; end if;
@@ -247,7 +251,8 @@ returns void language plpgsql security definer set search_path = ''
 as $$
 declare v_row public.sc_contractor_time_entries%rowtype; v_role text := public.sc_current_app_role();
 begin
-  if v_role is null then raise exception 'Active app access required'; end if;
+  if coalesce(v_role in ('admin','manager','operator'),false) = false
+    then raise exception 'Active contractor access required'; end if;
   select * into v_row from public.sc_contractor_time_entries where id=p_entry_id for update;
   if not found or (v_row.contractor_id <> auth.uid() and v_role not in ('admin','manager')) then
     raise exception 'Entry unavailable'; end if;
