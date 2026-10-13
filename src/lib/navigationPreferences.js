@@ -28,7 +28,7 @@ export function sanitizeNavigationLayout(sections, candidate) {
     });
     groups.push({
       id,
-      title: typeof group.title === 'string' && group.title.trim() ? group.title.trim().slice(0, 60) : 'Custom Group',
+      title: typeof group.title === 'string' && group.title.trim() ? group.title.slice(0, 60) : 'Custom Group',
       icon: typeof group.icon === 'string' ? group.icon.slice(0, 8) : '',
       paths,
     });
