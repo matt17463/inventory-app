@@ -55,6 +55,19 @@ create table if not exists public.sc_contractor_time_audit (
   changed_at timestamptz not null default now()
 );
 
+
+create table if not exists public.sc_contractor_rate_audit (
+  id bigint generated always as identity primary key,
+  contractor_id uuid not null,
+  effective_on date not null,
+  actor_id uuid,
+  old_rate numeric(10,2),
+  new_rate numeric(10,2),
+  changed_at timestamptz not null default now()
+);
+alter table public.sc_contractor_rate_audit enable row level security;
+revoke all on public.sc_contractor_rate_audit from anon, authenticated;
+
 alter table public.sc_contractors enable row level security;
 alter table public.sc_contractor_hourly_rates enable row level security;
 alter table public.sc_contractor_time_entries enable row level security;
@@ -245,7 +258,40 @@ begin
     where id=p_entry_id;
 end $$;
 
--- Database-owned immutable audit history for every change, including rate and approval edits.
+-- Managers can resolve a forgotten clock-out without fabricating a precise shift duration.
+create or replace function public.sc_contractor_resolve_open(p_entry_id uuid, p_hours numeric, p_reason text)
+returns void language plpgsql security definer set search_path = ''
+as $
+declare v_row public.sc_contractor_time_entries%rowtype; v_end timestamptz := clock_timestamp();
+begin
+  if coalesce(public.sc_current_app_role() in ('admin','manager'),false) = false then
+    raise exception 'Manager permission required'; end if;
+  if p_hours is null or p_hours < 0.01 or p_hours > 24
+    or length(trim(coalesce(p_reason,''))) < 3 then
+    raise exception 'Specify 0.01 to 24 hours and a correction reason'; end if;
+  select * into v_row from public.sc_contractor_time_entries where id=p_entry_id for update;
+  if not found or v_row.status <> 'open' then raise exception 'No open shift found'; end if;
+  update public.sc_contractor_time_entries
+    set ended_at=v_end,hours=round(p_hours,2),status='submitted',
+      notes=left(notes||' [Manager duration correction: '||trim(p_reason)||']',2000),
+      updated_at=now() where id=p_entry_id;
+end $;
+
+create or replace function public.sc_contractor_audit_rate_change()
+returns trigger language plpgsql security definer set search_path = ''
+as $
+begin
+  insert into public.sc_contractor_rate_audit
+    (contractor_id,effective_on,actor_id,old_rate,new_rate)
+  values (new.contractor_id,new.effective_on,auth.uid(),
+    case when tg_op = 'INSERT' then null else old.hourly_rate end, new.hourly_rate);
+  return new;
+end $;
+drop trigger if exists sc_contractor_rate_audit_trigger on public.sc_contractor_hourly_rates;
+create trigger sc_contractor_rate_audit_trigger after insert or update
+  on public.sc_contractor_hourly_rates for each row execute function public.sc_contractor_audit_rate_change();
+
+-- Database-owned immutable audit history for time entries and approvals.
 create or replace function public.sc_contractor_audit_change()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -278,6 +324,8 @@ revoke all on function public.sc_contractor_edit_manual(uuid,date,numeric,text,t
 revoke all on function public.sc_contractor_review(uuid,text) from public, anon;
 revoke all on function public.sc_contractor_void(uuid,text) from public, anon;
 revoke all on function public.sc_contractor_audit_change() from public, anon, authenticated;
+revoke all on function public.sc_contractor_audit_rate_change() from public, anon, authenticated;
+revoke all on function public.sc_contractor_resolve_open(uuid,numeric,text) from public, anon;
 grant execute on function public.sc_contractor_initialize() to authenticated;
 grant execute on function public.sc_contractor_register(text,text) to authenticated;
 grant execute on function public.sc_contractor_set_rate(uuid,date,numeric) to authenticated;
@@ -287,3 +335,5 @@ grant execute on function public.sc_contractor_clock_out() to authenticated;
 grant execute on function public.sc_contractor_edit_manual(uuid,date,numeric,text,text) to authenticated;
 grant execute on function public.sc_contractor_review(uuid,text) to authenticated;
 grant execute on function public.sc_contractor_void(uuid,text) to authenticated;
+
+grant execute on function public.sc_contractor_resolve_open(uuid,numeric,text) to authenticated;
