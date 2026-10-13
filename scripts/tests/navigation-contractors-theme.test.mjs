@@ -85,14 +85,14 @@ test('contractor migration enforces RLS and writes through authenticated RPCs on
   assert.match(sql, /sc_contractor_audit_rate_change/);
   // All PL/pgSQL functions must have balanced two-dollar body delimiters.
   // A single-dollar delimiter slipped through ordinary lint/build checks previously.
-  const definitions = (sql.match(/create or replace function public\\.sc_contractor_[a-z_]+\\s*\\(/g) || []).length;
-  const opens = (sql.match(/\\bas \\$\\$/g) || []).length;
-  const closes = (sql.match(/end \\$\\$;/g) || []).length;
+  const definitions = (sql.match(/create or replace function public\.sc_contractor_[a-z_]+\s*\(/g) || []).length;
+  const opens = (sql.match(/\bas \$\$/g) || []).length;
+  const closes = (sql.match(/end \$\$;/g) || []).length;
   assert.equal(definitions, 12);
   assert.equal(opens, definitions);
   assert.equal(closes, definitions);
-  assert.doesNotMatch(sql, /\\bas \\$(?!\\$)/);
-  assert.doesNotMatch(sql, /end \\$(?!\\$);/);
+  assert.doesNotMatch(sql, /\bas \$(?!\$)/);
+  assert.doesNotMatch(sql, /end \$(?!\$);/);
 
   assert.doesNotMatch(sql, /create policy .* for (insert|update|delete)/i);
 });
