@@ -2910,6 +2910,36 @@ html[data-preset='midnight-industrial'] select {
 }
 html[data-preset='midnight-industrial'] .sc-contractor-card,
 html[data-preset='midnight-industrial'] .sc-nav-editor-group {
-  background: linear-gradient(160deg, #172b42, #102034);
-  border-color: #2b4860;
+  background: var(--sc-card-gradient);
+  border-color: var(--sc-card-border);
+}
+
+/* Midnight Industrial retains its layout when a user explicitly chooses Light. */
+html[data-preset='midnight-industrial'][data-theme='light'] {
+  --sc-bg: #e9f2f8;
+  --sc-panel: #ffffff;
+  --sc-panel-2: #eaf4fb;
+  --sc-text: #12283d;
+  --sc-muted: #405a6c;
+  --sc-border: #abc5d4;
+  --sc-primary: #086d99;
+  --sc-primary-2: #0a5c81;
+  --sc-success: #137d6d;
+  --sc-warning: #996415;
+  --sc-danger: #ad3149;
+  --sc-surface-gradient: linear-gradient(130deg, #eef7fa, #dbeaf3);
+  --sc-card-gradient: linear-gradient(145deg, #ffffff, #f0f7fa);
+  --sc-card-border: #b3cbd8;
+  --sc-control-border: #92b4c6;
+  --sc-table-header-bg: #dceef7;
+  --sc-table-header-text: #183649;
+  --sc-topbar-bg: #f7fbfeef;
+  color-scheme: light;
+}
+html[data-preset='midnight-industrial'][data-theme='light'] input,
+html[data-preset='midnight-industrial'][data-theme='light'] textarea,
+html[data-preset='midnight-industrial'][data-theme='light'] select {
+  background: #fff;
+  color: #142e41;
+  border-color: #92b4c6;
 }
