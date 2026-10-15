@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { callService, createConnection, getAuth, subscribeEntities } from 'home-assistant-js-websocket';
 import { supabase } from './supabaseClient';
-import { BUSINESS_HA, PRIVATE_HA, controlFor, entityPresentation, equipment, validHaUrl } from './lib/equipment';
+import { BUSINESS_HA, PRIVATE_HA, PI_DESKTOP, MAC_DESKTOP, controlFor, entityPresentation, equipment, validHaUrl } from './lib/equipment';
 import './EquipmentCenter.css';
 
 const defaultSettings = { haUrl: PRIVATE_HA, photos: {}, mappings: {} };
@@ -29,7 +29,7 @@ export default function EquipmentCenter() {
   const currentAccount = useRef(null);
   const generation = useRef(0);
 
-  function disconnect() {
+  const disconnect = useCallback(() => {
     generation.current += 1;
     unsubscribe.current?.();
     unsubscribe.current = null;
@@ -41,14 +41,19 @@ export default function EquipmentCenter() {
     setEntities({});
     setLastUpdate(null);
     setBusy(false);
-  }
+  }, []);
 
-  async function connect(url, callback = false) {
+  const connect = useCallback(async (url, callback = false) => {
     const attempt = ++generation.current;
+    let authTimer;
     setBusy(true); setMessage('');
     try {
       const hassUrl = validHaUrl(url, window.location.protocol === 'https:');
-      const authorization = await getAuth({ hassUrl, clientId: window.location.origin, redirectUrl: `${window.location.origin}/equipment-center`, limitHassInstance: true, saveTokens: () => {}, loadTokens: async () => undefined });
+      const authorizationRequest = getAuth({ hassUrl, clientId: window.location.origin, redirectUrl: `${window.location.origin}/equipment-center`, limitHassInstance: true, saveTokens: () => {}, loadTokens: async () => undefined }).then((result) => {
+        if (!alive.current || attempt !== generation.current) result.revoke().catch(() => {});
+        return result;
+      });
+      const authorization = await Promise.race([authorizationRequest, new Promise((_, reject) => { authTimer = window.setTimeout(() => reject(new Error('Home Assistant authorization timed out. Check Tailscale and connect again.')), 30000); })]);
       if (!alive.current || attempt !== generation.current) { authorization.revoke().catch(() => {}); return; }
       auth.current = authorization;
       const conn = await createConnection({ auth: authorization, connectTimeout: 10000 });
@@ -62,15 +67,17 @@ export default function EquipmentCenter() {
       setConnected(true);
       if (callback) window.history.replaceState({}, '', '/equipment-center');
     } catch (error) {
-      if (alive.current && attempt === generation.current) setMessage(error?.message || 'Could not connect. Check Tailscale, the private HTTPS address, and Home Assistant sign-in.');
-    } finally { if (alive.current && attempt === generation.current) setBusy(false); }
-  }
+      if (alive.current && attempt === generation.current) { disconnect(); setMessage(error?.message || 'Could not connect. Check Tailscale, the private HTTPS address, and Home Assistant sign-in.'); }
+    } finally { window.clearTimeout(authTimer); if (alive.current && attempt === generation.current) setBusy(false); }
+  }, [disconnect]);
 
   useEffect(() => {
+    let effectActive = true;
     alive.current = true;
+    currentAccount.current = null;
     const loadAccount = (user) => {
       const id = user?.id || '';
-      if (!alive.current || currentAccount.current === id) return;
+      if (!effectActive || !alive.current || currentAccount.current === id) return;
       currentAccount.current = id;
       disconnect();
       const key = id ? `sc_equipment_v1:${id}` : '';
@@ -84,8 +91,8 @@ export default function EquipmentCenter() {
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => loadAccount(session?.user));
     supabase.auth.getUser().then(({ data }) => loadAccount(data?.user)).catch(() => setMessage('Sign in to Skilled Crafting before connecting live.'));
-    return () => { alive.current = false; generation.current += 1; subscription.unsubscribe(); unsubscribe.current?.(); connection.current?.close(); auth.current?.revoke().catch(() => {}); auth.current = null; };
-  }, []);
+    return () => { effectActive = false; alive.current = false; generation.current += 1; subscription.unsubscribe(); unsubscribe.current?.(); connection.current?.close(); auth.current?.revoke().catch(() => {}); auth.current = null; };
+  }, [connect, disconnect]);
 
   function saveSettings(event) {
     event.preventDefault();
@@ -111,7 +118,7 @@ export default function EquipmentCenter() {
 
   const visible = equipment.filter((d) => d.site === site && `${d.name} ${d.category} ${d.maker}`.toLowerCase().includes(query.toLowerCase()));
   const switches = Object.values(entities).filter((e) => controlFor(e, 'on'));
-  const consoleUrl = connected ? settings.haUrl : BUSINESS_HA;
+  const consoleUrl = settings.haUrl || BUSINESS_HA;
   const entityIds = (d) => settings.mappings[d.id] ? [settings.mappings[d.id]] : d.entities;
 
   return <main className="equipment-center">
@@ -130,8 +137,8 @@ export default function EquipmentCenter() {
     {message && <p className="eq-notice" role="status">{message}</p>}
     {editing && <form className="eq-settings" onSubmit={saveSettings}><h2>Private connection</h2><p>Use the Pi’s private HTTPS address for live data inside this app. Tailscale must be connected. Home Assistant handles sign-in; passwords and access tokens are not saved by this page.</p><label>Home Assistant HTTPS address<input type="url" required value={settings.haUrl} onChange={(e) => setSettings({ ...settings, haUrl: e.target.value })} /></label><p className="eq-muted">Private HTTPS uses your Tailscale network. Sign in to Home Assistant to authorize this app’s live connection.</p><button className="eq-button primary" type="submit">Save preferences</button></form>}
     <nav className="eq-remote" aria-label="Remote access">
-      <External href="vnc://100.106.153.72"><span className="eq-icon">▣</span><div><strong>Business MacBook</strong><small>Open Screen Sharing · Tailscale required</small></div></External>
-      <External href="https://connect.raspberrypi.com/"><span className="eq-icon">⌘</span><div><strong>Pi visual desktop</strong><small>Raspberry Pi Connect · account setup pending</small></div></External>
+      <External href={MAC_DESKTOP}><span className="eq-icon">▣</span><div><strong>Business MacBook</strong><small>Pi-assisted Screen Sharing · Tailscale required</small></div></External>
+      <External href={PI_DESKTOP}><span className="eq-icon">⌘</span><div><strong>Pi visual desktop</strong><small>Raspberry Pi Connect · visual desktop verified</small></div></External>
       <External href="ssh://mcdanielm@100.117.18.123"><span className="eq-icon">›_</span><div><strong>Pi terminal</strong><small>Open SSH · Tailscale required</small></div></External>
     </nav>
     <div className="eq-toolbar"><div className="eq-tabs" role="group" aria-label="Location"><button aria-pressed={site === 'business'} onClick={() => setSite('business')}>Business workshop</button><button aria-pressed={site === 'home'} onClick={() => setSite('home')}>Home</button></div><label><span className="sr-only">Find equipment</span><input type="search" placeholder="Find equipment…" value={query} onChange={(e) => setQuery(e.target.value)} /></label></div>

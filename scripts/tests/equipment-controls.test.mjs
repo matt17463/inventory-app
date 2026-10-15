@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { controlFor, entityPresentation, validHaUrl } from '../../src/lib/equipment.js';
+import { shouldDetectSupabaseCallback } from '../../src/lib/authCallbackRouting.js';
+
+test('Home Assistant callbacks keep their authorization code away from Supabase', () => {
+  assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/equipment-center?auth_callback=1&code=ha-code')), false);
+  assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/?code=supabase-code')), true);
+  assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/equipment-center?code=supabase-code')), true);
+});
 
 test('live connection refuses credentials, mixed content and invalid schemes', () => {
   assert.equal(validHaUrl('https://scshoppi.tail934ae0.ts.net/'), 'https://scshoppi.tail934ae0.ts.net');
