@@ -13,7 +13,7 @@ export const equipment = [
   { id: 'kasa', name: 'Kasa HS200 switch', maker: 'TP-LINK', category: 'Smart switch', site: 'business', image: 'kasa.webp', address: '192.168.1.247', entities: ['switch.business_hs200_switch'], stage: 'Integration added', detail: 'Local switch integration. Confirm what it powers before operating it.' },
   { id: 'reolink', name: 'Reolink cameras', maker: 'REOLINK', category: 'Security', site: 'business', entities: [], stage: 'Credentials needed', detail: 'Reolink devices discovered on the business network. Add each device using its local camera account in Home Assistant.' },
   { id: 'swann', name: 'Swann NVR8-7250', maker: 'SWANN', category: 'Recorder', site: 'business', entities: [], stage: 'Compatibility check', detail: 'Recorder found at 192.168.1.205. ONVIF or RTSP support and credentials still need verification.' },
-  { id: 'nas', name: 'Synology DS718+', maker: 'SYNOLOGY', category: 'Storage', site: 'home', image: 'nas.webp', entities: [], stage: 'Home visit pending', detail: 'Home NAS reserved in this view. Home network discovery and remote access remain pending; local addresses overlap with business.' },
+  { id: 'nas', name: 'Synology DS718+', maker: 'SYNOLOGY', category: 'Storage', site: 'home', image: 'nas.webp', entities: [], stage: 'Home visit pending', detail: 'Home NAS reserved in this view. Home network discovery and remote access remain pending; local addresses overlap with business.', action: 'NAS integration guide', url: 'https://www.home-assistant.io/integrations/synology_dsm/' },
 ];
 
 export function validHaUrl(value, secureContext = true) {
