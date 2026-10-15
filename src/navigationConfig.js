@@ -17,6 +17,7 @@ export const navSections = [
     items: [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
+      { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop' },
       { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },
       { label: 'Shop TV / Touch Mode', path: '/shop-tv', keywords: 'production display wall tv touch floor kiosk station dashboard due date blockers' },
     ],
