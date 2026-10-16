@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getPurchaseOrders, money } from './lib/inventoryApi';
+import { getPurchaseOrders, money, cancelPurchaseOrder, deletePurchaseOrder } from './lib/inventoryApi';
 
 function number(value) {
   return Number(value || 0).toLocaleString();
@@ -10,6 +10,7 @@ export default function PurchaseOrders() {
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('open');
   const [message, setMessage] = useState('');
+  const [busyId, setBusyId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loadRows = useCallback(async () => {
@@ -25,6 +26,18 @@ export default function PurchaseOrders() {
   }, [status]);
 
   useEffect(() => { loadRows(); }, [loadRows]);
+
+  async function changeOrder(row, remove = false) {
+    const action = remove ? 'Permanently delete' : 'Cancel outstanding quantities on';
+    if (!window.confirm(`${action} PO ${row.po_number}? ${remove ? 'This cannot be undone. Received orders cannot be deleted.' : 'Received inventory stays in its bin.'}`)) return;
+    setBusyId(row.id);
+    try {
+      const result = await (remove ? deletePurchaseOrder(row.id) : cancelPurchaseOrder(row.id));
+      await loadRows();
+      if (result?.simulated) setMessage('Training preview: purchase order unchanged.');
+    } catch (error) { setMessage(error.message); }
+    finally { setBusyId(null); }
+  }
 
   const totals = useMemo(() => rows.reduce((acc, row) => {
     acc.orders += 1;
@@ -83,7 +96,10 @@ export default function PurchaseOrders() {
                     <td>{number(row.total_units_received)}</td>
                     <td><strong>{number(row.total_units_open)}</strong></td>
                     <td>{money(row.estimated_total_cost)}</td>
-                    <td><Link to={`/purchase-orders/${row.id}/receive`}>Open / Receive</Link></td>
+                    <td><Link to={`/purchase-orders/${row.id}/receive`}>Open / Receive</Link>
+                      {!['received', 'cancelled'].includes(row.status) && <button type="button" disabled={busyId !== null} onClick={() => changeOrder(row)}>Cancel PO</button>}
+                      {Number(row.total_units_received || 0) === 0 && <button type="button" disabled={busyId !== null} onClick={() => changeOrder(row, true)}>Delete PO…</button>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

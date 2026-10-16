@@ -71,6 +71,7 @@ export default function ReceivePurchaseOrder() {
     setBusy(true);
     setMessage('');
     try {
+      if (po?.status === 'cancelled') throw new Error('This purchase order is cancelled.');
       if (!state.binId) throw new Error('Choose a destination bin before receiving.');
       await receivePurchaseOrderItem({
         poItemId: item.id,

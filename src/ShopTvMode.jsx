@@ -25,6 +25,7 @@ function normalizeDensity(value, fallback = 'standard') {
 }
 
 const QUICK_ACTIONS = [
+  { label: 'Equipment TV / Touch', path: '/shop-equipment', icon: '⚙️' },
   { label: 'Open Pull Sheets', path: '/pullsheets', icon: '📋' },
   { label: 'Production Board', path: '/production-board', icon: '🏭' },
   { label: 'Receive Inventory', path: '/add-item', icon: '📦' },
@@ -389,7 +390,7 @@ export default function ShopTvMode() {
         </div>
         <div>
           <span>Data source</span>
-          <strong>Production Board Sync</strong>
+          <strong>Production Board Sync · current results</strong>
         </div>
         <div>
           <span>Display size</span>

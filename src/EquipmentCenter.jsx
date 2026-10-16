@@ -1,3 +1,5 @@
+import { Link, useLocation } from 'react-router-dom';
+import { shouldSimulateWrites } from './lib/testingMode';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { callService, createConnection, getAuth, subscribeEntities } from 'home-assistant-js-websocket';
 import { supabase } from './supabaseClient';
@@ -10,6 +12,14 @@ function External({ href, children, ...props }) {
 }
 
 export default function EquipmentCenter() {
+  const location = useLocation();
+  const shopDisplay = location.pathname === '/shop-equipment';
+  const [tvMode, setTvMode] = useState(new URLSearchParams(location.search).get('mode') === 'tv');
+  const [kiosk, setKiosk] = useState(new URLSearchParams(location.search).get('kiosk') === '1');
+  useEffect(() => {
+    document.body.classList.toggle('shop-touch-kiosk-active', kiosk);
+    return () => document.body.classList.remove('shop-touch-kiosk-active');
+  }, [kiosk]);
   const [site, setSite] = useState('business');
   const [query, setQuery] = useState('');
   const [settings, setSettings] = useState(defaultSettings);
@@ -108,6 +118,7 @@ export default function EquipmentCenter() {
     const current = entities[request?.entityId];
     const action = controlFor(current, request?.target);
     if (!action || !connected || !connection.current) { setMessage('This device is no longer available. Reconnect and try again.'); setConfirmation(null); return; }
+    if (shouldSimulateWrites()) { setConfirmation(null); setMessage('Training preview: no device command sent.'); return; }
     setBusy(true);
     try {
       await callService(connection.current, action.domain, action.service, {}, action.target);
@@ -121,7 +132,8 @@ export default function EquipmentCenter() {
   const consoleUrl = settings.haUrl || BUSINESS_HA;
   const entityIds = (d) => settings.mappings[d.id] ? [settings.mappings[d.id]] : d.entities;
 
-  return <main className="equipment-center">
+  return <main className={`equipment-center ${shopDisplay ? 'equipment-shop-display' : ''} ${tvMode ? 'equipment-tv-mode' : ''}`}>
+    {shopDisplay && <section className="eq-display-bar" aria-label="Equipment display controls"><h1>Equipment {tvMode ? 'TV' : 'Touch'}</h1><Link to="/shop-tv">Production display</Link><button className="eq-button" onClick={() => setTvMode(!tvMode)}>{tvMode ? 'Use touch controls' : 'Use TV view'}</button><button className="eq-button" onClick={() => setKiosk(!kiosk)}>{kiosk ? 'Exit kiosk' : 'Full screen layout'}</button></section>}
     <header className="eq-hero">
       <div><p className="eq-kicker">SKILLED CRAFTING / CONNECTED WORKSHOP</p><h1>Mission control<span>.</span></h1><p>Your machines. Your spaces. One place to connect.</p>
         <div className="eq-hero-actions"><External className="eq-button primary" href={`${consoleUrl}/skilled-crafting/${site}`}>Open Home Assistant</External><button className="eq-button" onClick={() => setEditing(!editing)}>Connection settings</button></div>
@@ -154,7 +166,7 @@ export default function EquipmentCenter() {
         </div></article>; })}
     </section>
     {!visible.length && <p className="eq-notice">No matching equipment. Try another name or location.</p>}
-    {connected && site === 'business' && <section className="eq-live-controls"><div><p className="eq-kicker">LIVE FROM HOME ASSISTANT</p><h2>Supported controls</h2><p>Verify each device’s name and connected load before operating it.</p></div>{switches.length ? <div className="eq-control-grid">{switches.map((e) => <div key={e.entity_id}><strong>{e.attributes.friendly_name || e.entity_id}</strong><span>{e.state}</span><button className="eq-button" disabled={busy} onClick={() => setConfirmation({ entityId: e.entity_id, name: e.attributes.friendly_name || e.entity_id, target: e.state === 'on' ? 'off' : 'on' })}>Turn {e.state === 'on' ? 'off' : 'on'}…</button></div>)}</div> : <p>No supported switches, lights or fans are currently available.</p>}</section>}
+    {connected && site === 'business' && !tvMode && <section className="eq-live-controls"><div><p className="eq-kicker">LIVE FROM HOME ASSISTANT</p><h2>Supported controls</h2><p>Verify each device’s name and connected load before operating it.</p></div>{switches.length ? <div className="eq-control-grid">{switches.map((e) => <div key={e.entity_id}><strong>{e.attributes.friendly_name || e.entity_id}</strong><span>{e.state}</span><button className="eq-button" disabled={busy} onClick={() => setConfirmation({ entityId: e.entity_id, name: e.attributes.friendly_name || e.entity_id, target: e.state === 'on' ? 'off' : 'on' })}>Turn {e.state === 'on' ? 'off' : 'on'}…</button></div>)}</div> : <p>No supported switches, lights or fans are currently available.</p>}</section>}
     <footer className="eq-footer">MIDNIGHT INDUSTRIAL <span>•</span> Product photos are reference images. Connection labels are setup records until live data is connected. Laser operation remains in xTool Studio with an operator present.</footer>
     {selected && <div className="eq-modal-backdrop"><section className="eq-modal" role="dialog" aria-modal="true" aria-label={`${selected.name} details`}><button className="eq-close" autoFocus onClick={() => setSelected(null)} aria-label="Close details">×</button><p className="eq-kicker">{selected.site.toUpperCase()} / {selected.category.toUpperCase()}</p><h2>{selected.name}</h2><p>{selected.detail}</p>{selected.address && <p>Address: <code>{selected.address}</code>{selected.site === 'business' && !selected.address.startsWith('100.') && ' · Business LAN only'}</p>}<form onSubmit={(e) => { e.preventDefault(); if (accountKey) localStorage.setItem(accountKey, JSON.stringify(settings)); setSelected(null); }}><label>Photo URL (optional)<input type="url" pattern="https://.+" placeholder="https://…" value={settings.photos[selected.id] || ''} onChange={(e) => setSettings({ ...settings, photos: { ...settings.photos, [selected.id]: e.target.value } })} /></label><label>Primary Home Assistant entity (optional)<input pattern="[a-z_]+\.[a-z0-9_]+" placeholder="sensor.device_status" value={settings.mappings[selected.id] || ''} onChange={(e) => setSettings({ ...settings, mappings: { ...settings.mappings, [selected.id]: e.target.value } })} /></label><small>Saved for your account on this browser. Photos should use HTTPS.</small><button className="eq-button primary" type="submit">Save details</button></form></section></div>}
     {confirmation && <div className="eq-modal-backdrop"><section className="eq-modal" role="dialog" aria-modal="true" aria-label="Confirm device operation"><h2>Turn {confirmation.target} {confirmation.name}?</h2><p>This operates the connected equipment through Home Assistant. Confirm that its connected load is safe to switch.</p><div className="eq-hero-actions"><button autoFocus className="eq-button" disabled={busy} onClick={() => setConfirmation(null)}>Cancel</button><button className="eq-button primary" disabled={busy} onClick={operate}>{busy ? 'Sending…' : `Turn ${confirmation.target}`}</button></div></section></div>}

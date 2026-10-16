@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
+import { isPendingStockBin } from './lib/pullSheetBinAssignmentApi';
+import { mergeLogoOptions } from './lib/finishedLogoOptions';
 import { supabase } from './supabaseClient';
 import {
   createFinishedProductFromBlank,
@@ -98,6 +101,8 @@ export default function CreateFinishedFromBlank() {
 
   const [customers, setCustomers] = useState([]);
   const [logos, setLogos] = useState([]);
+  const [logoStatus, setLogoStatus] = useState('Loading current WooCommerce logo choices…');
+  const [logoRefresh, setLogoRefresh] = useState(0);
   const [customerId, setCustomerId] = useState('');
   const [logoId, setLogoId] = useState('');
 
@@ -111,8 +116,8 @@ export default function CreateFinishedFromBlank() {
   const [decorationType, setDecorationType] = useState('');
   const [placement, setPlacement] = useState('');
   const [decorationSize, setDecorationSize] = useState('');
-  const [deductBlank, setDeductBlank] = useState(true);
-  const [productionSource, setProductionSource] = useState('manual_production');
+  const [deductBlank, setDeductBlank] = useState(false);
+  const [productionSource, setProductionSource] = useState('overstock_production');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -138,9 +143,9 @@ export default function CreateFinishedFromBlank() {
         getLogosForDropdown(),
       ]);
 
-      setBins(binRows);
+      setBins(binRows.filter((bin) => !isPendingStockBin(bin)));
       setCustomers(customerRows);
-      setLogos(logoRows);
+      setLogos((current) => mergeLogoOptions(logoRows, current.map((row) => row.name)));
     } catch (err) {
       setMessage(err.message || 'Failed to load page data.');
     }
@@ -149,6 +154,32 @@ export default function CreateFinishedFromBlank() {
   useEffect(() => {
     loadInitial();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function discover() {
+      setLogoStatus('Loading current WooCommerce logo choices…');
+      let page = 1;
+      let count = 0;
+      try {
+        while (page) {
+          const response = await authenticatedFunctionFetch(`/.netlify/functions/finished-logo-options?page=${page}`, { signal: controller.signal });
+          const body = await response.json();
+          if (!response.ok || !body.success) throw new Error(body.message || 'Unable to read product logos');
+          if (controller.signal.aborted) return;
+          count += body.logos.length;
+          setLogos((current) => mergeLogoOptions(current, body.logos));
+          page = body.next_page;
+          setLogoStatus(`Checking WooCommerce products… ${count} logo choices found so far.`);
+        }
+        setLogoStatus('Current published-product logo choices loaded, including product-specific Logo Selection attributes.');
+      } catch (error) {
+        if (!controller.signal.aborted) setLogoStatus(`${error.message}. Synced logos remain available. Use Refresh to retry.`);
+      }
+    }
+    discover();
+    return () => controller.abort();
+  }, [logoRefresh]);
 
   useEffect(() => {
     async function loadSourceBins() {
@@ -235,7 +266,7 @@ export default function CreateFinishedFromBlank() {
         customerName,
         logoName,
         customerId: customerId || null,
-        logoId: logoId || null,
+        logoId: logos.find((row) => String(row.id) === String(logoId))?.logoId || null,
         decorationType: usingExistingFinishedProduct ? null : decorationType,
         placement: usingExistingFinishedProduct ? null : placement,
         decorationSize: usingExistingFinishedProduct ? null : decorationSize,
@@ -246,7 +277,7 @@ export default function CreateFinishedFromBlank() {
       });
 
       setMessage(
-        `Finished inventory received. Match method: ${result?.match_method || 'unknown'}`
+        result?.simulated ? 'Training preview: no inventory changed.' : `Finished inventory received. Match method: ${result?.match_method || 'unknown'}`
       );
 
       setQuantity(1);
@@ -263,8 +294,8 @@ export default function CreateFinishedFromBlank() {
       <section className="page-header">
         <div>
           <p className="eyebrow">Finished Inventory</p>
-          <h1>Create Finished Product from Blank</h1>
-          <p>Create finished inventory outside of an order or pullsheet.</p>
+          <h1>Add Finished Product to a Bin</h1>
+          <p>Record accidental extras, customer returns, and demo items in their physical bin. Deduct a blank only when you are making a new item now.</p>
         </div>
       </section>
 
@@ -282,6 +313,9 @@ export default function CreateFinishedFromBlank() {
 
       <form onSubmit={submit} className="card elevated-card">
         <h2>Finished Product Details</h2>
+        <button type="button" disabled={busy} onClick={() => { loadInitial(); setLogoRefresh((value) => value + 1); }}>Refresh bins, customers and logos</button>
+        <p className="helper-text" role="status">{logoStatus}</p>
+        <p className="helper-text">Choose an existing finished product when possible. Returns and already-made extras do not consume another blank.</p>
 
         <label>Blank product</label>
         <select value={blankProductId} onChange={(event) => setBlankProductId(event.target.value)} required={!existingFinishedProductId || deductBlank}>
@@ -389,11 +423,12 @@ export default function CreateFinishedFromBlank() {
 
           <label>
             Production Source
-            <select value={productionSource} onChange={(event) => setProductionSource(event.target.value)}>
+            <select value={productionSource} onChange={(event) => { setProductionSource(event.target.value); if (event.target.value === 'customer_return') setDeductBlank(false); }}>
+              <option value="customer_return">Customer Return</option>
               <option value="manual_production">Manual Production</option>
-              <option value="overstock_production">Overstock Production</option>
+              <option value="overstock_production">Accidental Extra / Overstock</option>
               <option value="customer_order">Customer Order</option>
-              <option value="sample_inventory">Sample Inventory</option>
+              <option value="sample_inventory">Demo / Sample</option>
             </select>
           </label>
         </div>
@@ -409,7 +444,7 @@ export default function CreateFinishedFromBlank() {
         </select>
 
         <label className="checkbox-label">
-          <input type="checkbox" checked={deductBlank} onChange={(event) => setDeductBlank(event.target.checked)} />
+          <input type="checkbox" checked={deductBlank} disabled={productionSource === 'customer_return'} onChange={(event) => setDeductBlank(event.target.checked)} />
           Deduct blank inventory from a source bin
         </label>
 

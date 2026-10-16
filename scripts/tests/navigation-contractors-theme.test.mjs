@@ -111,5 +111,5 @@ test('Midnight Industrial is opt in and does not replace the current default the
   assert.match(presets, /DEFAULT_THEME_PRESET = 'professional-enterprise'/);
   assert.match(presets, /id: 'midnight-industrial'/);
   assert.match(css, /data-preset='midnight-industrial'/);
-  assert.match(provider, /preset === 'midnight-industrial'/);
+  assert.match(provider, /\['midnight-industrial', 'copper-foundry', 'evergreen-workshop'\]\.includes\(preset\)/);
 });

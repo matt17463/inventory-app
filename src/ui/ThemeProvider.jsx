@@ -101,7 +101,7 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const setPreset = useCallback((preset) => {
-    updatePreferences({ preset, ...(preset === 'midnight-industrial' ? { mode: 'dark' } : {}) });
+    updatePreferences({ preset, ...(['midnight-industrial', 'copper-foundry', 'evergreen-workshop'].includes(preset) ? { mode: 'dark' } : {}) });
   }, [updatePreferences]);
 
   const setMode = useCallback((mode) => {

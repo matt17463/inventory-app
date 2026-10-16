@@ -1,4 +1,4 @@
-export const TRAINING_VERSION = '1.0';
+export const TRAINING_VERSION = '1.1';
 
 export const trainingRoles = [
   { id: 'new-employee', label: 'New Employee', description: 'Start here. Learn the daily workflow, safety rules, receiving, pull sheets, and how to avoid inventory mistakes.' },
@@ -12,6 +12,22 @@ export const trainingRoles = [
 const step = (title, instruction, options = {}) => ({ title, instruction, ...options });
 
 export const trainingTutorials = [
+  {
+    id:'current-shop-workflows', title:'Current Workflows: Returns, Purchasing, Catalog & Equipment',
+    roles:['new-employee','warehouse','production','artwork','manager','owner-admin'], level:'Core', minutes:25, safeMode:'read-only',
+    summary:'Find updated workflows and explain the correct action before changing live data.',
+    outcome:'Record a finished extra correctly, distinguish cancellation from deletion, and choose the right display and repair tool.',
+    steps:[
+      step('Navigate compact groups', 'Expand a group and find a tool with top-bar search. Review Menu Manager.', {route:'/menu-manager', verify:'You can explain how custom groups appear in the collapsible sidebar.', readOnly:true}),
+      step('Inspect finished receiving', 'Find an existing finished product and identify the bin and reason. Explain why a return does not deduct another blank. Do not submit.', {route:'/finished/create', verify:'You can identify global and product-specific logo choices.', readOnly:true}),
+      step('Review a supplier PO', 'Locate cancellation and deletion actions without activating them.', {route:'/purchase-orders', verify:'You can distinguish stopping outstanding demand from reversing inventory or notifying a supplier.', readOnly:true}),
+      step('Inspect active production', 'Review the display and explain why completed jobs are absent from overdue lanes.', {route:'/shop-tv', verify:'You can locate active work and its due-date bucket.', readOnly:true}),
+      step('Review equipment monitoring', 'Review TV and Touch views and connection status. Do not operate equipment.', {route:'/shop-equipment', verify:'You can distinguish a setup record from live data and find remote access.', readOnly:true}),
+      step('Choose the repair tool', 'Follow Catalog Workbench from diagnostics to definitions, mappings and operations verification. Do not apply repairs.', {route:'/catalog-workbench', verify:'You can explain the different purposes of color, mapping and bulk-pairing tools.', readOnly:true}),
+      step('Check themes', 'Compare Midnight Industrial, Copper Foundry and Evergreen Workshop in light and dark mode.', {route:'/theme-settings', verify:'You can choose a readable palette for the target screen.', readOnly:true}),
+      step('Review contractor hours', 'Identify where contractors enter time and managers review reports. Do not submit or approve time.', {route:'/contractor-hours', verify:'You know where to record work and who approves it.', readOnly:true}),
+    ],
+  },
   {
     id: 'orientation-101',
     title: 'Orientation: Learn the System Without Breaking Anything',

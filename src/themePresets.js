@@ -118,6 +118,15 @@ export const THEME_PRESETS = [
       text: '#f1f7fc',
     },
   },
+  ...[
+    { id: 'copper-foundry', name: 'Copper Foundry', icon: '◒', accent: '#efb17b', background: '#17120f', panel: '#30231d', text: '#fff3e8', description: 'Warm copper, charcoal steel, equipment photographs and clear workshop controls.' },
+    { id: 'evergreen-workshop', name: 'Evergreen Workshop', icon: '◩', accent: '#74d7b4', background: '#0c1916', panel: '#17342b', text: '#effcf5', description: 'Forest green, brushed metal, equipment photographs and calm telemetry surfaces.' },
+  ].map((theme) => ({
+    ...theme, category: 'Industrial', visualStyle: 'industrial',
+    bestFor: 'Equipment monitoring, shop televisions and everyday production',
+    traits: ['Equipment photos', 'Readable telemetry', 'Light and dark modes', 'Touch controls'],
+    preview: { background: theme.background, panel: theme.panel, sidebar: theme.background, primary: theme.accent, accent: theme.accent, text: theme.text },
+  })),
   {
     id: 'industrial-command',
     name: 'Industrial Command',

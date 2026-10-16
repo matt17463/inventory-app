@@ -120,8 +120,8 @@ export default function AppShell({ children }) {
       </Link>
       <nav className="sc-sidebar-nav">
         {nav.map((section) => (
-          <div className="sc-nav-section" key={section.title}>
-            <div className="sc-nav-section-title">{section.icon ? `${section.icon} ` : ''}{section.title}</div>
+          <details className="sc-nav-section" key={`${section.id}-${location.pathname}`} open={section.items.some((item) => item.path === location.pathname)}>
+            <summary className="sc-nav-section-title">{section.icon ? `${section.icon} ` : ''}{section.title} <small>({section.items.length})</small></summary>
             {section.items.map((item) => (
               <NavLink
                 key={`${section.title}-${item.path}-${item.label}`}
@@ -132,7 +132,7 @@ export default function AppShell({ children }) {
                 <span>{item.label}</span>
               </NavLink>
             ))}
-          </div>
+          </details>
         ))}
       </nav>
     </aside>

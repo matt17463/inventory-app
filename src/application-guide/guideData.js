@@ -1,4 +1,4 @@
-export const GUIDE_VERSION = '1.4.37';
+export const GUIDE_VERSION = '1.4.41';
 
 const section = (id, title, summary, options = {}) => ({
   id,
@@ -8,6 +8,32 @@ const section = (id, title, summary, options = {}) => ({
 });
 
 export const guideChapters = [
+  {
+    id: 'current-workflows', title: 'Current Shop, Catalog & Administration Workflows',
+    description: 'Finished extras and returns, compact navigation, purchase-order lifecycle, equipment displays and catalog repairs.',
+    sections: [
+      section('finished-extras-returns', 'Record finished extras, returns and demos', 'Use Create Finished Product to place an already-made item into its physical bin outside an order.', {
+        relatedRoutes: ['/finished/create'],
+        steps: ['Select the existing finished product when possible; otherwise choose the exact blank, customer and design.', 'Logo choices include synced global Logo Type terms and published products’ custom Logo Selection attributes. Wait for discovery to finish; Refresh retries discovery.', 'Choose Accidental Extra / Overstock, Customer Return, or Demo / Sample and enter a whole quantity and physical destination bin.', 'Leave blank deduction off for a return or already-made item. Enable it only when producing a new item now, and choose its source bin.', 'Save once, then verify the product and bin quantity in Finished Products.'],
+        warnings: ['A return must not deduct a second blank. Pending Stock is a planning location, not a physical receiving bin.', 'Training simulations do not add inventory.'],
+      }),
+      section('compact-menu', 'Use collapsible navigation and Menu Manager', 'Open only the navigation group you need, or search tools and pages from the top bar.', {
+        relatedRoutes: ['/menu-manager'], steps: ['Click a group heading to expand or collapse it. The current page’s group opens on navigation.', 'Use Menu Manager to rename, reorder, regroup or hide pages; the sidebar uses those same groups.', 'Preferences are saved for your account in this browser. Reset restores default groups.'],
+      }),
+      section('purchase-order-cancel-delete', 'Cancel or delete a supplier purchase order', 'Managers can cancel outstanding purchasing demand or delete an unreceived order.', {
+        relatedRoutes: ['/purchase-orders'], steps: ['Find the supplier PO and check its received quantities.', 'Cancel PO stops outstanding demand while preserving received inventory and history.', 'Delete PO removes an unreceived order after a permanent-deletion confirmation.', 'Refresh Purchase Orders and Purchasing Report to verify remaining demand.'], warnings: ['Received orders cannot be deleted. Cancellation does not reverse physical receipts or notify the supplier.'],
+      }),
+      section('shop-displays-current', 'Production and equipment TV / touch displays', 'Use Production for active work and Equipment for live status, monitoring and remote access.', {
+        relatedRoutes: ['/shop-tv', '/shop-equipment'], steps: ['Production honors saved job statuses; closed, completed and cancelled work is excluded before date prioritization.', 'Counts describe current results. Use station and search filters to find work.', 'Equipment TV / Touch includes photographs, printer maintenance and supply readings, private desktop links and supported controls.', 'Connect through Home Assistant and Tailscale. Missing or unavailable readings do not confirm a device is online.', 'TV view is for monitoring. Switch to Touch for controls; operations require confirmation.'], warnings: ['Laser jobs remain in the manufacturer application with an operator present.', 'Equipment commands are simulated in training mode.'],
+      }),
+      section('catalog-workbench-current', 'Choose one catalog repair workflow', 'Catalog Workbench connects the existing tools in the order they should be used.', {
+        relatedRoutes: ['/catalog-workbench'], steps: ['Start with Product Data Health and Product Integrity Center for missing fields, duplicates and identity conflicts.', 'Fix color aliases, color availability, product types or non-inventory rules in the appropriate tool.', 'Maintain Product-to-Blank Mappings, repair imported mappings, then propagate corrected matches to order lines with Bulk Pairing Repair.', 'Recheck Operations Integrity for downstream orders and reservations.', 'WordPress Supabase Sync imports products and global attributes. The app’s WooCommerce Sync queue tracks outbound inventory events, not import results.'], warnings: ['Do not use quantity edits to repair catalog identities. Preview bulk repairs before applying.'],
+      }),
+      section('themes-equipment-contractor-current', 'Themes, equipment and contractor administration', 'Recent features include Midnight Industrial, Copper Foundry, Evergreen Workshop, equipment photos and contractor reporting.', {
+        relatedRoutes: ['/theme-settings','/equipment-center','/contractor-hours'], steps: ['Choose a theme and check Light or Dark on the target shop screen. Shop displays share the selected palette.', 'Equipment Center and Equipment TV / Touch use the same browser connection preferences and mappings.', 'Contractors enter hours; managers review, approve and export reports in Contractor Hours & Reports.', 'Live printer readings include Roland maintenance and recent jobs plus Sawgrass ink, waste-collector usage and lifetime sheets.'],
+      }),
+    ],
+  },
   {
     id: 'start-here',
     title: 'Start Here: How Skilled Crafting Uses the System',

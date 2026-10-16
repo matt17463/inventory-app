@@ -78,6 +78,7 @@ const Reservations = lazy(() => import('./Reservations'));
 const ReturnFinishedInventory = lazy(() => import('./ReturnFinishedInventory'));
 const SampleInventory = lazy(() => import('./SampleInventory'));
 const ScanInventory = lazy(() => import('./ScanInventory'));
+const CatalogWorkbench = lazy(() => import('./CatalogWorkbench'));
 const ShopTvMode = lazy(() => import('./ShopTvMode'));
 const SpoilageTracking = lazy(() => import('./SpoilageTracking'));
 const SupplierCatalogImport = lazy(() => import('./SupplierCatalogImport'));
@@ -137,6 +138,8 @@ function EmployeeRoutes() {
       <Route path="/client-orders" element={<ClientOrders />} />
       <Route path="/job-costing" element={<JobCosting />} />
       <Route path="/artwork-requests" element={<ArtworkRequests />} />
+      <Route path="/catalog-workbench" element={<CatalogWorkbench />} />
+      <Route path="/shop-equipment" element={<EquipmentCenter />} />
       <Route path="/shop-tv" element={<ShopTvMode />} />
       <Route path="/shop-touch" element={<ShopTvMode />} />
       <Route path="/pullsheet-due-dates" element={<PullSheetDueDateEditor />} />

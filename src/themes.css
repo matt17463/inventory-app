@@ -2943,3 +2943,70 @@ html[data-preset='midnight-industrial'][data-theme='light'] select {
   color: #142e41;
   border-color: #92b4c6;
 }
+
+/* Shared readable surfaces include the shop displays, which previously hard-coded light colors. */
+.sc-nav-section > summary { cursor: pointer; list-style-position: inside; min-height: 42px; display: list-item; color: var(--sc-sidebar-text); }
+.sc-nav-section > summary:focus-visible { outline: 2px solid var(--sc-primary); outline-offset: -2px; }
+.sc-nav-section > summary small { font: inherit; opacity: .8; }
+.shop-touch-page { background: var(--sc-surface-gradient); color: var(--sc-text); font-family: var(--sc-font-body); }
+.shop-touch-page :is(.shop-touch-header, .shop-touch-status-strip > div, .shop-touch-search-panel, .shop-touch-panel, .shop-touch-lane, .shop-touch-task-card, .shop-touch-job-card, .shop-touch-metric, .shop-touch-quick-actions a) {
+  background: var(--sc-panel); color: var(--sc-text); border-color: var(--sc-border);
+}
+.shop-touch-page :is(h1,h2,h3,strong,label,.shop-touch-next-action) { color: var(--sc-text); }
+.shop-touch-page :is(p,small,.shop-touch-job-meta,.shop-touch-status-strip span,.shop-touch-metric strong,.shop-touch-task-card span) { color: var(--sc-muted); }
+.shop-touch-page :is(input,select,.shop-touch-toggle,.shop-touch-action-button,.shop-touch-station-tabs button,.shop-touch-search-form button,.shop-touch-density-control button) { background: var(--sc-panel-2); color: var(--sc-text); border: 1px solid var(--sc-border); }
+.shop-touch-page :is(.shop-touch-job-alert,.shop-touch-stale-warning) { background: var(--sc-danger-bg); color: var(--sc-danger-text); }
+.shop-touch-page .shop-touch-chip { color: #102033; }
+.shop-touch-page .shop-touch-chip.tone-danger { color: #fff; background: #a92332; }
+.shop-touch-page .shop-touch-chip.tone-muted { color: #fff; background: #4c596c; }
+.shop-touch-page :is(.shop-touch-lane header,.shop-touch-panel header,.shop-touch-next-action) { background: var(--sc-panel-2); border-color: var(--sc-border); }
+.shop-touch-page :is(.shop-touch-station-tabs,.shop-touch-density-control) { background: var(--sc-panel-2); color: var(--sc-text); }
+.shop-touch-page button.active { outline: 2px solid var(--sc-primary); outline-offset: -2px; }
+html .equipment-center { --eq-bg: var(--sc-bg); --eq-panel: var(--sc-panel); --eq-text: var(--sc-text); --eq-muted: var(--sc-muted); --eq-line: var(--sc-border); --eq-cyan: var(--sc-primary); background: var(--sc-surface-gradient); }
+html .equipment-center :is(.eq-hero,.eq-remote>a,.eq-settings,.eq-tabs,.eq-network-node,.eq-control-grid>div,.eq-modal) { background: var(--sc-panel); border-color: var(--sc-border); color: var(--sc-text); }
+html .equipment-center :is(.eq-button,input,.eq-notice) { background: var(--sc-panel-2); color: var(--sc-text); border-color: var(--sc-border); }
+html .equipment-center .eq-tabs button[aria-pressed=true] { background: var(--sc-panel-2); color: var(--sc-text); outline: 2px solid var(--sc-primary); }
+html .equipment-center .eq-close { color: var(--sc-text); }
+.eq-display-bar { display:flex; flex-wrap:wrap; align-items:center; gap:16px; margin-bottom:24px; }
+.eq-display-bar h1 { margin:0; font-size:2rem; }
+.equipment-shop-display .eq-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); }
+.equipment-shop-display :is(button,.eq-button,.eq-remote>a) { min-height:54px; font-size:1rem; }
+.equipment-shop-display .eq-reading { font-size:1rem; }
+.equipment-shop-display .eq-card p { min-height:0; }
+.equipment-tv-mode :is(.eq-card-actions,.eq-hero-actions,.eq-settings,.eq-toolbar,.eq-network) { display:none; }
+.equipment-tv-mode .eq-hero { display:none; }
+.equipment-tv-mode .eq-card h2 { font-size:1.8rem; }
+.equipment-tv-mode .eq-card-body p { display:none; }
+
+html[data-preset='copper-foundry'] { --sc-bg:#17120f; --sc-panel:#30231d; --sc-panel-2:#3b2b22; --sc-text:#fff3e8; --sc-muted:#ddbd9f; --sc-border:#70503c; --sc-primary:#efb17b; --sc-primary-2:#efb17b; --sc-logo-blue:#efb17b; --sc-logo-teal:#efb17b; --sc-logo-navy:#fff3e8; --sc-surface-gradient:linear-gradient(140deg,#17120f,#30231d); --sc-card-gradient:linear-gradient(160deg,#30231d,#17120f); --sc-sidebar-bg:#17120f; --sc-sidebar-text:#fff3e8; --sc-sidebar-muted:#ddbd9f; --sc-sidebar-active:#3b2b22; --sc-topbar-bg:#17120f; --sc-table-header-bg:#3b2b22; --sc-table-header-text:#fff3e8; --sc-card-border:#70503c; --sc-control-border:#70503c; --sc-secondary-bg:#3b2b22; --sc-secondary-text:#fff3e8; --sc-page-header-bg:#30231d; --sc-primary-gradient:linear-gradient(135deg,#3b2b22,#30231d); color-scheme:dark; }
+html[data-preset='copper-foundry'][data-theme='light'] { --sc-bg:#f8eee5; --sc-panel:#fff; --sc-panel-2:#f8eee5; --sc-text:#412719; --sc-muted:#412719; --sc-border:#9cafa4; --sc-primary:#412719; --sc-primary-2:#412719; --sc-logo-navy:#412719; --sc-surface-gradient:linear-gradient(140deg,#fff,#f8eee5); --sc-card-gradient:linear-gradient(160deg,#fff,#f8eee5); --sc-topbar-bg:#f8eee5; --sc-table-header-bg:#f8eee5; --sc-table-header-text:#412719; --sc-secondary-bg:#f8eee5; --sc-secondary-text:#412719; --sc-page-header-bg:#f8eee5; color-scheme:light; }
+
+html[data-preset='evergreen-workshop'] { --sc-bg:#0c1916; --sc-panel:#17342b; --sc-panel-2:#214438; --sc-text:#effcf5; --sc-muted:#afd0c0; --sc-border:#426c5b; --sc-primary:#74d7b4; --sc-primary-2:#74d7b4; --sc-logo-blue:#74d7b4; --sc-logo-teal:#74d7b4; --sc-logo-navy:#effcf5; --sc-surface-gradient:linear-gradient(140deg,#0c1916,#17342b); --sc-card-gradient:linear-gradient(160deg,#17342b,#0c1916); --sc-sidebar-bg:#0c1916; --sc-sidebar-text:#effcf5; --sc-sidebar-muted:#afd0c0; --sc-sidebar-active:#214438; --sc-topbar-bg:#0c1916; --sc-table-header-bg:#214438; --sc-table-header-text:#effcf5; --sc-card-border:#426c5b; --sc-control-border:#426c5b; --sc-secondary-bg:#214438; --sc-secondary-text:#effcf5; --sc-page-header-bg:#17342b; --sc-primary-gradient:linear-gradient(135deg,#214438,#17342b); color-scheme:dark; }
+html[data-preset='evergreen-workshop'][data-theme='light'] { --sc-bg:#e9f4ed; --sc-panel:#fff; --sc-panel-2:#e9f4ed; --sc-text:#173c2d; --sc-muted:#173c2d; --sc-border:#9cafa4; --sc-primary:#173c2d; --sc-primary-2:#173c2d; --sc-logo-navy:#173c2d; --sc-surface-gradient:linear-gradient(140deg,#fff,#e9f4ed); --sc-card-gradient:linear-gradient(160deg,#fff,#e9f4ed); --sc-topbar-bg:#e9f4ed; --sc-table-header-bg:#e9f4ed; --sc-table-header-text:#173c2d; --sc-secondary-bg:#e9f4ed; --sc-secondary-text:#173c2d; --sc-page-header-bg:#e9f4ed; color-scheme:light; }
+
+/* Accent text on pale fills needs a separate dark ink in light mode. */
+html[data-theme='light'] { --sc-warning-text:#7c3b08; --sc-success-text:#14532d; --sc-danger-text:#991b1b; }
+html[data-theme='dark'] { --sc-warning-text:#ffdf9e; --sc-success-text:#baf4d7; --sc-danger-text:#ffd1d4; }
+/* Explicit base colors also keep translucent presets readable over image/gradient surfaces. */
+html .page-header { background-color: var(--sc-panel) !important; }
+html .shop-touch-page,
+html .equipment-center { background-color: var(--sc-bg); }
+html .shop-touch-page :is(.shop-touch-toggle,.shop-touch-action-button,.shop-touch-station-tabs button,.shop-touch-search-form button,.shop-touch-density-control button) {
+  background: var(--sc-panel); color: var(--sc-text) !important;
+}
+html .shop-touch-page :is(.shop-touch-lane header span,.shop-touch-panel header span) {
+  background: var(--sc-panel); color: var(--sc-text); border:1px solid var(--sc-border);
+}
+html .shop-touch-page .shop-touch-job-alert { color:var(--sc-danger-text); }
+html .equipment-center :is(.eq-button,.eq-button.primary) {
+  background:var(--sc-panel); background-image:none; color:var(--sc-text) !important; border:1px solid var(--sc-primary); box-shadow:none;
+}
+html .equipment-center .eq-maker { color:var(--sc-text); }
+html[data-preset='industrial-command'][data-theme='light'] { --sc-muted:#4b5660; }
+
+html body { background-color:var(--sc-bg); }
+html body { background-color:var(--sc-bg) !important; }
+html[data-preset='futuristic-interface'][data-theme='dark'] {
+  --sc-page-header-bg:linear-gradient(145deg,#1a2152,#0b102d);
+}
+html[data-preset='futuristic-interface'][data-theme='dark'] .page-header { background-color:#12183e !important; }
