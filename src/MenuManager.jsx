@@ -12,7 +12,7 @@ export default function MenuManager() {
 
   const save = (updater) => {
     updateLayout(updater);
-    setMessage('Menu layout saved for your signed-in account on this browser.');
+    setMessage('Menu layout saved for your signed-in account on this browser. The sidebar uses these same groups as collapsible sections.');
   };
   const moveGroup = (index, direction) => save((current) => {
     const groups = [...current.groups];

@@ -1,3 +1,4 @@
+import { shouldSimulateWrites } from './testingMode';
 import { supabase } from '../supabaseClient';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { getPendingStockBins } from './pullSheetBinAssignmentApi';
@@ -2735,6 +2736,9 @@ export async function createFinishedProductFromBlank({
   quantity,
   customerName,
   logoName,
+  customerId,
+  logoId,
+  productionSource,
   decorationType,
   placement,
   decorationSize,
@@ -2742,9 +2746,14 @@ export async function createFinishedProductFromBlank({
   deductBlank,
   blankBinId,
 }) {
-  const { data, error } = await supabase.rpc('create_finished_product_from_blank', {
+  if (!Number.isSafeInteger(Number(quantity)) || Number(quantity) <= 0) throw new Error('Enter a positive whole quantity.');
+  if (shouldSimulateWrites()) return { simulated: true, match_method: 'training preview — no inventory changed' };
+  const { data, error } = await supabase.rpc('sc_receive_finished_product_v2', {
     p_existing_finished_product_id: existingFinishedProductId || null,
-    p_blank_product_id: blankProductId,
+    p_blank_product_id: blankProductId || null,
+    p_customer_id: customerId || null,
+    p_logo_id: logoId || null,
+    p_production_source: productionSource || null,
     p_finished_bin_id: finishedBinId ? Number(finishedBinId) : null,
     p_quantity: Number(quantity || 0),
     p_customer_name: customerName,
@@ -2752,7 +2761,7 @@ export async function createFinishedProductFromBlank({
     p_decoration_type: decorationType || null,
     p_placement: placement || null,
     p_decoration_size: decorationSize || null,
-    p_notes: notes || null,
+    p_notes: [productionSource ? `Reason: ${productionSource}` : '', notes].filter(Boolean).join(' | ') || null,
     p_deduct_blank: Boolean(deductBlank),
     p_blank_bin_id: blankBinId ? Number(blankBinId) : null,
   });
@@ -3948,4 +3957,18 @@ export async function applyColorPairingRules() {
 
   if (error) throw error;
   return data || [];
+}
+
+export async function deletePurchaseOrder(purchaseOrderId) {
+  if (shouldSimulateWrites()) return { simulated: true };
+  const { data, error } = await supabase.rpc('sc_delete_unreceived_purchase_order', { p_purchase_order_id: purchaseOrderId });
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelPurchaseOrder(purchaseOrderId) {
+  if (shouldSimulateWrites()) return { simulated: true };
+  const { data, error } = await supabase.rpc('sc_cancel_purchase_order', { p_purchase_order_id: purchaseOrderId });
+  if (error) throw error;
+  return data;
 }

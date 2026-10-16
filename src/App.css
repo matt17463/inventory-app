@@ -14,7 +14,7 @@
   --sc-radius: 18px;
   --sc-sidebar-w: 292px;
 }
-html[data-theme='dark'], body[data-theme='dark'] {
+html[data-theme='dark'] {
   --sc-bg: #0f172a;
   --sc-panel: #111827;
   --sc-panel-2: #1e293b;
@@ -473,7 +473,7 @@ body[data-theme='dark'] .sc-quick-grid-colored a:hover { background: #172554; }
   --sc-soft-green: #dcfce7;
 }
 
-html[data-theme='dark'], body[data-theme='dark'] {
+html[data-theme='dark'] {
   --sc-surface-gradient: radial-gradient(circle at top left, rgba(14,165,233,.13), transparent 34%), radial-gradient(circle at top right, rgba(139,92,246,.12), transparent 32%), var(--sc-bg);
   --sc-card-gradient: linear-gradient(180deg, rgba(17,24,39,.98), rgba(15,23,42,.98));
   --sc-soft-blue: rgba(14,165,233,.16);

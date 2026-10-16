@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { getWooSyncQueue } from './lib/inventoryApi';
 
@@ -27,7 +28,9 @@ export default function WooSync() {
       </div>
 
       <section className="card">
-        <h2>Important</h2>
+        <h2>What this queue measures</h2>
+        <p>These are outbound inventory events. A successful WordPress attribute import is a separate process and will not appear in this queue. Pending events alone do not mean product or attribute imports failed.</p>
+        <Link to="/catalog-workbench">Open Catalog Workbench for sync and repair guidance</Link>
         <p>
           Reservation records are internal planning holds. They reduce the app's available quantity number, but they do not prevent WooCommerce customers from ordering out-of-stock items.
         </p>

@@ -52,23 +52,24 @@ export function productionStatusForRow(row) {
   return JOB_STATUS_BOARD_COLUMNS[savedStatus] ? savedStatus : row?.production_status;
 }
 
-async function addSavedJobStatuses(rows) {
+export async function addSavedJobStatuses(rows) {
   const jobIds = [...new Set(rows.map((row) => Number(row.job_id)).filter(Number.isFinite))];
   if (!jobIds.length) return rows;
 
   const { data, error } = await supabase
     .from('jobs')
-    .select('id,status')
+    .select('id,status,woo_status')
     .in('id', jobIds);
 
   if (error) {
     throw new Error(rpcErrorMessage(error, 'Could not load saved production statuses.'));
   }
 
-  const statusByJob = new Map((data || []).map((job) => [String(job.id), job.status]));
+  const statusByJob = new Map((data || []).map((job) => [String(job.id), job]));
   return rows.map((row) => ({
     ...row,
-    saved_job_status: statusByJob.get(String(row.job_id)) || null,
+    saved_job_status: statusByJob.get(String(row.job_id))?.status || null,
+    woo_status: statusByJob.get(String(row.job_id))?.woo_status || row.woo_status,
   }));
 }
 

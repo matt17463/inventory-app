@@ -17,6 +17,7 @@ export const navSections = [
     items: [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
+      { label: 'Equipment TV / Touch', path: '/shop-equipment', keywords: 'equipment monitoring controls remote access television kiosk' },
       { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop' },
       { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },
       { label: 'Shop TV / Touch Mode', path: '/shop-tv', keywords: 'production display wall tv touch floor kiosk station dashboard due date blockers' },
@@ -125,6 +126,7 @@ export const navSections = [
     icon: '🧰',
     items: [
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
+      { label: 'Catalog Workbench', path: '/catalog-workbench', keywords: 'data health integrity sync mapping repair color types non inventory workflow' },
       { label: 'Color Pairings', path: '/color-pairings', keywords: 'color aliases pairings mapping canonical manufacturer colors woo sync blank products' },
       { label: 'Write NFC Tags', path: '/nfc-writer', keywords: 'nfc tags write bin tap' },
       { label: 'Mapping Repair', path: '/mapping-repair', keywords: 'product mapping repair woo woocommerce supabase blank products sku attributes data repair' },

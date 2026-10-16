@@ -1,3 +1,5 @@
+import { addSavedJobStatuses, boardColumnForRow, productionStatusForRow } from './productionStatusApi';
+import { isOpenShopJob, shopMetrics } from './shopJobs';
 import { supabase } from '../supabaseClient';
 
 function unwrapRpc(response, fallbackMessage) {
@@ -18,5 +20,9 @@ export async function getShopTouchMode({ station = 'all', search = '', limit = 8
     p_limit: Number(limit || 80),
   });
 
-  return unwrapRpc(response, 'Unable to load Shop TV / Touch Mode data') || {};
+  const data = unwrapRpc(response, 'Unable to load Shop TV / Touch Mode data') || {};
+  const jobs = (await addSavedJobStatuses(Array.isArray(data.jobs) ? data.jobs : []))
+    .filter(isOpenShopJob)
+    .map((job) => ({ ...job, board_column: boardColumnForRow(job), production_status: productionStatusForRow(job), status_bucket: boardColumnForRow(job) }));
+  return { ...data, jobs, metrics: shopMetrics(jobs) };
 }
