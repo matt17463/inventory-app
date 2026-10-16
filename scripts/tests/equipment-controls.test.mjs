@@ -5,6 +5,7 @@ import { shouldDetectSupabaseCallback } from '../../src/lib/authCallbackRouting.
 
 test('Home Assistant callbacks keep their authorization code away from Supabase', () => {
   assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/equipment-center?auth_callback=1&code=ha-code')), false);
+  assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/shop-equipment?auth_callback=1&code=ha-code')), false);
   assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/?code=supabase-code')), true);
   assert.equal(shouldDetectSupabaseCallback(new URL('https://app.example/equipment-center?code=supabase-code')), true);
 });

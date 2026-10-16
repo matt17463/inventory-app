@@ -14,6 +14,7 @@ function External({ href, children, ...props }) {
 export default function EquipmentCenter() {
   const location = useLocation();
   const shopDisplay = location.pathname === '/shop-equipment';
+  const callbackPath = shopDisplay ? '/shop-equipment' : '/equipment-center';
   const [tvMode, setTvMode] = useState(new URLSearchParams(location.search).get('mode') === 'tv');
   const [kiosk, setKiosk] = useState(new URLSearchParams(location.search).get('kiosk') === '1');
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function EquipmentCenter() {
     setBusy(true); setMessage('');
     try {
       const hassUrl = validHaUrl(url, window.location.protocol === 'https:');
-      const authorizationRequest = getAuth({ hassUrl, clientId: window.location.origin, redirectUrl: `${window.location.origin}/equipment-center`, limitHassInstance: true, saveTokens: () => {}, loadTokens: async () => undefined }).then((result) => {
+      const authorizationRequest = getAuth({ hassUrl, clientId: window.location.origin, redirectUrl: `${window.location.origin}${callbackPath}`, limitHassInstance: true, saveTokens: () => {}, loadTokens: async () => undefined }).then((result) => {
         if (!alive.current || attempt !== generation.current) result.revoke().catch(() => {});
         return result;
       });
@@ -75,11 +76,11 @@ export default function EquipmentCenter() {
       conn.addEventListener('ready', () => { if (alive.current && attempt === generation.current) { setConnected(true); setMessage(''); } });
       unsubscribe.current = subscribeEntities(conn, (next) => { if (alive.current && attempt === generation.current) { setEntities(next); setLastUpdate(new Date()); setConnected(true); } });
       setConnected(true);
-      if (callback) window.history.replaceState({}, '', '/equipment-center');
+      if (callback) window.history.replaceState({}, '', callbackPath);
     } catch (error) {
       if (alive.current && attempt === generation.current) { disconnect(); setMessage(error?.message || 'Could not connect. Check Tailscale, the private HTTPS address, and Home Assistant sign-in.'); }
     } finally { window.clearTimeout(authTimer); if (alive.current && attempt === generation.current) setBusy(false); }
-  }, [disconnect]);
+  }, [disconnect, callbackPath]);
 
   useEffect(() => {
     let effectActive = true;

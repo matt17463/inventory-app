@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-export const catalogWorkflows = [
+const catalogWorkflows = [
   { title: '1. Check catalog health', description: 'Start with product data health for missing fields, then inspect duplicate or conflicting records. Do not change inventory quantities to repair catalog data.', tools: [['Product Data Health', '/product-data-health'], ['Product Integrity Center', '/product-integrity']] },
   { title: '2. Fix the catalog definition', description: 'Use Color Pairings for supplier color aliases. Use Product Color Manager for WooCommerce color availability or replacements. Product Type Manager maintains catalog types; Non-Inventory Rules identifies services and customization lines that do not need blanks.', tools: [['Color Pairings', '/color-pairings'], ['Product Color Manager', '/product-color-replacement'], ['Product Type Manager', '/product-type-manager'], ['Non-Inventory Rules', '/non-inventory-rules']] },
   { title: '3. Link products to blanks', description: 'Maintain the exact product-to-blank link here. Mapping Repair repairs imported catalog mappings; Bulk Pairing Repair applies known mappings to existing pull-sheet lines. Preview the match before applying and rerun health checks afterward.', tools: [['Product-to-Blank Mappings', '/product-blank-mappings'], ['Mapping Repair', '/mapping-repair'], ['Bulk Pairing Repair', '/bulk-pairing-repair']] },
