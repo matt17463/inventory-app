@@ -1410,7 +1410,12 @@ export default function MockupStudio() {
   useEffect(() => {
     loadProjects();
     listMockupCustomers().then(setCustomers).catch(() => setCustomers([]));
-  }, []);
+    const linkedProject = new URLSearchParams(window.location.search).get('project');
+    if (linkedProject) {
+      setSelectedId(linkedProject);
+      loadProject(linkedProject).catch(error => setMessage(error.message));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initialize a linked project once on entry
 
   useEffect(() => {
     if (tab === 'artwork' && !vault.length) listArtworkVaultCandidates().then(setVault).catch(() => setVault([]));
@@ -1482,4 +1487,3 @@ export default function MockupStudio() {
     </main>
   );
 }
-

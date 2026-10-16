@@ -264,8 +264,8 @@ export async function getBlankProductLookups() {
   const [brandRes, colorRes, sizeRes, typeRes] = await Promise.all([
     supabase.from('brands').select('id, name, code').order('name', { ascending: true }),
     supabase.from('sc_active_colors').select('id, name, code').order('name', { ascending: true }),
-    supabase.from('sizes').select('id, name, code').order('name', { ascending: true }),
-    supabase.from('product_types').select('id, name, code').order('name', { ascending: true }),
+    supabase.from('sizes').select('id, name, code').eq('is_active',true).order('name', { ascending: true }),
+    supabase.from('product_types').select('id, name, code').eq('is_active',true).order('name', { ascending: true }),
   ]);
 
   if (brandRes.error) throw brandRes.error;

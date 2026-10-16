@@ -103,6 +103,7 @@ export default function TestingMode() {
             <span>Training role</span>
             <select value={settings.trainingRole||'new-employee'} onChange={(event)=>update({trainingRole:event.target.value})}>
               <option value="new-employee">New Employee</option>
+              <option value="marketing">Marketing / Business Development</option>
               <option value="warehouse">Receiving / Warehouse</option>
               <option value="production">Production</option>
               <option value="artwork">Artwork / Customer Admin</option>

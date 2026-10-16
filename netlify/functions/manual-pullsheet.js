@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient as createClient } from './_shared/serverSupabase.js';
+import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus, terminalOrderJobStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateSharedSecret } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
@@ -105,9 +106,9 @@ async function setJobDueDateFromOrder(order, jobId = null) {
 
     const rpcName = jobId ? 'sc_set_job_due_date' : 'sc_set_job_due_date_by_woo_order';
     const { error } = await supabase.rpc(rpcName, params);
-    if (error) console.warn('Due date sync failed:', error.message);
+    if (error) throw error;
   } catch (err) {
-    console.warn('Due date sync unavailable:', err.message);
+    throw new Error('Due date sync failed: '+err.message);
   }
 
   return dueDate;
@@ -560,6 +561,7 @@ async function upsertJob(order, customerName) {
         job_name: `Order #${order.number || orderId}`,
         customer_name: customerName,
         notes: clean(order.customer_note) || null,
+        ...(terminalOrderJobStatus(order.status)?{status:terminalOrderJobStatus(order.status)}:{}),
       })
       .eq('id', existing.id)
       .select('id, status')
@@ -574,7 +576,7 @@ async function upsertJob(order, customerName) {
       woocommerce_order_id: orderId,
       job_name: `Order #${order.number || orderId}`,
       customer_name: customerName,
-      status: 'queued',
+      status: terminalOrderJobStatus(order.status) || 'queued',
       notes: clean(order.customer_note) || null,
     })
     .select('id, status')
@@ -586,7 +588,7 @@ async function upsertJob(order, customerName) {
 async function existingJobItem(jobId, lineItemId, sku) {
   let query = supabase
     .from('job_items')
-    .select('id')
+    .select('id,status,blank_product_id,quantity')
     .eq('job_id', jobId)
     .order('id', { ascending: true })
     .limit(1);
@@ -638,12 +640,15 @@ async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProdu
   const existing = await existingJobItem(jobId, lineItemId, sku);
 
   if (existing?.id) {
+    const update = existingLineUpdate(enrichment, existing);
+    if (!update) return { ...existing, created:false, updated:false, terminal:true };
+    const quantityChanged = Number(existing.quantity) !== Number(lineItem.quantity || 1);
     const { error: updateError } = await supabase
       .from('job_items')
-      .update(enrichment)
+      .update(update)
       .eq('id', existing.id);
     if (updateError) throw updateError;
-    return { id: existing.id, created: false, updated: true };
+    return { id:existing.id, created:false, updated:true, blank_product_id:existing.blank_product_id || blankProductId, quantity_changed:quantityChanged };
   }
 
   const payload = {
@@ -668,7 +673,13 @@ async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProdu
 
 async function processOrder(order, context = {}) {
   const orderId = Number(order.id);
-  const runId = await startPullsheetRun(supabase, {
+  if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new Error('A valid WooCommerce order ID is required.');
+  const lease = await supabase.rpc('sc_acquire_order_sync_lease_v1', { p_order_id:orderId });
+  if (lease.error) throw lease.error;
+  if (!lease.data) throw new Error('This order is already syncing. Retry shortly.');
+  let runId = null;
+  try {
+  runId = await startPullsheetRun(supabase, {
     source: context.source || 'manual_pullsheet',
     orderId,
     requestId: context.requestId || null,
@@ -692,6 +703,10 @@ async function processOrder(order, context = {}) {
     errors: [],
   };
 
+  if (terminalProductionStatus(job.status) || terminalProductionStatus(order.status)) {
+    await finishPullsheetRun(supabase,runId,{ job_id:Number(job.id),outcome:'completed',metadata:{action:'terminal_history_preserved'} });
+    return orderResult;
+  }
   const lineItems = Array.isArray(order.line_items) ? order.line_items : [];
 
   for (const rawLineItem of lineItems) {
@@ -799,15 +814,17 @@ async function processOrder(order, context = {}) {
       else if (jobItem.updated) orderResult.items_updated += 1;
       else orderResult.items_existing += 1;
 
+      if (jobItem.quantity_changed) { orderResult.errors.push({sku,job_item_id:jobItem.id,error:'Order quantity changed. Review the production quantity and reservation.'}); continue; }
+      if (jobItem.terminal) continue;
       try {
         const reservation = await ensureJobItemReservation(supabase, {
           jobId: job.id,
           jobItemId: jobItem.id,
-          blankProductId: blankProduct.id,
+          blankProductId: jobItem.blank_product_id || blankProduct.id,
           quantity: Number(lineItem.quantity || 1),
         });
         if (reservation?.action === 'created') orderResult.reservations_created += 1;
-        else orderResult.reservations_existing += 1;
+        else if (reservation?.action !== 'skipped_terminal') orderResult.reservations_existing += 1;
       } catch (reservationError) {
         orderResult.reservations_failed += 1;
         orderResult.errors.push({
@@ -829,14 +846,16 @@ async function processOrder(order, context = {}) {
     }
   }
 
-  if (orderResult.reservations_created + orderResult.reservations_existing > 0 && orderResult.reservations_failed === 0) {
-    await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
+  if (orderResult.reservations_created + orderResult.reservations_existing > 0 && orderResult.reservations_failed === 0 && mayPromoteToReserved(job.status)) {
+    const promoted = await supabase.from('jobs').update({ status:'reserved' }).eq('id',job.id).eq('status',job.status);
+    if (promoted.error) throw promoted.error;
   }
 
   try {
-    await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(job.id) });
+    const recalculated=await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(job.id) });
+    if(recalculated.error)throw recalculated.error;
   } catch (err) {
-    console.warn('Production status board recalculation failed:', err.message);
+    orderResult.errors.push({error:'Production status board recalculation failed: '+err.message});
   }
 
   await finishPullsheetRun(supabase, runId, {
@@ -850,10 +869,18 @@ async function processOrder(order, context = {}) {
     reservations_existing: orderResult.reservations_existing,
     reservations_failed: orderResult.reservations_failed,
     items_needing_pairing: orderResult.items_needing_pairing,
+    error_message:orderResult.errors.length?orderResult.errors.slice(0,3).map(e=>[e.sku||e.job_item_id,e.error].filter(Boolean).join(': ')).join(' | ').slice(0,1000):null,
     metadata: { error_count: orderResult.errors.length },
   });
 
   return orderResult;
+  } catch(error) {
+    await finishPullsheetRun(supabase,runId,{outcome:'failed',error_message:String(error.message || 'Order sync failed.').slice(0,1000)});
+    throw error;
+  } finally {
+    const released = await supabase.rpc('sc_release_order_sync_lease_v1',{p_order_id:orderId,p_token:lease.data});
+    if (released.error) console.warn('Order sync lease will expire automatically:',released.error.message);
+  }
 }
 
 export const handler = async (event) => {

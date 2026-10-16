@@ -88,6 +88,7 @@ export const navSections = [
     label: 'Management',
     icon: '📊',
     items: [
+      { label: 'Marketing & Client Growth', path: '/marketing', keywords: 'marketing leads prospects clients contacts outreach flyers samples pricing profit sharing margin demo storefront handoff pipeline' },
       { label: 'Campaign Forecast', path: '/campaign-forecast', keywords: 'forecast campaign stock demand' },
       { label: 'Customer Reorders', path: '/customer-reorders', keywords: 'reorder intelligence repeat customers' },
       { label: 'Job Costing', path: '/job-costing', keywords: 'profit margin costing revenue cost' },
@@ -140,7 +141,7 @@ export const navSections = [
       { label: 'Operations Integrity', path: '/operations-integrity', keywords: 'product identity resolver duplicate review receiving inbox reconciliation integration jobs team store workflow guarded creation' },
       { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
-      { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
+      { label: 'WooCommerce Sync Health', path: '/woo-sync', keywords: 'woocommerce sync products queue health retry order' },
       { label: 'Application Guide', path: '/application-guide', keywords: 'help training guide workflow admin instructions how to use' },
       { label: 'Testing & Guided Training', path: '/testing-mode', keywords: 'testing mode employee training tutorial onboarding simulated writes practice' },
       { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },

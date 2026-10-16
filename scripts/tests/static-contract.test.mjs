@@ -22,7 +22,7 @@ test('all navigation paths have active routes', () => {
 });
 
 test('application pages are route-lazy-loaded to keep the first screen responsive', () => {
-  assert.match(app, /import \{ lazy, Suspense \} from 'react'/);
+  assert.match(app, /import \{[^}]*\blazy\b[^}]*\bSuspense\b[^}]*\} from 'react'/);
   assert.match(app, /const AddItemToBin = lazy\(\(\) => import\('\.\/AddItemToBin'\)\)/);
   assert.match(app, /const MockupStudio = lazy\(\(\) => import\('\.\/MockupStudio'\)\)/);
   assert.match(app, /<Suspense fallback=\{<RouteLoading \/>\}>/);

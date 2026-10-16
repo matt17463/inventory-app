@@ -54,7 +54,7 @@ async function ensureLookup(supabase, definition, value) {
     supabase,
     definition.table,
     'id,name,code',
-    definition.table === 'colors' ? (query) => query.eq('is_active', true) : undefined,
+    ['colors','sizes','product_types'].includes(definition.table) ? (query) => query.eq('is_active', true) : undefined,
   );
   let matches = rows.filter((row) => [row.name, row.code].some((candidate) => normalized(candidate) === normalized(requested)));
   let created = false;
@@ -68,7 +68,7 @@ async function ensureLookup(supabase, definition, value) {
         supabase,
         definition.table,
         'id,name,code',
-        definition.table === 'colors' ? (query) => query.eq('is_active', true) : undefined,
+        ['colors','sizes','product_types'].includes(definition.table) ? (query) => query.eq('is_active', true) : undefined,
       );
       matches = rows.filter((row) => [row.name, row.code].some((candidate) => normalized(candidate) === normalized(requested)));
       if (!matches.length) throw inserted.error;

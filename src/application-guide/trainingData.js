@@ -1,6 +1,7 @@
-export const TRAINING_VERSION = '1.1';
+export const TRAINING_VERSION = '1.3';
 
 export const trainingRoles = [
+  { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
   { id: 'new-employee', label: 'New Employee', description: 'Start here. Learn the daily workflow, safety rules, receiving, pull sheets, and how to avoid inventory mistakes.' },
   { id: 'warehouse', label: 'Receiving / Warehouse', description: 'Receiving, bins, scanning, transfers, audits, supplier deliveries, and physical inventory accuracy.' },
   { id: 'production', label: 'Production', description: 'Pull sheets, reservations, production sequencing, deductions, spoilage, QC, and finished goods.' },
@@ -12,6 +13,38 @@ export const trainingRoles = [
 const step = (title, instruction, options = {}) => ({ title, instruction, ...options });
 
 export const trainingTutorials = [
+  {
+    id:'marketing-client-growth-complete',title:'Marketing: Client Acquisition Through Launch',roles:['marketing','manager','owner-admin','artwork'],level:'Required',minutes:40,safeMode:'simulated-supported',
+    summary:'Practice a complete client-development workflow using the Training Example School. Simulated actions do not write records, upload files, change access or create real handoffs.',
+    outcome:'The partner can track a prospect, compare client pricing, prepare a complete brief and hand work to the next department.',
+    steps:[
+      step('Find the training client','Open the Training Example School opportunity. Identify the campaign owner, next action, follow-up date, pipeline value and weighted forecast.',{route:'/marketing',verify:'You can distinguish estimated retail sales from a probability-weighted forecast.'}),
+      step('Review client defaults','Open Edit Client and inspect the client type, relationship owner, source, profit share and margin defaults. Try a different percentage and Save; confirm the training-preview message.',{route:'/marketing',verify:'Defaults are per client, and this practice save did not change live records.'}),
+      step('Map the decision makers','Open Contacts. Identify the primary contact and outreach preference. Explain how a do-not-contact preference affects personalized email drafts.',{route:'/marketing',verify:'You can record the contact’s role and preference without sending outreach.'}),
+      step('Record a follow-up','Open Activity. Review the introduction and try adding a follow-up task with an owner and due date. Confirm the simulated-write message.',{route:'/marketing',verify:'You know where the next action, task and relationship timeline are recorded.'}),
+      step('Compare commercial models','Open Pricing and Edit Draft. Compare wholesale-retail, net-sales percentage and profit-share percentage. Adjust the client share and margin target; review client benefit and company profit.',{route:'/marketing',verify:'You can explain which percentage base is used and why company margin is calculated on retained sales.'}),
+      step('Use approved proposal versions','Explain the manager approval action and below-target note. Download a practice pricing guide and confirm it excludes internal costs and company margin.',{route:'/marketing',verify:'Approved versions are immutable; later terms require a new version and approval.'}),
+      step('Prepare outreach materials','Open Materials, choose the training contact and inspect the school introduction email. Copying a draft does not send it. Identify how to create a new approved revision.',{route:'/marketing',verify:'You can reuse approved content while preserving its version and contact preference.'}),
+      step('Track samples and demos','Return to the opportunity and inspect Samples and the demo status. Explain which physical inventory screen records an actual sample movement.',{route:'/marketing',verify:'Marketing sample commitments and physical inventory are separate linked responsibilities.'}),
+      step('Prepare the design handoff','Open Handoff. Identify the client brief, artwork request and Mockup Studio relationship. Try Prepare Design Handoff and confirm it is simulated.',{route:'/marketing',verify:'A live handoff creates or reuses linked drafts and never duplicates the customer on retry.'}),
+      step('Review departmental readiness','Identify the design, catalog, storefront, purchasing, production, QC and shipping responsibilities. Explain the artwork, product mapping and checkout checks required before Live.',{route:'/marketing',verify:'Each task has an owner, date and status, with blockers visible to the next department.'}),
+      step('Follow orders and repeat business','Explain automatic attribution by the exact published project product ID and the manual order-link option. Read the job status instead of creating a second production record.',{route:'/marketing',verify:'The same order continues through purchasing, production, QC and shipping.'}),
+      step('Review reports and safe access','Open Reports and Follow-ups. Distinguish forecasts, promotional commitments and actual settlement. Explain the Marketing, operator and manager responsibilities.',{route:'/marketing',verify:'You can hand off the opportunity with complete context and understand your role’s limits.'}),
+    ],
+  },
+  {
+    id:'sync-recovery-catalog-cleanup', title:'Manager: Sync Recovery and Catalog Cleanup',
+    roles:['manager','owner-admin'],level:'Required',minutes:15,safeMode:'read-only',
+    summary:'Distinguish order failures, catalog imports, internal inventory history and genuine missing mappings.',
+    outcome:'Recover the correct workflow without reopening completed work or creating duplicate inventory.',
+    steps:[
+      step('Review role access','Explain which actions belong to viewers, operators and managers. Do not change any account.',{route:'/catalog-workbench',readOnly:true,verify:'An active employee account is required; catalog repairs are manager actions.'}),
+      step('Read sync health','Find the most recent successful order sync and inspect recent attempts without refreshing an order.',{route:'/woo-sync',readOnly:true,verify:'You can distinguish order-sync results from attribute-update timestamps.'}),
+      step('Explain order recovery','Identify the WooCommerce order ID and the refresh action. Explain what remains preserved. Do not activate it.',{route:'/woo-sync',readOnly:true,verify:'Completed lines, production progress and existing pairings survive a refresh; changed quantities require review.'}),
+      step('Review exact repair','Inspect cleanup results and explain why a unique brand/style/color/size match is required. Do not apply a repair.',{route:'/catalog-workbench',readOnly:true,verify:'Ambiguous records need review and physical quantities are preserved.'}),
+      step('Read the complete health report','Filter an issue and use Next and Previous. Find optional barcode information.',{route:'/product-data-health',readOnly:true,verify:'Totals cover all results; barcode and cost checks use physical blank records.'}),
+    ],
+  },
   {
     id:'current-shop-workflows', title:'Current Workflows: Returns, Purchasing, Catalog & Equipment',
     roles:['new-employee','warehouse','production','artwork','manager','owner-admin'], level:'Core', minutes:25, safeMode:'read-only',

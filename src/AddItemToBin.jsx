@@ -73,7 +73,7 @@ async function loadBins() {
 async function loadLookupTable(tableName) {
   const res = await supabase.from(tableName).select('*');
   if (res.error) throw new Error(`Could not load ${tableName}: ${res.error.message}`);
-  return (res.data || []).map(normalizeLookup).filter((x) => x?.id).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return (res.data || []).filter(row=>row.is_active !== false).map(normalizeLookup).filter((x) => x?.id).sort((a, b) => String(a.name).localeCompare(String(b.name)));
 }
 
 function pairingRuleId(rule, prefix) {

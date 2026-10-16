@@ -72,7 +72,7 @@ export async function updateClientOrderItem(itemId, patch) {
   return data;
 }
 
-function normalizeRule(rule) {
+export function normalizeRule(rule) {
   const multiplier = Number(rule.markup_multiplier || 0)
     || (Number(rule.markup_percent || 0) ? 1 + Number(rule.markup_percent || 0) / 100 : 2);
   return {

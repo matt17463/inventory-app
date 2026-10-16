@@ -307,7 +307,7 @@ async function inspectProduct(productId) {
 }
 
 async function internalColorId(supabase, colorName) {
-  const { data, error } = await supabase.from('colors').select('id,name,code').limit(2000);
+  const { data, error } = await supabase.from('colors').select('id,name,code').eq('is_active',true).limit(2000);
   if (error) throw error;
   const wanted = normalized(colorName);
   const matches = (data || []).filter((row) => (

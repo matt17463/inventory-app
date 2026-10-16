@@ -1,5 +1,5 @@
 import { cleanText, rawRequestBody, timingSafeEqualText, wooSignatureForBody } from './cryptoSecurity.js';
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient as createClient } from './serverSupabase.js';
 
 const clean = cleanText;
 

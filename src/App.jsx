@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useContext } from 'react';
+import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from './components/AppShell';
 import './App.css';
@@ -79,6 +80,7 @@ const ReturnFinishedInventory = lazy(() => import('./ReturnFinishedInventory'));
 const SampleInventory = lazy(() => import('./SampleInventory'));
 const ScanInventory = lazy(() => import('./ScanInventory'));
 const CatalogWorkbench = lazy(() => import('./CatalogWorkbench'));
+const MarketingWorkspace = lazy(() => import('./MarketingWorkspace'));
 const ShopTvMode = lazy(() => import('./ShopTvMode'));
 const SpoilageTracking = lazy(() => import('./SpoilageTracking'));
 const SupplierCatalogImport = lazy(() => import('./SupplierCatalogImport'));
@@ -100,6 +102,15 @@ function RouteLoading() {
 }
 
 function EmployeeRoutes() {
+  const access=useContext(EmployeeAccessContext);
+  if(access?.role==='marketing') return <Routes>
+    <Route path="/marketing" element={<MarketingWorkspace />} />
+    <Route path="/application-guide" element={<ApplicationGuide />} />
+    <Route path="/testing-mode" element={<TestingMode />} />
+    <Route path="/theme-settings" element={<ThemeSettings />} />
+    <Route path="/menu-manager" element={<MenuManager />} />
+    <Route path="*" element={<Navigate to="/marketing" replace />} />
+  </Routes>;
   return (
     <Routes>
       <Route path="/" element={<Home />} />
@@ -180,6 +191,7 @@ function EmployeeRoutes() {
       <Route path="/product-data-health" element={<ProductDataHealth />} />
       <Route path="/product-integrity" element={<ProductIntegrityCenter />} />
       <Route path="/operations-integrity" element={<ApplicationIntegrityCenter />} />
+      <Route path="/marketing" element={<MarketingWorkspace />} />
       <Route path="/inventory-audit" element={<InventoryAudit />} />
       <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />
       <Route path="/nfc-writer" element={<NfcWriter />} />

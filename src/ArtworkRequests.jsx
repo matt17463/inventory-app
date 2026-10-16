@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import GrowthDesignInbox from './GrowthDesignInbox';
 import {
   getArtworkSystemRequests,
   getArtworkSystemReorders,
@@ -30,7 +32,7 @@ function dueBadge(row) {
   return `Due in ${days} day(s)`;
 }
 
-export default function ArtworkRequests() {
+function ArtworkRequests() {
   const [tab, setTab] = useState('requests');
   const [status, setStatus] = useState('open');
   const [requests, setRequests] = useState([]);
@@ -123,6 +125,7 @@ export default function ArtworkRequests() {
         <div>
           <p className="eyebrow">Artwork System</p>
           <h1>Artwork Requests & Reorders</h1>
+          <Link to="/artwork-requests?growth=all">Open Marketing Design Briefs</Link>
           <p>Review handoffs from the consolidated WordPress Artwork System plugin and move approved artwork into production.</p>
         </div>
         <button className="secondary-button" onClick={load}>Refresh</button>
@@ -265,4 +268,9 @@ export default function ArtworkRequests() {
       )}
     </main>
   );
+}
+
+export default function ArtworkRequestWorkspace() {
+  const [params] = useSearchParams();
+  return params.has('growth') ? <GrowthDesignInbox opportunityId={params.get('growth')} /> : <ArtworkRequests />;
 }
