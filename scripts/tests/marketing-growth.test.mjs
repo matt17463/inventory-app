@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   calculateGrowthPricing,
   suggestedGrowthRetail,
@@ -146,6 +147,17 @@ test("exports neutralize spreadsheet formulas and client text is escaped", () =>
 
 process.env.SUPABASE_URL = "https://marketing-fixture.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-only-marketing-service-key";
+test("server clients initialize without a native WebSocket implementation", () => {
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    delete globalThis.WebSocket;
+    const { createServiceClient } = await import('./netlify/functions/_shared/security.js');
+    createServiceClient();
+    await import('./netlify/functions/woocommerce-webhook.js');
+    await import('./netlify/functions/manual-pullsheet.js');
+    await import('./netlify/functions/update-woocommerce-order-status.js');
+  `], { cwd: new URL('../../', import.meta.url), env: process.env, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
 const { handler: assetsHandler } = await import(
   "../../netlify/functions/marketing-assets.js"
 );

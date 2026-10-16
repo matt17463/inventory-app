@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient as createClient } from './_shared/serverSupabase.js';
 import {
   auditFunctionSecurity,
   authorizeEmployee,

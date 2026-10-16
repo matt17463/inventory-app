@@ -43,9 +43,15 @@ The guide has a complete prospect-to-delivery chapter. Marketing guided training
 
 ## Verification
 
-- Eleven behavioral tests cover pricing bases/margins, independent settings and suggestions, loss handling, invalid amounts, CSV quoting/deduplication inputs, formula-safe exports, unsafe URLs, employee access, upload/revision boundaries, private file references and scoped access administration.
+- Twelve behavioral tests cover pricing bases/margins, independent settings and suggestions, loss handling, invalid amounts, CSV quoting/deduplication inputs, formula-safe exports, unsafe URLs, employee access, upload/revision boundaries, private file references and scoped access administration, and server startup without native WebSocket support.
 - Fifteen rolled-back database checks cover pricing, cross-client contacts, immutable versions, stale approval detection, repeat-safe handoffs, readiness gates, pricing replacement/history, exact product attribution, imports, operator/viewer/Marketing/anonymous boundaries and unchanged physical inventory.
 - The new tables and RPCs have no anonymous privileges. No real leads, contacts, demo orders or role assignments were created for testing.
 - Full existing checks and compatibility validation are required before push. Screen verification uses the actual Marketing component with simulated data, tests compact and desktop widths and samples text contrast across all nine themes in light/dark mode (18 combinations; sampled minimum 6.44:1). It does not claim a live file upload or a published customer store was exercised.
 
 Database setup is in `20261016221732_marketing_client_growth_workspace.sql`. Repeatable rollback fixtures are in `supabase/verification/962_marketing_growth_rollback_smoke.sql`. Role enforcement also applies at the server endpoints and table/RPC layers; navigation filtering is an additional usability measure.
+
+## Deployment runtime
+
+Netlify builds use Node 24, pinned through `.nvmrc` and `netlify.toml`. The current Supabase client requires native WebSocket support or an explicit transport when running below Node 22, including when constructing a service client for authentication. All server-side Supabase clients use the supported `ws` transport, so the existing Node 20 GitHub validation and older hosted runtimes remain compatible. This is runtime code, not a test-only shim. See [Supabase's compatibility notice](https://supabase.com/changelog/37869-change-in-realtime-js-affecting-node-js-22).
+
+Netlify normally follows the build's Node version for Functions. If an existing site has an `AWS_LAMBDA_JS_RUNTIME` override, it must also target `nodejs24.x` using the site UI/API; that override cannot be set in `netlify.toml`. See [Netlify Functions runtime configuration](https://docs.netlify.com/build/functions/configuration/?fn-language=js#nodejs-version-for-runtime).

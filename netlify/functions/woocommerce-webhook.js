@@ -2,7 +2,7 @@ export const config = {
   rawBody: true,
 };
 
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient as createClient } from './_shared/serverSupabase.js';
 import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus, terminalOrderJobStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateWooCommerceSignature } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';

@@ -68,7 +68,8 @@
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.18.2",
     "read-excel-file": "^9.3.10",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
