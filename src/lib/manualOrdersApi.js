@@ -516,6 +516,7 @@ async function loadManualInvoiceLookupTable(tableName) {
   const { data, error } = await supabase.from(tableName).select('*');
   if (error) throw error;
   return (data || [])
+    .filter((row)=>row.is_active !== false)
     .map(normalizeLookupRow)
     .filter((row) => row.id)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));

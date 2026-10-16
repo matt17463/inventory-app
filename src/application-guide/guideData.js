@@ -1,4 +1,4 @@
-export const GUIDE_VERSION = '1.4.41';
+export const GUIDE_VERSION = '1.4.42';
 
 const section = (id, title, summary, options = {}) => ({
   id,
@@ -27,7 +27,12 @@ export const guideChapters = [
         relatedRoutes: ['/shop-tv', '/shop-equipment'], steps: ['Production honors saved job statuses; closed, completed and cancelled work is excluded before date prioritization.', 'Counts describe current results. Use station and search filters to find work.', 'Equipment TV / Touch includes photographs, printer maintenance and supply readings, private desktop links and supported controls.', 'Connect through Home Assistant and Tailscale. Missing or unavailable readings do not confirm a device is online.', 'TV view is for monitoring. Switch to Touch for controls; operations require confirmation.'], warnings: ['Laser jobs remain in the manufacturer application with an operator present.', 'Equipment commands are simulated in training mode.'],
       }),
       section('catalog-workbench-current', 'Choose one catalog repair workflow', 'Catalog Workbench connects the existing tools in the order they should be used.', {
-        relatedRoutes: ['/catalog-workbench'], steps: ['Start with Product Data Health and Product Integrity Center for missing fields, duplicates and identity conflicts.', 'Fix color aliases, color availability, product types or non-inventory rules in the appropriate tool.', 'Maintain Product-to-Blank Mappings, repair imported mappings, then propagate corrected matches to order lines with Bulk Pairing Repair.', 'Recheck Operations Integrity for downstream orders and reservations.', 'WordPress Supabase Sync imports products and global attributes. The app’s WooCommerce Sync queue tracks outbound inventory events, not import results.'], warnings: ['Do not use quantity edits to repair catalog identities. Preview bulk repairs before applying.'],
+        relatedRoutes: ['/catalog-workbench'], steps: ['Start with Product Data Health and Product Integrity Center for missing fields, duplicates and identity conflicts.', 'Fix color aliases, color availability, product types or non-inventory rules in the appropriate tool.', 'Maintain Product-to-Blank Mappings, repair imported mappings, then propagate corrected matches to order lines with Bulk Pairing Repair.', 'Recheck Operations Integrity for downstream orders and reservations.', 'WordPress Supabase Sync imports products and global attributes. WooCommerce Sync Health shows order attempts and recovery. Bin movements and holds are internal history, not storefront stock publishing.'], warnings: ['Do not use quantity edits to repair catalog identities. Preview bulk repairs before applying.'],
+      }),
+      section('permissions-sync-cleanup', 'Access, sync recovery and catalog cleanup', 'Employee roles control internal data access. Managers recover missed orders and maintain catalog mappings.', {
+        relatedRoutes: ['/woo-sync','/catalog-workbench','/product-data-health'],
+        steps: ['Sign in with an active employee account. Viewers can read; operators handle shop work; managers maintain catalogs and integrations.', 'Open WooCommerce Sync Health to inspect completed, incomplete or failed order attempts. Product and attribute imports remain in WordPress.', 'Refresh a missed order by its WooCommerce ID. The current order is fetched again; completed work and shop-floor pairings are preserved. Review changed quantities and warnings.', 'Open Catalog Workbench to see cleanup results. Repair next 50 exact links fills only missing, unique brand/style/color/size matches.', 'Use Product Data Health pagination to inspect every result. Barcode/UPC is optional scanning information on the physical blank. Cost belongs to the blank, not every storefront variation.', 'Inactive duplicate lookups and resolved SKU aliases remain in history. Missing or ambiguous blanks require review; do not create stock to silence a warning.'],
+        warnings: ['An attribute-update timestamp does not prove a complete product import.', 'Physical bin quantities and reservations do not change WooCommerce stock or backorder policy.', 'Training simulations do not refresh real orders or repair catalog links.'],
       }),
       section('themes-equipment-contractor-current', 'Themes, equipment and contractor administration', 'Recent features include Midnight Industrial, Copper Foundry, Evergreen Workshop, equipment photos and contractor reporting.', {
         relatedRoutes: ['/theme-settings','/equipment-center','/contractor-hours'], steps: ['Choose a theme and check Light or Dark on the target shop screen. Shop displays share the selected palette.', 'Equipment Center and Equipment TV / Touch use the same browser connection preferences and mappings.', 'Contractors enter hours; managers review, approve and export reports in Contractor Hours & Reports.', 'Live printer readings include Roland maintenance and recent jobs plus Sawgrass ink, waste-collector usage and lifetime sheets.'],
@@ -782,9 +787,11 @@ export const guideChapters = [
             'You add Yellow as a WooCommerce color variation but the new variation is missing from Add Item to Bin. Run/verify WooCommerce Sync, then inspect the variation attributes and Product Data Health before creating anything manually.',
           steps: [
             'Confirm the WooCommerce product/variation is published and saved.',
-            'Run the sync or wait for the configured automatic sync.',
+            'For products and attributes, open WordPress → WooCommerce → Supabase Sync and run the appropriate import.',
+            'For a missed order, use WooCommerce Sync Health to fetch the current order again. Review warnings and the linked pull sheet.',
             'Verify Brand, Style, Color, Size, SKU, and variation ID are present in the app mirror.',
             'If one attribute is missing, fix the Woo source or attribute mapping and sync again.',
+            'Completed jobs and lines remain closed during a refresh. Changed production quantities require review instead of silently changing reservations.',
             'Use Deployment Health if the sync request itself fails.',
           ],
           relatedRoutes: ['/woo-sync', '/deployment-health'],

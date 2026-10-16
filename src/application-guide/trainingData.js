@@ -1,4 +1,4 @@
-export const TRAINING_VERSION = '1.1';
+export const TRAINING_VERSION = '1.2';
 
 export const trainingRoles = [
   { id: 'new-employee', label: 'New Employee', description: 'Start here. Learn the daily workflow, safety rules, receiving, pull sheets, and how to avoid inventory mistakes.' },
@@ -12,6 +12,19 @@ export const trainingRoles = [
 const step = (title, instruction, options = {}) => ({ title, instruction, ...options });
 
 export const trainingTutorials = [
+  {
+    id:'sync-recovery-catalog-cleanup', title:'Manager: Sync Recovery and Catalog Cleanup',
+    roles:['manager','owner-admin'],level:'Required',minutes:15,safeMode:'read-only',
+    summary:'Distinguish order failures, catalog imports, internal inventory history and genuine missing mappings.',
+    outcome:'Recover the correct workflow without reopening completed work or creating duplicate inventory.',
+    steps:[
+      step('Review role access','Explain which actions belong to viewers, operators and managers. Do not change any account.',{route:'/catalog-workbench',readOnly:true,verify:'An active employee account is required; catalog repairs are manager actions.'}),
+      step('Read sync health','Find the most recent successful order sync and inspect recent attempts without refreshing an order.',{route:'/woo-sync',readOnly:true,verify:'You can distinguish order-sync results from attribute-update timestamps.'}),
+      step('Explain order recovery','Identify the WooCommerce order ID and the refresh action. Explain what remains preserved. Do not activate it.',{route:'/woo-sync',readOnly:true,verify:'Completed lines, production progress and existing pairings survive a refresh; changed quantities require review.'}),
+      step('Review exact repair','Inspect cleanup results and explain why a unique brand/style/color/size match is required. Do not apply a repair.',{route:'/catalog-workbench',readOnly:true,verify:'Ambiguous records need review and physical quantities are preserved.'}),
+      step('Read the complete health report','Filter an issue and use Next and Previous. Find optional barcode information.',{route:'/product-data-health',readOnly:true,verify:'Totals cover all results; barcode and cost checks use physical blank records.'}),
+    ],
+  },
   {
     id:'current-shop-workflows', title:'Current Workflows: Returns, Purchasing, Catalog & Equipment',
     roles:['new-employee','warehouse','production','artwork','manager','owner-admin'], level:'Core', minutes:25, safeMode:'read-only',

@@ -42,9 +42,9 @@ function rpcError(error) {
 async function lookups(supabase) {
   const [brands, styles, colors, sizes] = await Promise.all([
     supabase.from('brands').select('id,name,code').order('name'),
-    supabase.from('product_types').select('id,name,code').order('name'),
+    supabase.from('product_types').select('id,name,code').eq('is_active',true).order('name'),
     supabase.from('sc_active_colors').select('id,name,code').order('name'),
-    supabase.from('sizes').select('id,name,code').order('name'),
+    supabase.from('sizes').select('id,name,code').eq('is_active',true).order('name'),
   ]);
   for (const result of [brands, styles, colors, sizes]) {
     if (result.error) throw rpcError(result.error);

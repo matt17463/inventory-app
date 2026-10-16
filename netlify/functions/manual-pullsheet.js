@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateSharedSecret } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
@@ -574,7 +575,7 @@ async function upsertJob(order, customerName) {
       woocommerce_order_id: orderId,
       job_name: `Order #${order.number || orderId}`,
       customer_name: customerName,
-      status: 'queued',
+      status: terminalProductionStatus(order.status) ? (['complete','completed','closed'].includes(order.status) ? 'completed' : 'cancelled') : 'queued',
       notes: clean(order.customer_note) || null,
     })
     .select('id, status')
@@ -586,7 +587,7 @@ async function upsertJob(order, customerName) {
 async function existingJobItem(jobId, lineItemId, sku) {
   let query = supabase
     .from('job_items')
-    .select('id')
+    .select('id,status,blank_product_id,quantity')
     .eq('job_id', jobId)
     .order('id', { ascending: true })
     .limit(1);
@@ -638,12 +639,15 @@ async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProdu
   const existing = await existingJobItem(jobId, lineItemId, sku);
 
   if (existing?.id) {
+    const update = existingLineUpdate(enrichment, existing);
+    if (!update) return { ...existing, created:false, updated:false, terminal:true };
+    const quantityChanged = Number(existing.quantity) !== Number(lineItem.quantity || 1);
     const { error: updateError } = await supabase
       .from('job_items')
-      .update(enrichment)
+      .update(update)
       .eq('id', existing.id);
     if (updateError) throw updateError;
-    return { id: existing.id, created: false, updated: true };
+    return { id:existing.id, created:false, updated:true, blank_product_id:existing.blank_product_id || blankProductId, quantity_changed:quantityChanged };
   }
 
   const payload = {
@@ -668,7 +672,13 @@ async function createJobItem({ jobId, rawLineItem, blankProductId, finishedProdu
 
 async function processOrder(order, context = {}) {
   const orderId = Number(order.id);
-  const runId = await startPullsheetRun(supabase, {
+  if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new Error('A valid WooCommerce order ID is required.');
+  const lease = await supabase.rpc('sc_acquire_order_sync_lease_v1', { p_order_id:orderId });
+  if (lease.error) throw lease.error;
+  if (!lease.data) throw new Error('This order is already syncing. Retry shortly.');
+  let runId = null;
+  try {
+  runId = await startPullsheetRun(supabase, {
     source: context.source || 'manual_pullsheet',
     orderId,
     requestId: context.requestId || null,
@@ -692,6 +702,10 @@ async function processOrder(order, context = {}) {
     errors: [],
   };
 
+  if (terminalProductionStatus(job.status) || terminalProductionStatus(order.status)) {
+    await finishPullsheetRun(supabase,runId,{ job_id:Number(job.id),outcome:'completed',metadata:{action:'terminal_history_preserved'} });
+    return orderResult;
+  }
   const lineItems = Array.isArray(order.line_items) ? order.line_items : [];
 
   for (const rawLineItem of lineItems) {
@@ -799,15 +813,17 @@ async function processOrder(order, context = {}) {
       else if (jobItem.updated) orderResult.items_updated += 1;
       else orderResult.items_existing += 1;
 
+      if (jobItem.quantity_changed) { orderResult.errors.push({sku,job_item_id:jobItem.id,error:'Order quantity changed. Review the production quantity and reservation.'}); continue; }
+      if (jobItem.terminal) continue;
       try {
         const reservation = await ensureJobItemReservation(supabase, {
           jobId: job.id,
           jobItemId: jobItem.id,
-          blankProductId: blankProduct.id,
+          blankProductId: jobItem.blank_product_id || blankProduct.id,
           quantity: Number(lineItem.quantity || 1),
         });
         if (reservation?.action === 'created') orderResult.reservations_created += 1;
-        else orderResult.reservations_existing += 1;
+        else if (reservation?.action !== 'skipped_terminal') orderResult.reservations_existing += 1;
       } catch (reservationError) {
         orderResult.reservations_failed += 1;
         orderResult.errors.push({
@@ -829,8 +845,9 @@ async function processOrder(order, context = {}) {
     }
   }
 
-  if (orderResult.reservations_created + orderResult.reservations_existing > 0 && orderResult.reservations_failed === 0) {
-    await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
+  if (orderResult.reservations_created + orderResult.reservations_existing > 0 && orderResult.reservations_failed === 0 && mayPromoteToReserved(job.status)) {
+    const promoted = await supabase.from('jobs').update({ status:'reserved' }).eq('id',job.id).eq('status',job.status);
+    if (promoted.error) throw promoted.error;
   }
 
   try {
@@ -854,6 +871,13 @@ async function processOrder(order, context = {}) {
   });
 
   return orderResult;
+  } catch(error) {
+    await finishPullsheetRun(supabase,runId,{outcome:'failed',error_message:String(error.message || 'Order sync failed.').slice(0,1000)});
+    throw error;
+  } finally {
+    const released = await supabase.rpc('sc_release_order_sync_lease_v1',{p_order_id:orderId,p_token:lease.data});
+    if (released.error) console.warn('Order sync lease will expire automatically:',released.error.message);
+  }
 }
 
 export const handler = async (event) => {

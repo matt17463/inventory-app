@@ -3,6 +3,7 @@ export const config = {
 };
 
 import { createClient } from '@supabase/supabase-js';
+import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateWooCommerceSignature } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
@@ -113,9 +114,9 @@ async function setJobDueDateFromOrder(order, jobId = null) {
 
     const rpcName = jobId ? 'sc_set_job_due_date' : 'sc_set_job_due_date_by_woo_order';
     const { error } = await supabase.rpc(rpcName, params);
-    if (error) console.warn('Due date sync failed:', error.message);
+    if (error) throw error;
   } catch (err) {
-    console.warn('Due date sync unavailable:', err.message);
+    throw new Error(`Due date sync failed: ${err.message}`);
   }
 
   return dueDate;
@@ -150,19 +151,17 @@ async function syncOrderStatusBoard(order, jobId = null) {
     });
 
     if (error) {
-      console.warn('Production status board Woo sync failed:', error.message);
-      return null;
+      throw error;
     }
 
     if (jobId) {
       const { error: recalcError } = await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(jobId) });
-      if (recalcError) console.warn('Production status board recalculation failed:', recalcError.message);
+      if (recalcError) throw recalcError;
     }
 
     return data;
   } catch (err) {
-    console.warn('Production status board sync unavailable:', err.message);
-    return null;
+    throw new Error(`Production status sync failed: ${err.message}`);
   }
 }
 
@@ -547,7 +546,7 @@ async function findBlankProductForLineItem(rawLineItem) {
 async function existingJobItem(jobId, lineItemId, sku) {
   let query = supabase
     .from('job_items')
-    .select('id')
+    .select('id,status,blank_product_id,quantity')
     .eq('job_id', jobId)
     .order('id', { ascending: true })
     .limit(1);
@@ -606,13 +605,13 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
   const existing = await existingJobItem(jobId, lineItemId, sku);
 
   if (existing?.id) {
-    const updatePayload = { ...basePayload };
-    delete updatePayload.job_id;
-    delete updatePayload.quantity;
+    const updatePayload = existingLineUpdate(basePayload, existing);
+    if (!updatePayload) return { ...existing, created: false, updated: false, terminal: true };
+    const quantityChanged = Number(existing.quantity) !== Number(lineItem.quantity || 1);
 
     const { error } = await supabase.from('job_items').update(updatePayload).eq('id', existing.id);
     if (error) throw error;
-    return { id: existing.id, created: false, updated: true };
+    return { id: existing.id, created: false, updated: true, blank_product_id: existing.blank_product_id || blankProductId, quantity_changed: quantityChanged };
   }
 
   const { data, error } = await supabase.from('job_items').insert(basePayload).select('id').single();
@@ -622,7 +621,8 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
 
 async function upsertWooJobWithoutResettingProduction(order, customerName) {
   const orderId = Number(order.id);
-  const cancelled = ['cancelled', 'refunded', 'failed'].includes(String(order.status || '').toLowerCase());
+  const cancelled = ['cancelled', 'canceled', 'refunded', 'failed'].includes(String(order.status || '').toLowerCase());
+  const completed = ['completed', 'complete', 'closed'].includes(String(order.status || '').toLowerCase());
   const common = {
     job_name: `Order #${order.number || orderId}`,
     customer_name: customerName,
@@ -649,6 +649,7 @@ async function upsertWooJobWithoutResettingProduction(order, customerName) {
   if (existing?.id) {
     const update = { ...common };
     if (cancelled) update.status = 'cancelled';
+    else if (completed) update.status = 'completed';
     const { data, error } = await supabase
       .from('jobs')
       .update(update)
@@ -663,7 +664,7 @@ async function upsertWooJobWithoutResettingProduction(order, customerName) {
     .from('jobs')
     .insert({
       woocommerce_order_id: orderId,
-      status: cancelled ? 'cancelled' : 'queued',
+      status: cancelled ? 'cancelled' : completed ? 'completed' : 'queued',
       ...common,
     })
     .select('id, status')
@@ -673,6 +674,9 @@ async function upsertWooJobWithoutResettingProduction(order, customerName) {
 }
 
 export const handler = async (event) => {
+  let runId = null;
+  let orderId = null;
+  let leaseToken = null;
   try {
     if (event.httpMethod === 'GET') {
       return {
@@ -723,9 +727,16 @@ export const handler = async (event) => {
       };
     }
 
-    const orderId = Number(order.id);
-    const runId = await startPullsheetRun(supabase, {
-      source: 'woocommerce_webhook',
+    orderId = Number(order.id);
+    if (!Number.isSafeInteger(orderId) || orderId <= 0 || !Array.isArray(order.line_items)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'A valid order ID and line_items array are required.' }) };
+    }
+    const lease = await supabase.rpc('sc_acquire_order_sync_lease_v1', { p_order_id: orderId });
+    if (lease.error) throw lease.error;
+    leaseToken = lease.data;
+    if (!leaseToken) return { statusCode: 503, headers: { 'Retry-After': '15' }, body: JSON.stringify({ error: 'This order is already syncing. Please retry shortly.' }) };
+    runId = await startPullsheetRun(supabase, {
+      source: getHeader(event, 'x-sc-sync-source') === 'manager_replay' ? 'manager_replay' : 'woocommerce_webhook',
       orderId,
       requestId: getHeader(event, 'x-nf-request-id') || getHeader(event, 'x-request-id') || null,
       metadata: { webhook_topic: getHeader(event, 'x-wc-webhook-topic') || null },
@@ -744,6 +755,10 @@ export const handler = async (event) => {
     await setJobDueDateFromOrder(order, job.id);
 
     await syncOrderStatusBoard(order, job.id);
+    if (terminalProductionStatus(job.status)) {
+      await finishPullsheetRun(supabase, runId, { job_id: Number(job.id), outcome: 'completed', metadata: { action: 'terminal_history_refreshed', production_preserved: true } });
+      return { statusCode: 200, body: JSON.stringify({ success: true, job_id: job.id, action: 'terminal_history_refreshed', production_preserved: true }) };
+    }
 
     const createdItems = [];
     const updatedItems = [];
@@ -827,16 +842,19 @@ export const handler = async (event) => {
         else if (jobItem.updated) updatedItems.push(jobItem.id);
         else existingItems.push(jobItem.id);
 
-        if (blankProduct?.id) {
+        if (jobItem.quantity_changed) {
+          errors.push({ sku, job_item_id: jobItem.id, error: 'Order quantity changed. Review the existing production quantity and reservation before applying it.' });
+        }
+        if (blankProduct?.id && !jobItem.terminal && !jobItem.quantity_changed) {
           try {
             const reservation = await ensureJobItemReservation(supabase, {
               jobId: job.id,
               jobItemId: jobItem.id,
-              blankProductId: blankProduct.id,
+              blankProductId: jobItem.blank_product_id || blankProduct.id,
               quantity: Number(lineItem.quantity || 1),
             });
             if (reservation?.action === 'created') reservationsCreated += 1;
-            else reservationsExisting += 1;
+            else if (reservation?.action !== 'skipped_terminal') reservationsExisting += 1;
           } catch (reservationError) {
             reservationsFailed += 1;
             errors.push({
@@ -871,8 +889,9 @@ export const handler = async (event) => {
       }
     }
 
-    if (reservationsCreated + reservationsExisting > 0 && reservationsFailed === 0 && !String(job.status || '').toLowerCase().includes('cancel')) {
-      await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id);
+    if (reservationsCreated + reservationsExisting > 0 && reservationsFailed === 0 && mayPromoteToReserved(job.status)) {
+      const promoted = await supabase.from('jobs').update({ status: 'reserved' }).eq('id', job.id).eq('status', job.status);
+      if (promoted.error) throw promoted.error;
     }
 
     await syncOrderStatusBoard(order, job.id);
@@ -908,10 +927,16 @@ export const handler = async (event) => {
       }),
     };
   } catch (err) {
+    await finishPullsheetRun(supabase, runId, { outcome: 'failed', error_message: String(err.message || 'Order sync failed.').slice(0,1000) });
     console.error('Unhandled webhook error:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: 'Server error', details: err.message }),
     };
+  } finally {
+    if (leaseToken && orderId) {
+      const released = await supabase.rpc('sc_release_order_sync_lease_v1', { p_order_id: orderId, p_token: leaseToken });
+      if (released.error) console.warn('Order sync lease will expire automatically:', released.error.message);
+    }
   }
 };

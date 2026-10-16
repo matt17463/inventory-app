@@ -140,7 +140,7 @@ export const navSections = [
       { label: 'Operations Integrity', path: '/operations-integrity', keywords: 'product identity resolver duplicate review receiving inbox reconciliation integration jobs team store workflow guarded creation' },
       { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
-      { label: 'WooCommerce Sync', path: '/woo-sync', keywords: 'woocommerce sync products queue' },
+      { label: 'WooCommerce Sync Health', path: '/woo-sync', keywords: 'woocommerce sync products queue health retry order' },
       { label: 'Application Guide', path: '/application-guide', keywords: 'help training guide workflow admin instructions how to use' },
       { label: 'Testing & Guided Training', path: '/testing-mode', keywords: 'testing mode employee training tutorial onboarding simulated writes practice' },
       { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
