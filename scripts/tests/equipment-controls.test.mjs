@@ -28,3 +28,13 @@ test('missing data is never presented as a live online reading', () => {
   assert.equal(entityPresentation({ state: 'unavailable' }).kind, 'pending');
   assert.deepEqual(entityPresentation({ state: 'off', attributes: { device_class: 'connectivity' } }), { label: 'Unreachable', kind: 'warn' });
 });
+
+test('maintenance problems and timestamps have readable, truthful labels', () => {
+  const problem = (state) => ({ state, attributes: { device_class: 'problem' } });
+  assert.deepEqual(entityPresentation(problem('on')), { label: 'Attention requested', kind: 'warn' });
+  assert.deepEqual(entityPresentation(problem('off')), { label: 'Clear', kind: 'good' });
+  for (const state of ['unknown', 'unavailable', 'unexpected']) assert.equal(entityPresentation(problem(state)).kind, 'pending');
+  assert.equal(entityPresentation({ state: 'bad date', attributes: { device_class: 'timestamp' } }).kind, 'pending');
+  const date = '2026-10-16T04:33:07+00:00';
+  assert.equal(entityPresentation({ state: date, attributes: { device_class: 'timestamp' } }).label, new Date(date).toLocaleString());
+});
