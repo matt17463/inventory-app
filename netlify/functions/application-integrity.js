@@ -329,7 +329,7 @@ export async function handler(event) {
   if (!['GET','POST'].includes(event.httpMethod)) return jsonResponse(405, { success: false, message: 'Method not allowed.' }, event);
   const body = event.httpMethod === 'POST' ? JSON.parse(event.body || '{}') : Object.fromEntries(new URLSearchParams(event.rawQuery || event.queryStringParameters || {}));
   const action = clean(body.action || (event.httpMethod === 'GET' ? 'health' : ''));
-  const allowedRoles = action.startsWith('product.') || action.startsWith('pullsheet.') || action.startsWith('review.') || action === 'identity.remember' || action === 'jobs.update' || (action === 'workflows' && body.mode === 'save')
+  const allowedRoles = action === 'health' ? ['admin','manager','operator','viewer','marketing'] : action.startsWith('product.') || action.startsWith('pullsheet.') || action.startsWith('review.') || action === 'identity.remember' || action === 'jobs.update' || (action === 'workflows' && body.mode === 'save')
     ? ['admin','manager'] : ['admin','manager','operator'];
   const auth = await authorizeEmployee(event, { functionName: FUNCTION_NAME, allowedRoles });
   if (!auth.ok) return jsonResponse(auth.statusCode, { success: false, message: auth.message }, event);

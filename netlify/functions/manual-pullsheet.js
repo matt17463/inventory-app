@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus } from './_shared/orderSyncReliability.js';
+import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus, terminalOrderJobStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateSharedSecret } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
@@ -106,9 +106,9 @@ async function setJobDueDateFromOrder(order, jobId = null) {
 
     const rpcName = jobId ? 'sc_set_job_due_date' : 'sc_set_job_due_date_by_woo_order';
     const { error } = await supabase.rpc(rpcName, params);
-    if (error) console.warn('Due date sync failed:', error.message);
+    if (error) throw error;
   } catch (err) {
-    console.warn('Due date sync unavailable:', err.message);
+    throw new Error('Due date sync failed: '+err.message);
   }
 
   return dueDate;
@@ -561,6 +561,7 @@ async function upsertJob(order, customerName) {
         job_name: `Order #${order.number || orderId}`,
         customer_name: customerName,
         notes: clean(order.customer_note) || null,
+        ...(terminalOrderJobStatus(order.status)?{status:terminalOrderJobStatus(order.status)}:{}),
       })
       .eq('id', existing.id)
       .select('id, status')
@@ -575,7 +576,7 @@ async function upsertJob(order, customerName) {
       woocommerce_order_id: orderId,
       job_name: `Order #${order.number || orderId}`,
       customer_name: customerName,
-      status: terminalProductionStatus(order.status) ? (['complete','completed','closed'].includes(order.status) ? 'completed' : 'cancelled') : 'queued',
+      status: terminalOrderJobStatus(order.status) || 'queued',
       notes: clean(order.customer_note) || null,
     })
     .select('id, status')
@@ -851,9 +852,10 @@ async function processOrder(order, context = {}) {
   }
 
   try {
-    await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(job.id) });
+    const recalculated=await supabase.rpc('sc_recalculate_order_status', { p_job_id: Number(job.id) });
+    if(recalculated.error)throw recalculated.error;
   } catch (err) {
-    console.warn('Production status board recalculation failed:', err.message);
+    orderResult.errors.push({error:'Production status board recalculation failed: '+err.message});
   }
 
   await finishPullsheetRun(supabase, runId, {
@@ -867,6 +869,7 @@ async function processOrder(order, context = {}) {
     reservations_existing: orderResult.reservations_existing,
     reservations_failed: orderResult.reservations_failed,
     items_needing_pairing: orderResult.items_needing_pairing,
+    error_message:orderResult.errors.length?orderResult.errors.slice(0,3).map(e=>[e.sku||e.job_item_id,e.error].filter(Boolean).join(': ')).join(' | ').slice(0,1000):null,
     metadata: { error_count: orderResult.errors.length },
   });
 

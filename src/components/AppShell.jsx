@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { EmployeeAccessContext, marketingPaths } from '../lib/employeeAccessContext';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import * as navConfig from '../navigationConfig';
 import DarkModeToggle from './DarkModeToggle';
@@ -62,6 +63,7 @@ const fallbackNav = [
 ];
 
 export default function AppShell({ children }) {
+  const employeeAccess=useContext(EmployeeAccessContext);
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -100,7 +102,10 @@ export default function AppShell({ children }) {
     }
     setLayout(defaultNavigationLayout(baseNav));
   };
-  const nav = useMemo(() => materializeNavigation(baseNav, layout), [baseNav, layout]);
+  const nav = useMemo(() => {
+    const result=materializeNavigation(baseNav, layout);
+    return employeeAccess?.role==='marketing' ? result.map(s=>({...s,items:s.items.filter(i=>marketingPaths.has(i.path))})).filter(s=>s.items.length) : result;
+  }, [baseNav, layout, employeeAccess?.role]);
 
   const allItems = nav.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
   const filtered = search.trim()

@@ -88,6 +88,7 @@ export const navSections = [
     label: 'Management',
     icon: '📊',
     items: [
+      { label: 'Marketing & Client Growth', path: '/marketing', keywords: 'marketing leads prospects clients contacts outreach flyers samples pricing profit sharing margin demo storefront handoff pipeline' },
       { label: 'Campaign Forecast', path: '/campaign-forecast', keywords: 'forecast campaign stock demand' },
       { label: 'Customer Reorders', path: '/customer-reorders', keywords: 'reorder intelligence repeat customers' },
       { label: 'Job Costing', path: '/job-costing', keywords: 'profit margin costing revenue cost' },

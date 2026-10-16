@@ -59,3 +59,7 @@ Catalog Workbench provides the existing tools in a single sequence and offers bo
 The verification SQL is in `supabase/verification/960_access_sync_catalog_read_only.sql`. Database backups and prior definitions are stored only in private `sc_maintenance` tables. Do not export or blindly restore legacy function definitions: a removed callback contained a legacy credential. A rollback should be a narrowly scoped reviewed migration; it must not reopen anonymous access or replay ignored stock events. Application code can revert independently, but the new Sync Health endpoint and health pagination require the matching frontend/server release.
 
 Storefront plugin deactivation and checkout/export cutovers remain separate work. No active WooCommerce plugin was disabled as part of this cleanup.
+
+## Final release follow-up
+
+Release 1.5.0 also includes the complete Marketing & Client Growth workspace; see `MARKETING_CLIENT_GROWTH_1_5.md`. The final sync review consolidated terminal statuses, including Production Complete, fulfilled/archived variants and WooCommerce-prefixed values, so imports, reservations and mapping repair agree. Eleven sync handler tests now cover incoming terminal orders and recorded manual-board failures as well as the original replay cases. Warning summaries are retained in Sync Health instead of disappearing with a request response.

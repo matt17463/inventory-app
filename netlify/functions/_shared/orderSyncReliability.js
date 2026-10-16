@@ -1,5 +1,5 @@
 export function terminalProductionStatus(value) {
-  return new Set(['complete','completed','closed','cancelled','canceled','refunded','failed','void','voided','deleted','shipped','delivered'])
+  return new Set(['complete','completed','production_complete','closed','fulfilled','filled','archived','inactive','removed','released','consumed','cancelled','canceled','refunded','failed','void','voided','deleted','shipped','delivered'])
     .has(String(value || '').trim().toLowerCase().replace(/^wc-/, ''));
 }
 
@@ -17,4 +17,10 @@ export function existingLineUpdate(payload, existing) {
 
 export function mayPromoteToReserved(status) {
   return ['new','queued','pending','awaiting_items','waiting_on_items'].includes(String(status || '').trim().toLowerCase());
+}
+
+export function terminalOrderJobStatus(value) {
+ if(!terminalProductionStatus(value))return null;
+ const status=String(value||'').trim().toLowerCase().replace(/^wc-/,'');
+ return ['cancelled','canceled','refunded','failed','void','voided','deleted','removed','inactive'].includes(status)?'cancelled':'completed';
 }

@@ -3010,3 +3010,24 @@ html[data-preset='futuristic-interface'][data-theme='dark'] {
   --sc-page-header-bg:linear-gradient(145deg,#1a2152,#0b102d);
 }
 html[data-preset='futuristic-interface'][data-theme='dark'] .page-header { background-color:#12183e !important; }
+
+/* Marketing controls share readable surfaces in every preset. Some legacy
+   theme button rules combine dark fills with light-mode ink. */
+html body .growth-workspace :is(button,.sc-btn,a.sc-btn) {
+  background:var(--sc-panel-2) !important;background-image:none !important;
+  color:var(--sc-text) !important;border:1px solid var(--sc-border) !important;
+  box-shadow:none !important;
+}
+html body .growth-workspace .sc-btn-primary {
+  border:2px solid var(--sc-primary) !important;font-weight:800;
+}
+html body .growth-workspace .growth-record-link {
+  background:transparent !important;border:0 !important;color:var(--sc-text) !important;
+  text-decoration:underline;
+}
+html body .growth-workspace :is(input,select,textarea,th) {
+  background:var(--sc-panel-2) !important;color:var(--sc-text) !important;
+}
+html body .growth-workspace :is(.growth-help,small,.growth-metrics span) {
+  color:var(--sc-text) !important;opacity:1;
+}

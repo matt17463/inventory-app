@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabaseClient';
 import logo from './assets/logo.png';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
+import { EmployeeAccessContext } from './lib/employeeAccessContext';
 
 const ACCESS_CHECK_TIMEOUT_MS = 8000;
 
@@ -273,7 +274,7 @@ export default function AuthGate({ children }) {
       <button type="button" className="employee-signout" onClick={signOut}>
         {access.role} · Sign out
       </button>
-      {children}
+      <EmployeeAccessContext.Provider value={access}>{children}</EmployeeAccessContext.Provider>
     </>
   );
 }

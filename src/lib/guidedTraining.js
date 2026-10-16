@@ -1,6 +1,7 @@
 import { navSections } from '../navigationConfig';
 import { trainingRoles, tutorialsForRole } from '../application-guide/trainingData';
 import { getTestingModeSettings, saveTestingModeSettings } from './testingMode';
+import { marketingPaths } from './employeeAccessContext';
 
 const SESSION_KEY='sc_guided_training_session_v2';
 const EVENT_NAME='sc-guided-training-change';
@@ -10,18 +11,21 @@ function emit(session){
   return session;
 }
 
-export function fullApplicationTour(){
+export function fullApplicationTour(role){
   const steps=[];
   for(const section of navSections){
+    const allowedItems=role==='marketing'?section.items.filter(item=>marketingPaths.has(item.path)):section.items;
+    if(!allowedItems.length)continue;
     steps.push({
       title:`${section.icon||'•'} ${section.label} section`,
       instruction:`This section groups the ${section.label.toLowerCase()} tools. The guided tour will open each page so you can see where it lives and what it is for.`,
-      route:section.items[0]?.path||'/',
+      route:allowedItems[0]?.path||'/',
       verify:`You can locate the ${section.label} section in the left navigation.`,
       target:'.sc-sidebar-nav',
       readOnly:true,
     });
     for(const item of section.items){
+      if(role==='marketing'&&!marketingPaths.has(item.path))continue;
       steps.push({
         title:item.label,
         instruction:`Open and identify the purpose of ${item.label}. Key concepts: ${item.keywords||'review the page title, controls, and status information'}.`,
@@ -53,7 +57,7 @@ export function guidedProgramForRole(role='new-employee'){
         || !['read-only','read-only-first','simulated-supported'].includes(tutorial.safeMode),
     })),
   }));
-  return [...roleTutorials,fullApplicationTour()];
+  return [...roleTutorials,fullApplicationTour(role)];
 }
 
 export function trainingRoleLabel(role){

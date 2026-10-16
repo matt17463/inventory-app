@@ -3,7 +3,7 @@ export const config = {
 };
 
 import { createClient } from '@supabase/supabase-js';
-import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus } from './_shared/orderSyncReliability.js';
+import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus, terminalOrderJobStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateWooCommerceSignature } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 
@@ -621,8 +621,9 @@ async function createOrUpdateJobItem({ jobId, item, blankProductId, finishedProd
 
 async function upsertWooJobWithoutResettingProduction(order, customerName) {
   const orderId = Number(order.id);
-  const cancelled = ['cancelled', 'canceled', 'refunded', 'failed'].includes(String(order.status || '').toLowerCase());
-  const completed = ['completed', 'complete', 'closed'].includes(String(order.status || '').toLowerCase());
+  const terminalStatus=terminalOrderJobStatus(order.status);
+  const cancelled=terminalStatus==='cancelled';
+  const completed=terminalStatus==='completed';
   const common = {
     job_name: `Order #${order.number || orderId}`,
     customer_name: customerName,
@@ -906,6 +907,7 @@ export const handler = async (event) => {
       reservations_existing: reservationsExisting,
       reservations_failed: reservationsFailed,
       items_needing_pairing: itemsNeedingPairing,
+      error_message:errors.length?errors.slice(0,3).map(e=>[e.sku||e.job_item_id,e.error].filter(Boolean).join(': ')).join(' | ').slice(0,1000):null,
       metadata: { error_count: errors.length },
     });
 
