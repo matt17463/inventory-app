@@ -3,17 +3,406 @@ export const MAC_DESKTOP = 'vnc://100.117.18.123:15900';
 export const PI_DESKTOP = 'https://connect.raspberrypi.com/devices/e0cfb85e-f7f4-4c2b-b4e3-5267dd2dd017/screen-sharing-session';
 export const PRIVATE_HA = 'https://scshoppi.tail934ae0.ts.net';
 export const equipment = [
-  { id: 'roland', name: 'Roland BN2-30', maker: 'ROLAND DG', category: 'Print & cut', site: 'business', image: 'roland.webp', address: '192.168.1.159', entities: ['sensor.roland_bn2_30_operating_status', 'binary_sensor.roland_bn2_30_manual_cleaning_requested', 'sensor.roland_bn2_30_manual_cleaning_age', 'sensor.roland_bn2_30_jobs_7d', 'sensor.roland_bn2_30_last_job_duration', 'sensor.roland_bn2_30_hub_updated'], stage: 'Telemetry configured', detail: 'Connect Hub reports status, maintenance flags, recent jobs and recorded error counters every minute while the business Mac and Hub are running. Cleaning age is estimated; stale readings become unavailable.', action: 'Maintenance, jobs & errors', haPath: '/skilled-crafting/roland' },
-  { id: 's1', name: 'xTool S1', maker: 'XTOOL', category: 'Laser', site: 'business', image: 's1.webp', entities: [], stage: 'Awaiting connection', detail: 'Prepared for your S1. Connect it to business Wi-Fi in xTool Studio, then add its verified monitoring integration.', action: 'Connection guide', url: 'https://support.xtool.com/article/1082' },
-  { id: 'p2', name: 'xTool P2', maker: 'XTOOL', category: 'Laser', site: 'business', image: 'p2.webp', entities: [], stage: 'Awaiting connection', detail: 'Prepared for your P2. Pair it in xTool Studio before enabling status or camera monitoring.', action: 'Connection guide', url: 'https://support.xtool.com/article/824' },
-  { id: 'sawgrass', name: 'Sawgrass SG500', maker: 'SAWGRASS', category: 'Sublimation', site: 'business', image: 'sawgrass.webp', address: '192.168.1.171', entities: ['sensor.sawgrass_sg500_printer_message', 'sensor.sawgrass_sg500_black_ink', 'sensor.sawgrass_sg500_cyan_ink', 'sensor.sawgrass_sg500_magenta_ink', 'sensor.sawgrass_sg500_yellow_ink', 'sensor.sawgrass_sg500_waste_collector_used', 'sensor.sawgrass_sg500_lifetime_sheets'], stage: 'Telemetry configured', detail: 'Local printer readings include ink levels, waste-collector usage, lifetime sheets and printer message. Open the printer view for tray readings and all available details.', action: 'Printer readings', haPath: '/skilled-crafting/printers' },
-  { id: 'epson', name: 'Epson ET-2980', maker: 'EPSON', category: 'Printer', site: 'business', image: 'epson.webp', address: '192.168.1.233', entities: ['sensor.epson_et_2980_series', 'sensor.epson_et_2980_series_black', 'sensor.epson_et_2980_series_cyan', 'sensor.epson_et_2980_series_magenta', 'sensor.epson_et_2980_series_yellow'], stage: 'Integration added', detail: 'Printer status and reported black, cyan, magenta and yellow supply levels.' },
-  { id: 'pi', name: 'Business Pi 5', maker: 'RASPBERRY PI', category: 'Control hub', site: 'business', image: 'pi.webp', address: '100.117.18.123', entities: ['sensor.backup_last_successful_automatic_backup'], stage: 'Visual desktop verified', detail: 'Home Assistant, Tailscale and SSH. Raspberry Pi Connect is linked and its visual desktop has been verified.', action: 'Open visual desktop', url: PI_DESKTOP },
-  { id: 'mac', name: 'Business MacBook Pro', maker: 'APPLE', category: 'Workstation', site: 'business', image: 'mac.webp', address: '100.106.153.72', entities: ['binary_sensor.business_macbook_screen_sharing'], stage: 'Private Mac relay ready', detail: 'Private Screen Sharing through the business Pi, with the Mac’s own login. The Mac must be awake and Screen Sharing enabled.', action: 'Open Screen Sharing', url: MAC_DESKTOP },
-  { id: 'kasa', name: 'Kasa HS200 switch', maker: 'TP-LINK', category: 'Smart switch', site: 'business', image: 'kasa.webp', address: '192.168.1.247', entities: ['switch.business_hs200_switch'], stage: 'Integration added', detail: 'Local switch integration. Confirm what it powers before operating it.' },
-  { id: 'reolink', name: 'Reolink cameras', maker: 'REOLINK', category: 'Security', site: 'business', entities: [], stage: 'Credentials needed', detail: 'Reolink devices discovered on the business network. Add each device using its local camera account in Home Assistant.' },
-  { id: 'swann', name: 'Swann NVR8-7250', maker: 'SWANN', category: 'Recorder', site: 'business', entities: [], stage: 'Compatibility check', detail: 'Recorder found at 192.168.1.205. ONVIF or RTSP support and credentials still need verification.' },
-  { id: 'nas', name: 'Synology DS718+', maker: 'SYNOLOGY', category: 'Storage', site: 'home', image: 'nas.webp', entities: [], stage: 'Home visit pending', detail: 'Home NAS reserved in this view. Home network discovery and remote access remain pending; local addresses overlap with business.', action: 'NAS integration guide', url: 'https://www.home-assistant.io/integrations/synology_dsm/' },
+  {
+    "id": "roland",
+    "name": "Roland BN2-30",
+    "maker": "ROLAND DG",
+    "category": "Print & cut",
+    "site": "business",
+    "image": "roland.webp",
+    "address": "192.168.1.160",
+    "entities": [
+      "sensor.roland_bn2_30_operating_status",
+      "binary_sensor.roland_bn2_30_manual_cleaning_requested",
+      "sensor.roland_bn2_30_jobs_7d",
+      "sensor.roland_printer_current_consumption",
+      "sensor.roland_printer_today_s_consumption",
+      "sensor.roland_printer_voltage"
+    ],
+    "stage": "Check live status",
+    "detail": "Roland printer telemetry and its separately monitored P115 power plug; measurements depend on working Home Assistant sensors.",
+    "haPath": "/skilled-crafting/roland"
+  },
+  {
+    "id": "s1",
+    "name": "xTool S1",
+    "maker": "XTOOL",
+    "category": "Laser",
+    "site": "business",
+    "image": "s1.webp",
+    "entities": [
+      "sensor.xtool_s1_status",
+      "binary_sensor.xtool_s1_alarm",
+      "sensor.xtool_s1_fire_level",
+      "sensor.xtool_s1_working_time",
+      "sensor.xtool_s1_laser_module_runtime",
+      "sensor.xtool_s1_laser_current_consumption",
+      "sensor.xtool_s1_laser_today_s_consumption"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Machine status, safety warnings and P115 power readings. Laser operation is not exposed in Skilled Crafting."
+  },
+  {
+    "id": "p2",
+    "name": "xTool P2",
+    "maker": "XTOOL",
+    "category": "Laser",
+    "site": "business",
+    "image": "p2.webp",
+    "entities": [
+      "sensor.business_tool_p2_status",
+      "binary_sensor.business_tool_p2_cover",
+      "binary_sensor.business_tool_p2_water_line",
+      "sensor.business_tool_p2_water_temperature",
+      "sensor.business_tool_p2_water_flow_rate",
+      "sensor.xtool_p2_laser_current_consumption",
+      "sensor.xtool_p2_laser_today_s_consumption"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Machine status, cooling and water monitoring plus P115 consumption. No remote laser operation."
+  },
+  {
+    "id": "sawgrass",
+    "name": "Sawgrass SG500",
+    "maker": "SAWGRASS",
+    "category": "Sublimation",
+    "site": "business",
+    "image": "sawgrass.webp",
+    "address": "192.168.1.171",
+    "entities": [
+      "sensor.sawgrass_sg500",
+      "sensor.sawgrass_sg500_printer_message",
+      "sensor.sawgrass_sg500_black_ink",
+      "sensor.sawgrass_sg500_cyan_ink",
+      "sensor.sawgrass_sg500_magenta_ink",
+      "sensor.sawgrass_sg500_yellow_ink"
+    ],
+    "stage": "Telemetry configured",
+    "detail": "Printer connection and available supply readings. Some sensors come from YAML and may not appear in the device registry.",
+    "haPath": "/skilled-crafting/printers"
+  },
+  {
+    "id": "epson",
+    "name": "Epson ET-2980",
+    "maker": "EPSON",
+    "category": "Printer",
+    "site": "business",
+    "image": "epson.webp",
+    "entities": [
+      "sensor.epson_et_2980_series",
+      "sensor.epson_et_2980_series_black",
+      "sensor.epson_et_2980_series_cyan",
+      "sensor.epson_et_2980_series_magenta",
+      "sensor.epson_et_2980_series_yellow"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Printer status and CMYK readings."
+  },
+  {
+    "id": "bambu",
+    "name": "Bambu H2C",
+    "maker": "BAMBU LAB",
+    "category": "3D printer",
+    "site": "business",
+    "entities": [
+      "sensor.home_bambu_h2c_printer_print_status",
+      "sensor.home_bambu_h2c_printer_print_progress",
+      "sensor.home_bambu_h2c_printer_remaining_time",
+      "sensor.home_bambu_h2c_printer_nozzle_temperature",
+      "sensor.home_bambu_h2c_printer_bed_temperature",
+      "binary_sensor.home_bambu_h2c_printer_print_error",
+      "sensor.bambu_3d_printer_current_consumption",
+      "sensor.bambu_3d_printer_today_s_consumption"
+    ],
+    "stage": "Registered in HA",
+    "detail": "3D-printing telemetry and dedicated power plug. Existing entity IDs include home_ prefixes; confirm device location before moving dashboard groups."
+  },
+  {
+    "id": "ams1",
+    "name": "Bambu AMS2 Pro 1",
+    "maker": "BAMBU LAB",
+    "category": "3D printer accessory",
+    "site": "business",
+    "entities": [
+      "sensor.home_bambu_ams2_pro_1_humidity",
+      "sensor.home_bambu_ams2_pro_1_temperature",
+      "binary_sensor.home_bambu_ams2_pro_1_drying"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Filament storage humidity and drying state."
+  },
+  {
+    "id": "ams2",
+    "name": "Bambu AMS2 Pro 2",
+    "maker": "BAMBU LAB",
+    "category": "3D printer accessory",
+    "site": "business",
+    "entities": [
+      "sensor.home_bambu_ams2_pro_2_humidity",
+      "sensor.home_bambu_ams2_pro_2_temperature",
+      "binary_sensor.home_bambu_ams2_pro_2_drying"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Filament storage humidity and drying state."
+  },
+  {
+    "id": "amsht",
+    "name": "Bambu AMS HT",
+    "maker": "BAMBU LAB",
+    "category": "3D printer accessory",
+    "site": "business",
+    "entities": [
+      "sensor.home_bambu_ams_ht_humidity",
+      "sensor.home_bambu_ams_ht_temperature",
+      "binary_sensor.home_bambu_ams_ht_drying"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Filament storage humidity and drying state."
+  },
+  {
+    "id": "pi",
+    "name": "Business Pi 5",
+    "maker": "RASPBERRY PI",
+    "category": "Control hub",
+    "site": "business",
+    "image": "pi.webp",
+    "address": "100.117.18.123",
+    "entities": [
+      "sensor.backup_last_successful_automatic_backup"
+    ],
+    "stage": "HA hub",
+    "detail": "Home Assistant, private network and backup status.",
+    "url": "https://connect.raspberrypi.com/"
+  },
+  {
+    "id": "mac",
+    "name": "Business MacBook Pro",
+    "maker": "APPLE",
+    "category": "Workstation",
+    "site": "business",
+    "image": "mac.webp",
+    "address": "100.106.153.72",
+    "entities": [
+      "binary_sensor.business_macbook_screen_sharing"
+    ],
+    "stage": "Remote access configured",
+    "detail": "Screen sharing requires the Mac to be online and awake.",
+    "url": "vnc://100.106.153.72"
+  },
+  {
+    "id": "kasa",
+    "name": "Kasa HS200 switch",
+    "maker": "TP-LINK",
+    "category": "Smart switch",
+    "site": "business",
+    "image": "kasa.webp",
+    "entities": [
+      "switch.business_hs200_switch"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Verify the connected load before remotely operating."
+  },
+  {
+    "id": "entry",
+    "name": "Reolink Business Entry",
+    "maker": "REOLINK",
+    "category": "Security",
+    "site": "business",
+    "address": "192.168.1.248",
+    "entities": [
+      "camera.business_entry_fluent",
+      "binary_sensor.business_entry_motion",
+      "binary_sensor.business_entry_person",
+      "binary_sensor.business_entry_vehicle",
+      "binary_sensor.business_entry_animal"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Direct-network RLC-520A; Home Assistant integration reconfigured after DHCP address change."
+  },
+  {
+    "id": "nvr",
+    "name": "Reolink NVR RLN8-410",
+    "maker": "REOLINK",
+    "category": "Security",
+    "site": "business",
+    "address": "192.168.1.113",
+    "entities": [
+      "switch.nvr_record",
+      "switch.nvr_push_notifications"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Recorder with separately registered camera channels. Monitoring only."
+  },
+  {
+    "id": "reolink_front",
+    "name": "Reolink front",
+    "maker": "REOLINK",
+    "category": "Security",
+    "site": "business",
+    "entities": [
+      "camera.front_fluent",
+      "binary_sensor.front_motion",
+      "binary_sensor.front_person",
+      "binary_sensor.front_vehicle"
+    ],
+    "stage": "Registered in HA",
+    "detail": "NVR camera channel; view status and motion events."
+  },
+  {
+    "id": "reolink_back",
+    "name": "Reolink back",
+    "maker": "REOLINK",
+    "category": "Security",
+    "site": "business",
+    "entities": [
+      "camera.back_fluent",
+      "binary_sensor.back_motion",
+      "binary_sensor.back_person",
+      "binary_sensor.back_vehicle"
+    ],
+    "stage": "Registered in HA",
+    "detail": "NVR camera channel; view status and motion events."
+  },
+  {
+    "id": "reolink_front_left",
+    "name": "Reolink front left",
+    "maker": "REOLINK",
+    "category": "Security",
+    "site": "business",
+    "entities": [
+      "camera.front_left_fluent",
+      "binary_sensor.front_left_motion",
+      "binary_sensor.front_left_person",
+      "binary_sensor.front_left_vehicle"
+    ],
+    "stage": "Registered in HA",
+    "detail": "NVR camera channel; view status and motion events."
+  },
+  {
+    "id": "reolink_camera1",
+    "name": "Reolink camera1",
+    "maker": "REOLINK",
+    "category": "Security",
+    "site": "business",
+    "entities": [
+      "camera.camera1_fluent",
+      "binary_sensor.camera1_motion",
+      "binary_sensor.camera1_person",
+      "binary_sensor.camera1_vehicle"
+    ],
+    "stage": "Registered in HA",
+    "detail": "NVR camera channel; view status and motion events."
+  },
+  {
+    "id": "router",
+    "name": "Archer AX11000",
+    "maker": "TP-LINK",
+    "category": "Network",
+    "site": "business",
+    "entities": [
+      "binary_sensor.business_archer_ax11000_wan_status",
+      "sensor.archer_ax11000_download_speed",
+      "sensor.archer_ax11000_upload_speed"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Business internet connection and router throughput."
+  },
+  {
+    "id": "swann",
+    "name": "Swann NVR8-7250",
+    "maker": "SWANN",
+    "category": "Recorder",
+    "site": "business",
+    "entities": [],
+    "stage": "Integration unverified",
+    "detail": "No matching device was present in the provided Home Assistant registry; verify separately."
+  },
+  {
+    "id": "nas",
+    "name": "Synology NAS",
+    "maker": "SYNOLOGY",
+    "category": "Storage",
+    "site": "home",
+    "image": "nas.webp",
+    "entities": [],
+    "stage": "HA integration unverified",
+    "detail": "Home NAS reachable through Tailscale according to previous network setup; no corresponding device in this registry inventory.",
+    "url": "https://www.home-assistant.io/integrations/synology_dsm/"
+  },
+  {
+    "id": "thecus",
+    "name": "Thecus N6600",
+    "maker": "THECUS",
+    "category": "Storage",
+    "site": "business",
+    "entities": [],
+    "stage": "HA integration pending",
+    "detail": "Awaiting verified NAS IP address and SNMP integration."
+  },
+  {
+    "id": "power_roland_printer",
+    "name": "roland printer P115",
+    "maker": "TP-LINK",
+    "category": "Power meter",
+    "site": "business",
+    "entities": [
+      "sensor.roland_printer_current_consumption",
+      "sensor.roland_printer_today_s_consumption",
+      "sensor.roland_printer_this_month_s_consumption",
+      "sensor.roland_printer_voltage",
+      "sensor.roland_printer_current"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Read-only energy monitoring. Device power switching remains disabled in this view."
+  },
+  {
+    "id": "power_bambu_3d_printer",
+    "name": "bambu 3d printer P115",
+    "maker": "TP-LINK",
+    "category": "Power meter",
+    "site": "business",
+    "entities": [
+      "sensor.bambu_3d_printer_current_consumption",
+      "sensor.bambu_3d_printer_today_s_consumption",
+      "sensor.bambu_3d_printer_this_month_s_consumption",
+      "sensor.bambu_3d_printer_voltage",
+      "sensor.bambu_3d_printer_current"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Read-only energy monitoring. Device power switching remains disabled in this view."
+  },
+  {
+    "id": "power_xtool_s1_laser",
+    "name": "xtool s1 laser P115",
+    "maker": "TP-LINK",
+    "category": "Power meter",
+    "site": "business",
+    "entities": [
+      "sensor.xtool_s1_laser_current_consumption",
+      "sensor.xtool_s1_laser_today_s_consumption",
+      "sensor.xtool_s1_laser_this_month_s_consumption",
+      "sensor.xtool_s1_laser_voltage",
+      "sensor.xtool_s1_laser_current"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Read-only energy monitoring. Device power switching remains disabled in this view."
+  },
+  {
+    "id": "power_xtool_p2_laser",
+    "name": "xtool p2 laser P115",
+    "maker": "TP-LINK",
+    "category": "Power meter",
+    "site": "business",
+    "entities": [
+      "sensor.xtool_p2_laser_current_consumption",
+      "sensor.xtool_p2_laser_today_s_consumption",
+      "sensor.xtool_p2_laser_this_month_s_consumption",
+      "sensor.xtool_p2_laser_voltage",
+      "sensor.xtool_p2_laser_current"
+    ],
+    "stage": "Registered in HA",
+    "detail": "Read-only energy monitoring. Device power switching remains disabled in this view."
+  }
 ];
 
 export function validHaUrl(value, secureContext = true) {
