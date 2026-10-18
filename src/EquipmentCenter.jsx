@@ -21,14 +21,14 @@ function cameraImageUrl(entity, baseUrl, refresh) {
     return url.toString();
   } catch { return ''; }
 }
-function CameraPreviews({ cameraEntities, baseUrl, refresh, name }) {
+function CameraPreviews({ cameraEntities, baseUrl, refresh, name, category }) {
   if (!cameraEntities.length) return null;
   return <div className="eq-camera-stack">
     {cameraEntities.map((camera, index) => {
       const src = cameraImageUrl(camera, baseUrl, refresh);
       return <div className="eq-camera-item" key={camera.entity_id}>
         <span className="eq-camera-label">{camera.attributes?.friendly_name || (cameraEntities.length > 1 ? `Camera ${index+1}` : name)}</span>
-        {src ? <a href={`${baseUrl}/skilled-crafting/security`} target="_blank" rel="noopener noreferrer" title="Open camera in Home Assistant">
+        {src ? <a href={`${baseUrl}/skilled-crafting/${category === "Security" ? "security" : "business"}`} target="_blank" rel="noopener noreferrer" title="Open camera in Home Assistant">
           <img src={src} alt={`${name}: ${camera.attributes?.friendly_name || 'camera'} snapshot`} loading="lazy" referrerPolicy="no-referrer" />
           <span>Snapshot preview · Open live camera in Home Assistant ↗</span>
         </a> : <p className="eq-camera-unavailable">No snapshot supplied · Open the camera in Home Assistant</p>}
@@ -191,7 +191,7 @@ export default function EquipmentCenter() {
     <section className="eq-grid" aria-label="Equipment">
       {visible.map((d) => { const mainEntity = connected ? entities[entityIds(d)[0]] : null; const state = entityPresentation(mainEntity); const cameras = connected ? (d.cameraEntities || []).map((id) => entities[id]).filter(Boolean) : []; return <article className={`eq-card eq-${d.id}`} key={d.id}>
         <div className="eq-card-meta"><span>{d.category}</span><span className={`eq-status ${mainEntity ? state.kind : 'pending'}`}><i />{mainEntity ? (d.id === 'pi' ? 'Backup recorded' : state.label) : d.stage}</span></div>
-        {cameras.length ? <CameraPreviews cameraEntities={cameras} baseUrl={consoleUrl} refresh={cameraRefresh} name={d.name} /> : <div className={`eq-photo ${d.image || settings.photos[d.id] ? '' : 'eq-no-photo'}`}>{d.image || settings.photos[d.id] ? <img src={settings.photos[d.id] || `/equipment/${d.image}`} alt={`${d.name} product photograph`} loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} /> : <span aria-hidden="true">{d.cameraEntities?.length ? (connected ? "Camera unavailable" : "Connect live to view camera") : "◈"}</span>}<span className="eq-grid-mark" aria-hidden="true">+</span></div>}
+        {cameras.length ? <CameraPreviews cameraEntities={cameras} baseUrl={consoleUrl} refresh={cameraRefresh} name={d.name} category={d.category} /> : <div className={`eq-photo ${d.image || settings.photos[d.id] ? '' : 'eq-no-photo'}`}>{d.image || settings.photos[d.id] ? <img src={settings.photos[d.id] || `/equipment/${d.image}`} alt={`${d.name} product photograph`} loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} /> : <span aria-hidden="true">{d.cameraEntities?.length ? (connected ? "Camera unavailable" : "Connect live to view camera") : "◈"}</span>}<span className="eq-grid-mark" aria-hidden="true">+</span></div>}
         <div className="eq-card-body"><span className="eq-maker">{d.maker}</span><h2>{d.name}</h2><p>{d.detail}</p>
           {d.id === 'pi' && mainEntity && <div className="eq-reading"><span>Latest successful backup</span><strong>{new Date(mainEntity.state).toLocaleString()}</strong></div>}
           {connected && entityIds(d).slice(1).map((id) => entities[id] && <div className={`eq-reading ${entityPresentation(entities[id]).kind === 'warn' ? 'eq-reading-warning' : ''}`} key={id}><span>{entities[id].attributes.friendly_name}</span><strong>{entityPresentation(entities[id]).label}</strong></div>)}
