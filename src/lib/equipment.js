@@ -418,7 +418,7 @@ export function controlFor(entity, target) {
   const domain = entity?.entity_id?.split('.')[0];
   if (!['switch', 'light', 'fan'].includes(domain) || !['on', 'off'].includes(target)) return null;
   if (['unknown', 'unavailable'].includes(entity.state)) return null;
-  if (/xtool|laser|roland|bn2/i.test(`${entity.entity_id} ${entity.attributes?.friendly_name || ''}`)) return null;
+  if (/xtool|laser|roland|bn2|bambu|3d.printer|printer|reolink|nvr|record|camera/i.test(`${entity.entity_id} ${entity.attributes?.friendly_name || ''}`)) return null;
   return { domain, service: target === 'on' ? 'turn_on' : 'turn_off', target: { entity_id: entity.entity_id } };
 }
 
