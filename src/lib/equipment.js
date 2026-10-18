@@ -353,13 +353,21 @@ export const equipment = [
   },
   {
     "id": "thecus",
-    "name": "Thecus N6600",
+    "name": "Thecus N5500",
     "maker": "THECUS",
     "category": "Storage",
     "site": "business",
-    "entities": [],
-    "stage": "HA integration pending",
-    "detail": "Awaiting verified NAS IP address and SNMP integration."
+    "address": "192.168.1.100",
+    "entities": [
+      "sensor.thecus_n5500_data_capacity",
+      "sensor.thecus_n5500_data_used",
+      "sensor.thecus_n5500_uptime",
+      "sensor.thecus_n5500_network_received",
+      "sensor.thecus_n5500_network_sent"
+    ],
+    "stage": "SNMP monitoring active",
+    "detail": "Read-only live SNMP monitoring. RAID 5 with five disks was manually confirmed healthy on October 18, 2026; there is no live disk or RAID health sensor. Storage usage reflects the /raid0/data filesystem.",
+    "url": "https://192.168.1.100/"
   },
   {
     "id": "power_roland_printer",
