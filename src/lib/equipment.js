@@ -1,5 +1,5 @@
 export const BUSINESS_HA = 'http://100.117.18.123:8123';
-export const MAC_DESKTOP = 'vnc://100.117.18.123:15900';
+export const MAC_DESKTOP = 'vnc://100.106.153.72:5900';
 export const PI_DESKTOP = 'https://connect.raspberrypi.com/devices/e0cfb85e-f7f4-4c2b-b4e3-5267dd2dd017/screen-sharing-session';
 export const PRIVATE_HA = 'https://scshoppi.tail934ae0.ts.net';
 export const equipment = [
