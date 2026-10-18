@@ -130,16 +130,16 @@ export default function EquipmentCenter() {
 
   const visible = equipment.filter((d) => d.site === site && `${d.name} ${d.category} ${d.maker}`.toLowerCase().includes(query.toLowerCase()));
   const switches = Object.values(entities).filter((e) => controlFor(e, 'on'));
-  const consoleUrl = settings.haUrl || BUSINESS_HA;
-  const entityIds = (d) => settings.mappings[d.id] ? [settings.mappings[d.id]] : d.entities;
+  const consoleUrl = settings.haUrl || PRIVATE_HA;
+  const entityIds = (d) => settings.mappings[d.id] ? [settings.mappings[d.id], ...d.entities.filter((id) => id !== settings.mappings[d.id])] : d.entities;
 
   return <main className={`equipment-center ${shopDisplay ? 'equipment-shop-display' : ''} ${tvMode ? 'equipment-tv-mode' : ''}`}>
     {shopDisplay && <section className="eq-display-bar" aria-label="Equipment display controls"><h1>Equipment {tvMode ? 'TV' : 'Touch'}</h1><Link to="/shop-tv">Production display</Link><button className="eq-button" onClick={() => setTvMode(!tvMode)}>{tvMode ? 'Use touch controls' : 'Use TV view'}</button><button className="eq-button" onClick={() => setKiosk(!kiosk)}>{kiosk ? 'Exit kiosk' : 'Full screen layout'}</button></section>}
     <header className="eq-hero">
       <div><p className="eq-kicker">SKILLED CRAFTING / CONNECTED WORKSHOP</p><h1>Mission control<span>.</span></h1><p>Your machines. Your spaces. One place to connect.</p>
-        <div className="eq-hero-actions"><External className="eq-button primary" href={`${consoleUrl}/skilled-crafting/${site}`}>Open Home Assistant</External><button className="eq-button" onClick={() => setEditing(!editing)}>Connection settings</button></div>
+        <div className="eq-hero-actions"><External className="eq-button primary" href={`${consoleUrl}/skilled-crafting/${site}`}>Open Home Assistant</External><button className="eq-button" onClick={() => setEditing(!editing)}>Connection settings</button></div><p className="eq-remote-help">Away from home or the shop? Connect Tailscale on this device first, then sign in to Home Assistant. On a phone, use the private HTTPS address in your browser or Home Assistant Companion app. No router port forwarding is required.</p>
       </div>
-      <div className="eq-network" aria-label="Connection diagram"><div className="eq-network-node">HOME<span>Tailscale client</span></div><div className="eq-network-path"><i />PRIVATE CONNECTION<i /></div><div className="eq-network-node">BUSINESS<span>Pi · Mac · Equipment</span></div><small>Both locations currently use the same LAN range. Home discovery awaits a visit.</small></div>
+      <div className="eq-network" aria-label="Connection diagram"><div className="eq-network-node">HOME<span>Tailscale client</span></div><div className="eq-network-path"><i />PRIVATE CONNECTION<i /></div><div className="eq-network-node">BUSINESS<span>Pi · Mac · Equipment</span></div><small>Business and home networks are linked privately over Tailscale. Remote devices require their own Tailscale connection.</small></div>
     </header>
     <section className="eq-telemetry" aria-label="Connection status">
       <div><span className={`eq-dot ${connected ? 'good' : ''}`} /><strong>{connected ? (site === 'business' ? 'Live Home Assistant' : 'Business hub connected') : 'Live data not connected'}</strong><small>{lastUpdate ? `Received ${lastUpdate.toLocaleTimeString()}` : 'Connect to see current device states'}</small></div>
@@ -155,7 +155,7 @@ export default function EquipmentCenter() {
       <External href="ssh://mcdanielm@100.117.18.123"><span className="eq-icon">›_</span><div><strong>Pi terminal</strong><small>Open SSH · Tailscale required</small></div></External>
     </nav>
     <div className="eq-toolbar"><div className="eq-tabs" role="group" aria-label="Location"><button aria-pressed={site === 'business'} onClick={() => setSite('business')}>Business workshop</button><button aria-pressed={site === 'home'} onClick={() => setSite('home')}>Home</button></div><label><span className="sr-only">Find equipment</span><input type="search" placeholder="Find equipment…" value={query} onChange={(e) => setQuery(e.target.value)} /></label></div>
-    {site === 'home' && <p className="eq-notice">Home discovery is pending. Your laptop is currently on a different network. The Synology is listed from your earlier setup; its current connection has not been verified.</p>}
+    {site === 'home' && <p className="eq-notice">Home devices are displayed according to recorded equipment mappings. Verify the device location and live sensor state before relying on it. Home NAS health monitoring is still pending.</p>}
     <section className="eq-grid" aria-label="Equipment">
       {visible.map((d) => { const mainEntity = connected ? entities[entityIds(d)[0]] : null; const state = entityPresentation(mainEntity); return <article className={`eq-card eq-${d.id}`} key={d.id}>
         <div className="eq-card-meta"><span>{d.category}</span><span className={`eq-status ${mainEntity ? state.kind : 'pending'}`}><i />{mainEntity ? (d.id === 'pi' ? 'Backup recorded' : state.label) : d.stage}</span></div>
