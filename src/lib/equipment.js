@@ -59,7 +59,11 @@ export const equipment = [
       "sensor.xtool_p2_laser_today_s_consumption"
     ],
     "stage": "Registered in HA",
-    "detail": "Machine status, cooling and water monitoring plus P115 consumption. No remote laser operation."
+    "detail": "Machine status, cooling and water monitoring plus P115 consumption. No remote laser operation.",
+    "cameraEntities": [
+      "camera.business_tool_p2_overview_camera",
+      "camera.business_tool_p2_close_up_camera"
+    ]
   },
   {
     "id": "sawgrass",
@@ -115,7 +119,10 @@ export const equipment = [
       "sensor.bambu_3d_printer_today_s_consumption"
     ],
     "stage": "Registered in HA",
-    "detail": "3D-printing telemetry and dedicated power plug. Existing entity IDs include home_ prefixes; confirm device location before moving dashboard groups."
+    "detail": "3D-printing telemetry and dedicated power plug. Existing entity IDs include home_ prefixes; confirm device location before moving dashboard groups.",
+    "cameraEntities": [
+      "camera.home_bambu_h2c_printer_camera"
+    ]
   },
   {
     "id": "ams1",
@@ -217,7 +224,10 @@ export const equipment = [
       "binary_sensor.business_entry_animal"
     ],
     "stage": "Registered in HA",
-    "detail": "Direct-network RLC-520A; Home Assistant integration reconfigured after DHCP address change."
+    "detail": "Direct-network RLC-520A; Home Assistant integration reconfigured after DHCP address change.",
+    "cameraEntities": [
+      "camera.business_entry_fluent"
+    ]
   },
   {
     "id": "nvr",
@@ -246,7 +256,10 @@ export const equipment = [
       "binary_sensor.front_vehicle"
     ],
     "stage": "Registered in HA",
-    "detail": "NVR camera channel; view status and motion events."
+    "detail": "NVR camera channel; view status and motion events.",
+    "cameraEntities": [
+      "camera.front_fluent"
+    ]
   },
   {
     "id": "reolink_back",
@@ -261,7 +274,10 @@ export const equipment = [
       "binary_sensor.back_vehicle"
     ],
     "stage": "Registered in HA",
-    "detail": "NVR camera channel; view status and motion events."
+    "detail": "NVR camera channel; view status and motion events.",
+    "cameraEntities": [
+      "camera.back_fluent"
+    ]
   },
   {
     "id": "reolink_front_left",
@@ -276,7 +292,10 @@ export const equipment = [
       "binary_sensor.front_left_vehicle"
     ],
     "stage": "Registered in HA",
-    "detail": "NVR camera channel; view status and motion events."
+    "detail": "NVR camera channel; view status and motion events.",
+    "cameraEntities": [
+      "camera.front_left_fluent"
+    ]
   },
   {
     "id": "reolink_camera1",
@@ -291,7 +310,10 @@ export const equipment = [
       "binary_sensor.camera1_vehicle"
     ],
     "stage": "Registered in HA",
-    "detail": "NVR camera channel; view status and motion events."
+    "detail": "NVR camera channel; view status and motion events.",
+    "cameraEntities": [
+      "camera.camera1_fluent"
+    ]
   },
   {
     "id": "router",
