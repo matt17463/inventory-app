@@ -7,6 +7,36 @@ import { BUSINESS_HA, PRIVATE_HA, PI_DESKTOP, MAC_DESKTOP, controlFor, entityPre
 import './EquipmentCenter.css';
 
 const defaultSettings = { haUrl: PRIVATE_HA, photos: {}, mappings: {} };
+function cameraImageUrl(entity, baseUrl, refresh) {
+  if (!entity?.entity_id?.startsWith('camera.') || !entity.attributes?.entity_picture) return '';
+  if (['unknown', 'unavailable'].includes(entity.state)) return '';
+  try {
+    const base = new URL(baseUrl);
+    const path = entity.attributes.entity_picture;
+    if (typeof path !== 'string' || !path.startsWith('/api/camera_proxy/')) return '';
+    const url = new URL(path, base);
+    if (url.origin !== base.origin || url.pathname !== '/api/camera_proxy/' + entity.entity_id) return '';
+    // Retain Home Assistant's short-lived signed token, if provided.
+    url.searchParams.set('_sc_snapshot', String(refresh));
+    return url.toString();
+  } catch { return ''; }
+}
+function CameraPreviews({ cameraEntities, baseUrl, refresh, name }) {
+  if (!cameraEntities.length) return null;
+  return <div className="eq-camera-stack">
+    {cameraEntities.map((camera, index) => {
+      const src = cameraImageUrl(camera, baseUrl, refresh);
+      return <div className="eq-camera-item" key={camera.entity_id}>
+        <span className="eq-camera-label">{camera.attributes?.friendly_name || (cameraEntities.length > 1 ? `Camera ${index+1}` : name)}</span>
+        {src ? <a href={`${baseUrl}/skilled-crafting/security`} target="_blank" rel="noopener noreferrer" title="Open camera in Home Assistant">
+          <img src={src} alt={`${name}: ${camera.attributes?.friendly_name || 'camera'} snapshot`} loading="lazy" referrerPolicy="no-referrer" />
+          <span>Snapshot preview · Open live camera in Home Assistant ↗</span>
+        </a> : <p className="eq-camera-unavailable">No snapshot supplied · Open the camera in Home Assistant</p>}
+      </div>;
+    })}
+  </div>;
+}
+
 function External({ href, children, ...props }) {
   return <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer" {...props}>{children}<span aria-hidden="true"> ↗</span></a>;
 }
@@ -31,8 +61,10 @@ export default function EquipmentCenter() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [cameraRefresh, setCameraRefresh] = useState(0);
   const [confirmation, setConfirmation] = useState(null);
   const [selected, setSelected] = useState(null);
+  useEffect(() => { if (!connected) return undefined; const id = window.setInterval(() => setCameraRefresh((n) => n + 1), 20000); return () => window.clearInterval(id); }, [connected]);
   const connection = useRef(null);
   const auth = useRef(null);
   const unsubscribe = useRef(null);
@@ -157,9 +189,9 @@ export default function EquipmentCenter() {
     <div className="eq-toolbar"><div className="eq-tabs" role="group" aria-label="Location"><button aria-pressed={site === 'business'} onClick={() => setSite('business')}>Business workshop</button><button aria-pressed={site === 'home'} onClick={() => setSite('home')}>Home</button></div><label><span className="sr-only">Find equipment</span><input type="search" placeholder="Find equipment…" value={query} onChange={(e) => setQuery(e.target.value)} /></label></div>
     {site === 'home' && <p className="eq-notice">Home devices are displayed according to recorded equipment mappings. Verify the device location and live sensor state before relying on it. Home NAS health monitoring is still pending.</p>}
     <section className="eq-grid" aria-label="Equipment">
-      {visible.map((d) => { const mainEntity = connected ? entities[entityIds(d)[0]] : null; const state = entityPresentation(mainEntity); return <article className={`eq-card eq-${d.id}`} key={d.id}>
+      {visible.map((d) => { const mainEntity = connected ? entities[entityIds(d)[0]] : null; const state = entityPresentation(mainEntity); const cameras = connected ? (d.cameraEntities || []).map((id) => entities[id]).filter(Boolean) : []; return <article className={`eq-card eq-${d.id}`} key={d.id}>
         <div className="eq-card-meta"><span>{d.category}</span><span className={`eq-status ${mainEntity ? state.kind : 'pending'}`}><i />{mainEntity ? (d.id === 'pi' ? 'Backup recorded' : state.label) : d.stage}</span></div>
-        <div className={`eq-photo ${d.image || settings.photos[d.id] ? '' : 'eq-no-photo'}`}>{d.image || settings.photos[d.id] ? <img src={settings.photos[d.id] || `/equipment/${d.image}`} alt={`${d.name} product photograph`} loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} /> : <span aria-hidden="true">◈</span>}<span className="eq-grid-mark" aria-hidden="true">+</span></div>
+        {cameras.length ? <CameraPreviews cameraEntities={cameras} baseUrl={consoleUrl} refresh={cameraRefresh} name={d.name} /> : <div className={`eq-photo ${d.image || settings.photos[d.id] ? '' : 'eq-no-photo'}`}>{d.image || settings.photos[d.id] ? <img src={settings.photos[d.id] || `/equipment/${d.image}`} alt={`${d.name} product photograph`} loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} /> : <span aria-hidden="true">{d.cameraEntities?.length ? (connected ? "Camera unavailable" : "Connect live to view camera") : "◈"}</span>}<span className="eq-grid-mark" aria-hidden="true">+</span></div>}
         <div className="eq-card-body"><span className="eq-maker">{d.maker}</span><h2>{d.name}</h2><p>{d.detail}</p>
           {d.id === 'pi' && mainEntity && <div className="eq-reading"><span>Latest successful backup</span><strong>{new Date(mainEntity.state).toLocaleString()}</strong></div>}
           {connected && entityIds(d).slice(1).map((id) => entities[id] && <div className={`eq-reading ${entityPresentation(entities[id]).kind === 'warn' ? 'eq-reading-warning' : ''}`} key={id}><span>{entities[id].attributes.friendly_name}</span><strong>{entityPresentation(entities[id]).label}</strong></div>)}
