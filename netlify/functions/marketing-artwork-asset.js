@@ -3,7 +3,8 @@ import sharp from "sharp";
 import {GetObjectCommand,PutObjectCommand} from "@aws-sdk/client-s3";
 import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {authorizeEmployee,jsonResponse} from "./_shared/security.js";
-import {r2Client,r2BucketName,defaultMockupStorageProvider} from "./_shared/mockupStorage.js";
+import {r2Client,r2BucketName} from "./_shared/mockupStorage.js";
+import {operationalStorageProvider} from "./_shared/operationalStorage.js";
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||""));
 const mimeExt={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
 const response=(status,payload,event)=>{const r=jsonResponse(status,payload,event);return {...r,headers:{...r.headers,"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer"}}};
@@ -13,7 +14,7 @@ export async function handler(event){
  const auth=await authorizeEmployee(event,{functionName:"marketing-artwork-asset",allowedRoles:["admin","manager","operator","marketing"]});
  if(!auth.ok)return response(auth.statusCode,{message:auth.message},event);
  try{
-  defaultMockupStorageProvider();
+  operationalStorageProvider();
   const body=event.httpMethod==="POST"?JSON.parse(event.body||"{}"):event.queryStringParameters||{};
   const accountId=String(body.account_id||"");
   if(!uuid(accountId))return response(400,{message:"Select a valid CRM organization."},event);
