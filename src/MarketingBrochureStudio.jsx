@@ -39,7 +39,7 @@ export default function MarketingBrochureStudio({organizations=[]}){
    if(!growthWriteAllowed()){setMessage("Training mode: no client brochure saved.");return;}
    let storedArtwork=null;
    if(logo){
-    const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(logo);
+    const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(logo);
     if(!match)throw Error("Invalid client logo image.");
     const upload=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:client.id,mime_type:match[1],base64:match[2]})});
     const value=await upload.json();if(!upload.ok||!value.asset)throw Error(value.message||"R2 artwork upload failed.");
