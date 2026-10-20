@@ -33,7 +33,7 @@ export default function MarketingClientReview(){
   <p>SKILLED CRAFTING · CLIENT REVIEW</p><h1>{document?.title||"Document review"}</h1>
   {message&&<p role="status">{message}</p>}
   {document&&<><p>Draft for your review. Reviewing does not place an order or approve production.</p>
-   <h2>{document.content.organization}</h2><p style={{whiteSpace:"pre-wrap"}}>{document.content.description}</p>
+   <h2>{document.content.organization}</h2>{document.content.logo_url&&<img src={document.content.logo_url} alt="Client artwork for concept review" style={{maxWidth:280,maxHeight:260,objectFit:"contain",display:"block",margin:"16px 0"}}/>}<p style={{whiteSpace:"pre-wrap"}}>{document.content.description}</p>
    <p>{document.content.style}</p><p>Sizes: {document.content.sizes||"To be confirmed"}</p>
    <p>Colors: {document.content.productColors||"To be confirmed"}</p>
    <h3>Suggested brand colors</h3><div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
