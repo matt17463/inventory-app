@@ -81,6 +81,7 @@ const SampleInventory = lazy(() => import('./SampleInventory'));
 const ScanInventory = lazy(() => import('./ScanInventory'));
 const CatalogWorkbench = lazy(() => import('./CatalogWorkbench'));
 const MarketingWorkspace = lazy(() => import('./MarketingWorkspace'));
+const MarketingClientReview = lazy(() => import('./MarketingClientReview'));
 const ShopTvMode = lazy(() => import('./ShopTvMode'));
 const SpoilageTracking = lazy(() => import('./SpoilageTracking'));
 const SupplierCatalogImport = lazy(() => import('./SupplierCatalogImport'));
@@ -220,6 +221,7 @@ export default function App() {
           <Route path="/customer-portal" element={<CustomerPortal />} />
           <Route path="/team-order" element={<PublicClientOrderForm />} />
           <Route path="/mockup-review" element={<MockupCustomerReview />} />
+          <Route path="/marketing-review" element={<MarketingClientReview />} />
           <Route
             path="*"
             element={(

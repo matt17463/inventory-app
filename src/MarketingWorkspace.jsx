@@ -21,12 +21,14 @@ import {
   defaultGrowthPricing,
   calculateGrowthPricing,
   suggestedGrowthRetail,
+  applyGrowthPricingRule,
   escapeGrowthHtml,
   growthCsv,
   safeGrowthUrl,
   parseGrowthCsv,
 } from "./lib/growthPricing";
 import "./MarketingWorkspace.css";
+import MarketingDocumentStudio from "./MarketingDocumentStudio";
 
 const label = (v) => String(v || "").replaceAll("_", " ");
 const money = (v) =>
@@ -304,9 +306,12 @@ function PricingEditor({
     [ruleId, setRuleId] = useState("");
   useEffect(() => {
     growthPricingRules()
-      .then(setRules)
+      .then((available) => {
+        setRules(available);
+        if (!proposal && !initial && available.length) setRuleId(String(available[0].id));
+      })
       .catch(() => {});
-  }, []);
+  }, [proposal, initial]);
   const change = (k, v) => setForm((s) => ({ ...s, [k]: v }));
   const changeLine = (i, k, v) =>
     setForm((s) => ({
@@ -322,24 +327,9 @@ function PricingEditor({
   function applyRule() {
     const r = rules.find((x) => String(x.id) === ruleId);
     if (!r) return;
-    setForm((s) => ({
-      ...s,
-      lines: s.lines.map((l) => ({
-        ...l,
-        decoration_cost: r.decoration_cost,
-        setup_fee: r.setup_fee,
-        retail_price:
-          r.base_price > 0
-            ? r.base_price
-            : (
-                (Number(l.unit_cost) +
-                  Number(l.labor_cost) +
-                  Number(l.other_cost) +
-                  r.decoration_cost +
-                  r.setup_fee / Number(l.quantity || 1)) *
-                r.markup_multiplier
-              ).toFixed(2),
-      })),
+    setForm((current) => ({
+      ...current,
+      lines: current.lines.map((line) => applyGrowthPricingRule(line, r)),
     }));
   }
   return (
@@ -392,7 +382,7 @@ function PricingEditor({
             value={ruleId}
             onChange={(e) => setRuleId(e.target.value)}
           >
-            <option value="">Use existing pricing rules</option>
+            <option value="">Select existing pricing rule</option>
             {rules.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.rule_name}
@@ -1050,7 +1040,7 @@ export default function MarketingWorkspace() {
         ))}
       </div>
       <nav className="growth-actions" aria-label="Marketing sections">
-        {["pipeline", "clients", "materials", "follow_ups", "reports"].map(
+        {["pipeline", "clients", "materials", "document_studio", "follow_ups", "reports"].map(
           (v) => (
             <button
               key={v}
@@ -1118,6 +1108,7 @@ export default function MarketingWorkspace() {
           </label>
         </div>
       </section>
+      {view === "document_studio" && <MarketingDocumentStudio organizations={accounts} manager={manager} />}
       {view === "pipeline" && (
         <>
           <section className="sc-panel">
@@ -1778,6 +1769,18 @@ export default function MarketingWorkspace() {
                         Due {s.due_date || "—"}
                       </p>
                       <p>{s.notes}</p>
+                      <p>Production review: {s.production_review_status || "pending"}</p>
+                      {manager && (!s.production_review_status || s.production_review_status==="pending") && (
+                        <button type="button" className="sc-btn" disabled={busy}
+                          onClick={()=>run(async()=>{
+                            const result=await growthRpc("sc_growth_review_sample_v1",{
+                              p_sample_id:s.id,p_decision:"approved",p_note:null
+                            });
+                            if(!result?.simulated){await refresh();setMessage("Sample sent to production review; no stock changed.");}
+                            return result;
+                          })}>Approve sample for production review</button>
+                      )}
+
                       {canWrite && (
                         <>
                           <button
