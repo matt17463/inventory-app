@@ -6,6 +6,7 @@ import { escapeGrowthHtml } from "./lib/growthPricing";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
 import { generateMarketingDraft } from "./lib/marketingAI";
+import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
 export default function MarketingDocumentStudio({ organizations = [], manager = false }) {
@@ -15,6 +16,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [saving, setSaving] = useState(false);
   const [savedDrafts, setSavedDrafts] = useState([]);
   const [saveStatus, setSaveStatus] = useState("");
+  const [reviewLink,setReviewLink]=useState("");
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
   const [colors, setColors] = useState("");
@@ -44,6 +46,19 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       });
     return () => { active=false; };
   },[accountId]);
+  async function createReviewLink(document) {
+    try {
+      if(!manager) throw Error("Manager role required.");
+      const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-review-link",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({document_id:document.id})
+      });
+      const result=await response.json();
+      if(!response.ok) throw Error(result.message||"Unable to create link.");
+      const url=new URL("/marketing-review?token="+encodeURIComponent(result.token),window.location.origin).toString();
+      setReviewLink(url);setSaveStatus("Private client review link created. Expires in seven days.");
+    } catch(error) {setError(error.message);}
+  }
   async function approveDocument(document) {
     try {
       if(!manager) throw Error("Manager permission required.");
@@ -193,10 +208,11 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <button type="button" className="sc-btn" disabled={aiBusy || !organization.trim() || !description.trim()} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
       <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
     {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
+    {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
-      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}</li>)}</ul> :
+      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</div>}
     {guide && <article className="growth-subcard" aria-live="polite"><h3>{guide.organization} — Draft {marketingTemplates.find(t=>t.id===guide.template)?.label}</h3>
       {guide.logo && <img src={guide.logo} alt="Client draft logo" style={{maxWidth:160,maxHeight:160,objectFit:"contain"}}/>}
