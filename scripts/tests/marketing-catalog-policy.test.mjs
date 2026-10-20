@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { marketingSuppliers, marketingTemplates, brandGuideProfiles,
-  normalizeSupplierOffer, suggestedBrandGuide, hexToPrintColor } from "../../src/lib/marketingCatalogPolicy.js";
+  normalizeSupplierOffer, suggestedBrandGuide, hexToPrintColor, normalizeMarketingCatalogItem, compareMarketingOffers } from "../../src/lib/marketingCatalogPolicy.js";
 test("supplier cost source is account wholesale only at S&S and SanMar", () => {
   assert.equal(marketingSuppliers.sanmar.cost_source, "account_wholesale");
   assert.equal(marketingSuppliers.ssactivewear.cost_source, "account_wholesale");
