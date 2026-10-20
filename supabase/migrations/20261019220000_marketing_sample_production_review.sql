@@ -23,7 +23,7 @@ begin
  if p_decision='approved' then
    insert into public.sc_growth_tasks(opportunity_id,task_key,title,department,status,notes)
    values(s.opportunity_id,'sample-production-'||s.id::text,
-     'Review and create production job for marketing sample: '||s.description,'production','open',
+     left('Review and create production job for marketing sample: '||s.description,300),'production','open',
      'Approved marketing sample '||s.id::text||'; quantity '||s.quantity||
      '. A production operator must verify blank/style/color, decoration, artwork and stock before creating any job.')
    on conflict(opportunity_id,task_key) do nothing;
