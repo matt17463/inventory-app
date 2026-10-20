@@ -16,3 +16,9 @@ test("store concept explicitly omits working checkout",()=>{
  assert.match(source,/NOT A LIVE STORE/);
  assert.match(source,/No checkout, live orders or product availability implied/);
 });
+
+test("imported catalog selection retains matching supplier",()=>{
+ const source=fetchText("../../src/MarketingSupplierCompare.jsx");
+ assert.match(source,/setSupplier\(Object\.keys\(marketingSuppliers\)/);
+ assert.match(source,/p\.supplier_name/);
+});
