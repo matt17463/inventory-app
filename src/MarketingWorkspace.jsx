@@ -1,3 +1,4 @@
+import MarketingProspectDiscovery from "./MarketingProspectDiscovery";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -1040,7 +1041,7 @@ export default function MarketingWorkspace() {
         ))}
       </div>
       <nav className="growth-actions" aria-label="Marketing sections">
-        {["pipeline", "clients", "materials", "document_studio", "follow_ups", "reports"].map(
+        {["pipeline", "clients", "materials", "document_studio", "ai_prospects", "follow_ups", "reports"].map(
           (v) => (
             <button
               key={v}
@@ -1109,6 +1110,7 @@ export default function MarketingWorkspace() {
         </div>
       </section>
       {view === "document_studio" && <MarketingDocumentStudio organizations={accounts} manager={manager} />}
+      {view === "ai_prospects" && <MarketingProspectDiscovery />}
       {view === "pipeline" && (
         <>
           <section className="sc-panel">
