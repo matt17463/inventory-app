@@ -42,8 +42,21 @@ export function suggestedBrandGuide(segment, colors = []) {
   const profile = brandGuideProfiles[segment] || brandGuideProfiles.business;
   if (!Array.isArray(colors) || colors.some(c => !/^#[0-9a-f]{6}$/i.test(c))) throw Error("Use six-digit HEX colors.");
   return { profile: profile.title, colors: [...new Set(colors.map(c => c.toUpperCase()))],
+    color_details: [...new Set(colors.map(c => c.toUpperCase()))].map(hexToPrintColor),
     placements: [...profile.placements], variants: [...profile.variants],
     typography: "Suggested font families require owner review; do not assert an exact font match from a logo image.",
     printing: "CMYK depends on the output color profile. Pantone matches are approximations requiring licensed reference and physical verification.",
     approval_required: true };
+}
+
+/** Device-independent approximate CMYK starting point, not a press ICC conversion. */
+export function hexToPrintColor(hex) {
+  if (!/^#[a-f0-9]{6}$/i.test(hex)) throw Error("Expected six digit HEX.");
+  const [r,g,b] = [1,3,5].map(index => parseInt(hex.slice(index,index+2),16));
+  const k = 1-Math.max(r,g,b)/255;
+  const c = k === 1 ? 0 : (1-r/255-k)/(1-k);
+  const m = k === 1 ? 0 : (1-g/255-k)/(1-k);
+  const y = k === 1 ? 0 : (1-b/255-k)/(1-k);
+  return { hex: hex.toUpperCase(), rgb: {r,g,b}, cmyk_approx: {c,m,y,k},
+    note: "Mathematical CMYK estimate only. Use an ICC profile and printed proof for production." };
 }
