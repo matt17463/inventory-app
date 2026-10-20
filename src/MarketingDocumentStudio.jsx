@@ -102,8 +102,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   function uploadLogo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5_000_000) {
-      setError("Choose a PNG, JPEG or WebP logo smaller than 5 MB."); return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 2_500_000) {
+      setError("Choose a PNG, JPEG or WebP logo smaller than 2.5 MB."); return;
     }
     const reader = new FileReader();
     reader.onload = () => {
