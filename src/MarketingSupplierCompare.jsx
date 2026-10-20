@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { compareMarketingOffers, marketingSuppliers } from "./lib/marketingCatalogPolicy";
 
 /** Manual supplier comparisons: verified entered costs only, not a live supplier feed. */
 export default function MarketingSupplierCompare({ onChoose }) {
   const [entries,setEntries] = useState([]);
+  const [feeds,setFeeds] = useState([]);
+  useEffect(()=>{let active=true;authenticatedFunctionFetch("/.netlify/functions/marketing-supplier-feed-status").then(r=>r.json()).then(p=>{if(active)setFeeds(p.feeds||[]);}).catch(()=>{});return ()=>{active=false;};},[]);
   const [supplier,setSupplier] = useState("sanmar");
   const [sku,setSku] = useState("");
   const [name,setName] = useState("");
@@ -39,6 +41,7 @@ export default function MarketingSupplierCompare({ onChoose }) {
   return <section className="growth-subcard">
     <h3>Compare supplier options</h3>
     <p>Enter products and source-checked prices to compare estimated purchasing cost. Stock and sizes must be checked with the supplier before placing an order. This does not query supplier websites.</p>
+    <div className="growth-card-grid">{feeds.map(f=><div className="growth-subcard" key={f.supplier}><strong>{f.supplier}</strong><p>{f.configured?"Feed configured":"Feed not configured"} · {f.status}</p><small>{f.last_sync_at?"Last import: "+new Date(f.last_sync_at).toLocaleString():"No recorded import"} · {f.source}. Live prices and stock not verified.</small></div>)}</div>
     <div className="growth-actions"><input aria-label="Search existing supplier catalog" value={catalogQuery} onChange={e=>setCatalogQuery(e.target.value)} placeholder="Search existing supplier SKUs, brands or styles"/><button type="button" className="sc-btn" disabled={searchBusy||catalogQuery.trim().length<2} onClick={searchCatalog}>{searchBusy?"Searching…":"Search catalog"}</button></div>
     {catalogRows.length>0 && <div className="growth-search-results">{catalogRows.map((p,i)=><button type="button" key={i} onClick={()=>{setSupplier(Object.keys(marketingSuppliers).find(key=>marketingSuppliers[key].name.toLowerCase()===String(p.supplier_name||"").toLowerCase())||supplier);setName(p.description||[p.brand,p.style].filter(Boolean).join(" "));setSku(p.supplier_sku||"");setSizes(p.size||"");setColors(p.color||"");setMessage("Confirm the supplier and obtain a current source-verified price before comparison. The imported catalog does not establish availability.");}}>{p.supplier_name} · {p.brand} {p.style} · {p.color} / {p.size} · {p.supplier_sku}</button>)}</div>}
     <form onSubmit={add}>

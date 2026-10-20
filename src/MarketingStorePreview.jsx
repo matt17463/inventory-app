@@ -1,4 +1,5 @@
 import { useState } from "react";
+import MarketingProductMockup from "./MarketingProductMockup";
 import { escapeGrowthHtml } from "./lib/growthPricing";
 
 /** Concept only: intentionally no checkout or order placement. */
@@ -18,6 +19,8 @@ export default function MarketingStorePreview({ organization, logo, products = [
     <div className="growth-grid"><label className="growth-field"><span>Headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)}/></label><label className="growth-field"><span>Introduction</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)}/></label></div>
     <div style={{background:primary,color:"#fff",padding:24,borderRadius:12,textAlign:"center"}}><small>CONCEPT — NOT LIVE</small><h2>{organization||"Client Store"}</h2>{logo&&<img src={logo} alt="Client logo" style={{maxHeight:110,maxWidth:150,objectFit:"contain"}}/>}<h3>{headline}</h3><p>{subtitle}</p></div>
     <div className="growth-card-grid">{products.length?products.map((p,i)=><article className="growth-subcard" key={i}><strong>{p.name||p.description||"Product"}</strong><p>Mockup pending approval</p><small>Price and sizes must be verified</small></article>):<p>Select products in a product guide to complete this concept.</p>}</div>
+    <MarketingProductMockup artwork={logo}/>
+    <p>For a textured, perspective-aware or AI-assisted rendering, continue in <a href="/mockup-studio">Mockup Studio</a> using the same licensed blank photograph and approved artwork. A flat composite is a positioning proof, not a final production simulation.</p>
     <button type="button" className="sc-btn" onClick={exportConcept}>Download concept HTML</button>
   </section>;
 }

@@ -22,3 +22,17 @@ test("imported catalog selection retains matching supplier",()=>{
  assert.match(source,/setSupplier\(Object\.keys\(marketingSuppliers\)/);
  assert.match(source,/p\.supplier_name/);
 });
+
+test("supplier readiness does not expose credentials or invent live prices",()=>{
+ const src=fetchText("../../netlify/functions/marketing-supplier-feed-status.js");
+ assert.match(src,/pricing_live:false/);
+ assert.match(src,/supplier_catalog_feeds/);
+ assert.doesNotMatch(src,/http_headers|feed_url|unit_cost/);
+});
+test("mockup editor combines the original product photo and artwork with canvas export",()=>{
+ const src=fetchText("../../src/MarketingProductMockup.jsx");
+ assert.match(src,/ctx\.drawImage\(blank/);
+ assert.match(src,/ctx\.drawImage\(logo/);
+ assert.match(src,/toDataURL\("image\/png"\)/);
+ assert.match(fetchText("../../src/MarketingStorePreview.jsx"),/MarketingProductMockup/);
+});
