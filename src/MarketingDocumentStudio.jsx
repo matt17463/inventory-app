@@ -4,6 +4,7 @@ import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
 import { escapeGrowthHtml } from "./lib/growthPricing";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
+import MarketingStorePreview from "./MarketingStorePreview";
 import { generateMarketingDraft } from "./lib/marketingAI";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
@@ -175,6 +176,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
     {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
+    {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
       <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</div>}
