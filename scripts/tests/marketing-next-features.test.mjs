@@ -47,3 +47,11 @@ test("AI prospect search requires employee role and live web research",()=>{
  assert.match(ui,/Find prospective clients/);
  assert.match(fetchText("../../src/MarketingWorkspace.jsx"),/ai_prospects/);
 });
+
+test("research leads require human CRM save, deduplication, and safe training-mode write",()=>{
+ const component=fetchText("../../src/MarketingProspectDiscovery.jsx");
+ assert.match(component,/saveGrowthRecord\("accounts"/);
+ assert.match(component,/sc_growth_accounts/);
+ assert.match(component,/Save prospect to CRM/);
+ assert.match(component,/Training mode/);
+});
