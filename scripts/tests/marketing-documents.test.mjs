@@ -24,3 +24,7 @@ test("supplier comparison selection populates supplier and product fields", () =
  assert.match(component,/setSku\(item\.sku\)/);
  assert.match(component,/setUnitCost\(String\(item\.unit_cost\)\)/);
 });
+
+test("saved document titles respect database length limit",()=>{
+ assert.match(component,/title: \(guide\.organization \+ " — " \+ template\)\.slice\(0, 200\)/);
+});
