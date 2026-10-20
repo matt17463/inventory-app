@@ -60,3 +60,26 @@ export function hexToPrintColor(hex) {
   return { hex: hex.toUpperCase(), rgb: {r,g,b}, cmyk_approx: {c,m,y,k},
     note: "Mathematical CMYK estimate only. Use an ICC profile and printed proof for production." };
 }
+
+/** Catalog import accepts only documented, explicitly verified data. Never invent sizes or stock. */
+export function normalizeMarketingCatalogItem(item) {
+  const offer = normalizeSupplierOffer(item);
+  const sizes = Array.isArray(item.sizes) ? item.sizes : [];
+  const colors = Array.isArray(item.colors) ? item.colors : [];
+  if (!item.name || !item.name.trim() || sizes.some(v => typeof v !== "string") ||
+      colors.some(v => typeof v !== "string"))
+    throw Error("Catalog items require a name and valid optional sizes/colors.");
+  if (!/^https:\/\//i.test(offer.source_url))
+    throw Error("An HTTPS supplier product source is required.");
+  const image_url = item.image_url || null;
+  if (image_url && !/^https:\/\//i.test(image_url))
+    throw Error("Product image URL must be HTTPS.");
+  return { ...offer, name: item.name.trim(), sizes: [...new Set(sizes)],
+    colors: [...new Set(colors)], image_url, supplier_sku: offer.sku,
+    availability_verified: Boolean(item.availability_verified), 
+    availability_checked_at: item.availability_checked_at || null };
+}
+export function compareMarketingOffers(offers) {
+  if (!Array.isArray(offers)) throw Error("Expected product offers.");
+  return offers.map(normalizeMarketingCatalogItem).sort((a,b)=>a.unit_cost-b.unit_cost);
+}
