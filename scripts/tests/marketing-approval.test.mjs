@@ -14,3 +14,11 @@ test("document UI gates approval by manager and testing-mode controls",()=>{
  assert.match(ui,/growthWriteAllowed\(\)/);
  assert.match(ui,/sc_growth_approve_document_v1/);
 });
+
+test("release policy allows manager approval but retains draft-only editor access",()=>{
+ const fix=readFileSync(new URL("../../supabase/migrations/20261019232000_marketing_release_policy_fixes.sql",import.meta.url),"utf8");
+ assert.match(fix,/status='approved' and \(select public\.sc_internal_access_allowed\(array\['admin','manager'\]\)\)/);
+ assert.match(fix,/drop policy if exists growth_docs_update/);
+ assert.match(fix,/old\.expires_at<=now\(\)/);
+ assert.match(fix,/Review revocation cannot be reversed/);
+});
