@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { marketingSuppliers, marketingTemplates, brandGuideProfiles,
-  normalizeSupplierOffer, suggestedBrandGuide } from "../../src/lib/marketingCatalogPolicy.js";
+  normalizeSupplierOffer, suggestedBrandGuide, hexToPrintColor } from "../../src/lib/marketingCatalogPolicy.js";
 test("supplier cost source is account wholesale only at S&S and SanMar", () => {
   assert.equal(marketingSuppliers.sanmar.cost_source, "account_wholesale");
   assert.equal(marketingSuppliers.ssactivewear.cost_source, "account_wholesale");
@@ -23,4 +23,12 @@ test("template gallery and brand profiles include every promised primary class",
   assert.equal(guide.approval_required, true);
   assert.match(guide.printing, /Pantone/);
   assert.throws(() => suggestedBrandGuide("team", ["red"]));
+});
+
+test("brand color output includes RGB and labeled approximate CMYK", () => {
+  assert.deepEqual(hexToPrintColor("#ff0000").rgb, { r:255, g:0, b:0 });
+  assert.deepEqual(hexToPrintColor("#000000").cmyk_approx, { c:0, m:0, y:0, k:1 });
+  const guide = suggestedBrandGuide("school",["#336699"]);
+  assert.equal(guide.color_details.length,1);
+  assert.match(guide.color_details[0].note,/ICC profile/);
 });
