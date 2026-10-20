@@ -6,6 +6,11 @@ export default function MarketingClientReview(){
  const [feedback,setFeedback]=useState("");
  const [busy,setBusy]=useState(false);
  useEffect(()=>{
+  const meta=document.createElement("meta");
+  meta.name="referrer";meta.content="no-referrer";document.head.appendChild(meta);
+  return ()=>meta.remove();
+ },[]);
+ useEffect(()=>{
   if(!token){setMessage("Review link missing.");return;}
   let active=true;
   fetch("/.netlify/functions/marketing-review-link?token="+encodeURIComponent(token))
