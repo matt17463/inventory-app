@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import {
   calculateGrowthPricing,
   suggestedGrowthRetail,
+  applyGrowthPricingRule,
   parseGrowthCsv,
   growthCsv,
   safeGrowthUrl,
@@ -275,4 +276,20 @@ test('partner access administration requires an administrator and prevents self 
 
 test('negative margins round consistently with decimal server calculations',()=>{
  const r=calculateGrowthPricing({model:'retail',target_margin_percent:0},[{description:'Loss rounding',quantity:1,unit_cost:202.01,retail_price:200}]);assert.equal(r.business_margin_percent,-1.01);assert(growthCsv([['  =1+1']]).includes("'  =1"));
+});
+
+test("marketing price suggestions reuse an existing rule while preserving source cost", () => {
+  const rule = { id: "shared", rule_name: "Established apparel markup", active: true,
+    markup_multiplier: 2, decoration_cost: 3, setup_fee: 24, base_price: 0 };
+  const line = { description: "Apparel", quantity: 12, unit_cost: 10, labor_cost: 2, other_cost: 1 };
+  const priced = applyGrowthPricingRule(line, rule);
+  assert.equal(priced.unit_cost, 10);
+  assert.equal(priced.decoration_cost, 3);
+  assert.equal(priced.setup_fee, 24);
+  assert.equal(priced.retail_price, 36);
+  assert.equal(priced.pricing_rule_id, "shared");
+  assert.equal(line.retail_price, undefined);
+  assert.equal(applyGrowthPricingRule(line, { ...rule, base_price: 29 }).retail_price, 29);
+  assert.throws(() => applyGrowthPricingRule(line, { ...rule, active: false }));
+  assert.throws(() => applyGrowthPricingRule(line, { ...rule, markup_multiplier: 0 }));
 });
