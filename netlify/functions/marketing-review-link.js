@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import {GetObjectCommand} from "@aws-sdk/client-s3";
+import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
+import {r2Client,r2BucketName} from "./_shared/mockupStorage.js";
 import {authorizeEmployee,createServiceClient,jsonResponse} from "./_shared/security.js";
 const hash = token => crypto.createHash("sha256").update(token).digest("hex");
 const privateResponse = (status, payload, event) => { const result=jsonResponse(status,payload,event); return {...result,headers:{...result.headers,"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}}; };
@@ -29,7 +32,7 @@ export async function handler(event) {
    .select("id,document_id,expires_at,revoked_at,decision").eq("token_hash",hash(token)).maybeSingle();
   if(error||!review||review.revoked_at||review.decision||Date.parse(review.expires_at)<=Date.now())
    return privateResponse(404,{message:"Review link has expired or is unavailable."},event);
-  const {data:doc,error:docError}=await db.from("sc_growth_documents").select("title,template_id,status,content").eq("id",review.document_id).single();
+  const {data:doc,error:docError}=await db.from("sc_growth_documents").select("title,template_id,status,content,account_id").eq("id",review.document_id).single();
   if(docError||doc?.status!=="approved") return privateResponse(404,{message:"Document unavailable."},event);
   const source=doc.content||{};
   const branding=source.branding||{};
@@ -42,6 +45,10 @@ export async function handler(event) {
     sizes:String(source.sizes||"").slice(0,400),
     productColors:String(source.productColors||"").slice(0,400)
   };
+  const artwork=source.marketing_artwork;
+  if(artwork?.storage_provider==="r2" && typeof artwork.key==="string" && artwork.key.startsWith("marketing/artwork/"+doc.account_id+"/") && /^marketing\/artwork\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(artwork.key)) {
+   content.logo_url=await getSignedUrl(r2Client(),new GetObjectCommand({Bucket:r2BucketName(),Key:artwork.key}),{expiresIn:900});
+  }
   return privateResponse(200,{title:doc.title,template_id:doc.template_id,content,
     expires_at:review.expires_at},event);
  }catch(error){return privateResponse(500,{message:"Review request failed."},event);}

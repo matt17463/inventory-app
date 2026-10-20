@@ -39,7 +39,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     if (!accountId) return;
     let active=true;
     supabase.from("sc_growth_documents")
-      .select("id,title,template_id,status,version,created_at,updated_at")
+      .select("id,title,template_id,status,version,created_at,updated_at,content")
       .eq("account_id", accountId).order("created_at", {ascending:false}).limit(30)
       .then(({data,error}) => {
         if (!active) return;
@@ -102,8 +102,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   function uploadLogo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5_000_000) {
-      setError("Choose a PNG, JPEG or WebP logo smaller than 5 MB."); return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 2_500_000) {
+      setError("Choose a PNG, JPEG or WebP logo smaller than 2.5 MB."); return;
     }
     const reader = new FileReader();
     reader.onload = () => {
@@ -168,19 +168,43 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     try {
       if (!growthWriteAllowed()) { setSaveStatus("Training mode: draft not saved."); return; }
       setSaving(true); setError("");
-      // Logo image data is not persisted in JSON; upload an approved asset separately.
+      // Persist the exact uploaded raster in private R2, never as a public data URL.
+      let storedArtwork = null;
+      if(guide.logo){
+        const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(guide.logo);
+        if(!match)throw Error("Choose a PNG, JPEG or WebP logo to save.");
+        const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({account_id:accountId,mime_type:match[1],base64:match[2]})
+        });
+        const result=await response.json();
+        if(!response.ok||!result.asset)throw Error(result.message||"Private artwork upload failed.");
+        storedArtwork=result.asset;
+      }
       const { logo: unusedLocalImage, ...safeGuide } = guide;
       void unusedLocalImage;
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
         account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
-        content: { ...safeGuide, logo_upload_required: Boolean(guide.logo) }
+        content: { ...safeGuide, marketing_artwork: storedArtwork, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
       });
       if (insertError) throw insertError;
-      setSaveStatus("Draft saved to this client. Logo file must be added through approved artwork storage.");
-      const {data:latest} = await supabase.from("sc_growth_documents").select("id,title,template_id,status,version,created_at").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
+      setSaveStatus(storedArtwork?"Draft and exact client artwork saved securely to R2.":"Draft saved to this client.");
+      const {data:latest} = await supabase.from("sc_growth_documents").select("id,title,template_id,status,version,created_at,content").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
       if(latest) setSavedDrafts(latest);
     } catch(e) { setError(e.message || "Draft could not be saved."); }
     finally { setSaving(false); }
+  }
+  async function openSavedArtwork(documentRow){
+    try{
+      const key=documentRow.content?.marketing_artwork?.key;
+      if(!key)throw Error("No stored artwork is associated with this document.");
+      const query=new URLSearchParams({account_id:accountId,key});
+      const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset?"+query);
+      const result=await response.json();
+      if(!response.ok||!result.url)throw Error(result.message||"Unable to load stored artwork.");
+      const anchor=document.createElement("a");anchor.href=result.url;anchor.target="_blank";anchor.rel="noopener noreferrer";anchor.click();
+      setSaveStatus("Artwork link opened. Private image links expire after five minutes.");
+    }catch(error){setError(error.message);}
   }
   function printGuide() {
     if (!guide) return;
@@ -235,7 +259,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
-      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
+      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</div>}
     {guide && <article className="growth-subcard" aria-live="polite"><h3>{guide.organization} — Draft {marketingTemplates.find(t=>t.id===guide.template)?.label}</h3>
       {guide.logo && <img src={guide.logo} alt="Client draft logo" style={{maxWidth:160,maxHeight:160,objectFit:"contain"}}/>}

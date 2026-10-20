@@ -36,3 +36,29 @@ test("mockup editor combines the original product photo and artwork with canvas 
  assert.match(src,/toDataURL\("image\/png"\)/);
  assert.match(fetchText("../../src/MarketingStorePreview.jsx"),/MarketingProductMockup/);
 });
+
+test("AI prospect search requires employee role and live web research",()=>{
+ const endpoint=fetchText("../../netlify/functions/marketing-prospect-research.js");
+ const ui=fetchText("../../src/MarketingProspectDiscovery.jsx");
+ assert.match(endpoint,/allowedRoles:\["admin","manager","marketing"\]/);
+ assert.match(endpoint,/web_search/);
+ assert.match(endpoint,/validPublicWebsite/);
+ assert.match(endpoint,/requires_review:true/);
+ assert.match(ui,/Find prospective clients/);
+ assert.match(fetchText("../../src/MarketingWorkspace.jsx"),/ai_prospects/);
+});
+
+test("research leads require human CRM save, deduplication, and safe training-mode write",()=>{
+ const component=fetchText("../../src/MarketingProspectDiscovery.jsx");
+ assert.match(component,/saveGrowthRecord\("accounts"/);
+ assert.match(component,/sc_growth_accounts/);
+ assert.match(component,/Save prospect to CRM/);
+ assert.match(component,/Training mode/);
+});
+
+test("prospect research can generate human-reviewed contextual outreach without sending messages",()=>{
+ const component=fetchText("../../src/MarketingProspectDiscovery.jsx");
+ assert.match(component,/generateMarketingDraft/);
+ assert.match(component,/Draft outreach/);
+ assert.match(component,/No message was sent/);
+});

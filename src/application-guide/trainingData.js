@@ -1,4 +1,4 @@
-export const TRAINING_VERSION = '1.3';
+export const TRAINING_VERSION = '1.4';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
@@ -13,6 +13,25 @@ export const trainingRoles = [
 const step = (title, instruction, options = {}) => ({ title, instruction, ...options });
 
 export const trainingTutorials = [
+  {
+    id:'marketing-research-brochure-artwork',title:'Marketing: Prospect Research, Brochures & Client Artwork',
+    roles:['marketing','manager','owner-admin','artwork'],level:'Required',minutes:35,safeMode:'simulated-supported',
+    summary:'Practice source review, ethical contact research, lead scoring, CRM follow-ups, sector brochures, artwork versioning and client proof approvals.',
+    outcome:'The employee can move from a researched organization to a verified source, editable outreach, branded presentation and manager-approved review without making live inventory changes.',
+    steps:[
+      step('Open AI Prospects','Open Marketing → AI Prospects. Enter soccer clubs in Kitsap County with a product-fit criterion. Web research may use an AI service even in training mode, so only run research when permitted.',{route:'/marketing',verify:'You understand that external search suggestions and provisional fit scores are not confirmed customer facts.'}),
+      step('Audit source-backed results','Open each proposed organization website. Verify its name, location, and fit. Explain why guessed names, emails, purchasing intent and unverifiable leads must not be treated as facts.',{route:'/marketing',verify:'You can distinguish a source URL from independently verified evidence.'}),
+      step('Review fit scores','Open How this fit score was estimated. Identify territory, category, program and supplier-independent relevance criteria.',{route:'/marketing',verify:'A high fit score never means the organization wants to buy.'}),
+      step('Practice saving a CRM prospect','Use the Save prospect to CRM action while test mode is active and confirm the simulated-write message. Review the Clients tab for potential duplicates.',{route:'/marketing',verify:'Training mode did not add customer data.'}),
+      step('Plan a follow-up','Choose a due date and inspect the Schedule CRM follow-up workflow. Explain why contact permission and the public business channel must be verified.',{route:'/marketing',verify:'A follow-up is an internal task, not an automatically sent email.'}),
+      step('Write an outreach draft','Choose Draft outreach, then edit it to remove any unsupported claims, named contacts, urgency, or unverifiable specifics. Copying the draft does not send it.',{route:'/marketing',verify:'You would obtain approval and check do-not-contact preferences before delivery.'}),
+      step('Prepare a sector brochure','Open Brochures, choose a training organization, school, club or nonprofit template. Select product categories and proofread the call to action. Export a printable HTML proof.',{route:'/marketing',verify:'Products and lead times remain subject to verification; concept proofs are not orders.'}),
+      step('Store exact artwork','Open Document Studio, upload a permitted logo and build a draft. Explain private R2 artwork versions and the difference between on-screen RGB/estimated CMYK and production proofs.',{route:'/marketing',verify:'Client-owned artwork is preserved and approval/usage rights are checked before publication.'}),
+      step('Review garment photography','Open Mockup Studio to choose a licensed real product photograph and upload the exact artwork. Check placement, proportions, color, and decoration method.',{route:'/mockup-studio',verify:'A flat overlay is not a substitute for a texture-aware approved production proof.'}),
+      step('Manager and client approval','Review internally approved document versions, time-limited external review links and feedback. Explain that reviewing a concept cannot create an order or deduct stock.',{route:'/marketing',verify:'You can distinguish an internal manager approval from an external customer concept review.'}),
+      step('Verify production handoff','Inspect the related campaign tasks and sample review. A manager approval creates a production review task—not an automatic job or blank deduction.',{route:'/marketing',verify:'No stock or WooCommerce orders are created by marketing proof review.'}),
+    ],
+  },
   {
     id:'marketing-client-growth-complete',title:'Marketing: Client Acquisition Through Launch',roles:['marketing','manager','owner-admin','artwork'],level:'Required',minutes:40,safeMode:'simulated-supported',
     summary:'Practice a complete client-development workflow using the Training Example School. Simulated actions do not write records, upload files, change access or create real handoffs.',
