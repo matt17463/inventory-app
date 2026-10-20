@@ -39,3 +39,8 @@ test("review endpoints prevent browser caching of private client data",()=>{
   assert.match(src,/no-referrer/);
  }
 });
+
+test("public client review page disables referrer sharing",()=>{
+ assert.match(review,/meta\.name="referrer"/);
+ assert.match(review,/meta\.content="no-referrer"/);
+});
