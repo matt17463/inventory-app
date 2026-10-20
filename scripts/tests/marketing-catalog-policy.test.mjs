@@ -42,3 +42,10 @@ test("comparison keeps verified supplier pricing distinctions", () => {
  assert.equal(offers[0].availability_verified,false);
  assert.equal(normalizeMarketingCatalogItem({...base,supplier:"USCutter",unit_cost:6}).supplier_sku,"ABC");
 });
+
+test("missing costs and future observations cannot become verified prices",()=>{
+ for(const cost of ["",null,undefined]){
+  assert.throws(()=>normalizeSupplierOffer({supplier:"SanMar",sku:"ABC",unit_cost:cost,observed_at:"2026-10-19"}));
+ }
+ assert.throws(()=>normalizeSupplierOffer({supplier:"SanMar",sku:"ABC",unit_cost:5,observed_at:"2099-01-01"}));
+});
