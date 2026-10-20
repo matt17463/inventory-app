@@ -68,3 +68,10 @@ test("marketable mockup handoff and training lessons are wired in",()=>{
  assert.match(training,/marketing-research-brochure-artwork/);
  assert.match(training,/No stock or WooCommerce orders are created/);
 });
+
+test("public concept review uses the browser document rather than shadowing it with review state",()=>{
+ const srcText=src("../../src/MarketingClientReview.jsx");
+ assert.match(srcText,/const \[reviewData,setDocument\]/);
+ assert.doesNotMatch(srcText,/const \[document,setDocument\]/);
+ assert.match(srcText,/document\.createElement\("meta"\)/);
+});
