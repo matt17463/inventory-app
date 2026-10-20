@@ -1,0 +1,53 @@
+import { useState } from "react";
+import { compareMarketingOffers, marketingSuppliers } from "./lib/marketingCatalogPolicy";
+
+/** Manual supplier comparisons: verified entered costs only, not a live supplier feed. */
+export default function MarketingSupplierCompare({ onChoose }) {
+  const [entries,setEntries] = useState([]);
+  const [supplier,setSupplier] = useState("sanmar");
+  const [sku,setSku] = useState("");
+  const [name,setName] = useState("");
+  const [cost,setCost] = useState("");
+  const [observed,setObserved] = useState("");
+  const [url,setUrl] = useState("");
+  const [sizes,setSizes] = useState("");
+  const [colors,setColors] = useState("");
+  const [message,setMessage] = useState("");
+  function add(e) {
+    e.preventDefault();
+    try {
+      const item = {
+        supplier, sku:sku.trim(), name:name.trim(), unit_cost:Number(cost),
+        observed_at: observed, source_url:url.trim() || marketingSuppliers[supplier].product_url,
+        sizes:sizes.split(",").map(x=>x.trim()).filter(Boolean),
+        colors:colors.split(",").map(x=>x.trim()).filter(Boolean),
+        availability_verified:false,
+      };
+      const next=compareMarketingOffers([...entries,item]);
+      setEntries(next);
+      setMessage("");
+      setSku("");setName("");setCost("");setUrl("");setSizes("");setColors("");
+    } catch(error) {setMessage(error.message);}
+  }
+  return <section className="growth-subcard">
+    <h3>Compare supplier options</h3>
+    <p>Enter products and source-checked prices to compare estimated purchasing cost. Stock and sizes must be checked with the supplier before placing an order. This does not query supplier websites.</p>
+    <form onSubmit={add}>
+      <div className="growth-grid">
+        <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
+        <label className="growth-field"><span>Product description</span><input required value={name} onChange={e=>setName(e.target.value)}/></label>
+        <label className="growth-field"><span>Supplier SKU</span><input required value={sku} onChange={e=>setSku(e.target.value)}/></label>
+        <label className="growth-field"><span>Internal purchase cost</span><input type="number" required min="0" step="0.01" value={cost} onChange={e=>setCost(e.target.value)}/></label>
+        <label className="growth-field"><span>Price checked on</span><input required type="date" value={observed} onChange={e=>setObserved(e.target.value)}/></label>
+        <label className="growth-field"><span>Supplier product URL</span><input type="url" value={url} onChange={e=>setUrl(e.target.value)}/></label>
+        <label className="growth-field"><span>Confirmed size names, separated by commas</span><input value={sizes} onChange={e=>setSizes(e.target.value)}/></label>
+        <label className="growth-field"><span>Confirmed colors, separated by commas</span><input value={colors} onChange={e=>setColors(e.target.value)}/></label>
+      </div>
+      <button className="sc-btn" type="submit">Add to comparison</button>
+    </form>
+    {message && <p role="alert">{message}</p>}
+    {entries.length>0 && <div className="growth-table-wrap"><table className="sc-table"><thead><tr><th>Product</th><th>Supplier</th><th>Purchase cost (internal)</th><th>Price date</th><th>Availability</th><th>Use</th></tr></thead><tbody>
+    {entries.map((item,i)=><tr key={item.supplier+item.sku+i}><td>{item.name}<br/>{item.sku}</td><td>{item.supplier_name}</td><td>${item.unit_cost.toFixed(2)}</td><td>{item.observed_at.slice(0,10)}</td><td>Not verified</td><td><button type="button" className="sc-btn" onClick={()=>onChoose(item)}>Use in guide</button></td></tr>)}
+    </tbody></table></div>}
+  </section>;
+}
