@@ -17,6 +17,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [savedDrafts, setSavedDrafts] = useState([]);
   const [saveStatus, setSaveStatus] = useState("");
   const [reviewLink,setReviewLink]=useState("");
+  const [reviewHistory,setReviewHistory]=useState([]);
+  const [historyDocument,setHistoryDocument]=useState(null);
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
   const [colors, setColors] = useState("");
@@ -46,6 +48,26 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       });
     return () => { active=false; };
   },[accountId]);
+  async function loadReviewHistory(document) {
+    try {
+      setError("");
+      const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-review-admin?document_id="+encodeURIComponent(document.id));
+      const payload=await response.json();
+      if(!response.ok) throw Error(payload.message||"Review history unavailable.");
+      setReviewHistory(payload.reviews||[]);setHistoryDocument(document);
+    } catch(error){setError(error.message);}
+  }
+  async function revokeReviewLink(id,document) {
+    try {
+      const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-review-admin",{
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({review_id:id})
+      });
+      const payload=await response.json();
+      if(!response.ok) throw Error(payload.message||"Cannot revoke link.");
+      await loadReviewHistory(document);
+      setSaveStatus("Review link revoked.");
+    }catch(error){setError(error.message);}
+  }
   async function createReviewLink(document) {
     try {
       if(!manager) throw Error("Manager role required.");
@@ -211,8 +233,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
+    {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
-      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}</li>)}</ul> :
+      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</div>}
     {guide && <article className="growth-subcard" aria-live="polite"><h3>{guide.organization} — Draft {marketingTemplates.find(t=>t.id===guide.template)?.label}</h3>
       {guide.logo && <img src={guide.logo} alt="Client draft logo" style={{maxWidth:160,maxHeight:160,objectFit:"contain"}}/>}
