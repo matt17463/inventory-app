@@ -64,6 +64,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
           throw Error("Provide a verified supplier SKU, observed price and price date, or leave the product details blank.");
         offer = normalizeSupplierOffer({ supplier, sku: sku.trim(), unit_cost: unitCost,
           observed_at: observedAt, source_url: sourceUrl || undefined });
+        if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
       }
       setGuide({ template, organization: organization.trim() || "Client", description, logo,
         branding, offer, style, sizes, productColors, generated_at: new Date().toISOString() });
