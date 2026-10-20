@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
@@ -10,6 +10,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
   const [organization, setOrganization] = useState("");
   const [accountId, setAccountId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savedDrafts, setSavedDrafts] = useState([]);
   const [saveStatus, setSaveStatus] = useState("");
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
@@ -25,6 +26,19 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
   const [productColors, setProductColors] = useState("");
   const [guide, setGuide] = useState(null);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!accountId) return;
+    let active=true;
+    supabase.from("sc_growth_documents")
+      .select("id,title,template_id,status,version,created_at")
+      .eq("account_id", accountId).order("created_at", {ascending:false}).limit(30)
+      .then(({data,error}) => {
+        if (!active) return;
+        if (error) { setSaveStatus("Saved document list unavailable until the database migration is applied."); return; }
+        setSavedDrafts(data||[]);
+      });
+    return () => { active=false; };
+  },[accountId]);
   function uploadLogo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -90,6 +104,8 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       });
       if (insertError) throw insertError;
       setSaveStatus("Draft saved to this client. Logo file must be added through approved artwork storage.");
+      const {data:latest} = await supabase.from("sc_growth_documents").select("id,title,template_id,status,version,created_at").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
+      if(latest) setSavedDrafts(latest);
     } catch(e) { setError(e.message || "Draft could not be saved."); }
     finally { setSaving(false); }
   }
@@ -139,6 +155,9 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
     </div></>}
     <div className="growth-actions"><button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
+    {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
+      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()}</li>)}</ul> :
+      <p>No saved documents found for this client.</p>}</div>}
     {guide && <article className="growth-subcard" aria-live="polite"><h3>{guide.organization} — Draft {marketingTemplates.find(t=>t.id===guide.template)?.label}</h3>
       {guide.logo && <img src={guide.logo} alt="Client draft logo" style={{maxWidth:160,maxHeight:160,objectFit:"contain"}}/>}
       <p>{guide.branding.profile} · Suggested logo uses: {guide.branding.placements.join(", ")}</p>
