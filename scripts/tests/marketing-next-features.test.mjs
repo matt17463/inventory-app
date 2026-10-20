@@ -55,3 +55,10 @@ test("research leads require human CRM save, deduplication, and safe training-mo
  assert.match(component,/Save prospect to CRM/);
  assert.match(component,/Training mode/);
 });
+
+test("prospect research can generate human-reviewed contextual outreach without sending messages",()=>{
+ const component=fetchText("../../src/MarketingProspectDiscovery.jsx");
+ assert.match(component,/generateMarketingDraft/);
+ assert.match(component,/Draft outreach/);
+ assert.match(component,/No message was sent/);
+});
