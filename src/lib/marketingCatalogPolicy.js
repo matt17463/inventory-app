@@ -30,11 +30,12 @@ export const brandGuideProfiles = Object.freeze({
 export function normalizeSupplierOffer(offer) {
   const supplier = marketingSuppliers[String(offer.supplier || "").toLowerCase().replace(/[^a-z]/g, "")];
   if (!supplier) throw Error("Unknown supplier");
-  const price = Number(offer.unit_cost);
+  const rawPrice = offer.unit_cost;
+  const price = rawPrice === null || rawPrice === undefined || String(rawPrice).trim() === "" ? NaN : Number(rawPrice);
   if (!Number.isFinite(price) || price < 0 || !offer.sku || !offer.observed_at)
     throw Error("Supplier offer needs a real SKU, verified cost and observation date.");
   const observed = new Date(offer.observed_at);
-  if (Number.isNaN(observed.getTime())) throw Error("Invalid supplier price observation time.");
+  if (Number.isNaN(observed.getTime()) || observed.getTime() > Date.now() + 86400000) throw Error("Invalid or future supplier price observation time.");
   return { ...offer, unit_cost: price, cost_source: supplier.cost_source, supplier_name: supplier.name,
     observed_at: observed.toISOString(), source_url: offer.source_url || supplier.product_url };
 }
