@@ -29,3 +29,13 @@ test("database review guard rejects token identity changes and replay",()=>{
  assert.match(sql,/new\.token_hash is distinct from old\.token_hash/);
  assert.match(sql,/old\.expires_at<=now\(\)/);
 });
+
+test("review endpoints prevent browser caching of private client data",()=>{
+ for(const path of ["../../netlify/functions/marketing-review-link.js","../../netlify/functions/marketing-review-response.js"]){
+  const src=file(path);
+  assert.match(src,/Cache-Control/);
+  assert.match(src,/no-store, private/);
+  assert.match(src,/Referrer-Policy/);
+  assert.match(src,/no-referrer/);
+ }
+});
