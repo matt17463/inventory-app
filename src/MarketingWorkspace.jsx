@@ -1769,6 +1769,18 @@ export default function MarketingWorkspace() {
                         Due {s.due_date || "—"}
                       </p>
                       <p>{s.notes}</p>
+                      <p>Production review: {s.production_review_status || "pending"}</p>
+                      {manager && (!s.production_review_status || s.production_review_status==="pending") && (
+                        <button type="button" className="sc-btn" disabled={busy}
+                          onClick={()=>run(async()=>{
+                            const result=await growthRpc("sc_growth_review_sample_v1",{
+                              p_sample_id:s.id,p_decision:"approved",p_note:null
+                            });
+                            if(!result?.simulated){await refresh();setMessage("Sample sent to production review; no stock changed.");}
+                            return result;
+                          })}>Approve sample for production review</button>
+                      )}
+
                       {canWrite && (
                         <>
                           <button
