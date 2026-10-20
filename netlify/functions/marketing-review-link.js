@@ -30,9 +30,18 @@ export async function handler(event) {
    return jsonResponse(404,{message:"Review link has expired or is unavailable."},event);
   const {data:doc,error:docError}=await db.from("sc_growth_documents").select("title,template_id,status,content").eq("id",review.document_id).single();
   if(docError||doc?.status!=="approved") return jsonResponse(404,{message:"Document unavailable."},event);
-  const {offer, ...content}=doc.content||{};
-  return jsonResponse(200,{title:doc.title,template_id:doc.template_id,
-    content:{...content,offer:offer?{supplier_name:offer.supplier_name,sku:offer.sku,availability_verified:false}:null},
+  const source=doc.content||{};
+  const branding=source.branding||{};
+  const content={
+    organization:String(source.organization||"").slice(0,200),
+    description:String(source.description||"").slice(0,3000),
+    branding:{profile:branding.profile||"",colors:Array.isArray(branding.colors)?branding.colors.slice(0,12):[],
+      placements:Array.isArray(branding.placements)?branding.placements.slice(0,25):[]},
+    style:String(source.style||"").slice(0,200),
+    sizes:String(source.sizes||"").slice(0,400),
+    productColors:String(source.productColors||"").slice(0,400)
+  };
+  return jsonResponse(200,{title:doc.title,template_id:doc.template_id,content,
     expires_at:review.expires_at},event);
  }catch(error){return jsonResponse(500,{message:"Review request failed."},event);}
 }
