@@ -23,7 +23,7 @@ export async function handler(event){
   const response=await fetch("https://api.openai.com/v1/responses",{
    method:"POST",headers:{"Authorization":"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},
    body:JSON.stringify({model:process.env.OPENAI_MARKETING_RESEARCH_MODEL||"gpt-4.1-mini",
-    tools:[{type:"web_search"}],max_output_tokens:1400,
+    tools:[{type:"web_search"}],tool_choice:"required",max_output_tokens:1400,
     instructions:"Search the organization's official public website ONLY for a clearly published generic business contact channel or a named professional representative. Never guess names, roles or email patterns and never return personal/home/mobile contact information. Source URLs must be on that official site's domain. If none is found, return []. Return JSON array only, maximum 6 objects: name, job_title, email, source_url, notes. Blank name allowed for a generic department contact, but email must be genuinely visible on the official source. Every record must have an official source_url. Do not claim any outreach permission.",
     input:"Organization: "+organization+". Official website: "+site.origin+". Identify publicly listed business-only contact channels relevant to branded clothing or team merchandise."}),
    signal:AbortSignal.timeout(60000)});
