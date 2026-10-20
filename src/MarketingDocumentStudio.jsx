@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { supabase } from "./supabaseClient";
+import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
 import { escapeGrowthHtml } from "./lib/growthPricing";
 
@@ -6,6 +8,9 @@ import { escapeGrowthHtml } from "./lib/growthPricing";
 export default function MarketingDocumentStudio({ organizations = [] }) {
   const [template, setTemplate] = useState("brand-guide");
   const [organization, setOrganization] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
   const [colors, setColors] = useState("");
@@ -71,6 +76,23 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       setError("");
     } catch (e) { setError(e.message); }
   }
+  async function saveDraft() {
+    if (!guide || !accountId) { setError("Select a saved client before storing this draft."); return; }
+    try {
+      if (!growthWriteAllowed()) { setSaveStatus("Training mode: draft not saved."); return; }
+      setSaving(true); setError("");
+      // Logo image data is not persisted in JSON; upload an approved asset separately.
+      const { logo: unusedLocalImage, ...safeGuide } = guide;
+      void unusedLocalImage;
+      const { error: insertError } = await supabase.from("sc_growth_documents").insert({
+        account_id: accountId, template_id: template, title: guide.organization + " — " + template,
+        content: { ...safeGuide, logo_upload_required: Boolean(guide.logo) }
+      });
+      if (insertError) throw insertError;
+      setSaveStatus("Draft saved to this client. Logo file must be added through approved artwork storage.");
+    } catch(e) { setError(e.message || "Draft could not be saved."); }
+    finally { setSaving(false); }
+  }
   function printGuide() {
     if (!guide) return;
     const e = escapeGrowthHtml;
@@ -98,6 +120,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
     <p>Choose a starting template, add the client's details and generate a printable draft. This builder works without sending logo files to AI services. Advanced AI generation and supplier feeds require separate integration.</p>
     <div className="growth-grid">
       <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);}}>{marketingTemplates.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+      <label className="growth-field"><span>Save under client</span><select value={accountId} onChange={e=>{const id=e.target.value;setAccountId(id);const a=organizations.find(x=>x.id===id);if(a){setOrganization(a.organization);setSegment(a.segment==="club"?"team":a.segment==="other"?"business":a.segment);}}}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>setOrganization(e.target.value)} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
       <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>setSegment(e.target.value)}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
       <label className="growth-field"><span>Upload client's draft logo (optional)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
@@ -114,8 +137,8 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       <label className="growth-field"><span>Verified sizes</span><input value={sizes} onChange={e=>setSizes(e.target.value)}/></label>
       <label className="growth-field"><span>Verified product colors</span><input value={productColors} onChange={e=>setProductColors(e.target.value)}/></label>
     </div></>}
-    <div className="growth-actions"><button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}</div>
-    {error && <p role="alert">{error}</p>}
+    <div className="growth-actions"><button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
+    {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {guide && <article className="growth-subcard" aria-live="polite"><h3>{guide.organization} — Draft {marketingTemplates.find(t=>t.id===guide.template)?.label}</h3>
       {guide.logo && <img src={guide.logo} alt="Client draft logo" style={{maxWidth:160,maxHeight:160,objectFit:"contain"}}/>}
       <p>{guide.branding.profile} · Suggested logo uses: {guide.branding.placements.join(", ")}</p>
