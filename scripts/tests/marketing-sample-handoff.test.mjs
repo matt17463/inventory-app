@@ -15,3 +15,7 @@ test("marketing approval calls review RPC rather than job creation",()=>{
  assert.match(ui,/sc_growth_review_sample_v1/);
  assert.match(ui,/Approve sample for production review/);
 });
+
+test("production review task names respect database title constraint",()=>{
+ assert.match(sql,/left\('Review and create production job for marketing sample: '\|\|s\.description,300\)/);
+});
