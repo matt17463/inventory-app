@@ -47,7 +47,7 @@ export async function handler(event) {
     if (!response.ok) return jsonResponse(502, { message: "AI service unavailable; retry later." }, event);
     const draft = String(payload.choices?.[0]?.message?.content || "").trim().slice(0, 12000);
     if (!draft) return jsonResponse(502, { message: "AI returned no draft." }, event);
-    await auditFunctionSecurity?.(auth, "marketing-ai-draft", "generate", { kind });
+    await auditFunctionSecurity({ functionName: "marketing-ai-draft", action: "generate", outcome: "success", userId: auth.user.id, role: auth.role, event, metadata: { kind } });
     return jsonResponse(200, { draft, kind, review_required: true }, event);
   } catch (error) {
     return jsonResponse(500, { message: "Could not generate marketing draft." }, event);
