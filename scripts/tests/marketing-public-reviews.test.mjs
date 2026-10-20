@@ -21,3 +21,11 @@ test("client response is single-use and cannot trigger production",()=>{
  assert.match(review,/changes_requested/);
  assert.doesNotMatch(feedback,/jobs\)/);
 });
+
+test("database review guard rejects token identity changes and replay",()=>{
+ const sql=file("../../supabase/migrations/20261019231000_marketing_review_response_guard.sql");
+ assert.match(sql,/sc_growth_review_response_guard_v1/);
+ assert.match(sql,/old\.decision is not null/);
+ assert.match(sql,/new\.token_hash is distinct from old\.token_hash/);
+ assert.match(sql,/old\.expires_at<=now\(\)/);
+});
