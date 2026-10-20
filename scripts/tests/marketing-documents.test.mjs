@@ -17,3 +17,10 @@ test("marketing document drafts require a stored client and exclude raw logo byt
   assert.match(component,/growthWriteAllowed\(\)/);
   assert.match(component,/Save client draft/);
 });
+
+test("supplier comparison selection populates supplier and product fields", () => {
+ assert.match(component,/MarketingSupplierCompare onChoose/);
+ assert.match(component,/setSupplier\(Object\.keys\(marketingSuppliers\)/);
+ assert.match(component,/setSku\(item\.sku\)/);
+ assert.match(component,/setUnitCost\(String\(item\.unit_cost\)\)/);
+});
