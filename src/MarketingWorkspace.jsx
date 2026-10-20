@@ -1,3 +1,4 @@
+import MarketingFollowUpPlanner from "./MarketingFollowUpPlanner";
 import MarketingBrochureStudio from "./MarketingBrochureStudio";
 import MarketingProspectDiscovery from "./MarketingProspectDiscovery";
 import { useCallback, useEffect, useState, useRef } from "react";
@@ -1042,7 +1043,7 @@ export default function MarketingWorkspace() {
         ))}
       </div>
       <nav className="growth-actions" aria-label="Marketing sections">
-        {["pipeline", "clients", "materials", "document_studio", "brochures", "ai_prospects", "follow_ups", "reports"].map(
+        {["pipeline", "clients", "materials", "document_studio", "brochures", "ai_prospects", "campaign_planner", "follow_ups", "reports"].map(
           (v) => (
             <button
               key={v}
@@ -1113,6 +1114,7 @@ export default function MarketingWorkspace() {
       {view === "document_studio" && <MarketingDocumentStudio organizations={accounts} manager={manager} />}
       {view === "ai_prospects" && <MarketingProspectDiscovery />}
       {view === "brochures" && <MarketingBrochureStudio organizations={accounts} />}
+      {view === "campaign_planner" && <MarketingFollowUpPlanner opportunities={opportunities} accounts={accounts} />}
       {view === "pipeline" && (
         <>
           <section className="sc-panel">
