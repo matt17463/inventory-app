@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
 import { escapeGrowthHtml } from "./lib/growthPricing";
+import MarketingSupplierCompare from "./MarketingSupplierCompare";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
 export default function MarketingDocumentStudio({ organizations = [] }) {
@@ -143,7 +144,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       <label className="growth-field"><span>Logo colors (editable HEX values, separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
-    {template==="product-guide" && <><h3>Verified supplier product (optional until catalog feed is connected)</h3><div className="growth-grid">
+    {template==="product-guide" && <><MarketingSupplierCompare onChoose={item=>{setStyle(item.name);setSku(item.sku);setUnitCost(String(item.unit_cost));setObservedAt(item.observed_at.slice(0,10));setSourceUrl(item.source_url);setSizes(item.sizes.join(", "));setProductColors(item.colors.join(", "));setGuide(null);}}/><h3>Verified supplier product (optional until catalog feed is connected)</h3><div className="growth-grid">
       <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
       <label className="growth-field"><span>Product name/style</span><input value={style} onChange={e=>setStyle(e.target.value)}/></label>
       <label className="growth-field"><span>Supplier SKU</span><input value={sku} onChange={e=>setSku(e.target.value)}/></label>
