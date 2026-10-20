@@ -226,3 +226,33 @@ export function parseGrowthCsv(text) {
     return item;
   });
 }
+
+/** Use the operational pricing rule as the source of suggested marketing line prices.
+ * Supplier cost remains a separate input; never persist a discounted or hypothetical cost.
+ */
+export function applyGrowthPricingRule(line, rule) {
+  if (!rule || rule.active === false) throw Error("Select an active pricing rule.");
+  const quantity = Number(line.quantity);
+  const unitCost = Number(line.unit_cost || 0);
+  const decoration = Number(rule.decoration_cost || 0);
+  const setup = Number(rule.setup_fee || 0);
+  const multiplier = Number(rule.markup_multiplier);
+  const base = Number(rule.base_price || 0);
+  const labor = Number(line.labor_cost || 0);
+  const other = Number(line.other_cost || 0);
+  if (![quantity, unitCost, decoration, setup, multiplier, base, labor, other].every(Number.isFinite) ||
+      !Number.isInteger(quantity) || quantity < 1 ||
+      [unitCost, decoration, setup, base, labor, other].some((v) => v < 0) || multiplier <= 0) {
+    throw Error("Invalid product cost or pricing rule.");
+  }
+  const calculated = base > 0 ? base :
+    Math.ceil((unitCost + decoration + labor + other + setup / quantity) * multiplier * 100) / 100;
+  return {
+    ...line,
+    decoration_cost: decoration,
+    setup_fee: setup,
+    retail_price: Number(calculated.toFixed(2)),
+    pricing_rule_id: rule.id,
+    pricing_rule_name: rule.rule_name || "",
+  };
+}
