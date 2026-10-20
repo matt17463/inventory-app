@@ -32,3 +32,13 @@ test("brand color output includes RGB and labeled approximate CMYK", () => {
   assert.equal(guide.color_details.length,1);
   assert.match(guide.color_details[0].note,/ICC profile/);
 });
+
+test("comparison keeps verified supplier pricing distinctions", () => {
+ const base = {sku:"ABC",name:"Blank",observed_at:"2026-10-19",sizes:["M"],colors:["Black"]};
+ const offers=compareMarketingOffers([{...base,supplier:"SanMar",unit_cost:9},{...base,supplier:"JPPlus",unit_cost:7}]);
+ assert.equal(offers[0].supplier_name,"Johnson Plastics Plus");
+ assert.equal(offers[0].cost_source,"published_web");
+ assert.equal(offers[1].cost_source,"account_wholesale");
+ assert.equal(offers[0].availability_verified,false);
+ assert.equal(normalizeMarketingCatalogItem({...base,supplier:"USCutter",unit_cost:6}).supplier_sku,"ABC");
+});
