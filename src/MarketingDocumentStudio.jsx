@@ -8,7 +8,7 @@ import MarketingStorePreview from "./MarketingStorePreview";
 import { generateMarketingDraft } from "./lib/marketingAI";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
-export default function MarketingDocumentStudio({ organizations = [] }) {
+export default function MarketingDocumentStudio({ organizations = [], manager = false }) {
   const [template, setTemplate] = useState("brand-guide");
   const [organization, setOrganization] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -35,7 +35,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
     if (!accountId) return;
     let active=true;
     supabase.from("sc_growth_documents")
-      .select("id,title,template_id,status,version,created_at")
+      .select("id,title,template_id,status,version,created_at,updated_at")
       .eq("account_id", accountId).order("created_at", {ascending:false}).limit(30)
       .then(({data,error}) => {
         if (!active) return;
@@ -44,6 +44,24 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       });
     return () => { active=false; };
   },[accountId]);
+  async function approveDocument(document) {
+    try {
+      if(!manager) throw Error("Manager permission required.");
+      if(!growthWriteAllowed()) {setSaveStatus("Training mode: approval not submitted.");return;}
+      setSaving(true);setError("");
+      const {error:rpcError}=await supabase.rpc("sc_growth_approve_document_v1",{
+        p_id:document.id,p_expected_updated_at:document.updated_at,
+      });
+      if(rpcError) throw rpcError;
+      const {data, error:refreshError}=await supabase.from("sc_growth_documents")
+        .select("id,title,template_id,status,version,created_at,updated_at")
+        .eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
+      if(refreshError) throw refreshError;
+      setSavedDrafts(data||[]);
+      setSaveStatus("Document approved. Changes require a new draft.");
+    }catch(error){setError(error.message||"Could not approve document.");}
+    finally{setSaving(false);}
+  }
   function uploadLogo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -178,7 +196,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
-      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()}</li>)}</ul> :
+      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</div>}
     {guide && <article className="growth-subcard" aria-live="polite"><h3>{guide.organization} — Draft {marketingTemplates.find(t=>t.id===guide.template)?.label}</h3>
       {guide.logo && <img src={guide.logo} alt="Client draft logo" style={{maxWidth:160,maxHeight:160,objectFit:"contain"}}/>}
