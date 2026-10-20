@@ -172,7 +172,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       const { logo: unusedLocalImage, ...safeGuide } = guide;
       void unusedLocalImage;
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
-        account_id: accountId, template_id: template, title: guide.organization + " — " + template,
+        account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
         content: { ...safeGuide, logo_upload_required: Boolean(guide.logo) }
       });
       if (insertError) throw insertError;
