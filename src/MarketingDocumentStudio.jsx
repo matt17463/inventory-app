@@ -77,7 +77,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
     // Logo is restricted to a local browser data URL from an image upload.
     const safeLogo = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(guide.logo)
       ? '<img alt="Client draft logo" src="' + guide.logo + '" style="max-width:180px;max-height:180px;object-fit:contain">' : "";
-    const swatches = guide.branding.colors.map(c => '<span style="display:inline-block;margin:5px;text-align:center"><span style="display:block;background:'+c+';width:70px;height:55px;border:1px solid #ddd"></span>'+c+'</span>').join("");
+    const swatches = guide.branding.color_details.map(c => '<span style="display:inline-block;margin:5px;text-align:center;vertical-align:top"><span style="display:block;background:'+c.hex+';width:120px;height:55px;border:1px solid #ddd"></span>'+c.hex+'<br><small>RGB '+c.rgb.r+', '+c.rgb.g+', '+c.rgb.b+'</small><br><small>CMYK est. '+Object.values(c.cmyk_approx).map(n=>Math.round(n*100)+'%').join(' / ')+'</small></span>').join("");
     const supplierDetails = guide.offer ? '<h2>Product source</h2><p>'+e(guide.offer.supplier_name)+' · '+e(guide.offer.sku)+
       ' · Cost basis: '+e(guide.offer.cost_source)+' · Observed '+e(guide.offer.observed_at.slice(0,10))+
       '</p>' : "";
