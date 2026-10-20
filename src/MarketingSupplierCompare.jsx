@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { compareMarketingOffers, marketingSuppliers } from "./lib/marketingCatalogPolicy";
 
 /** Manual supplier comparisons: verified entered costs only, not a live supplier feed. */
@@ -13,6 +14,12 @@ export default function MarketingSupplierCompare({ onChoose }) {
   const [sizes,setSizes] = useState("");
   const [colors,setColors] = useState("");
   const [message,setMessage] = useState("");
+  const [catalogQuery,setCatalogQuery]=useState("");
+  const [catalogRows,setCatalogRows]=useState([]);
+  const [searchBusy,setSearchBusy]=useState(false);
+  async function searchCatalog(){
+    try{setSearchBusy(true);setMessage("");const r=await authenticatedFunctionFetch("/.netlify/functions/marketing-catalog-search?q="+encodeURIComponent(catalogQuery));const result=await r.json();if(!r.ok)throw Error(result.message||"Catalog lookup failed");setCatalogRows(result.products||[]);}catch(e){setMessage(e.message);}finally{setSearchBusy(false);}
+  }
   function add(e) {
     e.preventDefault();
     try {
@@ -32,6 +39,8 @@ export default function MarketingSupplierCompare({ onChoose }) {
   return <section className="growth-subcard">
     <h3>Compare supplier options</h3>
     <p>Enter products and source-checked prices to compare estimated purchasing cost. Stock and sizes must be checked with the supplier before placing an order. This does not query supplier websites.</p>
+    <div className="growth-actions"><input aria-label="Search existing supplier catalog" value={catalogQuery} onChange={e=>setCatalogQuery(e.target.value)} placeholder="Search existing supplier SKUs, brands or styles"/><button type="button" className="sc-btn" disabled={searchBusy||catalogQuery.trim().length<2} onClick={searchCatalog}>{searchBusy?"Searching…":"Search catalog"}</button></div>
+    {catalogRows.length>0 && <div className="growth-search-results">{catalogRows.map((p,i)=><button type="button" key={i} onClick={()=>{setName(p.description||[p.brand,p.style].filter(Boolean).join(" "));setSku(p.supplier_sku||"");setSizes(p.size||"");setColors(p.color||"");setMessage("Confirm the supplier and obtain a current source-verified price before comparison. The imported catalog does not establish availability.");}}>{p.supplier_name} · {p.brand} {p.style} · {p.color} / {p.size} · {p.supplier_sku}</button>)}</div>}
     <form onSubmit={add}>
       <div className="growth-grid">
         <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
