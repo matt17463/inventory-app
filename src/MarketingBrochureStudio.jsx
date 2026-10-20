@@ -3,6 +3,7 @@ import {marketingTemplates} from "./lib/marketingCatalogPolicy";
 import {escapeGrowthHtml} from "./lib/growthPricing";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {supabase} from "./supabaseClient";
+import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 
 const segments={
  "brochure-sports":{intro:"One team. One identity. Custom uniforms, training apparel, and supportive fan wear.",categories:["Team uniforms","Practice wear","Coach apparel","Spirit wear","Personalized team gifts"],benefit:"Coordinated gear for players, coaches and supporters."},
@@ -19,7 +20,7 @@ function makeBrochureHtml({name,kind,headline,description,chosen,colors,cta,logo
 export default function MarketingBrochureStudio({organizations=[]}){
  const [account,setAccount]=useState(""),[kind,setKind]=useState("brochure-sports"),[headline,setHeadline]=useState(""),[description,setDescription]=useState(""),[color,setColor]=useState("#184D47"),[logo,setLogo]=useState(""),[selected,setSelected]=useState([]),[cta,setCta]=useState("Contact Skilled Crafting to discuss products, artwork, quantities, delivery and a custom quote."),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const client=organizations.find(a=>a.id===account),profile=segments[kind];
- const chosen=selected.length?selected:[...profile.categories];
+ const chosen=selected===null?[...profile.categories]:selected;
  function updateLogo(file){
   if(!file)return;if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>2_500_000){setMessage("Choose a PNG/JPG/WebP under 2.5 MB.");return;}
   const reader=new FileReader();reader.onload=()=>setLogo(String(reader.result));reader.readAsDataURL(file);
@@ -36,27 +37,35 @@ export default function MarketingBrochureStudio({organizations=[]}){
   setBusy(true);setMessage("");
   try{
    if(!growthWriteAllowed()){setMessage("Training mode: no client brochure saved.");return;}
+   let storedArtwork=null;
+   if(logo){
+    const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(logo);
+    if(!match)throw Error("Invalid client logo image.");
+    const upload=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:client.id,mime_type:match[1],base64:match[2]})});
+    const value=await upload.json();if(!upload.ok||!value.asset)throw Error(value.message||"R2 artwork upload failed.");
+    storedArtwork=value.asset;
+   }
    const productDescription=[description||profile.intro,"Featured programs: "+chosen.join(", "),"Call to action: "+cta].join("\n\n");
    const {error}=await supabase.from("sc_growth_documents").insert({
     account_id:client.id,template_id:kind,title:(client.organization+" — "+marketingTemplates.find(t=>t.id===kind)?.label).slice(0,200),
     content:{organization:client.organization,template:kind,description:productDescription,
-     branding:{profile:kind,colors:[color],placements:[]},style:chosen.join(", "),sizes:"To confirm",productColors:"To confirm",brochure_headline:headline||profile.benefit,logo_upload_required:Boolean(logo)}
+     branding:{profile:kind,colors:[color],placements:[]},style:chosen.join(", "),sizes:"To confirm",productColors:"To confirm",brochure_headline:headline||profile.benefit,marketing_artwork:storedArtwork,logo_upload_required:Boolean(logo&&!storedArtwork)}
    });
    if(error)throw error;
-   setMessage("Brochure saved as a client-linked draft. Manager approval is available in Marketing Document Builder. Uploaded local logo is not saved: attach final artwork there before client review.");
+   setMessage("Brochure and optional exact artwork saved securely to the client. Manager approval is available in Marketing Document Builder.");
   }catch(err){setMessage(err.message);}finally{setBusy(false);}
  }
  return <section className="sc-panel"><h2>Branded brochure builder</h2>
   <p>Create a professionally formatted, industry-specific concept brochure. Review product claims and artwork licensing before sending. Nothing is published or priced automatically.</p>
   <div className="growth-grid">
    <label className="growth-field"><span>CRM client</span><select value={account} onChange={e=>setAccount(e.target.value)}><option value="">Select client</option>{organizations.map(a=><option key={a.id} value={a.id}>{a.organization}</option>)}</select></label>
-   <label className="growth-field"><span>Audience</span><select value={kind} onChange={e=>{setKind(e.target.value);setSelected([]);}}>{marketingTemplates.filter(t=>t.kind==="brochure").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+   <label className="growth-field"><span>Audience</span><select value={kind} onChange={e=>{setKind(e.target.value);setSelected(null);}}>{marketingTemplates.filter(t=>t.kind==="brochure").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
    <label className="growth-field"><span>Headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)} placeholder={profile.benefit}/></label>
    <label className="growth-field"><span>Brand accent</span><input type="color" value={color} onChange={e=>setColor(e.target.value)}/></label>
    <label className="growth-field"><span>Local logo (export only)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>updateLogo(e.target.files?.[0])}/></label>
   </div>
   <label className="growth-field"><span>Overview / benefits</span><textarea value={description} onChange={e=>setDescription(e.target.value)} rows={3} placeholder={profile.intro}/></label>
-  <h3>Product categories to feature</h3><div className="growth-grid">{profile.categories.map(p=><label key={p}><input type="checkbox" checked={!selected.length||selected.includes(p)} onChange={e=>{const current=selected.length?selected:profile.categories;setSelected(e.target.checked?[...new Set([...current,p])]:current.filter(x=>x!==p));}}/> {p}</label>)}</div>
+  <h3>Product categories to feature</h3><div className="growth-grid">{profile.categories.map(p=><label key={p}><input type="checkbox" checked={selected===null||selected.includes(p)} onChange={e=>{const current=selected===null?profile.categories:selected;setSelected(e.target.checked?[...new Set([...current,p])]:current.filter(x=>x!==p));}}/> {p}</label>)}</div>
   <label className="growth-field"><span>Call to action</span><textarea value={cta} rows={2} onChange={e=>setCta(e.target.value)}/></label>
   <div className="growth-actions"><button className="sc-btn" type="button" disabled={!client} onClick={download}>Download printable brochure</button><button className="sc-btn sc-btn-primary" type="button" disabled={!client||busy} onClick={save}>{busy?"Saving…":"Save approval draft"}</button></div>
   {message&&<p role="status">{message}</p>}
