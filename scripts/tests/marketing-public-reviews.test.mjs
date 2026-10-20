@@ -44,3 +44,10 @@ test("public client review page disables referrer sharing",()=>{
  assert.match(review,/meta\.name="referrer"/);
  assert.match(review,/meta\.content="no-referrer"/);
 });
+
+test("manager review history is not cacheable",()=>{
+ const src=file("../../netlify/functions/marketing-review-admin.js");
+ assert.match(src,/Cache-Control/);
+ assert.match(src,/no-store, private/);
+ assert.match(src,/allowedRoles:\["admin","manager"\]/);
+});
