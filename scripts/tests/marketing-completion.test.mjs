@@ -75,3 +75,9 @@ test("public concept review uses the browser document rather than shadowing it w
  assert.doesNotMatch(srcText,/const \[document,setDocument\]/);
  assert.match(srcText,/document\.createElement\("meta"\)/);
 });
+
+test("public-prospect and official-contact research must run actual web search",()=>{
+ for(const path of ["../../netlify/functions/marketing-prospect-research.js","../../netlify/functions/marketing-public-contacts.js"]){
+  assert.match(src(path),/tool_choice:"required"/);
+ }
+});
