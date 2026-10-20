@@ -19,7 +19,7 @@ export async function handler(event){
   const response=await fetch("https://api.openai.com/v1/responses",{
    method:"POST",headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},
    body:JSON.stringify({model:process.env.OPENAI_MARKETING_RESEARCH_MODEL||"gpt-4.1-mini",
-    tools:[{type:"web_search"}],max_output_tokens:1700,
+    tools:[{type:"web_search"}],tool_choice:"required",max_output_tokens:1700,
     instructions:"Research publicly listed organizations for a custom apparel business. Use web search and cite each organization's own official public website URL. Never invent organizations, email addresses, decision-makers, phone numbers, private details, or an intent to purchase. Do not return an organization unless search evidence supports its existence and location. Return only a JSON array of at most 8 objects with string fields name, website, location, reason. Do not include markdown fences or extra text.",
     input:"Find potential organizations in "+region+" for category "+industry+". Criteria: "+query}),
    signal:AbortSignal.timeout(60000)});
