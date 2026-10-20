@@ -4,6 +4,7 @@ import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
 import { escapeGrowthHtml } from "./lib/growthPricing";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
+import { generateMarketingDraft } from "./lib/marketingAI";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
 export default function MarketingDocumentStudio({ organizations = [] }) {
@@ -27,6 +28,8 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
   const [productColors, setProductColors] = useState("");
   const [guide, setGuide] = useState(null);
   const [error, setError] = useState("");
+  const [aiBusy,setAiBusy] = useState(false);
+  const [aiText,setAiText] = useState("");
   useEffect(() => {
     if (!accountId) return;
     let active=true;
@@ -73,6 +76,19 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       setError("");
     };
     reader.readAsDataURL(file);
+  }
+  async function assistWithAI() {
+    try {
+      setAiBusy(true);setError("");
+      const kind = template === "brand-guide" ? "brand-guide" :
+        template === "product-guide" ? "product-guide" :
+        template === "store-preview" ? "store-concept" :
+        template.startsWith("brochure") ? "brochure" : "outreach";
+      const result=await generateMarketingDraft({kind,organization:organization.trim(),
+        segment,brief:description.trim()});
+      setAiText(result);
+    } catch (e) { setError(e.message || "AI draft unavailable"); }
+    finally { setAiBusy(false); }
   }
   function build() {
     try {
@@ -154,7 +170,10 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
       <label className="growth-field"><span>Verified sizes</span><input value={sizes} onChange={e=>setSizes(e.target.value)}/></label>
       <label className="growth-field"><span>Verified product colors</span><input value={productColors} onChange={e=>setProductColors(e.target.value)}/></label>
     </div></>}
-    <div className="growth-actions"><button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
+    <div className="growth-actions">
+      <button type="button" className="sc-btn" disabled={aiBusy || !organization.trim() || !description.trim()} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
+      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
+    {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
       <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()}</li>)}</ul> :
