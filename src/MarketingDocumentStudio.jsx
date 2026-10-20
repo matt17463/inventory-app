@@ -79,8 +79,7 @@ export default function MarketingDocumentStudio({ organizations = [] }) {
     const swatches = guide.branding.colors.map(c => '<span style="display:inline-block;margin:5px;text-align:center"><span style="display:block;background:'+c+';width:70px;height:55px;border:1px solid #ddd"></span>'+c+'</span>').join("");
     const supplierDetails = guide.offer ? '<h2>Product source</h2><p>'+e(guide.offer.supplier_name)+' · '+e(guide.offer.sku)+
       ' · Cost basis: '+e(guide.offer.cost_source)+' · Observed '+e(guide.offer.observed_at.slice(0,10))+
-      '</p><p>Internal source cost: $'+e(guide.offer.unit_cost.toFixed(2))+
-      ' (remove before sharing a client-facing copy)</p>' : "";
+      '</p>' : "";
     const markup = '<!doctype html><html><head><meta charset="utf-8"><title>'+e(guide.organization)+' draft guide</title><style>body{font:16px system-ui;max-width:850px;margin:50px auto;color:#172033;padding:24px}h1{font-size:32px}h2{border-bottom:1px solid #aaa;padding-bottom:8px}li{margin:8px 0}small{color:#555}@media print{body{margin:0}}</style></head><body><small>SKILLED CRAFTING · DRAFT FOR REVIEW</small><h1>'+e(guide.organization)+'</h1><h2>'+e(marketingTemplates.find(t=>t.id===guide.template)?.label||"Marketing guide")+'</h2>'+safeLogo+
       '<p>'+e(guide.description)+'</p><h2>Suggested logo colors</h2>'+swatches+
       '<h2>Logo variants</h2><ul>'+guide.branding.variants.map(t=>'<li>'+e(t)+'</li>').join("")+'</ul>'+
