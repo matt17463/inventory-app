@@ -1108,7 +1108,7 @@ export default function MarketingWorkspace() {
           </label>
         </div>
       </section>
-      {view === "document_studio" && <MarketingDocumentStudio organizations={accounts} />}
+      {view === "document_studio" && <MarketingDocumentStudio organizations={accounts} manager={manager} />}
       {view === "pipeline" && (
         <>
           <section className="sc-panel">
