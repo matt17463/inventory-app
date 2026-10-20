@@ -2,9 +2,16 @@ import { useState } from "react";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { saveGrowthRecord } from "./lib/marketingApi";
 import { supabase } from "./supabaseClient";
+import { generateMarketingDraft } from "./lib/marketingAI";
 export default function MarketingProspectDiscovery(){
+ const [outreach,setOutreach]=useState(""),[selectedSource,setSelectedSource]=useState(""),[drafting,setDrafting]=useState(false);
  const [industry,setIndustry]=useState("soccer clubs"),[region,setRegion]=useState("Kitsap County, Washington");
  const [saved,setSaved]=useState([]);const [query,setQuery]=useState(""),[results,setResults]=useState([]),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
+ async function draftOutreach(p){
+  setDrafting(true);setMessage("");setOutreach("");setSelectedSource(p.website);
+  try{setOutreach(await generateMarketingDraft({kind:"outreach",organization:p.name,segment:industry,brief:"Public website: "+p.website+"; Research finding (unverified until source review): "+p.reason+". Area: "+(p.location||region)+". Offer an opt-in conversation about Skilled Crafting custom team apparel and branded products. Never claim an existing relationship or name unknown people. Human review required before sending."}));}
+  catch(e){setMessage(e.message);}finally{setDrafting(false);}
+ }
  async function saveProspect(p){
   setMessage("");
   try{
@@ -31,6 +38,6 @@ export default function MarketingProspectDiscovery(){
    <label className="growth-field"><span>Additional criteria</span><input value={query} onChange={e=>setQuery(e.target.value)} maxLength={200} placeholder="e.g. youth teams and spirit wear"/></label>
   </div><button type="submit" className="sc-btn" disabled={busy}>{busy?"Researching…":"Find prospective clients"}</button></form>
   {message&&<p role="status">{message}</p>}
-  <div className="growth-card-grid">{results.map((p,i)=><article className="growth-subcard" key={p.website+i}><h3>{p.name}</h3><p>{p.reason}</p><a href={p.website} target="_blank" rel="noreferrer noopener">Open organization source</a> <button type="button" className="sc-btn" disabled={saved.includes(p.website)} onClick={()=>saveProspect(p)}>{saved.includes(p.website)?"Saved":"Save prospect to CRM"}</button><p><small>{p.location||region} · Public organization website, not a verified contact</small></p></article>)}</div>
+  <div className="growth-card-grid">{results.map((p,i)=><article className="growth-subcard" key={p.website+i}><h3>{p.name}</h3><p>{p.reason}</p><a href={p.website} target="_blank" rel="noreferrer noopener">Open organization source</a> <button type="button" className="sc-btn" disabled={drafting} onClick={()=>draftOutreach(p)}>Draft outreach</button> <button type="button" className="sc-btn" disabled={saved.includes(p.website)} onClick={()=>saveProspect(p)}>{saved.includes(p.website)?"Saved":"Save prospect to CRM"}</button><p><small>{p.location||region} · Public organization website, not a verified contact</small></p></article>)}</div>
  </section>;
 }
