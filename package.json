@@ -55,7 +55,7 @@
     "test:contractor-navigation-theme": "node --test scripts/tests/navigation-contractors-theme.test.mjs",
     "test:equipment": "node --test scripts/tests/equipment-controls.test.mjs",
     "test:sync-reliability": "node --test scripts/tests/sync-reliability.test.mjs",
-    "test:marketing": "node --test scripts/tests/marketing-growth.test.mjs"
+    "test:marketing": "node --test scripts/tests/marketing-growth.test.mjs scripts/tests/marketing-catalog-policy.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
