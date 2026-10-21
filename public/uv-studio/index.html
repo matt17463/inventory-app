@@ -79,7 +79,16 @@
 <section class="middle"><div class="projectbar"><div><h1>Raised Stitch Designer</h1><div class="subtle">Procedurally create stitch shading and a matched grayscale height map from a logo.</div></div><div class="busy" id="status" aria-live="polite">Ready</div></div>
 <div class="preview-wrap"><div class="tabs"><button class="tab active" data-tab="color">Stitch artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
 <div class="modulegrid"><div class="module"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
-<div class="module"><h2>Patch format &amp; production layout</h2><label for="productPreset">Quick product template</label><select id="productPreset"><option value="custom">Custom dimensions / geometry</option><option value="hat-leather" selected>Hat leather patch · 3.5 × 2.5 in</option><option value="hat-oval">Hat oval patch · 3.5 × 2.25 in</option><option value="garment-square">Apparel badge · 3 × 3 in</option><option value="chest-small">Left-chest patch · 2.5 × 2.5 in</option><option value="heat-transfer">Raised transfer motif · 3.5 × 2.5 in</option><option value="metal-tag">Metal badge · 4 × 3 in</option></select><div class="form-row"><div><label for="patchShape">Outline / patch template</label><select id="patchShape"><option value="rounded">Rounded rectangle / hat patch</option><option value="rectangle">Rectangle / apparel</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="hexagon">Hexagon</option><option value="shield">Shield</option></select></div><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><div class="metric-row"><span id="layoutResult">Calculating layout…</span></div><div class="mini-tools"><button id="layoutZip">↓ Layout + cutlines ZIP</button><button id="outlineSvg">↓ Cutline SVG</button></div><div class="small">Cutlines are uncalibrated geometric references, not registration-verified cutter commands.</div></div></div>
+<div class="module"><h2>Patch format &amp; production layout</h2><label for="productPreset">Quick product template</label><select id="productPreset"><option value="custom">Custom dimensions / geometry</option><option value="hat-leather" selected>Hat leather patch · 3.5 × 2.5 in</option><option value="hat-oval">Hat oval patch · 3.5 × 2.25 in</option><option value="garment-square">Apparel badge · 3 × 3 in</option><option value="chest-small">Left-chest patch · 2.5 × 2.5 in</option><option value="heat-transfer">Raised transfer motif · 3.5 × 2.5 in</option><option value="metal-tag">Metal badge · 4 × 3 in</option></select><div class="form-row"><div><label for="patchShape">Outline / patch template</label><select id="patchShape"><option value="rounded">Rounded rectangle / hat patch</option><option value="rectangle">Rectangle / apparel</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="hexagon">Hexagon</option><option value="shield">Shield</option></select></div><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
+<div class="form-row">
+<div><label for="jigX">First blank X from sheet left (in)</label><input type="number" min="0" max="12" step=".01" id="jigX" value=".25"></div>
+<div><label for="jigY">First blank Y from sheet top (in)</label><input type="number" min="0" max="16" step=".01" id="jigY" value=".25"></div>
+<div><label for="jigGapX">Horizontal clearance (in)</label><input type="number" min=".05" max="3" step=".01" id="jigGapX" value=".20"></div>
+<div><label for="jigGapY">Vertical clearance (in)</label><input type="number" min=".05" max="3" step=".01" id="jigGapY" value=".20"></div>
+</div>
+<label class="checkbox"><input type="checkbox" id="registrationMarks" checked> Include printable registration crosshairs in proof / cutline</label>
+<div class="small">Fixture positions must be measured and tested against the physical jig. This output does not control a laser/cutter or define alignment accuracy automatically.</div>
+</fieldset><div class="metric-row"><span id="layoutResult">Calculating layout…</span></div><div class="mini-tools"><button id="layoutZip">↓ Layout + cutlines ZIP</button><button id="outlineSvg">↓ Cutline SVG</button></div><div class="small">Cutlines are uncalibrated geometric references, not registration-verified cutter commands.</div></div></div>
 
 <div class="module" style="margin-top:14px" id="scDesignPro">
 <h2>Design Pro — preflight, special effects and team personalization</h2>
@@ -470,6 +479,68 @@ $('projectInput').addEventListener('change',async e=>{let f=e.target.files?.[0];
 applySheetChoice();renderCalRecords();UI();
 
 
+
+
+/* Operator-measured fixture geometry. Layouts remain design references, not device coordinates. */
+const scOriginalLayoutPlan=layoutPlan;
+layoutPlan=function(v){
+ const base=scOriginalLayoutPlan(v),w=v.width,h=v.height;
+ const x=Number(v.jigX),y=Number(v.jigY),gx=Number(v.jigGapX),gy=Number(v.jigGapY);
+ const originX=Math.max(0,Number.isFinite(x)?x:base.margin);
+ const originY=Math.max(0,Number.isFinite(y)?y:base.margin);
+ const gapX=Math.max(.05,Number.isFinite(gx)?gx:base.gap);
+ const gapY=Math.max(.05,Number.isFinite(gy)?gy:base.gap);
+ const cols=Math.max(0,Math.floor((base.sw-originX-base.margin+gapX)/(w+gapX)));
+ const rows=Math.max(0,Math.floor((base.sh-originY-base.margin+gapY)/(h+gapY)));
+ const capacity=cols*rows;
+ return {...base,originX,originY,gapX,gapY,cols,rows,capacity,sheets:capacity?Math.ceil(base.quantity/capacity):0,
+   fullSheets:capacity?Math.floor(base.quantity/capacity):0,remainder:capacity?base.quantity%capacity:0};
+};
+const scBaseSheetSVG=batchSheetSvg;
+batchSheetSvg=function(v,plan,count){
+ let result=scBaseSheetSVG(v,{...plan,margin:plan.originX??plan.margin,gap:plan.gapX??plan.gap},count);
+ if(plan.originY!==plan.originX ||plan.gapY!==plan.gapX){
+  const W=plan.sw*25.4,H=plan.sh*25.4;
+  const paths=Array.from({length:count},(_,i)=>{
+   const x=(plan.originX+(i%plan.cols)*(v.width+plan.gapX))*25.4;
+   const y=(plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*25.4;
+   const shape=outlinePath(v.width*25.4,v.height*25.4,v.patchShape,Math.min(v.width,v.height)*.45);
+   return '<g transform="translate('+x.toFixed(3)+' '+y.toFixed(3)+')"><path d="'+shape+'" fill="none" stroke="#ef4444" stroke-width=".1"/></g>';
+  }).join('');
+  result='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+paths+'</svg>';
+ }
+ if(v.registrationMarks){
+  const mx=5,my=5,W=plan.sw*25.4,H=plan.sh*25.4;
+  const mark=(x,y)=>'<path d="M'+(x-2)+' '+y+'h4 M'+x+' '+(y-2)+'v4" stroke="#1788ef" stroke-width=".15" fill="none"/>';
+  result=result.replace('</svg>',mark(mx,my)+mark(W-mx,my)+mark(mx,H-my)+mark(W-mx,H-my)+'</svg>');
+ }
+ return result;
+};
+const scBaseSheetCanvas=makeSheetCanvas;
+makeSheetCanvas=function(p,v,plan,count,proof=false){
+ // Keep production artwork on physical 300 DPI coordinates.
+ const sheet=scBaseSheetCanvas(p,v,{...plan,margin:plan.originX??plan.margin,gap:plan.gapX??plan.gap},count,proof);
+ if(plan.originX!==plan.originY||plan.gapX!==plan.gapY){
+  const ctx=sheet.getContext('2d');ctx.clearRect(0,0,sheet.width,sheet.height);
+  const art=imageCanvas(p,'color');
+  for(let i=0;i<count;i++){
+   const x=Math.round((plan.originX+(i%plan.cols)*(v.width+plan.gapX))*DPI),
+     y=Math.round((plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*DPI);
+   ctx.drawImage(art,x,y,p.w,p.h);
+   if(proof){ctx.strokeStyle='#ef4444';ctx.stroke(new Path2D(outlinePath(p.w,p.h,v.patchShape,4)));}
+  }
+ }
+ if(proof&&v.registrationMarks){
+  const ctx=sheet.getContext('2d');ctx.strokeStyle='#1687dc';ctx.lineWidth=2;
+  const crosses=[[30,30],[sheet.width-30,30],[30,sheet.height-30],[sheet.width-30,sheet.height-30]];
+  for(const [x,y] of crosses){ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke();}
+ }
+ return sheet;
+};
+const scBaseValuesForJig=values;
+values=function(){return {...scBaseValuesForJig(),jigX:Number($('jigX').value),jigY:Number($('jigY').value),
+ jigGapX:Number($('jigGapX').value),jigGapY:Number($('jigGapY').value),registrationMarks:$('registrationMarks').checked};};
+for(const id of ['jigX','jigY','jigGapX','jigGapY','registrationMarks'])$(id).addEventListener('input',renderSoon);
 
 /* Design Pro extensions; preserve the v0.3 texture engine and manufacturer-controlled print processing. */
 const scBasePaint = paintBase;
