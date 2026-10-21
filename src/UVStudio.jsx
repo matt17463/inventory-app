@@ -126,8 +126,8 @@ export default function UVStudio(){
  }
  async function setStatus(status){
   if(!admin||!project.id)return;
-  if(status==='approved'&&(!project.material_recipe_id||!project.artwork_url.trim())){
-   return setMessage('Approval requires an approved material recipe and a durable artwork-file reference in the Artwork Vault.');
+  if(status==='approved'&&(!project.material_recipe_id||!project.artwork_url.trim()||!project.proof_url.trim())){
+   return setMessage('Approval requires an approved material recipe plus source artwork and an approved customer proof stored in the Artwork Vault.');
   }
   if(shouldSimulateWrites())return setMessage('Training mode: status unchanged.');
   setBusy(true);
