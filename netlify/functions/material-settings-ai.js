@@ -43,6 +43,39 @@ export async function handler(event) {
     const unverifiedLinks=cleanSources(body.sources).map(s=>({...s,verified:false}));
     const vetted=[];
     const key=process.env.OPENAI_API_KEY;
+
+    if(body.mode==='research'){
+      if(!key)return bodyResponse(503,{message:'Configure the server-only OPENAI_API_KEY for live manufacturer research.'},event);
+      const request={machine_type:machine,machine_model:model,machine_configuration:configuration,
+        operation,material_name:material,brand,finish,thickness,notes};
+      const task='Find manufacturer or supplier operating recommendations for the EXACT machine module and EXACT identified material, not a generic material family. '+
+        'Prefer xTool official support for S1/P2/Omni, the laser OEM/controller for MOPA, and heat-transfer/substrate makers for presses. '+
+        'Document source URLs and critical conditions. If sources do not establish numerical values, say insufficient evidence. '+
+        'Do not give a ready-to-run recipe when the exact variant is not confirmed. Never encourage laser processing PVC or unknown plastics. '+
+        'Mention ventilation, PPE, fire precautions, substrate coatings and test coupons. '+
+        'Return concise plain English with direct source links and indicate if a value is manufacturer or community-provided. Input: '+JSON.stringify(request);
+      const response=await fetch('https://api.openai.com/v1/responses',{
+        method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:process.env.OPENAI_MATERIAL_RESEARCH_MODEL||'gpt-4.1',
+          tools:[{type:'web_search',search_context_size:'medium'}],
+          tool_choice:'required',
+          input:task,max_output_tokens:1800
+        }),signal:AbortSignal.timeout(95000)
+      });
+      if(!response.ok)return bodyResponse(502,{message:'Live manufacturer research is unavailable. Refer to saved approved recipes.'},event);
+      const data=await response.json();
+      const messages=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]);
+      const report=messages.map(x=>x.text||'').join('\n').slice(0,14000);
+      const references=messages.flatMap(x=>x.annotations||[]).filter(a=>a.type==='url_citation'&&/^https:\/\//.test(a.url||''))
+        .map(a=>({label:clip(a.title,160)||new URL(a.url).hostname,url:a.url,provenance:'live web research; confirm source applicability',verified:false}));
+      const unique=[...new Map(references.map(a=>[a.url,a])).values()].slice(0,20);
+      if(!report)return bodyResponse(502,{message:'Live research did not return a source-grounded result.'},event);
+      await auditFunctionSecurity({functionName:'material-settings-ai',action:'research',outcome:'success',userId:auth.user.id,role:auth.role,event,metadata:{machine,operation}});
+      return bodyResponse(200,{research:report,references:unique,review_required:true,confidence:'unverified',
+        evidence_note:'Live web findings are suggestions, not verified manufacturer matches or production-approved settings. Compare cited manuals and test a coupon.'},event);
+    }
+
     if(!key)return bodyResponse(503,{message:'AI suggestions are not configured. Existing verified recipes remain available.'},event);
     const requestContext={
       machine_type:machine,machine_model:model,machine_configuration:configuration,
