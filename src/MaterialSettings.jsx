@@ -40,6 +40,7 @@ export default function MaterialSettings(){
   const [filterMachine,setFilterMachine]=useState('all');
   const [trial,setTrial]=useState({result:'needs_adjustment',observations:'',measurement:'{}'});
   const [ai,setAi]=useState(null);
+  const [research,setResearch]=useState(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [currentTab,setCurrentTab]=useState('library');
@@ -141,6 +142,24 @@ export default function MaterialSettings(){
       setAi(data);setMessage('Unverified AI plan prepared. Review against machine and substrate manuals before testing.');
     }catch(e){setMessage(errorText(e));}finally{setBusy(false);}
   }
+
+  async function researchSources(){
+    if(safety.blocked)return setMessage(safety.reason);
+    if(!form.material_name||!form.machine_model||!form.machine_configuration)
+      return setMessage('Identify the exact material and equipment configuration first.');
+    setBusy(true);setMessage('Researching live manufacturer and supplier instructions...');
+    try{
+      const response=await authenticatedFunctionFetch('/.netlify/functions/material-settings-ai',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({...form,mode:'research',notes:form.material_notes})
+      });
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(payload.message||'Live research failed.');
+      setResearch(payload);
+      setMessage('Research complete. Verify the cited instructions apply to your exact machine and material before any test.');
+    }catch(e){setMessage(errorText(e));}finally{setBusy(false);}
+  }
+
   function adoptSuggestion(){
     if(!ai)return;
     set('settings',JSON.stringify(ai.candidate_settings||{},null,2));
@@ -182,13 +201,21 @@ export default function MaterialSettings(){
       </div>
       <details><summary>Advanced settings JSON (optional)</summary><label className="sc-material-json">Editable machine settings (JSON — include units)<textarea rows={8} spellCheck={false} value={form.settings} onChange={e=>set('settings',e.target.value)}/></label></details>
       <div className="sc-material-actions"><button className="primary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={saveRecord}>Save experimental draft</button>
-       <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={suggest}>Ask AI for test plan</button>
+       <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={suggest}>AI test plan</button>
+       <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={researchSources}>Research manufacturer settings online</button>
        {admin&&form.id&&form.status!=='approved'&&<button className="secondary-button" type="button" disabled={busy||!trialRows.some(x=>x.result==='pass' && x.recipe_version===form.version)} onClick={approve}>Approve tested recipe</button>}</div>
       {form.id&&<p className="sc-material-help">Status: <strong>{form.status}</strong> · Version {form.version} · {form.approved_at?'Approved '+new Date(form.approved_at).toLocaleDateString():'Not production approved'}</p>}
     </section>
     <div className="sc-material-aside">
-      <section className="card"><h2>AI settings researcher</h2><p>This assistant prepares a conservative test plan. It does not browse current manuals or make unverified settings production-safe.</p>
+      <section className="card"><h2>AI settings researcher</h2><p>The research tool searches current manufacturer/supplier sources. The test-plan tool prepares cautious candidate settings. Verify citations, model/module, and substrate before trying any setting.</p>
         <label>Relevant manufacturer reference links (one per line)<textarea rows={3} value={sourceLinks} onChange={e=>setSourceLinks(e.target.value)}/></label>
+        {research&&<div className="sc-material-ai">
+          <h3>Current source research</h3><p className="sc-material-warning">{research.evidence_note}</p>
+          <div style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{research.research}</div>
+          {research.references?.length>0&&<><h4>Cited sources</h4><ul>{research.references.map((ref,i)=><li key={i}>
+            <a href={ref.url} rel="noopener noreferrer" target="_blank">{ref.label||ref.url}</a> · verify exact product match
+          </li>)}</ul></>}
+        </div>}
         {ai&&<div className="sc-material-ai"><h3>{ai.summary}</h3><p>{ai.evidence_note}</p>
           {!!ai.test_steps?.length&&<><h4>Test checklist</h4><ol>{ai.test_steps.map((s,i)=><li key={i}>{s}</li>)}</ol></>}
           {!!ai.warnings?.length&&<><h4>Warnings</h4><ul>{ai.warnings.map((s,i)=><li key={i}>{s}</li>)}</ul></>}
