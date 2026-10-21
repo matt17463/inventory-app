@@ -135,7 +135,7 @@ create or replace function public.sc_approve_material_recipe(p_recipe_id uuid)
 returns void language plpgsql security invoker set search_path = ''
 as $$
 begin
-  if public.sc_current_app_role() not in ('admin','manager') then raise exception 'Manager approval required'; end if;
+  if coalesce(public.sc_current_app_role() in ('admin','manager'), false) = false then raise exception 'Manager approval required'; end if;
   if not exists(select 1 from public.sc_material_recipe_trials
    where recipe_id = p_recipe_id and result = 'pass') then
     raise exception 'At least one passing physical test must be recorded before approval';
@@ -148,3 +148,55 @@ begin
 end $$;
 revoke all on function public.sc_approve_material_recipe(uuid) from public, anon;
 grant execute on function public.sc_approve_material_recipe(uuid) to authenticated;
+
+
+-- Invariants enforced at database boundary; UI-only approval checks are insufficient.
+create or replace function public.sc_material_recipe_approval_guard()
+returns trigger language plpgsql security invoker set search_path = ''
+as $$
+begin
+  if new.status = 'approved' then
+    if coalesce(public.sc_current_app_role() in ('admin','manager'), false) = false
+       or new.approved_by is distinct from auth.uid()
+       or new.approved_at is null then
+      raise exception 'Only a signed-in manager may approve a recipe';
+    end if;
+    if not exists (
+      select 1 from public.sc_material_recipe_trials t
+      where t.recipe_id = new.id and t.result = 'pass'
+    ) then raise exception 'Recipe approval requires a passing physical test'; end if;
+  elsif new.approved_at is not null or new.approved_by is not null then
+    raise exception 'Unapproved recipes cannot retain manager approval metadata';
+  end if;
+  return new;
+end $$;
+drop trigger if exists sc_material_recipe_approval_validate on public.sc_material_recipes;
+create trigger sc_material_recipe_approval_validate
+before insert or update on public.sc_material_recipes
+for each row execute function public.sc_material_recipe_approval_guard();
+revoke all on function public.sc_material_recipe_approval_guard() from public, anon, authenticated;
+
+create or replace function public.sc_uv_project_approval_guard()
+returns trigger language plpgsql security invoker set search_path = ''
+as $$
+begin
+  if new.status in ('approved','production','completed') then
+    if new.approved_at is null or new.approved_by is null then
+      raise exception 'Approval metadata is mandatory for production UV projects';
+    end if;
+    if nullif(btrim(new.artwork_url),'') is null or nullif(btrim(new.proof_url),'') is null then
+      raise exception 'Source artwork and approved proof references required';
+    end if;
+    if new.material_recipe_id is null or not exists (
+      select 1 from public.sc_material_recipes r
+      where r.id = new.material_recipe_id and r.status = 'approved'
+    ) then raise exception 'Choose a physically tested and approved Omni recipe'; end if;
+  elsif new.approved_at is not null or new.approved_by is not null then
+    raise exception 'Unapproved project must clear approval metadata';
+  end if;
+  return new;
+end $$;
+drop trigger if exists sc_uv_project_approval_validate on public.sc_uv_projects;
+create trigger sc_uv_project_approval_validate before insert or update on public.sc_uv_projects
+for each row execute function public.sc_uv_project_approval_guard();
+revoke all on function public.sc_uv_project_approval_guard() from public, anon, authenticated;
