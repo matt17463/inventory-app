@@ -587,6 +587,61 @@ $('downloadRosterSheet').onclick=async()=>{
 
 /* Same-origin bridge to Skilled Crafting application: transfers recipe metadata only.
    Original art is not uploaded. Operators must preserve the local source and exported production files. */
+async function scUvCloudPacket(type){
+ if(type==='SC_UV_EXPORT_EDITABLE'){
+  if(!imageDataURL)throw Error('Import artwork before saving the cloud-editable project.');
+  return {type:'SC_UV_EXPORT_RESULT',mime_type:'application/json',asset_kind:'editable',
+    file_name:filename()+'-editable.json',contents:JSON.stringify({
+      type:'SC_UV_STUDIO_PROJECT',settings:values(),artworkDataURL:imageDataURL,
+      calibrationRecords:calibrationRecords.slice(-100),regionOverrides
+    })};
+ }
+ if(type==='SC_UV_EXPORT_PACK'){
+  if(!imageDataURL)throw Error('Upload source artwork before generating a production pack.');
+  const p=await prod(),files=[],v=values();
+  for(const [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],
+    ['white','white-underbase.png'],['varnish','varnish-highlights.png']]){
+   files.push({name,data:await pngBytes(imageCanvas(p,key))});
+  }
+  files.push({name:'outline-cutline.svg',data:textBytes(patchOutlineSVG(v))});
+  files.push({name:'manifest.json',data:textBytes(JSON.stringify(manifest(v,p),null,2))});
+  files.push({name:'print-notes.txt',data:textBytes(printNotes(v))});
+  const zip=zipStore(files);
+  if(zip.byteLength>52428800)throw Error('Cloud print pack exceeds 50 MB; export locally instead.');
+  return {type:'SC_UV_EXPORT_RESULT',mime_type:'application/zip',asset_kind:'production_zip',
+    file_name:filename()+'-production.zip',buffer:zip.buffer.slice(zip.byteOffset,zip.byteOffset+zip.byteLength)};
+ }
+ if(type==='SC_UV_EXPORT_PROOF'){
+  scProductProof();
+  const bytes=await pngBytes($('productProofCanvas'));
+  return {type:'SC_UV_EXPORT_RESULT',mime_type:'image/png',asset_kind:'proof',
+    file_name:filename()+'-customer-proof.png',buffer:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)};
+ }
+ throw Error('Invalid export kind');
+}
+window.addEventListener('message', async(event)=>{
+ if(event.origin!==window.location.origin||event.source!==window.parent)return;
+ const msg=event.data||{};
+ if(!['SC_UV_EXPORT_EDITABLE','SC_UV_EXPORT_PACK','SC_UV_EXPORT_PROOF','SC_UV_IMPORT_EDITABLE'].includes(msg.type))return;
+ try{
+  if(msg.type==='SC_UV_IMPORT_EDITABLE'){
+   if(typeof msg.contents!=='string'||msg.contents.length>45_000_000)throw Error('Editable project is not valid');
+   const transfer=new DataTransfer();
+   transfer.items.add(new File([msg.contents],'uv-studio-saved-project.json',{type:'application/json'}));
+   $('projectInput').files=transfer.files;
+   $('projectInput').dispatchEvent(new Event('change',{bubbles:true}));
+   window.parent.postMessage({type:'SC_UV_IMPORT_ACCEPTED',requestId:msg.requestId},event.origin);
+   return;
+  }
+  const result=await scUvCloudPacket(msg.type);
+  const payload={...result,requestId:msg.requestId};
+  if(payload.buffer)window.parent.postMessage(payload,event.origin,[payload.buffer]);
+  else window.parent.postMessage(payload,event.origin);
+ }catch(err){
+  window.parent.postMessage({type:'SC_UV_EXPORT_ERROR',requestId:msg.requestId,message:String(err.message||err)},event.origin);
+ }finally{currentProduction=null}
+});
+
 window.addEventListener('message', (event) => {
   if (event.origin !== window.location.origin || event.source !== window.parent) return;
   if (event.data?.type !== 'SC_UV_REQUEST_SNAPSHOT') return;
