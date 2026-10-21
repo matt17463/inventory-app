@@ -1,5 +1,5 @@
 [build]
-  ignore = "node scripts/netlify-ignore-non-production.mjs"
+  ignore = "node ./scripts/netlify-ignore-non-production.mjs"
   command = "npm run build"
   publish = "dist"
 
