@@ -68,8 +68,18 @@ export async function handler(event){
       if(error)throw error;
       return reply(event,200,{assets:data||[]});
     }
-    if(action==='download'||action==='read_inline'){
+    if(action==='download'||action==='read_inline'||action==='read_chunk'){
       const asset=await assetFor(auth.supabase,String(body.asset_id||''),projectId);
+      if(action==='read_chunk'){
+        if(asset.asset_kind!=='editable'||asset.mime_type!=='application/json')return reply(event,400,{message:'Not an editable project'});
+        const offset=Number(body.offset),max=262144;
+        if(!Number.isSafeInteger(offset)||offset<0||offset>=asset.file_size)return reply(event,400,{message:'Invalid chunk offset'});
+        const last=Math.min(asset.file_size-1,offset+max-1);
+        const response=await r2Client().send(new GetObjectCommand({Bucket:r2BucketName(),Key:asset.storage_key,Range:'bytes='+offset+'-'+last}));
+        const bytes=Buffer.from(await response.Body.transformToByteArray());
+        if(bytes.length!==last-offset+1)return reply(event,409,{message:'Incomplete stored chunk'});
+        return reply(event,200,{base64:bytes.toString('base64'),next_offset:last+1,size:asset.file_size});
+      }
       if(action==='download'){
         const url=await getSignedUrl(r2Client(),new GetObjectCommand({Bucket:r2BucketName(),Key:asset.storage_key}),{expiresIn:300});
         return reply(event,200,{url,expires_in:300,filename:asset.file_name});
