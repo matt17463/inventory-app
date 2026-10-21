@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { supabase } from './supabaseClient';
+import { listUvAssets, uploadUvAsset, readUvEditable, signedUvAsset } from './lib/uvAssets';
 import './UVStudio.css';
 
 function newProject(){return{
@@ -26,6 +27,11 @@ export default function UVStudio(){
  const [projects,setProjects]=useState([]);
  const [recipes,setRecipes]=useState([]);
  const [events,setEvents]=useState([]);
+ const [assets,setAssets]=useState([]);
+ const [jobs,setJobs]=useState([]);
+ const [customers,setCustomers]=useState([]);
+ const [artworkRequests,setArtworkRequests]=useState([]);
+ const [blankProducts,setBlankProducts]=useState([]);
  const [message,setMessage]=useState('');
  const [busy,setBusy]=useState(false);
  const [eventKind,setEventKind]=useState('qc');
@@ -40,13 +46,27 @@ export default function UVStudio(){
   ]);
   if(pr.error)throw pr.error;if(re.error)throw re.error;
   setProjects(pr.data||[]);setRecipes(re.data||[]);
+  const [j,cu,ar,bp]=await Promise.all([
+   supabase.from('jobs').select('id,job_name,customer_name,woocommerce_order_id,manual_order_id,status').order('created_at',{ascending:false}).limit(350),
+   supabase.from('customers').select('id,name').order('name').limit(1000),
+   supabase.from('sc_artwork_system_requests').select('id,organization,customer_name,graphic_text,status').order('created_at',{ascending:false}).limit(150),
+   supabase.from('blank_products').select('id,name,unit_cost').order('name').limit(800)
+  ]);
+  if(!j.error)setJobs(j.data||[]);
+  if(!cu.error)setCustomers(cu.data||[]);
+  if(!ar.error)setArtworkRequests(ar.data||[]);
+  if(!bp.error)setBlankProducts(bp.data||[]);
  },[]);
  useEffect(()=>{load().catch(e=>setMessage(e.message));},[load]);
  useEffect(()=>{
   function onMessage(event){
    if(event.origin!==window.location.origin||event.source!==iframe.current?.contentWindow)return;
    if(event.data?.requestId!==waiting.current?.id)return;
-   if(event.data?.type==='SC_UV_SNAPSHOT'){
+   if(['SC_UV_EXPORT_RESULT','SC_UV_IMPORT_ACCEPTED'].includes(event.data?.type)){
+    waiting.current.resolve(event.data);waiting.current=null;
+   } else if(event.data?.type==='SC_UV_EXPORT_ERROR'){
+    waiting.current.reject(new Error(event.data.message||'UV export failed'));waiting.current=null;
+   } else if(event.data?.type==='SC_UV_SNAPSHOT'){
     waiting.current.resolve(event.data);waiting.current=null;
    } else if(event.data?.type==='SC_UV_SNAPSHOT_ERROR'){
     waiting.current.reject(new Error(event.data.message||'Cannot read UV editor'));waiting.current=null;
@@ -63,6 +83,52 @@ export default function UVStudio(){
   waiting.current={id,resolve:value=>{window.clearTimeout(timeout);resolve(value);},reject:e=>{window.clearTimeout(timeout);reject(e);}};
   iframe.current.contentWindow.postMessage({type:'SC_UV_REQUEST_SNAPSHOT',requestId:id},window.location.origin);
  });
+
+ const editorRequest=(type,contents)=>new Promise((resolve,reject)=>{
+  if(!iframe.current?.contentWindow){reject(Error('UV designer is not loaded'));return;}
+  const id='uv-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
+  const timeout=window.setTimeout(()=>{if(waiting.current?.id===id){waiting.current=null;reject(Error('UV editor response timed out'));}},50000);
+  waiting.current={id,resolve:v=>{window.clearTimeout(timeout);resolve(v);},reject:e=>{window.clearTimeout(timeout);reject(e);}};
+  iframe.current.contentWindow.postMessage({type,requestId:id,...(contents?{contents}: {})},window.location.origin);
+ });
+ const refreshAssets=async(id)=>{
+  if(!id){setAssets([]);return [];}
+  const list=await listUvAssets(id);setAssets(list);return list;
+ };
+ async function persistArtwork(id,kind='SC_UV_EXPORT_EDITABLE'){
+  const result=await editorRequest(kind);
+  const blob=result.buffer?new Blob([result.buffer],{type:result.mime_type}):
+    new Blob([result.contents],{type:result.mime_type});
+  const uploaded=await uploadUvAsset(id,{
+    asset_kind:result.asset_kind,file_name:result.file_name,mime_type:result.mime_type,blob,
+    notes:result.asset_kind==='production_zip'?'300 DPI graphics; xTool Studio controls printing':'Versioned UV Studio asset'
+  });
+  await refreshAssets(id);
+  return uploaded;
+ }
+ async function saveCloudAsset(kind){
+  if(!project.id)return setMessage('Save the project first.');
+  if(shouldSimulateWrites())return setMessage('Training mode: nothing uploaded.');
+  setBusy(true);setMessage('');
+  try{
+   const asset=await persistArtwork(project.id,kind);
+   if(asset.asset_kind==='proof'){
+    const {error}=await supabase.from('sc_uv_projects').update({
+      proof_url:'r2://'+asset.storage_key,updated_at:new Date().toISOString()
+    }).eq('id',project.id);
+    if(error)throw error;setProject(p=>({...p,proof_url:'r2://'+asset.storage_key}));
+   }
+   setMessage('Private '+asset.asset_kind.replace('_',' ')+' uploaded and verified in R2 ('+Math.round(asset.file_size/1024)+' KB).');
+  }catch(e){setMessage(e.message||'Cloud export failed');}finally{setBusy(false);}
+ }
+ async function downloadAsset(asset){
+  try{
+   const info=await signedUvAsset(project.id,asset.id);
+   // Signed download URL opens without exposing the R2 bucket itself.
+   window.open(info.url,'_blank','noopener,noreferrer');
+  }catch(e){setMessage(e.message||'Could not access stored file');}
+ }
+
  async function save(){
   if(!canWrite)return setMessage('Read-only employee access.');
   if(!project.title.trim())return setMessage('Project title is required.');
@@ -97,18 +163,37 @@ export default function UVStudio(){
    if(response.error)throw response.error;
    setProject({...response.data,material_recipe_id:response.data.material_recipe_id||''});
    await load();
-   setMessage('Project metadata saved. Production PNGs and original image are NOT stored in cloud; export them from the designer and attach to your Artwork Vault.');
+   try{
+     const savedAsset=await persistArtwork(result.data.id,'SC_UV_EXPORT_EDITABLE');
+     const reference='r2://'+savedAsset.storage_key;
+     const {error:refError}=await supabase.from('sc_uv_projects').update({
+       artwork_url:reference,updated_at:new Date().toISOString()
+     }).eq('id',result.data.id);
+     if(refError)throw refError;
+     setProject(p=>({...p,artwork_url:reference}));
+     setMessage('Project and editable source artwork saved to private R2 storage. Export a production ZIP before manufacturing.');
+   }catch(assetError){
+     setMessage('Project metadata saved, but cloud artwork save FAILED: '+assetError.message+
+     '. Do not approve this job until the original artwork is stored.');
+   }
   }catch(e){setMessage(e.message||'Could not save project');}finally{setBusy(false);}
  }
  async function loadEvents(id){
   const {data,error}=await supabase.from('sc_uv_project_events').select('*').eq('project_id',id).order('recorded_at',{ascending:false}).limit(100);
   if(error)setMessage(error.message);else setEvents(data||[]);
  }
- function openProject(item){
+ async function openProject(item){
   setProject({...item,material_recipe_id:item.material_recipe_id||''});
-  loadEvents(item.id);
-  setMessage('Project metadata opened. For now, import the original artwork into the embedded designer again; embedded canvas files are local.');
-  setShowLibrary(false);
+  await loadEvents(item.id);setShowLibrary(false);
+  try{
+   const list=await refreshAssets(item.id);
+   const editable=list.find(x=>x.asset_kind==='editable');
+   if(editable){
+    const json=await readUvEditable(item.id,editable.id);
+    await editorRequest('SC_UV_IMPORT_EDITABLE',json);
+    setMessage('Private project artwork restored from R2. Review preview and settings before printing.');
+   }else setMessage('This project has no cloud-editable asset yet. Upload source artwork before use.');
+  }catch(e){setMessage('Project metadata opened. Cloud artwork could not be automatically restored: '+e.message);}
  }
  async function writeEvent(){
   if(!project.id)return setMessage('Save the project first.');
@@ -143,7 +228,8 @@ export default function UVStudio(){
    setMessage('Project status updated; physical production still requires the xTool Studio operator checklist and QC.');
   }catch(e){setMessage(e.message);}finally{setBusy(false);}
  }
- const total=Number(project.unit_cost||0)*Number(project.quantity||1);
+ const total=Number(project.unit_cost||0)*(Number(project.quantity||1)+Number(project.waste_quantity||0))
+   + Number(project.overhead_cost||0);
  const revenue=Number(project.selling_price||0)*Number(project.quantity||1);
  const gross=revenue-total;
  function exportJobCard(){
@@ -174,6 +260,22 @@ export default function UVStudio(){
     {[['title','Job title'],['customer_reference','Customer / club'],['order_reference','Woo / manual order reference'],
       ['artwork_url','Artwork Vault source URL'],['proof_url','Approved customer proof URL']].map(([id,label])=>
       <label key={id}>{label}<input value={project[id]||''} onChange={e=>update(id,e.target.value)}/></label>)}
+
+    <label>Linked production job<select value={project.job_id||''} onChange={e=>{
+      const job=jobs.find(j=>String(j.id)===e.target.value);
+      setProject(p=>({...p,job_id:e.target.value,
+        customer_reference:job?.customer_name||p.customer_reference,
+        order_reference:job?.woocommerce_order_id?'Woo #'+job.woocommerce_order_id:job?.manual_order_id?'Manual #'+job.manual_order_id:p.order_reference}));
+    }}><option value="">Unlinked UV sample / standalone</option>{jobs.map(x=><option key={x.id} value={x.id}>Job {x.id} · {x.customer_name||x.job_name||'Unknown'}</option>)}</select></label>
+    <label>Existing customer<select value={project.customer_id||''} onChange={e=>update('customer_id',e.target.value)}>
+    <option value="">Not linked</option>{customers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+    <label>Artwork request<select value={project.artwork_request_id||''} onChange={e=>update('artwork_request_id',e.target.value)}>
+    <option value="">Not linked</option>{artworkRequests.map(x=><option key={x.id} value={x.id}>{x.organization||x.customer_name||x.graphic_text||x.id} · {x.status}</option>)}</select></label>
+    <label>Available inventory blank<select value={project.blank_product_id||''} onChange={e=>{
+       const blank=blankProducts.find(x=>x.id===e.target.value);
+       setProject(p=>({...p,blank_product_id:e.target.value,unit_cost:blank?.unit_cost??p.unit_cost}));
+    }}><option value="">None / custom material</option>{blankProducts.map(x=><option value={x.id} key={x.id}>{x.name}</option>)}</select></label>
+    <label>Supplier material SKU<input value={project.material_sku||''} onChange={e=>update('material_sku',e.target.value)}/></label>
     <label>Material<select value={project.material_type} onChange={e=>update('material_type',e.target.value)}>
       {['leather','synthetic','transfer_film','metal','other'].map(x=><option key={x} value={x}>{x.replace('_',' ')}</option>)}</select></label>
     <label>Product type<select value={project.project_type} onChange={e=>update('project_type',e.target.value)}>
@@ -182,14 +284,23 @@ export default function UVStudio(){
       <option value="">No approved recipe selected</option>{recipes.map(x=><option key={x.id} value={x.id}>{x.material_name} · {x.machine_model} · {x.operation}</option>)}</select></label>
     <label>Quantity<input type="number" min="1" max="10000" value={project.quantity} onChange={e=>update('quantity',e.target.value)}/></label>
     <label>Cost per item ($)<input type="number" step="0.01" min="0" value={project.unit_cost} onChange={e=>update('unit_cost',e.target.value)}/></label>
+    <label>Estimated spoiled extras<input type="number" min="0" value={project.waste_quantity||0} onChange={e=>update('waste_quantity',e.target.value)}/></label>
+    <label>Labor minutes<input type="number" step="0.1" min="0" value={project.labor_minutes||0} onChange={e=>update('labor_minutes',e.target.value)}/></label>
+    <label>Overhead / setup cost ($)<input type="number" step="0.01" min="0" value={project.overhead_cost||0} onChange={e=>update('overhead_cost',e.target.value)}/></label>
     <label>Selling price per item ($)<input type="number" step="0.01" min="0" value={project.selling_price} onChange={e=>update('selling_price',e.target.value)}/></label>
   </div>
   <div className="sc-uv-costs"><span>Estimated batch cost <strong>{fmt(total)}</strong></span><span>Revenue <strong>{fmt(revenue)}</strong></span><span>Gross contribution (before overhead) <strong>{fmt(gross)}</strong></span></div>
   <div className="sc-uv-buttons"><button className="primary-button" disabled={busy||!canWrite} onClick={save}>Save project metadata from editor</button>
     <button className="secondary-button" onClick={exportJobCard}>Export job card CSV</button>
+    <button className="secondary-button" disabled={busy||!canWrite||!project.id} onClick={()=>saveCloudAsset('SC_UV_EXPORT_PACK')}>Generate & save production ZIP to R2</button>
+    <button className="secondary-button" disabled={busy||!canWrite||!project.id} onClick={()=>saveCloudAsset('SC_UV_EXPORT_PROOF')}>Save customer proof to R2</button>
     {admin&&project.id&&<><button className="secondary-button" onClick={()=>setStatus('proof')} disabled={busy}>Request proof</button>
       <button className="secondary-button" onClick={()=>setStatus('approved')} disabled={busy||project.status==='approved'}>Approve for production</button></>}</div>
-  <p className="sc-uv-disclaimer">Saving records design settings only. Re-import your original logo when reopening until Artwork Vault/R2 binary-file sync is implemented. Keep exported 300-DPI print files with the job.</p>
+  {selectedJob&&<p className="sc-uv-disclaimer">Linked job #{selectedJob.id} · {selectedJob.status}. Inventory is reserved and deducted only by the existing pull-sheet workflow; this UV record will not double-count blanks.</p>}
+  {project.id&&<div className="sc-uv-events"><h3>Private Artwork Vault files</h3>{assets.map(a=><article key={a.id}><strong>{a.asset_kind}: {a.file_name}</strong> · {Math.round(a.file_size/1024)} KB · {new Date(a.created_at).toLocaleString()}
+  <button type="button" className="secondary-button" onClick={()=>downloadAsset(a)}>Download</button></article>)}
+  {!assets.length&&<p>No verified R2 assets yet.</p>}</div>}
+  <p className="sc-uv-disclaimer">Source files, editable artwork and production assets are versioned in private R2 storage. The actual UV printing settings, image approvals and physical QC still require verification in xTool Studio and on the printed substrate.</p>
   </section>
   <section className="sc-uv-designer card"><div className="sc-uv-frame-head"><h2>Faux embroidery & UV texture editor</h2><span>Full prepress tools · version 0.3</span></div>
     <iframe ref={iframe} src="/uv-studio/index.html" title="Skilled Crafting UV Studio advanced editor" loading="eager" allow="clipboard-write"/></section>
