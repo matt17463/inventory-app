@@ -80,6 +80,23 @@
 <div class="preview-wrap"><div class="tabs"><button class="tab active" data-tab="color">Stitch artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
 <div class="modulegrid"><div class="module"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
 <div class="module"><h2>Patch format &amp; production layout</h2><label for="productPreset">Quick product template</label><select id="productPreset"><option value="custom">Custom dimensions / geometry</option><option value="hat-leather" selected>Hat leather patch · 3.5 × 2.5 in</option><option value="hat-oval">Hat oval patch · 3.5 × 2.25 in</option><option value="garment-square">Apparel badge · 3 × 3 in</option><option value="chest-small">Left-chest patch · 2.5 × 2.5 in</option><option value="heat-transfer">Raised transfer motif · 3.5 × 2.5 in</option><option value="metal-tag">Metal badge · 4 × 3 in</option></select><div class="form-row"><div><label for="patchShape">Outline / patch template</label><select id="patchShape"><option value="rounded">Rounded rectangle / hat patch</option><option value="rectangle">Rectangle / apparel</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="hexagon">Hexagon</option><option value="shield">Shield</option></select></div><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><div class="metric-row"><span id="layoutResult">Calculating layout…</span></div><div class="mini-tools"><button id="layoutZip">↓ Layout + cutlines ZIP</button><button id="outlineSvg">↓ Cutline SVG</button></div><div class="small">Cutlines are uncalibrated geometric references, not registration-verified cutter commands.</div></div></div>
+
+<div class="module" style="margin-top:14px" id="scDesignPro">
+<h2>Design Pro — preflight, special effects and team personalization</h2>
+<div class="form-row">
+<div><label class="checkbox"><input type="checkbox" id="cleanupWhite"> Remove near-white photo background (preview and export)</label><div class="small">Enable only when white is NOT part of the logo. Alpha cleanup is approximate; inspect fine edges.</div></div>
+<div><label for="cleanThreshold">White cutoff (RGB)</label><input id="cleanThreshold" type="range" min="220" max="254" value="245"><div class="small">Higher numbers remove fewer off-white pixels.</div></div>
+<div><label for="effectStyle">Dimensional effect family</label><select id="effectStyle"><option value="embroidery">Thread embroidery</option><option value="chenille">Chenille pile</option><option value="molded">Molded rubber / PVC-look</option><option value="embossed">Embossed leather-look</option><option value="metallic">Brushed metal-look</option><option value="gloss">High-gloss spot relief</option></select></div>
+<div><label for="proofSurface">Illustrative customer mockup</label><select id="proofSurface"><option value="hat">Baseball cap</option><option value="hoodie">Garment / hoodie</option><option value="leather">Flat leather patch</option><option value="metal">Brushed metal panel</option></select></div>
+</div>
+<div class="mini-tools"><button id="generateProductProof">Generate stylized proof</button><button id="downloadProductProof">↓ Customer proof PNG</button></div>
+<canvas id="productProofCanvas" width="860" height="480" style="width:100%;max-width:860px;border:1px solid #345269;border-radius:12px;background:#0d1721;margin-top:10px"></canvas>
+<div class="small">Design visualization only. Lighting, texture, physical ink and curved placement are illustrative—not photographs or measured printer results.</div>
+<label for="personalizationRows" style="margin-top:16px">Team roster — one per line: player name, jersey number</label>
+<textarea id="personalizationRows" rows="5" style="width:100%;background:#101d29;color:#ecf9ff;border:1px solid #537285;border-radius:8px;padding:9px" placeholder="J. Smith,12&#10;A. Lee,4"></textarea>
+<div class="mini-tools"><button id="downloadRosterCsv">↓ Personalization CSV</button><button id="downloadRosterSheet">↓ Personalized print sheets ZIP</button></div>
+<div class="small">Review capitalization, size and legibility before printing. Roster overlays are provisional artwork and never replace approved customer proof.</div>
+</div>
 <div class="module" style="margin-top:14px"><h2>Material calibration and print validation</h2><div class="form-row"><div><label for="calName">Material / supplier / lot</label><input type="text" id="calName" placeholder="PU patch — Supplier SKU"></div><div><label for="calMode">xTool Studio mode</label><select id="calMode"><option value="Texture">Texture</option><option value="Relief">Relief</option><option value="Flat">Flat</option></select></div><div><label for="calStudioHeight">Studio target (mm)</label><input id="calStudioHeight" type="number" min="0.01" max="7" step="0.05" value="0.3"></div><div><label for="calMeasured">Measured result (mm)</label><input id="calMeasured" type="number" min="0" max="7" step="0.01" placeholder="After test print"></div><div><label for="calPrimer">Primer / treatment</label><input id="calPrimer" type="text" placeholder="Product and procedure"></div><div><label for="calDurability">Adhesion + durability result</label><select id="calDurability"><option value="untested">Untested</option><option value="pass">Passed relevant tests</option><option value="fail">Failed</option></select></div></div><label for="calNotes">Test notes / bend, transfer or scratch observations</label><input id="calNotes" type="text" placeholder="Sample preparation, result, ink type, press details etc."><div class="mini-tools" style="margin:11px 0"><button id="recordCalibration">Save test record</button><button id="coupon">↓ Test coupon ZIP</button><button id="exportCalibration">↓ Calibration records CSV</button><button id="exportCalibrationJSON">↓ Records JSON</button><button id="importCalibration">Import records JSON</button><input id="calImport" type="file" accept="application/json,.json" style="display:none"></div><div class="small" id="calGuidance">Only physical measurements and passed durability tests can qualify a material record for use as a tentative guide.</div><div id="calRecords"></div></div>
 <div class="callout"><strong>Omni compatibility notice:</strong> xTool currently requires its official software for printing. These files are <strong>design assets and experimental separations</strong>, not a machine-ready RIP job. The relationship between an imported grayscale map and actual deposited ink height needs physical calibration on the Omni.</div>
 <div class="steps"><h2>Material-specific first-print checklist</h2><div id="printChecklist" class="material-note"></div></div></section>
@@ -452,6 +469,121 @@ $('projectInput').addEventListener('change',async e=>{let f=e.target.files?.[0];
  }}catch(err){}},false);
 applySheetChoice();renderCalRecords();UI();
 
+
+
+/* Design Pro extensions; preserve the v0.3 texture engine and manufacturer-controlled print processing. */
+const scBasePaint = paintBase;
+paintBase = function(w,h){
+  const data=scBasePaint(w,h);
+  if(!$('cleanupWhite')?.checked)return data;
+  const a=data.data, limit=Number($('cleanThreshold').value||245);
+  for(let i=0;i<a.length;i+=4){
+    if(a[i]>=limit&&a[i+1]>=limit&&a[i+2]>=limit)a[i+3]=0;
+  }
+  return data;
+};
+const scPriorValues=values;
+values=function(){return {...scPriorValues(),cleanupWhite:$('cleanupWhite').checked,
+  cleanThreshold:+$('cleanThreshold').value,effectStyle:$('effectStyle').value};};
+const scPriorProduce=produce;
+produce=function(w,h,v){
+ const r=scPriorProduce(w,h,v),type=v.effectStyle;
+ if(type==='embroidery')return r;
+ const px=r.mask.length;
+ for(let i=0;i<px;i++){
+  if(!r.mask[i])continue;
+  const z=i*4,x=i%w,y=(i/w)|0,orig=r.gray[i]/255;
+  const noise=.5+.5*Math.sin(x*.43+y*.73)*Math.sin(x*.67-y*.31);
+  let h=orig,mul=1.0;
+  if(type==='chenille'){h=.30+.40*noise+.30*orig;mul=.78+noise*.42;}
+  if(type==='molded'){h=.78+.18*orig;mul=.96+orig*.13;}
+  if(type==='embossed'){h=.28+orig*.54;mul=.77+orig*.30;}
+  if(type==='metallic'){h=.39+.36*orig;mul=.70+.47*Math.abs(Math.sin(y*.16+x*.012));}
+  if(type==='gloss'){h=.58+.40*orig;mul=.83+.35*orig;}
+  r.gray[i]=colorClamped(h*255);
+  r.height[z]=r.height[z+1]=r.height[z+2]=r.gray[i];r.height[z+3]=255;
+  for(let c=0;c<3;c++)r.color[z+c]=colorClamped(r.color[z+c]*mul);
+  if(type==='gloss'){r.varnish[z]=r.varnish[z+1]=r.varnish[z+2]=255;r.varnish[z+3]=255;}
+ }
+ return r;
+};
+function scRosterRows(){
+ const raw=($('personalizationRows').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ if(raw.length>250)throw Error('Max 250 roster rows per export');
+ const rows=raw.map((line,i)=>{
+  const [name,number]=line.split(',').map(s=>(s||'').trim());
+  if(!name||name.length>36||!number||number.length>12)throw Error('Roster row '+(i+1)+': require name (up to 36 characters) and number (up to 12).');
+  return {name,number};
+ });return rows;
+}
+function scCsvCell(v){
+ const x=String(v??'').replace(/^[\s]*[=+@-]/,t=>"'"+t);
+ return '"'+x.replace(/"/g,'""')+'"';
+}
+$('downloadRosterCsv').onclick=()=>{
+ try{const rows=scRosterRows(),csv=[['name','number'],...rows.map(r=>[r.name,r.number])].map(r=>r.map(scCsvCell).join(',')).join('\r\n');
+  saveBytes(filename()+'-roster.csv',textBytes(csv),'text/csv');$('status').textContent='✓ Roster worksheet ready';}
+ catch(e){$('status').textContent=e.message;}
+};
+function scProductProof(){
+ if(!output)throw Error('Upload a logo first');
+ const el=$('productProofCanvas'),ctx=el.getContext('2d'),w=el.width,h=el.height;
+ const mode=$('proofSurface').value;ctx.clearRect(0,0,w,h);
+ const bg=ctx.createLinearGradient(0,0,w,h);bg.addColorStop(0,'#0d2030');bg.addColorStop(1,'#10161c');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
+ ctx.save();ctx.translate(w/2,h/2);
+ if(mode==='hat'){
+  ctx.fillStyle='#181d24';ctx.beginPath();ctx.ellipse(0,82,345,95,0,0,Math.PI*2);ctx.fill();
+  const crown=ctx.createLinearGradient(0,-180,0,170);crown.addColorStop(0,'#4d5562');crown.addColorStop(1,'#111821');ctx.fillStyle=crown;
+  ctx.beginPath();ctx.moveTo(-265,80);ctx.quadraticCurveTo(-240,-188,0,-203);ctx.quadraticCurveTo(240,-188,265,80);ctx.quadraticCurveTo(0,168,-265,80);ctx.fill();
+ }else if(mode==='hoodie'){
+  ctx.fillStyle='#222935';ctx.beginPath();ctx.moveTo(-260,190);ctx.lineTo(-210,-122);ctx.lineTo(-116,-191);ctx.quadraticCurveTo(0,-148,116,-191);ctx.lineTo(215,-122);ctx.lineTo(260,190);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#697480';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,-148,78,0,Math.PI);ctx.stroke();
+ }else{
+  const plate=ctx.createLinearGradient(-280,-180,280,180);
+  if(mode==='metal'){plate.addColorStop(0,'#a6afb5');plate.addColorStop(.5,'#43505b');plate.addColorStop(1,'#b5bdc5');}
+  else{plate.addColorStop(0,'#a06b39');plate.addColorStop(.5,'#422d22');plate.addColorStop(1,'#94613f');}
+  ctx.fillStyle=plate;ctx.beginPath();ctx.roundRect(-300,-160,600,320,22);ctx.fill();
+ }
+ const art=canvases.color;
+ const ratio=Math.min(420/art.width,230/art.height),dw=art.width*ratio,dh=art.height*ratio;
+ ctx.shadowColor='#000a';ctx.shadowBlur=20;ctx.shadowOffsetY=10;
+ ctx.fillStyle=mode==='metal'?'#161e28':'#6b4d37';
+ ctx.beginPath();ctx.roundRect(-dw/2-18,-dh/2-18,dw+36,dh+36,16);ctx.fill();
+ ctx.shadowColor='transparent';ctx.drawImage(art,-dw/2,-dh/2,dw,dh);
+ ctx.restore();
+ ctx.fillStyle='#d9e8ed';ctx.font='16px system-ui';ctx.fillText('SKILLED CRAFTING · STYLIZED CONCEPT PROOF',22,h-22);
+ ctx.font='13px system-ui';ctx.fillText('Not a photograph or calibrated representation of ink buildup',22,27);
+}
+$('generateProductProof').onclick=()=>{try{scProductProof();$('status').textContent='✓ Mockup preview ready'}catch(e){$('status').textContent=e.message}};
+$('downloadProductProof').onclick=async()=>{try{scProductProof();saveBytes(filename()+'-stylized-proof.png',await pngBytes($('productProofCanvas')),'image/png');$('status').textContent='✓ Proof exported'}catch(e){$('status').textContent=e.message}};
+$('downloadRosterSheet').onclick=async()=>{
+ if(busy)return;busy=true;
+ try{
+  const rows=scRosterRows();if(!rows.length)throw Error('Enter at least one roster entry');
+  const p=await prod(),v=values(),plan=layoutPlan(v);if(!plan.capacity)throw Error('Patch format does not fit the selected sheet');
+  const files=[],sheetCount=Math.ceil(rows.length/plan.capacity),art=imageCanvas(p,'color');
+  for(let sheet=0;sheet<sheetCount;sheet++){
+   const canvas=document.createElement('canvas');canvas.width=Math.round(plan.sw*DPI);canvas.height=Math.round(plan.sh*DPI);
+   const ctx=canvas.getContext('2d');const qty=Math.min(plan.capacity,rows.length-sheet*plan.capacity);
+   for(let n=0;n<qty;n++){
+    const item=rows[sheet*plan.capacity+n];
+    const x=Math.round((plan.margin+(n%plan.cols)*(v.width+plan.gap))*DPI),y=Math.round((plan.margin+Math.floor(n/plan.cols)*(v.height+plan.gap))*DPI);
+    ctx.drawImage(art,x,y,p.w,p.h);
+    ctx.save();ctx.font='bold '+Math.max(13,Math.round(p.h*.075))+'px system-ui';ctx.textAlign='center';
+    ctx.strokeStyle='#061423';ctx.lineWidth=Math.max(2,p.h*.012);
+    const label=item.name+'  #'+item.number;
+    ctx.strokeText(label,x+p.w*.5,y+p.h*.82,p.w*.85);
+    ctx.fillStyle='#fff';ctx.fillText(label,x+p.w*.5,y+p.h*.82,p.w*.85);
+    ctx.restore();
+   }
+   files.push({name:'personalized-sheet-'+String(sheet+1).padStart(2,'0')+'.png',data:await pngBytes(canvas)});
+  }
+  files.push({name:'personalization-roster.csv',data:textBytes([['name','number'],...rows.map(r=>[r.name,r.number])].map(x=>x.map(scCsvCell).join(',')).join('\r\n'))});
+  files.push({name:'READ-ME.txt',data:textBytes('PERSONALIZED UV ARTWORK — TEST/PROOF ONLY. Names and numbers must be visually approved by customer. Inspect registration, patch edges and minimum text size. Exporting this ZIP does not set Omni printer parameters.')});
+  saveBytes(filename()+'-personalization.zip',zipStore(files),'application/zip');$('status').textContent='✓ '+rows.length+' personalized pieces exported';
+ }catch(e){$('status').textContent='Personalization error: '+e.message}finally{busy=false;currentProduction=null}
+};
+['cleanupWhite','cleanThreshold','effectStyle'].forEach(id=>$(id).addEventListener('input',renderSoon));
 
 /* Same-origin bridge to Skilled Crafting application: transfers recipe metadata only.
    Original art is not uploaded. Operators must preserve the local source and exported production files. */
