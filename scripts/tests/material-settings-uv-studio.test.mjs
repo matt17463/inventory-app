@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { spawnSync } from 'node:child_process';
 import { MACHINE_TYPES, OPERATION_LABELS, machineFor, materialSafety, normalizeSettingsJson, formatRecipeCSV } from '../../src/lib/materialSettings.js';
 
 test('all six equipment categories map to supported operations',()=>{
@@ -56,7 +57,7 @@ test('UV Studio and settings are routed and provide secured data migration',()=>
  assert.match(html,/height-map-grayscale/);
  assert.match(api,/authorizeEmployee/);
  assert.match(api,/OPENAI_API_KEY/);
- assert.match(netlify,/ignore = "node scripts\/netlify-ignore-non-production\.mjs"/);
+ assert.match(netlify,/ignore = "node \.\/scripts\/netlify-ignore-non-production\.mjs"/);
 });
 
 
@@ -67,4 +68,13 @@ test('embedded UV design editor JavaScript is valid and Design Pro actions are c
   for(const [,script] of blocks)new vm.Script(script,{filename:'uv-studio-inline.js'});
   for(const id of ['cleanupWhite','effectStyle','productProofCanvas','personalizationRows','downloadRosterSheet']) assert.ok(html.includes('id="'+id+'"'));
   for(const marker of ['scRosterRows','scProductProof','SC_UV_SNAPSHOT']) assert.ok(html.includes(marker));
+});
+
+
+test('Netlify ignore policy builds production and skips preview contexts',()=>{
+  const p='scripts/netlify-ignore-non-production.mjs';
+  const run=(CONTEXT,BRANCH)=>spawnSync(process.execPath,[p],{env:{...process.env,CONTEXT,BRANCH,SC_NETLIFY_FORCE_PREVIEW:'0'},encoding:'utf8'}).status;
+  assert.equal(run('production','main'),1);
+  assert.equal(run('deploy-preview','feature/foo'),0);
+  assert.equal(run('branch-deploy','feature/foo'),0);
 });
