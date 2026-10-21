@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { supabase } from './supabaseClient';
@@ -18,12 +18,18 @@ function inputData(record){
 }
 function csvLine(values){return values.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',');}
 export default function UVStudio(){
+ const [query]=useSearchParams();
  const access=useContext(EmployeeAccessContext);
  const admin=['admin','manager'].includes(access?.role);
  const canWrite=['admin','manager','operator'].includes(access?.role);
  const iframe=useRef(null);
  const waiting=useRef(null);
- const [project,setProject]=useState(newProject);
+ const [project,setProject]=useState(()=>{
+  const p=newProject();
+  const job=query.get('job');if(job&&/^\d+$/.test(job))p.job_id=job;
+  const req=query.get('artwork_request');if(req&&/^[a-f0-9-]{36}$/i.test(req))p.artwork_request_id=req;
+  return p;
+ });
  const [projects,setProjects]=useState([]);
  const [recipes,setRecipes]=useState([]);
  const [events,setEvents]=useState([]);
