@@ -35,3 +35,43 @@ export function formatRecipeCSV(rows) {
   const q=x=>'"'+String(x??'').replace(/^[\s]*[=+@-]/,m=>"'"+m).replace(/"/g,'""')+'"';
   return [cols.map(q).join(','),...rows.map(r=>cols.map(k=>q(k==='settings'?JSON.stringify(r[k]||{}):r[k])).join(','))].join('\r\n');
 }
+
+
+export const SETTING_FIELDS = {
+  mopa_fiber:[
+    ['power_percent','Power (%)'],['speed_mm_s','Speed (mm/s)'],
+    ['frequency_khz','Pulse frequency (kHz)'],['pulse_width_ns','Pulse width (ns)'],
+    ['hatch_mm','Hatch spacing (mm)'],['passes','Pass count'],['lens_focal_mm','Lens focal length (mm)'],
+    ['focus_offset_mm','Focus offset (mm)'],['line_angle_degrees','Hatch angle (degrees)']
+  ],
+  xtool_s1:[
+    ['laser_module','Installed laser module'],['power_percent','Power (%)'],
+    ['speed_mm_s','Speed (mm/s)'],['passes','Pass count'],
+    ['lines_per_cm','Lines per cm'],['focus_offset_mm','Focus offset (mm)'],
+    ['air_assist','Air assist setting'],['mode','Fill / line mode']
+  ],
+  xtool_p2:[
+    ['power_percent','Power (%)'],['speed_mm_s','Speed (mm/s)'],
+    ['passes','Pass count'],['focus_offset_mm','Focus offset (mm)'],
+    ['lines_per_cm','Lines per cm'],['air_assist','Air assist setting'],
+    ['bed_or_riser','Bed/riser configuration']
+  ],
+  xtool_omni:[
+    ['studio_mode','xTool Studio printing mode'],['target_relief_mm','Target relief height (mm)'],
+    ['ink_white_mode','White ink mode'],['varnish','Varnish setting'],
+    ['texture_smoothness','Texture smoothness'],['primer','Surface primer'],
+    ['printed_height_mm','Measured printed height (mm)'],['cure_or_dry','Cure / dry notes']
+  ],
+  heat_press:[
+    ['temperature_f','Temperature (°F)'],['dwell_seconds','Press time (seconds)'],
+    ['pressure','Pressure setting'],['peel','Hot / warm / cold peel'],
+    ['prepress_seconds','Prepress time (seconds)'],['platen','Platen type'],
+    ['cover_sheet','Cover sheet / carrier'],['postpress_seconds','Post-press seconds']
+  ],
+  sublimation_press:[
+    ['temperature_f','Temperature (°F)'],['dwell_seconds','Press time (seconds)'],
+    ['pressure','Pressure setting'],['substrate_coating','Substrate coating'],
+    ['wrap_or_tape','Wrap / tape details'],['protective_paper','Protective paper'],
+    ['platen','Press platen'],['peel_or_cool','Cool / release procedure']
+  ],
+};
