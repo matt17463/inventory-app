@@ -33,6 +33,7 @@ create index if not exists sc_material_recipe_updated on public.sc_material_reci
 create table if not exists public.sc_material_recipe_trials (
   id uuid primary key default gen_random_uuid(),
   recipe_id uuid not null references public.sc_material_recipes(id) on delete cascade,
+  recipe_version integer not null default 1 check (recipe_version > 0),
   recorded_by uuid not null default auth.uid() references auth.users(id),
   result text not null check (result in ('pass','fail','needs_adjustment')),
   observed_settings jsonb not null default '{}'::jsonb check (jsonb_typeof(observed_settings) = 'object'),
@@ -136,13 +137,14 @@ returns void language plpgsql security invoker set search_path = ''
 as $$
 begin
   if coalesce(public.sc_current_app_role() in ('admin','manager'), false) = false then raise exception 'Manager approval required'; end if;
-  if not exists(select 1 from public.sc_material_recipe_trials
-   where recipe_id = p_recipe_id and result = 'pass') then
+  if not exists(select 1 from public.sc_material_recipe_trials t
+   join public.sc_material_recipes r on r.id = t.recipe_id
+   where t.recipe_id = p_recipe_id and t.result = 'pass' and t.recipe_version = r.version) then
     raise exception 'At least one passing physical test must be recorded before approval';
   end if;
   update public.sc_material_recipes
      set status = 'approved', approved_by = auth.uid(), approved_at = now(),
-         updated_at = now(), version = version + 1
+         updated_at = now()
    where id = p_recipe_id and status in ('draft','testing','verified');
   if not found then raise exception 'Recipe not found or not eligible for approval'; end if;
 end $$;
@@ -155,6 +157,16 @@ create or replace function public.sc_material_recipe_approval_guard()
 returns trigger language plpgsql security invoker set search_path = ''
 as $$
 begin
+  if tg_op = 'UPDATE' and old.status = 'approved' and new.status = 'approved'
+    and (new.settings is distinct from old.settings
+      or new.material_name is distinct from old.material_name
+      or new.machine_type is distinct from old.machine_type
+      or new.machine_model is distinct from old.machine_model
+      or new.machine_configuration is distinct from old.machine_configuration
+      or new.operation is distinct from old.operation
+      or new.material_finish is distinct from old.material_finish) then
+    raise exception 'Approved recipe is immutable; create a revised draft and re-test';
+  end if;
   if new.status = 'approved' then
     if coalesce(public.sc_current_app_role() in ('admin','manager'), false) = false
        or new.approved_by is distinct from auth.uid()
@@ -163,7 +175,7 @@ begin
     end if;
     if not exists (
       select 1 from public.sc_material_recipe_trials t
-      where t.recipe_id = new.id and t.result = 'pass'
+      where t.recipe_id = new.id and t.result = 'pass' and t.recipe_version = new.version
     ) then raise exception 'Recipe approval requires a passing physical test'; end if;
   elsif new.approved_at is not null or new.approved_by is not null then
     raise exception 'Unapproved recipes cannot retain manager approval metadata';
