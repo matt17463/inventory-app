@@ -23,6 +23,22 @@ export async function signedUvAsset(projectId,assetId){
  return call({action:'download',project_id:projectId,asset_id:assetId});
 }
 export async function readUvEditable(projectId,assetId){
- const response=await call({action:'read_inline',project_id:projectId,asset_id:assetId});
- return response.text;
+ try{
+   const result=await call({action:'read_inline',project_id:projectId,asset_id:assetId});
+   return result.text;
+ }catch(error){
+   if(!/too large/i.test(error.message))throw error;
+   let cursor=0,size=null,fragments=[];
+   do{
+     const part=await call({action:'read_chunk',project_id:projectId,asset_id:assetId,offset:cursor});
+     if(size===null)size=part.size;
+     if(part.next_offset<=cursor||part.size!==size)throw new Error('Corrupt remote chunk sequence.');
+     const raw=atob(part.base64),buffer=new Uint8Array(raw.length);
+     for(let i=0;i<raw.length;i++)buffer[i]=raw.charCodeAt(i);
+     fragments.push(buffer);cursor=part.next_offset;
+   }while(cursor<size);
+   const merged=new Uint8Array(size);let cursor2=0;
+   for(const part of fragments){merged.set(part,cursor2);cursor2+=part.length;}
+   return new TextDecoder('utf-8',{fatal:true}).decode(merged);
+ }
 }
