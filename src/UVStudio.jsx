@@ -142,6 +142,15 @@ export default function UVStudio(){
     quantity:Number(project.quantity)||1,
     unit_cost:Number(project.unit_cost)||0,
     selling_price:Number(project.selling_price)||0,
+    labor_minutes:Number(project.labor_minutes)||0,
+    overhead_cost:Number(project.overhead_cost)||0,
+    waste_quantity:Number(project.waste_quantity)||0,
+    material_sku:project.material_sku||'',
+    job_id:project.job_id?Number(project.job_id):null,
+    customer_id:project.customer_id?Number(project.customer_id):null,
+    artwork_request_id:project.artwork_request_id||null,
+    mockup_project_id:project.mockup_project_id||null,
+    blank_product_id:project.blank_product_id||null,
     artwork_config:snapshot.data,
     production_config:{
      ...(project.production_config||{}),
@@ -164,11 +173,11 @@ export default function UVStudio(){
    setProject({...response.data,material_recipe_id:response.data.material_recipe_id||''});
    await load();
    try{
-     const savedAsset=await persistArtwork(result.data.id,'SC_UV_EXPORT_EDITABLE');
+     const savedAsset=await persistArtwork(response.data.id,'SC_UV_EXPORT_EDITABLE');
      const reference='r2://'+savedAsset.storage_key;
      const {error:refError}=await supabase.from('sc_uv_projects').update({
        artwork_url:reference,updated_at:new Date().toISOString()
-     }).eq('id',result.data.id);
+     }).eq('id',response.data.id);
      if(refError)throw refError;
      setProject(p=>({...p,artwork_url:reference}));
      setMessage('Project and editable source artwork saved to private R2 storage. Export a production ZIP before manufacturing.');
@@ -232,6 +241,7 @@ export default function UVStudio(){
    + Number(project.overhead_cost||0);
  const revenue=Number(project.selling_price||0)*Number(project.quantity||1);
  const gross=revenue-total;
+ const selectedJob=jobs.find(x=>String(x.id)===String(project.job_id));
  function exportJobCard(){
   const rows=[
    ['Skilled Crafting UV job card',''],['Title',project.title],['Customer',project.customer_reference],
