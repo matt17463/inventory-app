@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { shouldSimulateWrites } from './lib/testingMode';
-import { MACHINE_TYPES, OPERATION_LABELS, formatRecipeCSV, machineFor, materialSafety, normalizeSettingsJson } from './lib/materialSettings';
+import { MACHINE_TYPES, SETTING_FIELDS, OPERATION_LABELS, formatRecipeCSV, machineFor, materialSafety, normalizeSettingsJson } from './lib/materialSettings';
 import './MaterialSettings.css';
 
 const blank = () => ({
@@ -46,6 +46,7 @@ export default function MaterialSettings(){
   const [sourceLinks,setSourceLinks]=useState('');
   const machine=machineFor(form.machine_type);
   const safety=materialSafety(form.machine_type,form.material_name);
+  const currentValues=useMemo(()=>{try{return normalizeSettingsJson(form.settings);}catch{return {}; }},[form.settings]);
   const visible=useMemo(()=>rows.filter(r=>(filterMachine==='all'||r.machine_type===filterMachine)&&
     [r.material_name,r.material_brand,r.material_sku,r.machine_model,r.operation].join(' ').toLowerCase().includes(search.toLowerCase())),[rows,search,filterMachine]);
   const load=useCallback(async()=>{
@@ -55,6 +56,7 @@ export default function MaterialSettings(){
   },[]);
   useEffect(()=>{let alive=true;load().catch(e=>{if(alive)setMessage(errorText(e));});return()=>{alive=false;};},[load]);
   const set=(key,value)=>setForm(p=>({...p,[key]:value}));
+  const setMachineSetting=(key,value)=>{try{const settings=normalizeSettingsJson(form.settings);if(value==='')delete settings[key];else settings[key]=value;set('settings',JSON.stringify(settings,null,2));}catch{setMessage('Repair invalid settings JSON before editing individual machine fields.');}};
   const edit=(record)=>{
     setForm({...record,thickness_mm:record.thickness_mm??'',settings:JSON.stringify(record.settings||{},null,2)});
     setAi(null);setCurrentTab('editor');
@@ -173,7 +175,12 @@ export default function MaterialSettings(){
       </div>
       <p className="sc-material-help">{machine.note}</p>
       {safety.blocked?<p className="sc-material-danger" role="alert">{safety.reason}</p>:<p className="sc-material-warning">{safety.warning}</p>}
-      <label className="sc-material-json">Editable machine settings (JSON — include units)<textarea rows={8} spellCheck={false} value={form.settings} onChange={e=>set('settings',e.target.value)}/></label>
+      <h3>Machine-specific settings</h3><p className="sc-material-help">Enter verified manufacturer values or values from your own test coupon. Leave unknown values empty. No fields are automatically assumed safe.</p>
+      <div className="sc-material-grid">
+      {(SETTING_FIELDS[form.machine_type]||[]).map(([key,label])=><label key={key}>{label}
+        <input type="text" value={String(currentValues[key]??'')} onChange={e=>setMachineSetting(key,e.target.value)}/></label>)}
+      </div>
+      <details><summary>Advanced settings JSON (optional)</summary><label className="sc-material-json">Editable machine settings (JSON — include units)<textarea rows={8} spellCheck={false} value={form.settings} onChange={e=>set('settings',e.target.value)}/></label></details>
       <div className="sc-material-actions"><button className="primary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={saveRecord}>Save experimental draft</button>
        <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={suggest}>Ask AI for test plan</button>
        {admin&&form.id&&form.status!=='approved'&&<button className="secondary-button" type="button" disabled={busy||!trialRows.some(x=>x.result==='pass' && x.recipe_version===form.version)} onClick={approve}>Approve tested recipe</button>}</div>
