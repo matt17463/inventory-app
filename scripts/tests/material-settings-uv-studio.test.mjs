@@ -78,3 +78,41 @@ test('Netlify ignore policy builds production and skips preview contexts',()=>{
   assert.equal(run('deploy-preview','feature/foo'),0);
   assert.equal(run('branch-deploy','feature/foo'),0);
 });
+
+
+test('R2 asset backend enforces project ownership, verified object and private storage',()=>{
+ const server=fs.readFileSync('netlify/functions/uv-asset-storage.js','utf8');
+ const client=fs.readFileSync('src/lib/uvAssets.js','utf8');
+ const schema=fs.readFileSync('supabase/migrations/202610200002_uv_asset_storage_order_links.sql','utf8');
+ for(const key of ['authorizeEmployee','create_upload','finalize','HeadObjectCommand','sc_uv_assets','read_chunk'])
+   assert.ok(server.includes(key),key);
+ assert.match(server,/ContentLength/);
+ assert.match(server,/created_by:auth\.user\.id/);
+ assert.match(client,/authenticatedFunctionFetch/);
+ assert.match(client,/readUvEditable/);
+ assert.match(schema,/sc_uv_assets enable row level security/);
+ assert.match(schema,/references public\.jobs\(id\)/);
+ assert.match(schema,/references public\.customers\(id\)/);
+ assert.match(schema,/references public\.sc_artwork_system_requests\(id\)/);
+});
+test('UV designer cloud bridge roundtrips editable content and can upload production pack and proof',()=>{
+ const html=fs.readFileSync('public/uv-studio/index.html','utf8');
+ const ui=fs.readFileSync('src/UVStudio.jsx','utf8');
+ const board=fs.readFileSync('src/ProductionBoard.jsx','utf8');
+ const requests=fs.readFileSync('src/ArtworkRequests.jsx','utf8');
+ for(const marker of ['SC_UV_EXPORT_EDITABLE','SC_UV_EXPORT_PACK','SC_UV_EXPORT_PROOF','SC_UV_IMPORT_EDITABLE','registrationMarks','jigGapX']){
+   assert.ok(html.includes(marker),marker);
+ }
+ for(const marker of ['persistArtwork','saveCloudAsset','readUvEditable','job_id','customer_id','artwork_request_id','material_sku']){
+   assert.ok(ui.includes(marker),marker);
+ }
+ assert.match(board,/uv-studio\?job=/);
+ assert.match(requests,/uv-studio\?artwork_request=/);
+});
+test('live AI research uses current source citations without certifying machine settings',()=>{
+ const ai=fs.readFileSync('netlify/functions/material-settings-ai.js','utf8');
+ assert.match(ai,/https:\/\/api\.openai\.com\/v1\/responses/);
+ assert.match(ai,/type:'web_search'/);
+ assert.match(ai,/url_citation/);
+ assert.match(ai,/confidence:'unverified'/);
+});
