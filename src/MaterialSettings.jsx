@@ -85,7 +85,7 @@ export default function MaterialSettings(){
       if(shouldSimulateWrites()){setMessage('Training mode: settings validated; no database changes made.');return;}
       let result;
       if(form.id){
-        result=await supabase.from('sc_material_recipes').update({...payload,version:(form.version||1)+1}).eq('id',form.id).select().single();
+        result=await supabase.from('sc_material_recipes').update({...payload,version:(form.version||1)+1}).eq('id',form.id).eq('version',form.version).select().single();
       }else{
         result=await supabase.from('sc_material_recipes').insert(payload).select().single();
       }
@@ -103,7 +103,7 @@ export default function MaterialSettings(){
       if(!trial.observations.trim())throw Error('Describe the actual result, test method and material lot.');
       if(shouldSimulateWrites()){setMessage('Training mode: test recorded locally only; database unchanged.');return;}
       const {error}=await supabase.from('sc_material_recipe_trials').insert({
-        recipe_id:form.id,result:trial.result,observations:trial.observations.trim(),measurement,
+        recipe_id:form.id,recipe_version:form.version||1,result:trial.result,observations:trial.observations.trim(),measurement,
         observed_settings:normalizeSettingsJson(form.settings)
       });
       if(error)throw error;setTrial({result:'needs_adjustment',observations:'',measurement:'{}'});
@@ -176,7 +176,7 @@ export default function MaterialSettings(){
       <label className="sc-material-json">Editable machine settings (JSON — include units)<textarea rows={8} spellCheck={false} value={form.settings} onChange={e=>set('settings',e.target.value)}/></label>
       <div className="sc-material-actions"><button className="primary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={saveRecord}>Save experimental draft</button>
        <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={suggest}>Ask AI for test plan</button>
-       {admin&&form.id&&form.status!=='approved'&&<button className="secondary-button" type="button" disabled={busy||!trialRows.some(x=>x.result==='pass')} onClick={approve}>Approve tested recipe</button>}</div>
+       {admin&&form.id&&form.status!=='approved'&&<button className="secondary-button" type="button" disabled={busy||!trialRows.some(x=>x.result==='pass' && x.recipe_version===form.version)} onClick={approve}>Approve tested recipe</button>}</div>
       {form.id&&<p className="sc-material-help">Status: <strong>{form.status}</strong> · Version {form.version} · {form.approved_at?'Approved '+new Date(form.approved_at).toLocaleDateString():'Not production approved'}</p>}
     </section>
     <div className="sc-material-aside">
