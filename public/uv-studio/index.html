@@ -626,10 +626,19 @@ window.addEventListener('message', async(event)=>{
  try{
   if(msg.type==='SC_UV_IMPORT_EDITABLE'){
    if(typeof msg.contents!=='string'||msg.contents.length>45_000_000)throw Error('Editable project is not valid');
-   const transfer=new DataTransfer();
-   transfer.items.add(new File([msg.contents],'uv-studio-saved-project.json',{type:'application/json'}));
-   $('projectInput').files=transfer.files;
-   $('projectInput').dispatchEvent(new Event('change',{bubbles:true}));
+   const p=JSON.parse(msg.contents);
+   if(p.type!=='SC_UV_STUDIO_PROJECT'||typeof p.artworkDataURL!=='string'||!p.artworkDataURL.startsWith('data:image/'))throw Error('Invalid editable UV project');
+   for(const [key,value] of Object.entries(p.settings||{})){
+     const el=$(key);if(!el)continue;
+     if(el.type==='checkbox')el.checked=!!value;else el.value=value;
+   }
+   if(p.settings?.material&&profiles[p.settings.material]){
+     $('material').value=p.settings.material;loadVariants(p.settings.variant);
+   }
+   if(p.settings?.preset)settings.preset=p.settings.preset;
+   if(p.regionOverrides&&typeof p.regionOverrides==='object')regionOverrides=p.regionOverrides;
+   if(Array.isArray(p.calibrationRecords)){calibrationRecords=p.calibrationRecords.slice(-400);renderCalRecords();}
+   await useImage(p.artworkDataURL);renderSoon();
    window.parent.postMessage({type:'SC_UV_IMPORT_ACCEPTED',requestId:msg.requestId},event.origin);
    return;
   }
