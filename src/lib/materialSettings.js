@@ -11,7 +11,7 @@ export const OPERATION_LABELS = {
   uv_flat: 'UV flat print', uv_texture: 'Raised texture', uv_relief: 'Relief', uv_varnish: 'Spot varnish',
   heat_transfer: 'Heat transfer', sublimation: 'Sublimation',
 };
-export const SAFETY_BLOCKED = /(?:^|\W)(?:pvc|polyvinyl chloride|vinyl chloride|chlorinated plastic|unknown plastic|unidentified plastic)(?:$|\W)/i;
+export const SAFETY_BLOCKED = /(?:^|\W)(?:pvc|polyvinyl chloride|vinyl|vinyl chloride|chlorinated plastic|unknown plastic|unidentified plastic)(?:$|\W)/i;
 export function machineFor(id) { return MACHINE_TYPES.find(x=>x.id===id) || MACHINE_TYPES[0]; }
 export function materialSafety(machine, material) {
   const text = String(material || '').trim();
