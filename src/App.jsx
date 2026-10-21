@@ -90,6 +90,8 @@ const TestTag = lazy(() => import('./TestTag'));
 const TestingMode = lazy(() => import('./TestingMode'));
 const ThemeSettings = lazy(() => import('./ThemeSettings'));
 const EquipmentCenter = lazy(() => import('./EquipmentCenter'));
+const MaterialSettings = lazy(() => import('./MaterialSettings'));
+const UVStudio = lazy(() => import('./UVStudio'));
 const MenuManager = lazy(() => import('./MenuManager'));
 const ContractorHours = lazy(() => import('./ContractorHours'));
 const TransferInventory = lazy(() => import('./TransferInventory'));
@@ -124,6 +126,8 @@ function EmployeeRoutes() {
       <Route path="/testing-mode" element={<TestingMode />} />
       <Route path="/theme-settings" element={<ThemeSettings />} />
       <Route path="/equipment-center" element={<EquipmentCenter />} />
+      <Route path="/material-settings" element={<MaterialSettings />} />
+      <Route path="/uv-studio" element={<UVStudio />} />
       <Route path="/menu-manager" element={<MenuManager />} />
       <Route path="/contractor-hours" element={<ContractorHours />} />
       <Route path="/inventory/blanks" element={<BlankInventory />} />

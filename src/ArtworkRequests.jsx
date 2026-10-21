@@ -221,6 +221,7 @@ function ArtworkRequests() {
             ) : (
               <>
                 <h2>{selected.organization || selected.main_subject || 'Artwork Request'}</h2>
+                <Link className="secondary-button" to={`/uv-studio?artwork_request=${selected.id}`}>Create UV project from request</Link>
                 <Field label="Customer">{selected.customer_name}</Field>
                 <Field label="Project Type">{selected.project_type}</Field>
                 <Field label="Main Subject">{selected.main_subject}</Field>

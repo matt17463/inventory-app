@@ -118,6 +118,7 @@ export const navSections = [
     items: [
       { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
+      { label: 'UV Studio — Textured Patches', path: '/uv-studio', keywords: 'UV printing faux embroidery dimensional raised patches laser leather vinyl TPU metal texture preview print cut calibration' },
       { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },
     ],
   },
@@ -126,6 +127,7 @@ export const navSections = [
     label: 'Tools & Admin',
     icon: '🧰',
     items: [
+      { label: 'Material & Machine Settings', path: '/material-settings', keywords: 'mopa fiber xtool s1 p2 omni uv settings laser etching engraving color scoring cutting heat press sublimation presets' },
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
       { label: 'Catalog Workbench', path: '/catalog-workbench', keywords: 'data health integrity sync mapping repair color types non inventory workflow' },
       { label: 'Color Pairings', path: '/color-pairings', keywords: 'color aliases pairings mapping canonical manufacturer colors woo sync blank products' },

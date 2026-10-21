@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skilled Crafting UV Studio — Faux Embroidery Designer</title>
+<style>
+:root{--bg:#0b1018;--card:#121b27;--card2:#182331;--line:#2a3848;--txt:#ecf3f9;--muted:#9eaebf;--accent:#37dec2;--accent2:#12a891;--warning:#e8b667}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px/1.45 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--txt)}button,input,select{font:inherit}button{cursor:pointer}
+.top{padding:18px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;background:#111923;position:sticky;top:0;z-index:2}
+.brand{display:flex;align-items:center;gap:12px}.brandmark{border:1px solid #4de6d2;background:#123b38;color:#62f1de;border-radius:11px;padding:9px 11px;font-weight:900;letter-spacing:1px}.brand strong{font-size:17px;display:block}.subtitle{font-size:12px;color:var(--muted)}.topright{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pill{border:1px solid #22564e;color:#80eddb;background:#14342f;padding:5px 10px;font-size:11px;border-radius:40px}.shell{display:grid;grid-template-columns:338px minmax(0,1fr) 262px;gap:16px;padding:20px;max-width:1770px;margin:auto;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden}.section{padding:18px 17px;border-bottom:1px solid var(--line)}.section:last-child{border-bottom:0}h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;margin:0 0 15px;color:#d3e3ee}.num{color:var(--accent);margin-right:8px}label{display:flex;justify-content:space-between;gap:8px;color:#b7c9d7;font-size:12px;margin:14px 0 7px}label strong{color:#f0f7fc;font-weight:600}.filebox{border:1px dashed #426275;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:15px 10px;text-align:center;border-radius:9px;background:#121f2b;min-height:104px;position:relative;transition:border .15s}.filebox:hover{border-color:var(--accent)}.filebox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}.filebox .ico{font-size:22px;color:var(--accent)}.filebox .hint{color:var(--muted);font-size:11px;margin-top:5px}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px}input[type=number],select,input[type=text]{background:#0e1621;color:var(--txt);border:1px solid #405066;border-radius:6px;padding:8px 9px;width:100%;outline-color:var(--accent)}input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}input[type=checkbox]{accent-color:var(--accent)}.checkbox{display:flex;align-items:center;gap:8px;margin-top:11px;color:var(--txt);font-size:13px}.checkbox input{width:16px;height:16px}.small{font-size:11px;color:var(--muted);margin-top:7px}.subtle{color:var(--muted);font-size:12px}.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.presetrow{display:grid;grid-template-columns:1fr 1fr;gap:7px}.preset{background:#1b2b38;border:1px solid #344858;border-radius:7px;color:#cddae4;padding:9px 4px;font-size:12px}.preset.active{color:#3bf0d7;background:#123b36;border-color:#24bca7}
+.middle{min-width:0}.projectbar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin:1px 0 14px;flex-wrap:wrap}.projectbar h1{font-size:24px;margin:0 0 4px}.preview-wrap{background:#14202b;border:1px solid var(--line);border-radius:14px;overflow:hidden}.tabs{display:flex;gap:5px;padding:11px 12px;border-bottom:1px solid var(--line);overflow:auto}.tab{background:transparent;color:#a4b6c6;border:1px solid transparent;border-radius:7px;padding:9px 13px;white-space:nowrap;font-size:12px}.tab.active{background:#224339;border-color:#3b8f7d;color:#83f2df}.canvas-viewport{position:relative;min-height:460px;display:flex;align-items:center;justify-content:center;padding:30px;background-color:#1d2935;background-image:linear-gradient(45deg,#24303b 25%,transparent 25%),linear-gradient(-45deg,#24303b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#24303b 75%),linear-gradient(-45deg,transparent 75%,#24303b 75%);background-size:26px 26px;background-position:0 0,0 13px,13px -13px,-13px 0px}.canvas-viewport canvas{max-width:100%;max-height:560px;object-fit:contain;box-shadow:0 15px 50px #0006;border:1px solid #bbc3ce30}.preview-foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 16px;color:var(--muted);font-size:12px}.callout{margin-top:16px;border:1px solid #565039;background:#292820;border-radius:10px;padding:13px 15px;color:#e8d9b4;font-size:12px}.callout strong{color:#f7e5bd}.steps{background:#121b27;border:1px solid var(--line);margin-top:16px;padding:18px;border-radius:12px}.steps h2{margin-bottom:9px}.steps ol{margin:0;padding-left:20px;color:#bbcedb;font-size:13px}.steps li{margin:7px 0}
+.metric{padding:12px 0;border-bottom:1px solid var(--line)}.metric:last-child{border:0}.metric .key{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#8fa7b8}.metric .value{font-size:20px;font-weight:700;padding-top:2px}.metric .note{font-size:11px;color:var(--muted)}.download{background:#14b69f;color:#071a18;border:1px solid #48ead3;border-radius:8px;padding:11px 12px;width:100%;font-weight:750;margin:6px 0}.download:hover{background:#3ce0c4}.outline{background:#1c2b39;color:#eaf7f9;border:1px solid #415a69;border-radius:8px;padding:9px 11px;width:100%;margin:5px 0;text-align:left}.outline:hover{border-color:#64ccb7}.outline span{font-size:11px;color:#a9bcc7;float:right}.fine{font-size:11px;line-height:1.6;color:var(--muted)}.busy{font-size:12px;color:#85f0d8;min-height:18px}.green{color:#75efcf}.warn{color:#ebc47f}.material-note{font-size:12px;line-height:1.6;color:#d4e4ed}.material-note b{color:#75efcf}.note-strip{font-size:12px;background:#17313c;border:1px solid #385c68;border-radius:8px;padding:11px 12px;color:#d2e8ed;margin-top:10px}.note-strip.warning{border-color:#8c653a;background:#35281d;color:#ffe6b4}.mini-heading{font-size:12px;color:#8fa7b8;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin:14px 0 4px}
+@media(max-width:1220px){.shell{grid-template-columns:280px minmax(0,1fr)}.right{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px}.right .panel{height:100%}}
+@media(max-width:760px){.shell{display:block;padding:10px}.panel{margin-bottom:14px}.right{display:block}.top{padding:12px;position:static}.projectbar h1{font-size:20px}.canvas-viewport{min-height:310px;padding:12px}}
+
+/* v0.3 build additions */
+.modulegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:15px}
+.module{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:15px}
+.module h2{margin-bottom:8px}
+.regionline{display:grid;grid-template-columns:22px minmax(75px,1fr) 90px 52px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px}
+.regionline .swatch{width:17px;height:17px;border:1px solid #a5b1b7;border-radius:4px}
+.regionline input{padding:6px!important}
+.regionline .tiny{color:var(--muted);text-align:right;font-size:10px}
+.mini-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mini-tools button{background:#23374a;color:#ddf2ee;border:1px solid #45617a;border-radius:6px;padding:7px 10px}
+.metric-row{display:flex;gap:10px;justify-content:space-between;align-items:center;margin:9px 0;color:#c2d3dc;font-size:12px}
+#calRecords{overflow:auto;max-height:210px}#calRecords table{border-collapse:collapse;width:100%;font-size:11px}#calRecords th,#calRecords td{padding:6px 5px;border-bottom:1px solid #2b4253;text-align:left;white-space:nowrap}
+#calRecords th{color:#86c5bc}#calRecords button{background:#173b37;color:#82edd6;border:1px solid #3d8e85;border-radius:5px;cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.form-row label{margin-top:7px} .form-row input,.form-row select{width:100%}
+.error-note{background:#47351f;border:1px solid #a97d3c;padding:10px;border-radius:7px;color:#f8dca7;font-size:11px}
+.success-note{background:#17372e;border:1px solid #398b72;padding:10px;border-radius:7px;color:#b9e9d9;font-size:11px}
+#canvasLegend{color:#a9c4cf;font-size:11px;margin-top:8px}
+@media(max-width:1200px){.regionline{grid-template-columns:22px minmax(75px,1fr) 75px 40px}}
+
+</style>
+</head>
+<body>
+<header class="top"><div class="brand"><div class="brandmark">SC</div><div><strong>SKILLED CRAFTING <span style="color:var(--accent)">UV STUDIO</span></strong><div class="subtitle">Faux embroidery & 2.5D print preparation · Prototype v0.3 · Stitch regions / Layout / Calibration</div></div></div><div class="topright"><span class="pill">LOCAL-FIRST • NO UPLOADS</span><span class="subtitle">Designed for xTool O1 Omni workflows</span></div></header>
+<main class="shell">
+<aside class="panel">
+<section class="section"><h2><span class="num">00</span>Material profile</h2>
+<label for="material">Print substrate</label><select id="material"><option value="leather">Leather / synthetic patch</option><option value="film">Heat-transfer film</option><option value="metal">Metal / coated metal</option></select>
+<label for="variant">Specific material / process</label><select id="variant" aria-label="Material variant"></select>
+<div id="profileGuide" class="note-strip" aria-live="polite"></div>
+<div class="small">Changing profiles loads conservative design starting points. You can then adjust them. These are not verified printer recipes.</div></section>
+<section class="section"><h2><span class="num">01</span>Artwork</h2>
+<div class="filebox"><span class="ico">⬆</span><b>Drop or select a logo</b><span class="hint">Transparent PNG recommended · SVG supported</span><input id="file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Import artwork"></div>
+<button class="outline" id="openProject">↗ Open saved project <span>JSON</span></button><input type="file" id="projectInput" accept="application/json,.json" style="display:none"><label for="job">Design / job name</label><input id="job" type="text" value="Faux Embroidery Patch">
+<div class="inputs"><div><label for="width">Width (inches)</label><input id="width" type="number" min="0.75" max="6" step="0.25" value="3.5"></div><div><label for="height">Height (inches)</label><input id="height" type="number" min="0.75" max="6" step="0.25" value="2.5"></div></div><div class="small">Production PNG exports are rendered at 300 DPI, with PNG resolution metadata.</div></section>
+<section class="section"><h2><span class="num">02</span>Embroidery style</h2><div class="presetrow"><button class="preset active" data-preset="tatami">Tatami Fill</button><button class="preset" data-preset="satin">Satin Stitch</button><button class="preset" data-preset="cross">Cross Hatch</button><button class="preset" data-preset="micro">Micro Stitch</button></div>
+<label for="spacing">Thread spacing <strong id="spacingV">0.45 mm</strong></label><input id="spacing" type="range" min="0.25" max="1.4" value="0.45" step="0.05">
+<label for="stitchLength">Stitch length <strong id="stitchLengthV">2.4 mm</strong></label><input id="stitchLength" type="range" min="0.8" max="5" step="0.2" value="2.4">
+<label for="angle">Stitch angle <strong id="angleV">35°</strong></label><input id="angle" type="range" min="0" max="180" step="5" value="35">
+<label for="contrast">Thread relief appearance <strong id="contrastV">55%</strong></label><input id="contrast" type="range" min="10" max="100" step="5" value="55">
+<label class="checkbox"><input id="border" type="checkbox" checked> Satin-stitched border</label>
+<label for="borderSize">Border width <strong id="borderSizeV">2.0 mm</strong></label><input id="borderSize" type="range" min="0.5" max="4" step="0.25" value="2">
+</section>
+<section class="section"><h2><span class="num">02B</span>Automatic stitch regions</h2>
+<label for="paletteSize">Detect logo colors <strong id="paletteSizeV">6</strong></label><input id="paletteSize" type="range" min="2" max="10" value="6" step="1">
+<label class="checkbox"><input id="autoAngles" type="checkbox" checked> Adapt stitch angle by region</label>
+<label for="gloss">Thread highlight strength <strong id="glossV">65%</strong></label><input id="gloss" type="range" min="0" max="100" value="65" step="5">
+<div class="small">Color clustering + connected-area analysis identify editable stitch regions. Complex antialiased logos may need manual cleanup.</div></section>
+<section class="section"><h2><span class="num">03</span>UV height design</h2>
+<label for="depth">Target relief height <strong id="depthV">0.60 mm</strong></label><input id="depth" type="range" min="0.1" max="1.5" step="0.05" value="0.6">
+<label for="layers">Nominal buildup separations <strong id="layersV">6</strong></label><input id="layers" type="range" min="2" max="12" step="1" value="6">
+<div class="small">Layer count creates grayscale threshold masks for testing; it does not set real printer passes. xTool Studio determines ink buildup.</div>
+<label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
+<label for="edgeStyle">Patch perimeter</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">None</option></select>
+<label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px">
+<label class="checkbox"><input id="varnish" type="checkbox" checked> Generate highlight / varnish mask</label>
+<label class="checkbox" id="mirrorBox" style="display:none"><input id="mirror" type="checkbox"> Include mirrored artwork reference (film only)</label>
+<div class="small" id="mirrorNote" style="display:none">Mirroring depends on the film's print-side and xTool Studio workflow. Never mirror automatically without confirming the transfer orientation.</div>
+</section>
+</aside>
+<section class="middle"><div class="projectbar"><div><h1>Raised Stitch Designer</h1><div class="subtle">Procedurally create stitch shading and a matched grayscale height map from a logo.</div></div><div class="busy" id="status" aria-live="polite">Ready</div></div>
+<div class="preview-wrap"><div class="tabs"><button class="tab active" data-tab="color">Stitch artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
+<div class="modulegrid"><div class="module"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
+<div class="module"><h2>Patch format &amp; production layout</h2><label for="productPreset">Quick product template</label><select id="productPreset"><option value="custom">Custom dimensions / geometry</option><option value="hat-leather" selected>Hat leather patch · 3.5 × 2.5 in</option><option value="hat-oval">Hat oval patch · 3.5 × 2.25 in</option><option value="garment-square">Apparel badge · 3 × 3 in</option><option value="chest-small">Left-chest patch · 2.5 × 2.5 in</option><option value="heat-transfer">Raised transfer motif · 3.5 × 2.5 in</option><option value="metal-tag">Metal badge · 4 × 3 in</option></select><div class="form-row"><div><label for="patchShape">Outline / patch template</label><select id="patchShape"><option value="rounded">Rounded rectangle / hat patch</option><option value="rectangle">Rectangle / apparel</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="hexagon">Hexagon</option><option value="shield">Shield</option></select></div><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
+<div class="form-row">
+<div><label for="jigX">First blank X from sheet left (in)</label><input type="number" min="0" max="12" step=".01" id="jigX" value=".25"></div>
+<div><label for="jigY">First blank Y from sheet top (in)</label><input type="number" min="0" max="16" step=".01" id="jigY" value=".25"></div>
+<div><label for="jigGapX">Horizontal clearance (in)</label><input type="number" min=".05" max="3" step=".01" id="jigGapX" value=".20"></div>
+<div><label for="jigGapY">Vertical clearance (in)</label><input type="number" min=".05" max="3" step=".01" id="jigGapY" value=".20"></div>
+</div>
+<label class="checkbox"><input type="checkbox" id="registrationMarks" checked> Include printable registration crosshairs in proof / cutline</label>
+<div class="small">Fixture positions must be measured and tested against the physical jig. This output does not control a laser/cutter or define alignment accuracy automatically.</div>
+</fieldset><div class="metric-row"><span id="layoutResult">Calculating layout…</span></div><div class="mini-tools"><button id="layoutZip">↓ Layout + cutlines ZIP</button><button id="outlineSvg">↓ Cutline SVG</button></div><div class="small">Cutlines are uncalibrated geometric references, not registration-verified cutter commands.</div></div></div>
+
+<div class="module" style="margin-top:14px" id="scDesignPro">
+<h2>Design Pro — preflight, special effects and team personalization</h2>
+<div class="form-row">
+<div><label class="checkbox"><input type="checkbox" id="cleanupWhite"> Remove near-white photo background (preview and export)</label><div class="small">Enable only when white is NOT part of the logo. Alpha cleanup is approximate; inspect fine edges.</div></div>
+<div><label for="cleanThreshold">White cutoff (RGB)</label><input id="cleanThreshold" type="range" min="220" max="254" value="245"><div class="small">Higher numbers remove fewer off-white pixels.</div></div>
+<div><label for="effectStyle">Dimensional effect family</label><select id="effectStyle"><option value="embroidery">Thread embroidery</option><option value="chenille">Chenille pile</option><option value="molded">Molded rubber / PVC-look</option><option value="embossed">Embossed leather-look</option><option value="metallic">Brushed metal-look</option><option value="gloss">High-gloss spot relief</option></select></div>
+<div><label for="proofSurface">Illustrative customer mockup</label><select id="proofSurface"><option value="hat">Baseball cap</option><option value="hoodie">Garment / hoodie</option><option value="leather">Flat leather patch</option><option value="metal">Brushed metal panel</option></select></div>
+</div>
+<div class="mini-tools"><button id="generateProductProof">Generate stylized proof</button><button id="downloadProductProof">↓ Customer proof PNG</button></div>
+<canvas id="productProofCanvas" width="860" height="480" style="width:100%;max-width:860px;border:1px solid #345269;border-radius:12px;background:#0d1721;margin-top:10px"></canvas>
+<div class="small">Design visualization only. Lighting, texture, physical ink and curved placement are illustrative—not photographs or measured printer results.</div>
+<label for="personalizationRows" style="margin-top:16px">Team roster — one per line: player name, jersey number</label>
+<textarea id="personalizationRows" rows="5" style="width:100%;background:#101d29;color:#ecf9ff;border:1px solid #537285;border-radius:8px;padding:9px" placeholder="J. Smith,12&#10;A. Lee,4"></textarea>
+<div class="mini-tools"><button id="downloadRosterCsv">↓ Personalization CSV</button><button id="downloadRosterSheet">↓ Personalized print sheets ZIP</button></div>
+<div class="small">Review capitalization, size and legibility before printing. Roster overlays are provisional artwork and never replace approved customer proof.</div>
+</div>
+<div class="module" style="margin-top:14px"><h2>Material calibration and print validation</h2><div class="form-row"><div><label for="calName">Material / supplier / lot</label><input type="text" id="calName" placeholder="PU patch — Supplier SKU"></div><div><label for="calMode">xTool Studio mode</label><select id="calMode"><option value="Texture">Texture</option><option value="Relief">Relief</option><option value="Flat">Flat</option></select></div><div><label for="calStudioHeight">Studio target (mm)</label><input id="calStudioHeight" type="number" min="0.01" max="7" step="0.05" value="0.3"></div><div><label for="calMeasured">Measured result (mm)</label><input id="calMeasured" type="number" min="0" max="7" step="0.01" placeholder="After test print"></div><div><label for="calPrimer">Primer / treatment</label><input id="calPrimer" type="text" placeholder="Product and procedure"></div><div><label for="calDurability">Adhesion + durability result</label><select id="calDurability"><option value="untested">Untested</option><option value="pass">Passed relevant tests</option><option value="fail">Failed</option></select></div></div><label for="calNotes">Test notes / bend, transfer or scratch observations</label><input id="calNotes" type="text" placeholder="Sample preparation, result, ink type, press details etc."><div class="mini-tools" style="margin:11px 0"><button id="recordCalibration">Save test record</button><button id="coupon">↓ Test coupon ZIP</button><button id="exportCalibration">↓ Calibration records CSV</button><button id="exportCalibrationJSON">↓ Records JSON</button><button id="importCalibration">Import records JSON</button><input id="calImport" type="file" accept="application/json,.json" style="display:none"></div><div class="small" id="calGuidance">Only physical measurements and passed durability tests can qualify a material record for use as a tentative guide.</div><div id="calRecords"></div></div>
+<div class="callout"><strong>Omni compatibility notice:</strong> xTool currently requires its official software for printing. These files are <strong>design assets and experimental separations</strong>, not a machine-ready RIP job. The relationship between an imported grayscale map and actual deposited ink height needs physical calibration on the Omni.</div>
+<div class="steps"><h2>Material-specific first-print checklist</h2><div id="printChecklist" class="material-note"></div></div></section>
+<aside class="right">
+<div class="panel"><section class="section"><h2>Production summary</h2><div class="metric"><div class="key">Selected material</div><div class="value" id="summaryMaterial" style="font-size:15px">Leather / synthetic</div><div class="note" id="summaryInk">Flexible white</div></div><div class="metric"><div class="key">Artwork size</div><div class="value" id="summarySize">3.5 × 2.5 in</div><div class="note" id="summaryPixels">1050 × 750 pixels at 300 DPI</div></div><div class="metric"><div class="key">Height-map encoding</div><div class="value" id="summaryHeight">0–0.60 mm</div><div class="note">8-bit grayscale, maximum height = 255</div></div><div class="metric"><div class="key">Threshold mask count</div><div class="value" id="summaryLayers">6</div><div class="note">Conceptual separations — not RIP passes</div></div><div class="metric"><div class="key">Pixel output</div><div class="value green">300 DPI</div><div class="note">True-size PNG exports</div></div></section></div>
+<div class="panel"><section class="section"><h2>Exports</h2><button class="download" id="all">↓ Download production ZIP</button><button class="outline" data-export="color">Stitch color artwork <span>PNG</span></button><button class="outline" data-export="height">Grayscale height map <span>PNG</span></button><button class="outline" data-export="white">White underbase mask <span>PNG</span></button><button class="outline" data-export="varnish">Highlight / varnish mask <span>PNG</span></button><button class="outline" id="save">Save editable project <span>JSON</span></button><button class="outline" id="log">Print test record template <span>CSV</span></button><div class="fine" style="margin-top:12px">ZIP includes region metadata, aligned artwork, height/white/varnish maps, threshold intent masks, a 300 DPI layout proof reference, and calibration notes. Direct xTool print passes remain controlled in xTool Studio.</div></section></div>
+</aside>
+</main>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const settings={preset:'tatami',tab:'color'};
+const controls=['spacing','stitchLength','angle','contrast','borderSize','depth','layers','width','height','border','varnish','mirror','job'];
+const DPI=300;
+const profiles={
+ leather:{name:'Leather / synthetic patch',ink:'Flexible white ink',depth:.30,layers:4,borderSize:1.75,variants:[['genuine','Genuine leather patch'],['synthetic','PU / synthetic leather patch']],guide:'Direct print. Use flexible white ink; keep raised ink reasonably shallow because bending can crack thick prints. Test on the exact leather finish.',safety:'Leather / PU: xTool supports direct dual-UV printing with flexible white. The 0.30 mm design starting point follows a published xTool bend-test example, not a validated profile for your blanks.',steps:['Confirm the specific leather / PU coating accepts UV ink; secure the blank flat.','In xTool Studio choose the approved flexible white workflow, and trial Texture mode at a conservative setting.','Allow the print to rest as required by the material workflow; perform bend and rub testing on the finished patch.','Record the measured height, appearance, edge adhesion, and flex results before producing a customer batch.']},
+ film:{name:'Heat-transfer film',ink:'Film/process dependent',depth:.20,layers:3,borderSize:1.50,variants:[['tpu3d','Compatible TPU 3D label transfer film'],['htv','Conventional HTV — unvalidated']],guide:'Use a manufacturer-approved raised 3D TPU label transfer system for textile applications. Ordinary HTV is NOT a verified UV textured-ink transfer workflow.',safety:'Film: xTool identifies specialty TPU 3D label film for heat-transferred raised graphics. Ordinary HTV is a different material and must not be presumed UV compatible; do not use production garments until tested.',steps:['Identify the precise film manufacturer, film type, print side, transfer adhesive and press process; conventional HTV remains experimental.','Make a sample using only manufacturer-approved compatible film and xTool Studio settings; verify which side is printed and whether mirroring is necessary.','Follow the film maker’s heat press parameters; do not assume any particular temperature, pressure or peel timing.','Test adhesion, wash durability, stretch and repeated folding after transfer. Record results before selling textile patches.']},
+ metal:{name:'Metal / coated metal',ink:'Rigid white ink',depth:.65,layers:8,borderSize:2.0,variants:[['bare','Bare metal / stainless / aluminum'],['anodized','Anodized aluminum'],['coated','Painted or powder-coated metal']],guide:'Rigid UV print. Metal primer and surface cleaning generally matter; test any coating. Higher relief is a design option, not a guaranteed physical print height.',safety:'Metal: use a compatible metal primer and verify adhesion on the exact alloy or finish. A 0.65 mm relief setting is an experimental design target, not a tested xTool printing prescription.',steps:['Identify the metal alloy and surface coating. Clean/degrease, then use the correct approved primer and drying procedure.','Align the metal blank in xTool Studio and trial Texture or Relief, starting conservatively.','Check fine stitch edges, topcoat effects and physical height; do not assume grayscale map values map directly to millimeters.','Perform tape/scratch and handling tests after the required rest period. Record settings and pass/fail results.']}
+};
+const variantNotes={genuine:'Leather: variation in oils, finishes and absorbency affects adhesion.',synthetic:'PU leather: avoid excessive relief on parts that will be bent or stitched.',tpu3d:'Specialty 3D TPU film: follow the exact film/press maker instructions; multilayer durability requires testing.',htv:'UNVERIFIED PROCESS: conventional garment HTV is not automatically printable or heat-transferable with UV ink from the Omni.',bare:'Bare metal: clean thoroughly; verify primer compatibility.',anodized:'Anodized metal: adhesion depends on finish, seal and primer.',coated:'Coated metal: primer and adhesion depend on the exact coating system.'};
+const materialOptions=()=>profiles[$('material').value]||profiles.leather;
+function loadVariants(choice){const p=materialOptions(),el=$('variant');el.innerHTML='';for(let [id,label] of p.variants){let o=document.createElement('option');o.value=id;o.textContent=label;el.appendChild(o)}if(choice && p.variants.some(x=>x[0]===choice))el.value=choice;}
+function applyMaterialProfile(){const p=materialOptions();loadVariants();$('depth').value=p.depth;$('layers').value=p.layers;$('borderSize').value=p.borderSize;$('mirror').checked=false;renderSoon();}
+function materialUI(v){const p=profiles[v.material]||profiles.leather,experimental=v.variant==='htv';$('profileGuide').className='note-strip'+(experimental?' warning':'');$('profileGuide').textContent=p.guide+' '+(variantNotes[v.variant]||'');$('mirrorBox').style.display=v.material==='film'?'flex':'none';$('mirrorNote').style.display=v.material==='film'?'block':'none';$('summaryMaterial').textContent=p.name;$('summaryInk').textContent=p.ink+(experimental?' · CONVENTIONAL HTV UNVALIDATED':'');let steps=p.steps.map((s,i)=>'<li>'+s+'</li>').join('');$('printChecklist').innerHTML='<strong>'+p.name+'</strong><ol>'+steps+'</ol><div class="small">' + (experimental?'⚠ Conventional HTV remains a design-only experimental substrate; do not treat this as an approved print recipe.':'Produce one test blank before a sellable batch.') + '</div>';}
+
+let image=null, imageDataURL=null, output=null, token=0, debounce=null, busy=false;
+const canvases={color:document.createElement('canvas'),height:document.createElement('canvas'),white:document.createElement('canvas'),varnish:document.createElement('canvas')};
+const demo=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 460"><path d="M170 30H530L665 220L530 430H170L35 220Z" fill="#163c48" stroke="#00d1b1" stroke-width="29"/><path d="M175 63H525L626 219L525 394H175L75 219Z" fill="#143948" stroke="#e7c276" stroke-width="8"/><text x="350" y="208" font-family="Arial,sans-serif" font-weight="900" font-size="138" text-anchor="middle" fill="#f3f4f3">SC</text><text x="350" y="287" font-family="Arial,sans-serif" font-weight="900" font-size="45" letter-spacing="6" text-anchor="middle" fill="#22dbbb">CRAFTING</text></svg>`;
+function loadImg(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=src})}
+async function useImage(src){image=await loadImg(src);imageDataURL=src;renderSoon()}
+function values(){return {width:Math.max(.75,Math.min(6,Number($('width').value)||3.5)),height:Math.max(.75,Math.min(6,Number($('height').value)||2.5)),spacing:+$('spacing').value,stitchLength:+$('stitchLength').value,angle:+$('angle').value,contrast:+$('contrast').value,borderSize:+$('borderSize').value,depth:+$('depth').value,layers:+$('layers').value,border:$('border').checked,varnish:$('varnish').checked,preset:settings.preset,job:$('job').value||'Faux Embroidery Patch',material:$('material').value,variant:$('variant').value,mirror:$('mirror').checked};}
+function UI(){const v=values();['spacing','stitchLength','borderSize','depth'].forEach(k=>$(k+'V').textContent=v[k].toFixed(k==='depth'?2:k==='spacing'?2:1)+' mm');$('angleV').textContent=v.angle+'°';$('contrastV').textContent=v.contrast+'%';$('layersV').textContent=v.layers;$('summarySize').textContent=`${v.width} × ${v.height} in`;$('summaryPixels').textContent=`${Math.round(v.width*DPI)} × ${Math.round(v.height*DPI)} pixels at 300 DPI`;$('summaryHeight').textContent=`0–${v.depth.toFixed(2)} mm`;$('summaryLayers').textContent=v.layers;$('dimensions').textContent=`${v.width} × ${v.height} in · 300 DPI`;materialUI(v);}
+function renderSoon(){UI();clearTimeout(debounce);debounce=setTimeout(()=>renderPreview(),120)}
+function paintBase(w,h){let c=document.createElement('canvas');c.width=w;c.height=h;let ctx=c.getContext('2d',{willReadFrequently:true});ctx.clearRect(0,0,w,h);let pad=Math.max(7,Math.round(Math.min(w,h)*.04));if(image){let scale=Math.min((w-pad*2)/image.width,(h-pad*2)/image.height);let dw=image.width*scale,dh=image.height*scale;ctx.drawImage(image,(w-dw)/2,(h-dh)/2,dw,dh)}return ctx.getImageData(0,0,w,h)}
+function distanceField(mask,w,h){
+ const d=new Float32Array(w*h),diag=Math.SQRT2,far=1e6;
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;const inside=mask[i];d[i]=(!inside||x===0||y===0||x===w-1||y===h-1||!mask[i-1]||!mask[i-w]||(x<w-1&&!mask[i+1])||(y<h-1&&!mask[i+w]))?0:far;}
+ for(let y=1;y<h;y++)for(let x=1;x<w;x++){let i=y*w+x;if(d[i]===0)continue;let a=Math.min(d[i-1]+1,d[i-w]+1,d[i-w-1]+diag);if(x<w-1)a=Math.min(a,d[i-w+1]+diag);d[i]=Math.min(d[i],a)}
+ for(let y=h-2;y>=0;y--)for(let x=w-2;x>=0;x--){let i=y*w+x;if(d[i]===0)continue;let a=Math.min(d[i+1]+1,d[i+w]+1,d[i+w+1]+diag);if(x>0)a=Math.min(a,d[i+w-1]+diag);d[i]=Math.min(d[i],a)}return d;
+}
+function cap(x,min,max){return Math.max(min,Math.min(max,x))}
+function frac(n){return n-Math.floor(n)}
+function colorClamped(z){return cap(Math.round(z),0,255)}
+function produce(w,h,v){
+ let src=paintBase(w,h).data;let mask=new Uint8Array(w*h);for(let i=0;i<w*h;i++)mask[i]=src[i*4+3]>90?1:0;
+ let dist=distanceField(mask,w,h), pxPerMM=w/(v.width*25.4);
+ let pitch=Math.max(1.5,v.spacing*pxPerMM), length=Math.max(3,v.stitchLength*pxPerMM), borderWidth=Math.max(1,v.borderSize*pxPerMM);
+ const a=v.angle*Math.PI/180,cos=Math.cos(a),sin=Math.sin(a),strength=v.contrast/100;
+ let rgba=new Uint8ClampedArray(w*h*4),height=new Uint8ClampedArray(w*h*4),white=new Uint8ClampedArray(w*h*4),varnish=new Uint8ClampedArray(w*h*4),gray=new Uint8Array(w*h);
+ let active=0;
+ for(let y=0;y<h;y++){for(let x=0;x<w;x++){
+   const i=y*w+x,z=i*4;if(!mask[i]){height[z+3]=255;continue}
+   active++;
+   const d=dist[i],outline=v.border&&d<borderWidth;
+   let ang=outline?a+Math.PI/2:a;
+   let u=x*Math.cos(ang)+y*Math.sin(ang),vv=-x*Math.sin(ang)+y*Math.cos(ang);
+   let row=Math.floor(vv/pitch), across=frac(vv/pitch), rowShade=Math.pow(Math.max(0,Math.sin(Math.PI*across)),.58);
+   let along=frac(u/length+((row%2===0)?0:0.5)), endShade=Math.pow(Math.max(0,Math.sin(Math.PI*along)),.6);
+   let highlight= rowShade*.7+endShade*.3;
+   if(v.preset==='satin'){highlight=.83*rowShade+.17*endShade;}
+   if(v.preset==='cross'){const cross=Math.abs(Math.sin(Math.PI*((x*Math.cos(ang+Math.PI/2)+y*Math.sin(ang+Math.PI/2))/pitch)));highlight=cap((rowShade+cross)*.52,0,1);}
+   if(v.preset==='micro'){highlight=.53*rowShade+.47*Math.pow(Math.max(0,Math.sin(Math.PI*frac(u/(length*.6)))),.9);}
+   let grain=(frac(Math.sin(x*.23+y*.17)*43758.5453)-.5)*.11;
+   let modulation=1-strength*.42+strength*.42*(highlight*1.5+grain);
+   let r=src[z],g=src[z+1],b=src[z+2];
+   if(outline){modulation*=1.05;r=r*.62+236*.38;g=g*.62+197*.38;b=b*.68+113*.32}
+   rgba[z]=colorClamped(r*modulation);rgba[z+1]=colorClamped(g*modulation);rgba[z+2]=colorClamped(b*modulation);rgba[z+3]=src[z+3];
+   let local=.42+.50*highlight;if(outline)local=.64+.33*highlight;
+   if(v.preset==='satin')local=outline?.72+.27*highlight:.5+.49*highlight;
+   let H=colorClamped(local*255);gray[i]=H;
+   height[z]=height[z+1]=height[z+2]=H;height[z+3]=255;
+   white[z]=white[z+1]=white[z+2]=255;white[z+3]=src[z+3];
+   varnish[z]=varnish[z+1]=varnish[z+2]=255;varnish[z+3]=v.varnish&&highlight>.65?Math.round(255*cap((highlight-.65)*3.6,0,1)):0;
+ }}
+ return {w,h,active,color:rgba,height,white,varnish,gray,mask,v};
+}
+function toCanvas(key,arr,w,h){const c=canvases[key];c.width=w;c.height=h;let ctx=c.getContext('2d');const data=new ImageData(arr,w,h);ctx.putImageData(data,0,0);return c}
+function showTab(){const p=$('preview');let ctx=p.getContext('2d');if(!output)return;const w=output.w,h=output.h;p.width=w;p.height=h;ctx.clearRect(0,0,w,h);ctx.drawImage(canvases[settings.tab],0,0);}
+async function renderPreview(){if(!image)return;const my=++token,v=values();const max=680,ratio=v.width/v.height;let w=Math.round(Math.min(max,max*ratio)),h=Math.round(w/ratio);if(h>max){h=max;w=Math.round(h*ratio)};
+ $('status').textContent='Rendering preview…';await new Promise(r=>setTimeout(r,12));if(my!==token)return;
+ try{const res=produce(w,h,v);if(my!==token)return;output=res;for(let key of ['color','height','white','varnish'])toCanvas(key,res[key],w,h);showTab();$('status').textContent='✓ Preview ready';}catch(e){$('status').textContent='Render failed';console.error(e)}
+}
+function makeMaskPNG(w,h,mask,levels,step){let c=document.createElement('canvas');c.width=w;c.height=h;let ar=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){if(!mask[i])continue;const z=i*4;const threshold=255*step/levels;if(currentProduction.gray[i]>=threshold){ar[z]=ar[z+1]=ar[z+2]=255;ar[z+3]=255}}c.getContext('2d').putImageData(new ImageData(ar,w,h),0,0);return c}
+function crc32(buf){let crc=0xFFFFFFFF;for(let b of buf){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^(-(crc&1)&0xEDB88320)}return (crc^0xFFFFFFFF)>>>0}
+function patchDPI(buf){
+ const src=new Uint8Array(buf),sig=[137,80,78,71,13,10,26,10];if(!sig.every((x,i)=>src[i]===x))throw Error('Not a PNG');
+ let ch=new Uint8Array(21),dv=new DataView(ch.buffer);dv.setUint32(0,9);ch.set([112,72,89,115],4);dv.setUint32(8,11811);dv.setUint32(12,11811);ch[16]=1;dv.setUint32(17,crc32(ch.subarray(4,17)));
+ let chunks=[src.subarray(0,8)],pos=8,inserted=false;
+ while(pos+12<=src.length){let n=new DataView(src.buffer,src.byteOffset+pos,4).getUint32(0),end=pos+12+n;if(end>src.length)throw Error('Malformed PNG');let type=String.fromCharCode(...src.subarray(pos+4,pos+8));if(type!=='pHYs')chunks.push(src.subarray(pos,end));if(type==='IHDR'&&!inserted){chunks.push(ch);inserted=true}pos=end;if(type==='IEND')break}
+ let length=chunks.reduce((a,b)=>a+b.length,0),out=new Uint8Array(length),z=0;for(let chunk of chunks){out.set(chunk,z);z+=chunk.length}return out
+}
+async function pngBytes(c){let blob=await new Promise(res=>c.toBlob(res,'image/png'));if(!blob)throw Error('PNG encoding failed');return patchDPI(await blob.arrayBuffer())}
+function textBytes(s){return new TextEncoder().encode(s)}
+function saveBytes(name,b,type='application/octet-stream'){let url=URL.createObjectURL(new Blob([b],{type}));let a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000)}
+function filename(){return values().job.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,50)||'patch'}
+function manifest(v,p){return {application:'Skilled Crafting UV Studio',version:'0.3.0',design:v.job,material_profile:{type:v.material,variant:v.variant,description:profiles[v.material]?.name,ink_advisory:profiles[v.material]?.ink,process_advisory:profiles[v.material]?.safety,mirrored_reference_included:!!(v.material==='film'&&v.mirror)},production_status:'UNVALIDATED — design-only, not RIP-ready',created:new Date().toISOString(),dimensions_inches:{width:v.width,height:v.height},dpi:DPI,pixels:{width:p.w,height:p.h},stitches:{pattern:v.preset,spacing_mm:v.spacing,length_mm:v.stitchLength,angle_degrees:v.angle,appearance_strength_percent:v.contrast,border:v.border,border_width_mm:v.borderSize},nominal_height_mm:v.depth,nominal_threshold_mask_count:v.layers,mask_mapping:'grayscale 0..255 maps to an intended relative texture height of 0..nominal_height_mm; black/no-art region corresponds to zero height',printing_note:'DESIGN ASSETS ONLY. xTool O1 Omni uses xTool Studio for processing. Third-party RIP control, alignment of individual masks and physical layer height have not been validated. Do not treat mask count as printer pass count.'}}
+let currentProduction=null;
+async function prod(){let v=values();let w=Math.round(v.width*DPI),h=Math.round(v.height*DPI);$('status').textContent='Generating 300 DPI artwork…';await new Promise(r=>setTimeout(r,30));let p=produce(w,h,v);currentProduction=p;return p}
+function imageCanvas(p,key){let c=document.createElement('canvas');c.width=p.w;c.height=p.h;c.getContext('2d').putImageData(new ImageData(p[key],p.w,p.h),0,0);return c}
+function mirroredArtwork(p){let orig=imageCanvas(p,'color'),c=document.createElement('canvas');c.width=p.w;c.height=p.h;let ctx=c.getContext('2d');ctx.translate(p.w,0);ctx.scale(-1,1);ctx.drawImage(orig,0,0);return c;}
+function printNotes(v){let p=profiles[v.material];return 'SKILLED CRAFTING UV STUDIO 0.3 — MATERIAL EXPERIMENTAL PREPRESS PACK\n\nSELECTED MATERIAL: '+p.name+' / '+(p.variants.find(x=>x[0]===v.variant)?.[1]||v.variant)+'\nINK ADVISORY: '+p.ink+'\nDESIGN-ONLY MAXIMUM HEIGHT TARGET: '+v.depth.toFixed(2)+' mm\n\n'+p.safety+'\n\nCHECKLIST:\n'+p.steps.map((x,i)=>(i+1)+'. '+x).join('\n')+'\n\nMAIN FILES: color-artwork.png (artwork to trial in xTool Studio); height-map-grayscale.png (experimental relative relief concept); white-underbase.png and varnish-highlights.png (intent maps); layer-masks/ (conceptual thresholds, NOT printing passes). '+(v.material==='film'&&v.mirror?'mirrored-color-REFERENCE.png is a separate reference ONLY — check workflow orientation before use. ':'')+'\n\nPhysical layering, white/varnish channels, real ink height, and mirroring are handled by manufacturer processing in xTool Studio. Verify the Studio workflow rather than assuming PNG mask layers become independently registered passes.\n\nRecord material supplier, batch, equipment, primer, xTool Studio settings, finish, height, adhesion, bend/wash test and operator. All images are 300-DPI PNGs.\n';}
+function logCSV(v){let p=profiles[v.material];const cols=['date','job','material','variant','blank_supplier_sku','primer','white_ink','xtool_studio_mode','studio_height_mm','actual_measured_height_mm','print_time_min','adhesion_pass','bend_or_wash_pass','scratch_pass','operator','notes'];const sample=cols.map(c=>({job:v.job,material:p.name,variant:v.variant,white_ink:p.ink,notes:'TEST PRINT — not production validated'}[c]||''));const esc=a=>'"'+String(a).replace(/"/g,'""')+'"';return cols.map(esc).join(',')+'\r\n'+sample.map(esc).join(',')+'\r\n';}
+
+function zipStore(files){let parts=[],central=[],offset=0,encoder=new TextEncoder();const u16=(d,o,x)=>d.setUint16(o,x,true),u32=(d,o,x)=>d.setUint32(o,x>>>0,true);for(let f of files){let name=encoder.encode(f.name),data=f.data,crc=crc32(data),lh=new Uint8Array(30+name.length),lv=new DataView(lh.buffer);u32(lv,0,0x04034b50);u16(lv,4,20);u16(lv,8,0);u32(lv,14,crc);u32(lv,18,data.length);u32(lv,22,data.length);u16(lv,26,name.length);lh.set(name,30);parts.push(lh,data);let ce=new Uint8Array(46+name.length),cv=new DataView(ce.buffer);u32(cv,0,0x02014b50);u16(cv,4,20);u16(cv,6,20);u32(cv,16,crc);u32(cv,20,data.length);u32(cv,24,data.length);u16(cv,28,name.length);u32(cv,42,offset);ce.set(name,46);central.push(ce);offset+=lh.length+data.length}let cLen=central.reduce((a,b)=>a+b.length,0),end=new Uint8Array(22),ev=new DataView(end.buffer);u32(ev,0,0x06054b50);u16(ev,8,files.length);u16(ev,10,files.length);u32(ev,12,cLen);u32(ev,16,offset);let all=new Uint8Array(offset+cLen+22),pos=0;for(let part of [...parts,...central,end]){all.set(part,pos);pos+=part.length}return all}
+async function exportSingle(key){if(busy)return;busy=true;try{const p=await prod();$('status').textContent='Encoding PNG…';const name={color:'color-artwork',height:'height-map-grayscale',white:'white-underbase',varnish:'varnish-highlights'}[key];saveBytes(filename()+'-'+name+'.png',await pngBytes(imageCanvas(p,key)),'image/png');$('status').textContent='✓ Export ready'}catch(e){$('status').textContent='Export failed: '+e.message;console.error(e)}finally{busy=false;currentProduction=null}}
+async function exportZip(){if(busy)return;busy=true;try{const p=await prod(),files=[];for(let [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],['white','white-underbase.png'],['varnish','varnish-highlights.png']]){ $('status').textContent='Encoding '+name+'…';files.push({name,data:await pngBytes(imageCanvas(p,key))})}
+ for(let i=1;i<=p.v.layers;i++){let name='layer-masks/threshold-'+String(i).padStart(2,'0')+'-of-'+p.v.layers+'.png';$('status').textContent='Generating threshold '+i+'/'+p.v.layers+'…';files.push({name,data:await pngBytes(makeMaskPNG(p.w,p.h,p.mask,p.v.layers,i))})}
+ if(p.v.material==='film'&&p.v.mirror)files.push({name:'mirrored-color-REFERENCE.png',data:await pngBytes(mirroredArtwork(p))});
+ files.push({name:'test-print-log.csv',data:textBytes(logCSV(p.v))});
+ files.push({name:'manifest.json',data:textBytes(JSON.stringify(manifest(p.v,p),null,2))});files.push({name:'editable-project.json',data:textBytes(JSON.stringify({type:'SC_UV_STUDIO_PROJECT',settings:p.v,artworkDataURL:imageDataURL},null,2))});
+ files.push({name:'READ-ME.txt',data:textBytes(printNotes(p.v))});;
+ $('status').textContent='Packing production ZIP…';saveBytes(filename()+'-uv-studio-pack.zip',zipStore(files),'application/zip');$('status').textContent='✓ Production ZIP ready';
+ }catch(e){$('status').textContent='ZIP failed: '+e.message;console.error(e)}finally{busy=false;currentProduction=null}}
+$('openProject').onclick=()=>$('projectInput').click();
+$('projectInput').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{let p=JSON.parse(await f.text());if(p.type!=='SC_UV_STUDIO_PROJECT'||!p.artworkDataURL)throw Error('Not a Skilled Crafting UV Studio project');for(let [key,v] of Object.entries(p.settings||{})){const el=$(key);if(el){if(el.type==='checkbox')el.checked=!!v;else el.value=v}}if(p.settings?.material&&profiles[p.settings.material]){$('material').value=p.settings.material;loadVariants(p.settings?.variant)}if(p.settings?.preset)settings.preset=p.settings.preset;document.querySelectorAll('[data-preset]').forEach(b=>b.classList.toggle('active',b.dataset.preset===settings.preset));await useImage(p.artworkDataURL);$('status').textContent='✓ Project loaded'}catch(err){alert('Could not open project: '+err.message)}finally{e.target.value=''}});
+$('file').addEventListener('change',async e=>{let f=e.target.files?.[0];if(!f)return;if(f.size>12*1024*1024){alert('Select an image below 12MB for this prototype.');return}let reader=new FileReader();reader.onload=async()=>{try{await useImage(reader.result);$('job').value=f.name.replace(/\.[^/.]+$/,'');renderSoon()}catch(e){alert('Unable to open image: '+e.message)}};reader.readAsDataURL(f)});
+applyMaterialProfile();
+$('material').addEventListener('change',applyMaterialProfile);
+$('variant').addEventListener('change',renderSoon);
+$('log').onclick=()=>saveBytes(filename()+'-'+$('material').value+'-print-test-log.csv',textBytes(logCSV(values())),'text/csv');
+for(let key of controls){$(key).addEventListener(key==='job'?'input':'change',renderSoon);if($(key).type==='range')$(key).addEventListener('input',renderSoon)}
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{settings.preset=b.dataset.preset;document.querySelectorAll('[data-preset]').forEach(c=>c.classList.toggle('active',c===b));renderSoon()});
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{settings.tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(c=>c.classList.toggle('active',c===b));showTab()});
+document.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportSingle(b.dataset.export));$('all').onclick=exportZip;
+$('save').onclick=()=>saveBytes(filename()+'-project.json',textBytes(JSON.stringify({type:'SC_UV_STUDIO_PROJECT',settings:values(),artworkDataURL:imageDataURL},null,2)),'application/json');
+useImage('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(demo)).catch(e=>console.error(e));
+// Skilled Crafting UV Studio v0.3 — module extension (offline, no third-party runtime)
+const MODULE_VERSION='0.3.0';
+let regionOverrides={};
+let selectedCalibrationId=null;
+let calibrationRecords=[];
+const CAL_KEY='sc-uvstudio-v03-calibrations';
+const oldValues=values;
+values=function(){let v=oldValues();return {...v,
+ paletteSize:Math.min(10,Math.max(2,Number($('paletteSize').value)||6)),
+ autoAngles:$('autoAngles').checked, gloss:+$('gloss').value,
+ reliefContrast:+$('reliefContrast').value,edgeStyle:$('edgeStyle').value,
+ edgeColor:$('edgeColor').value,patchShape:$('patchShape').value,
+ sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
+ margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
+ regionOverrides:{...regionOverrides},selectedCalibrationId
+};};
+// Polygon/curve outline defined on the same physical dimensions as exported artwork.
+function outlinePath(w,h,shape,inset=0){
+ const x=inset,y=inset,W=Math.max(1,w-2*inset),H=Math.max(1,h-2*inset),r=Math.min(W,H)*.16;
+ const p=(a,b)=>`${(a).toFixed(3)} ${(b).toFixed(3)}`;
+ if(shape==='rectangle')return `M${p(x,y)}H${(x+W).toFixed(3)}V${(y+H).toFixed(3)}H${x.toFixed(3)}Z`;
+ if(shape==='oval'||shape==='circle') {let rx=shape==='circle'?Math.min(W,H)/2:W/2,ry=shape==='circle'?rx:H/2,cx=x+W/2,cy=y+H/2;return `M ${p(cx-rx,cy)} A ${rx} ${ry} 0 1 0 ${p(cx+rx,cy)} A ${rx} ${ry} 0 1 0 ${p(cx-rx,cy)} Z`}
+ if(shape==='hexagon')return `M${p(x+W*.23,y)} L${p(x+W*.77,y)} L${p(x+W,y+H/2)} L${p(x+W*.77,y+H)} L${p(x+W*.23,y+H)} L${p(x,y+H/2)}Z`;
+ if(shape==='shield')return `M${p(x+W*.06,y)} L${p(x+W*.94,y)} L${p(x+W*.91,y+H*.60)} Q${p(x+W*.8,y+H*.80)} ${p(x+W*.5,y+H)} Q${p(x+W*.20,y+H*.80)} ${p(x+W*.09,y+H*.60)}Z`;
+ return `M ${p(x+r,y)} H ${(x+W-r).toFixed(3)} Q${p(x+W,y)} ${p(x+W,y+r)} V${(y+H-r).toFixed(3)} Q${p(x+W,y+H)} ${p(x+W-r,y+H)} H${(x+r).toFixed(3)} Q${p(x,y+H)} ${p(x,y+H-r)} V${(y+r).toFixed(3)} Q${p(x,y)} ${p(x+r,y)}Z`;
+}
+function patchOutlineSVG(v,wIn=v.width,hIn=v.height){let w=wIn*25.4,h=hIn*25.4;let path=outlinePath(w,h,v.patchShape,Math.min(w,h)*.018);let safe=outlinePath(w,h,v.patchShape,Math.min(w,h)*.085);return `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(3)}mm" height="${h.toFixed(3)}mm" viewBox="0 0 ${w.toFixed(3)} ${h.toFixed(3)}"><title>Skilled Crafting patch cutting outline — verify registration before cutting</title><path d="${path}" fill="none" stroke="red" stroke-width="0.1"/><path d="${safe}" fill="none" stroke="blue" stroke-width="0.12" stroke-dasharray="1.2 1.2"/></svg>`}
+function rgbHex(r,g,b){return '#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('')}
+function hexRgb(s){const n=parseInt(s.replace('#',''),16);return [(n>>16)&255,(n>>8)&255,n&255]}
+// K-means color recognition and contiguous component analysis. Deterministic across preview/output scales.
+function segmentColors(src,mask,w,h,k){
+ const N=w*h,samples=[],stride=Math.max(1,Math.floor(Math.sqrt(N/6500)));
+ for(let y=0;y<h;y+=stride)for(let x=0;x<w;x+=stride){let z=(y*w+x)*4;if(mask[y*w+x])samples.push([src[z],src[z+1],src[z+2]]);}
+ if(!samples.length)return {clusters:new Uint8Array(N),componentAt:new Int32Array(N),components:[],palette:[]};
+ const sorted=[...samples].sort((a,b)=>(a[0]*.2126+a[1]*.7152+a[2]*.0722)-(b[0]*.2126+b[1]*.7152+b[2]*.0722));
+ const centers=Array.from({length:k},(_,i)=>[...sorted[Math.min(sorted.length-1,Math.floor((i+.5)*sorted.length/k))]]);
+ const distRGB=(a,b)=>{let r=a[0]-b[0],g=a[1]-b[1],bl=a[2]-b[2];return r*r*.85+g*g*1.1+bl*bl*.75};
+ for(let t=0;t<7;t++){const sums=Array.from({length:k},()=>[0,0,0,0]);for(const p of samples){let best=0,err=1e10;for(let c=0;c<k;c++){let d=distRGB(p,centers[c]);if(d<err){err=d;best=c}}let a=sums[best];a[0]+=p[0];a[1]+=p[1];a[2]+=p[2];a[3]++}for(let c=0;c<k;c++){let s=sums[c];if(s[3])centers[c]=[s[0]/s[3],s[1]/s[3],s[2]/s[3]]}}
+ const clusters=new Uint8Array(N),componentAt=new Int32Array(N);componentAt.fill(-1);const stack=new Int32Array(N),components=[];
+ for(let i=0;i<N;i++)if(mask[i]){const z=i*4,p=[src[z],src[z+1],src[z+2]];let best=0,err=Infinity;for(let c=0;c<k;c++){let d=distRGB(p,centers[c]);if(d<err){err=d;best=c}}clusters[i]=best}
+ // Discrete contiguous parts of the logo, not just colors. Excludes transparent outside.
+ for(let start=0;start<N;start++){if(!mask[start]||componentAt[start]>=0)continue;let head=0,tail=1,cc=clusters[start],index=components.length;stack[0]=start;componentAt[start]=index;
+ let count=0,sx=0,sy=0,sxx=0,syy=0,sxy=0;
+ while(head<tail){const z=stack[head++],x=z%w,y=(z/w)|0;count++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
+ const neighbors=[x>0?z-1:-1,x<w-1?z+1:-1,y>0?z-w:-1,y<h-1?z+w:-1];
+ for(let n of neighbors)if(n>=0&&mask[n]&&componentAt[n]<0&&clusters[n]===cc){componentAt[n]=index;stack[tail++]=n}}
+ const mx=sx/count,my=sy/count,xx=sxx/count-mx*mx,yy=syy/count-my*my,xy=sxy/count-mx*my;
+ let theta=(.5*Math.atan2(2*xy,xx-yy)+Math.PI/2)*180/Math.PI;
+ components.push({source:index,count,colorIndex:cc,cx:mx/w,cy:my/h,angle:((theta%180)+180)%180});
+ }
+ const ranked=components.map((c,i)=>({...c,index:i})).sort((a,b)=>b.count-a.count).slice(0,14);
+ const byIndex=new Int16Array(components.length);byIndex.fill(-1);
+ for(let i=0;i<ranked.length;i++){ranked[i].rank=i;ranked[i].hex=rgbHex(...centers[ranked[i].colorIndex]);byIndex[ranked[i].index]=i;}
+ return {clusters,componentAt,components:ranked,palette:centers,byIndex};
+}
+const oldProduce=produce;
+produce=function(w,h,v){
+ let res=oldProduce(w,h,v),N=w*h,src=paintBase(w,h).data, seg=segmentColors(src,res.mask,w,h,v.paletteSize);
+ const mm=w/(v.width*25.4),slen=Math.max(2,v.stitchLength*mm),pitch=Math.max(1.5,v.spacing*mm);
+ const vmap=new Uint8ClampedArray(N*4);const attrs=seg.components;
+ for(let i=0;i<N;i++){
+ if(!res.mask[i])continue;const z=i*4,x=i%w,y=(i/w)|0;
+ const component=seg.componentAt[i],rank=component<0?-1:seg.byIndex[component],reg=rank>=0?attrs[rank]:null;
+ let angle=Number(v.regionOverrides['r'+rank]);if(!Number.isFinite(angle)||v.regionOverrides['r'+rank]===undefined)angle=(v.autoAngles&&reg&&reg.count>N*.00035)?reg.angle:v.angle;
+ const rad=angle*Math.PI/180,co=Math.cos(rad),si=Math.sin(rad);
+ const u=x*co+y*si,across=-x*si+y*co,idx=Math.floor(across/pitch);
+ const ridge=Math.pow(Math.max(0,Math.sin(Math.PI*frac(across/pitch))),.65);
+ const end=Math.pow(Math.max(0,Math.sin(Math.PI*frac(u/slen+(idx%2)*.5))),.6);
+ let thread=.74*ridge+.26*end;
+ if(v.preset==='satin')thread=.94*ridge+.06*end;
+ else if(v.preset==='cross')thread=cap(.53*ridge+.47*Math.abs(Math.sin(Math.PI*frac(u/pitch))),0,1);
+ else if(v.preset==='micro')thread=.46*ridge+.54*Math.abs(Math.sin(Math.PI*frac(u/(slen*.55))));
+ let glossy=(thread-.48)*(v.gloss/100)*.46;
+ let shade=1+(thread-.5)*.42*(v.contrast/100)+glossy;
+ // Preserve intrinsic logo color rather than imposing synthetic thread palettes.
+ for(let c=0;c<3;c++)res.color[z+c]=colorClamped(src[z+c]*shade);
+ res.color[z+3]=src[z+3];
+ const lum=(src[z]*.2126+src[z+1]*.7152+src[z+2]*.0722)/255;
+ const relief=.42+(v.reliefContrast/100)*(.16*lum+.40*thread);
+ const gray=colorClamped(cap(relief,0,1)*255);res.gray[i]=gray;
+ for(let c=0;c<3;c++)res.height[z+c]=gray;res.height[z+3]=255;
+ const varnishHit=v.varnish ? cap((thread-.48)*2.4*(v.gloss/100),0,1):0;
+ res.varnish[z]=res.varnish[z+1]=res.varnish[z+2]=255;res.varnish[z+3]=Math.round(255*varnishHit);
+ const col=seg.palette[seg.clusters[i]]||[255,255,255];for(let c=0;c<3;c++)vmap[z+c]=Math.round(col[c]);vmap[z+3]=src[z+3];
+ }
+ // Simulate stitches on the actual patch perimeter; transparent interior remains transparent.
+ if(v.edgeStyle!=='none'){
+ let c=document.createElement('canvas');c.width=w;c.height=h;let cx=c.getContext('2d',{willReadFrequently:true});cx.fill(new Path2D(outlinePath(w,h,v.patchShape,Math.min(w,h)*.022)));
+ let pd=cx.getImageData(0,0,w,h).data,shapeMask=new Uint8Array(N);for(let i=0;i<N;i++)shapeMask[i]=pd[i*4+3]>120?1:0;
+ const shapeDist=distanceField(shapeMask,w,h),edgePx=Math.max(1,v.borderSize*mm),cr=hexRgb(v.edgeColor);
+ for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){let i=y*w+x,d=shapeDist[i];if(!shapeMask[i]||d>=edgePx)continue;let z=i*4;
+ let gx=shapeDist[i+1]-shapeDist[i-1],gy=shapeDist[i+w]-shapeDist[i-w];
+ let tangent=Math.atan2(gy,gx)+Math.PI/2,travel=x*Math.cos(tangent)+y*Math.sin(tangent);
+ let coil=Math.sin((travel/Math.max(2.2,pitch))*Math.PI*2+d*.29);
+ let ridge=(v.edgeStyle==='merrow'?(coil*.22+.8):(.68+.25*Math.sin(Math.PI*frac(d/Math.max(1,pitch)))));
+ const alpha=cap(1-Math.max(0,(edgePx-d)/Math.max(2,edgePx)*.015),0,1);
+ for(let ch=0;ch<3;ch++)res.color[z+ch]=colorClamped(cr[ch]*ridge);
+ res.color[z+3]=Math.round(255*alpha);res.gray[i]=colorClamped(188+50*ridge);
+ res.height[z]=res.height[z+1]=res.height[z+2]=res.gray[i];res.height[z+3]=255;
+ res.white[z]=res.white[z+1]=res.white[z+2]=255;res.white[z+3]=255;
+ res.varnish[z]=res.varnish[z+1]=res.varnish[z+2]=255;res.varnish[z+3]=v.varnish?Math.round(255*.25*ridge):0;
+ vmap[z]=cr[0];vmap[z+1]=cr[1];vmap[z+2]=cr[2];vmap[z+3]=255;
+ res.mask[i]=1;
+ }
+ }
+ res.regionViz=vmap;res.segmentation=seg;return res;
+};
+canvases.regions=document.createElement('canvas');canvases.proof=document.createElement('canvas');
+function previewProof(res,v){const c=document.createElement('canvas');c.width=res.w;c.height=res.h;let cx=c.getContext('2d');cx.putImageData(new ImageData(res.color,res.w,res.h),0,0);
+ cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(1,res.w/(v.width*300));cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,res.w*.018)));
+ cx.strokeStyle='#57baff';cx.setLineDash([7,6]);cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,Math.min(res.w,res.h)*.085)));cx.setLineDash([]);return c;}
+const oldRenderPreview=renderPreview;
+renderPreview=async function(){await oldRenderPreview();if(!output)return;let res=output,v=values();
+ toCanvas('regions',res.regionViz,res.w,res.h);
+ const proof=previewProof(res,v),pc=canvases.proof;pc.width=proof.width;pc.height=proof.height;pc.getContext('2d').drawImage(proof,0,0);showTab();
+ updateRegions(res);
+};
+function updateRegions(res){const el=$('regionsList');const comps=res.segmentation.components.filter(c=>c.count>=res.w*res.h*.0002);
+ if(!comps.length){el.textContent='No substantial opaque color regions were found.';return}
+ el.innerHTML='';
+ for(let reg of comps){const row=document.createElement('div');row.className='regionline';const sw=document.createElement('span');sw.className='swatch';sw.style.background=reg.hex;
+ const desc=document.createElement('span');desc.textContent=`Region ${reg.rank+1} · ${reg.hex}`;desc.title='Contiguous color area '+reg.hex;
+ const ang=document.createElement('input');ang.type='number';ang.min='0';ang.max='180';ang.step='5';ang.setAttribute('aria-label',`Stitch angle for region ${reg.rank+1}`);
+ let key='r'+reg.rank;ang.value=regionOverrides[key]!==undefined?regionOverrides[key]:Math.round(reg.angle);ang.addEventListener('change',()=>{if(ang.value.trim()==='')delete regionOverrides[key];else regionOverrides[key]=cap(+ang.value,0,180);renderSoon()});
+ const share=document.createElement('span');share.className='tiny';share.textContent=(reg.count/(res.w*res.h)*100).toFixed(1)+'%';row.append(sw,desc,ang,share);el.appendChild(row);
+ }
+}
+function sheetSize(v){if(v.sheet==='standard')return [13,16.5];if(v.sheet==='mini')return [13,4.8];if(v.sheet==='letter')return [8.5,11];return [cap(v.sheetW,1,13),cap(v.sheetH,1,16.5)]}
+function layoutPlan(v){const [sw,sh]=sheetSize(v),m=cap(v.margin,0,1),g=cap(v.gap,.05,1);
+ const cols=Math.max(0,Math.floor((sw-2*m+g)/(v.width+g))),rows=Math.max(0,Math.floor((sh-2*m+g)/(v.height+g)));
+ const capacity=cols*rows,q=cap(Math.round(v.quantity),1,250),sheets=capacity?Math.ceil(q/capacity):0;
+ return {sw,sh,margin:m,gap:g,cols,rows,capacity,quantity:q,sheets,fullSheets:capacity?Math.floor(q/capacity):0,remainder:capacity?q%capacity:0};
+}
+function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Patch + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
+const oldUI=UI;UI=function(){oldUI();const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
+function batchSheetSvg(v,plan,count){const W=plan.sw*25.4,H=plan.sh*25.4,s=v.width*25.4,t=v.height*25.4;
+ let paths=[];for(let i=0;i<count;i++){let x=(plan.margin+(i%plan.cols)*(v.width+plan.gap))*25.4,y=(plan.margin+Math.floor(i/plan.cols)*(v.height+plan.gap))*25.4;
+ paths.push(`<g transform="translate(${x.toFixed(3)} ${y.toFixed(3)})"><path d="${outlinePath(s,t,v.patchShape,Math.min(s,t)*.018)}" fill="none" stroke="red" stroke-width="0.11"/></g>`)}
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(3)}mm" height="${H.toFixed(3)}mm" viewBox="0 0 ${W.toFixed(3)} ${H.toFixed(3)}"><title>Unregistered reference outline sheet — not verified cutter coordinates</title>${paths.join('')}</svg>`;
+}
+function makeSheetCanvas(p,v,plan,count,proof=false){const c=document.createElement('canvas');c.width=Math.round(plan.sw*DPI);c.height=Math.round(plan.sh*DPI);let cx=c.getContext('2d');const art=imageCanvas(p,'color');
+ for(let i=0;i<count;i++){let x=Math.round((plan.margin+(i%plan.cols)*(v.width+plan.gap))*DPI),y=Math.round((plan.margin+Math.floor(i/plan.cols)*(v.height+plan.gap))*DPI);
+ cx.drawImage(art,x,y,p.w,p.h);if(proof){cx.save();cx.translate(x,y);cx.strokeStyle='#f45650';cx.lineWidth=2;cx.stroke(new Path2D(outlinePath(p.w,p.h,v.patchShape,Math.min(p.w,p.h)*.018)));cx.restore()}}return c;
+}
+function calSave(){try{localStorage.setItem(CAL_KEY,JSON.stringify(calibrationRecords))}catch(e){$('calGuidance').textContent='Local storage unavailable; export JSON or CSV to retain these records.'}}
+try{const parsed=JSON.parse(localStorage.getItem(CAL_KEY)||'[]');if(Array.isArray(parsed))calibrationRecords=parsed.filter(r=>r&&typeof r==='object').slice(-400)}catch(e){}
+function updateCalibrationGuide(){const v=values(),records=calibrationRecords.filter(r=>r.material===v.material&&r.variant===v.variant&&r.result==='pass'&&Number(r.studioHeight)>0&&Number(r.measured)>0);
+ const selected=records.find(r=>r.id===selectedCalibrationId);const ref=selected||records.at(-1);
+ // The operator-entered Studio height must not change automatically while entering a test.
+
+ if(ref){const ratio=ref.measured/ref.studioHeight;const propose=v.depth/ratio;$('calGuidance').className='success-note';$('calGuidance').textContent=`Passed sample from ${ref.date}: Studio ${ref.studioHeight} mm → measured ${ref.measured} mm (ratio ${ratio.toFixed(2)}). For ${v.depth.toFixed(2)} mm target, a linear test-only estimate is Studio ${propose.toFixed(2)} mm. Verify on a new sample; this is NOT a calibrated printer driver.`;
+ }else{$('calGuidance').className='error-note';$('calGuidance').textContent='No physically measured, durability-passed sample for this substrate yet. Height maps are proportional design intent; no xTool physical height can be predicted. Record a print test below.';}}
+function renderCalRecords(){const div=$('calRecords');div.innerHTML='';if(!calibrationRecords.length){div.textContent='No calibration measurements saved. Use the test coupon and record your results.';return}
+ const table=document.createElement('table');table.innerHTML='<thead><tr><th>Material</th><th>Studio / measured</th><th>Result</th><th>Date</th><th>Use</th></tr></thead>';
+ let body=document.createElement('tbody');for(const r of [...calibrationRecords].reverse().slice(0,25)){
+ const row=document.createElement('tr'),cells=[`${r.material}/${r.variant}`,`${r.studioHeight} / ${r.measured||'—'} mm`,r.result,r.date];for(const v of cells){const c=document.createElement('td');c.textContent=v;row.appendChild(c)}
+ const action=document.createElement('td');const btn=document.createElement('button');btn.textContent=r.id===selectedCalibrationId?'Selected':'Use';btn.disabled=r.result!=='pass'||!(Number(r.measured)>0);btn.title=btn.disabled?'Requires physical measured height and pass result':'Use record as proposed material reference';btn.onclick=()=>{selectedCalibrationId=r.id;renderCalRecords();updateCalibrationGuide()};action.appendChild(btn);row.appendChild(action);body.appendChild(row)}table.appendChild(body);div.appendChild(table);}
+function csvQuote(s){return '"'+String(s??'').replace(/"/g,'""')+'"'}
+function calibrationCSV(){const cols=['date','id','material','variant','supplier_lot','studio_mode','studio_height_mm','actual_measured_height_mm','primer','result','notes'];return [cols.map(csvQuote).join(','),...calibrationRecords.map(r=>[r.date,r.id,r.material,r.variant,r.name,r.mode,r.studioHeight,r.measured,r.primer,r.result,r.notes].map(csvQuote).join(','))].join('\r\n')+'\r\n'}
+function calRef(v){const candidates=calibrationRecords.filter(r=>r.material===v.material&&r.variant===v.variant&&r.result==='pass'&&Number(r.measured)>0&&Number(r.studioHeight)>0);return candidates.find(x=>x.id===v.selectedCalibrationId)||candidates.at(-1)||null}
+function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,cutlines:'geometric reference SVG only; registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
+function exportProjectJSON(){return JSON.stringify({type:'SC_UV_STUDIO_PROJECT',version:MODULE_VERSION,settings:values(),artworkDataURL:imageDataURL,calibrationRecords},null,2)}
+const oldPrintNotes=printNotes;
+printNotes=function(v){return oldPrintNotes(v)+'\nNEW v0.3 FEATURES: k-means/connected-component stitch regions, customizable angles, thread highlights, merrow/satin patch perimeter, template SVG, batch layouts, locally recorded print tests.\n\nHEIGHT CALIBRATION: calibrated records only yield a LINEAR ESTIMATE of the xTool Studio height setting. They do NOT establish that a grayscale pixel commands a physical pass or varnish/white channels. These generated masks and outlines are prepress references, not machine control.\n\nBATCH: separate color sheet PNG and reference cut SVG share document origin; align using a physical registration test before cutting.\n'};
+async function exportV03Zip(layoutOnly=false){if(busy)return;busy=true;try{
+ let v=values(),pl=layoutPlan(v);if(layoutOnly&&!pl.capacity)throw Error('Patch does not fit on this sheet');
+ const p=await prod(),files=[],addTxt=(name,s)=>files.push({name,data:textBytes(s)});
+ if(!layoutOnly){
+ for(let [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],['white','white-underbase.png'],['varnish','varnish-highlights.png']]){ $('status').textContent='Encoding '+name+'…';files.push({name,data:await pngBytes(imageCanvas(p,key))});}
+ for(let i=1;i<=v.layers;i++){files.push({name:`layer-masks/threshold-${String(i).padStart(2,'0')}-of-${v.layers}.png`,data:await pngBytes(makeMaskPNG(p.w,p.h,p.mask,v.layers,i))})}
+ for(const r of p.segmentation.components.filter(r=>r.count>p.w*p.h*.001).slice(0,8)){
+  const ar=new Uint8ClampedArray(p.w*p.h*4);for(let j=0;j<p.w*p.h;j++)if(p.segmentation.componentAt[j]===r.index){const z=j*4;ar[z]=ar[z+1]=ar[z+2]=255;ar[z+3]=255}
+  let c=document.createElement('canvas');c.width=p.w;c.height=p.h;c.getContext('2d').putImageData(new ImageData(ar,p.w,p.h),0,0);
+  files.push({name:`region-masks/region-${String(r.rank+1).padStart(2,'0')}.png`,data:await pngBytes(c)});
+ }
+ addTxt('cutting/individual-patch-outline.svg',patchOutlineSVG(v));
+ if(v.material==='film'&&v.mirror)files.push({name:'mirrored-color-REFERENCE.png',data:await pngBytes(mirroredArtwork(p))});
+ addTxt('editable-project.json',exportProjectJSON());addTxt('manifest.json',JSON.stringify(extendedManifest(v,p),null,2));addTxt('READ-ME.txt',printNotes(v));
+ addTxt('calibration-records.csv',calibrationCSV());addTxt('test-print-log.csv',logCSV(v));
+ }
+ if(pl.capacity){for(let [kind,count,mult] of [['full',pl.capacity,pl.fullSheets],['remainder',pl.remainder,pl.remainder?1:0]]){
+  if(!mult)continue;$('status').textContent='Building '+kind+' sheet at 300 DPI…';
+  files.push({name:`batch/${kind}-artwork.png`,data:await pngBytes(makeSheetCanvas(p,v,pl,count))});
+  files.push({name:`batch/${kind}-proof.png`,data:await pngBytes(makeSheetCanvas(p,v,pl,count,true))});
+  addTxt(`batch/${kind}-cutlines.svg`,batchSheetSvg(v,pl,count));
+ }
+ addTxt('batch/batch-plan.csv',['sheet_type,copies_of_sheet,patches_per_sheet,sheet_width_in,sheet_height_in',...[['full',pl.fullSheets,pl.capacity],['remainder',pl.remainder?1:0,pl.remainder]].filter(x=>x[1]).map(x=>`${x[0]},${x[1]},${x[2]},${pl.sw},${pl.sh}`)].join('\r\n')+'\r\n');
+ }else if(!layoutOnly)addTxt('batch/WARNING.txt','Selected patch does not fit on the selected sheet. No batch files generated.');
+ $('status').textContent='Packaging ZIP…';saveBytes(filename()+(layoutOnly?'-batch-layout':'-uvstudio-v03-prepress')+'.zip',zipStore(files),'application/zip');$('status').textContent='✓ '+files.length+' prepress assets exported';
+ }catch(e){$('status').textContent='Export error: '+e.message;console.error(e)}finally{busy=false;currentProduction=null}}
+function couponCanvases(v){const w=1200,h=750,color=document.createElement('canvas'),depth=document.createElement('canvas');for(let c of [color,depth]){c.width=w;c.height=h}
+ const a=color.getContext('2d'),b=depth.getContext('2d');a.fillStyle='#ffffff';a.fillRect(0,0,w,h);b.fillStyle='#000';b.fillRect(0,0,w,h);
+ a.fillStyle='#102734';a.font='bold 34px Arial';a.fillText('SC UV STUDIO • CALIBRATION COUPON',45,55);a.font='22px Arial';a.fillText(`${v.material} / ${v.variant}  |  Physical sample required`,45,90);
+ b.fillStyle='#fff';b.font='24px Arial';b.fillText('Relative grayscale geometry — NOT calibrated deposited millimeters',25,35);
+ const levels=[.20,.35,.50,.65,.80,.95];for(let i=0;i<6;i++){let x=35+(i%3)*390,y=140+Math.floor(i/3)*270;
+ a.fillStyle='#ededed';a.fillRect(x,y,340,210);a.fillStyle=['#0f5353','#48723b','#263d9b','#b27b2c','#933e69','#363636'][i];a.fillRect(x+15,y+22,310,155);
+ a.fillStyle='#fff';for(let j=0;j<12;j++){let yy=y+30+j*12;a.fillRect(x+15+(j%2)*12,yy,310-(j%2)*12,3)}
+ a.fillStyle='#102734';a.font='bold 22px Arial';a.fillText('Level '+(i+1)+' / 6',x+13,y+203);
+ b.fillStyle=`rgb(${Math.round(levels[i]*255)},${Math.round(levels[i]*255)},${Math.round(levels[i]*255)})`;b.fillRect(x+15,y+22,310,155);
+ b.fillStyle='#fff';b.font='20px Arial';b.fillText('gray '+Math.round(levels[i]*255),x+25,y+201);
+ }
+ return {color,depth}}
+async function exportCoupon(){if(busy)return;busy=true;try{let v=values(),c=couponCanvases(v);let files=[{name:'calibration-coupon-color.png',data:await pngBytes(c.color)},{name:'calibration-coupon-grayscale.png',data:await pngBytes(c.depth)},{name:'test-log.csv',data:textBytes(logCSV(v))},{name:'READ-ME.txt',data:textBytes('SC UV STUDIO MATERIAL TEST COUPON\n\nSix tonal swatches are RELATIVE artwork intensity levels, not direct physical thickness instructions. Their printed height depends on how xTool Studio processes the graphics. Use manufacturer settings, measure with a depth gauge, document mode/height/primer/ink/substrate and adhesion. Do not import this as a machine-ready layer plan.\n')}];saveBytes(filename()+'-calibration-coupon.zip',zipStore(files),'application/zip');$('status').textContent='✓ Test coupon generated'}catch(e){$('status').textContent=e.message}finally{busy=false}}
+// Offline tools: no outgoing uploads, no printer side effects.
+function addCalibrationRecord(){let v=values(),name=$('calName').value.trim(),studio=+$('calStudioHeight').value,meas=$('calMeasured').value===''?null:+$('calMeasured').value,res=$('calDurability').value;
+ if(!studio||studio<=0||studio>7){alert('Enter a positive xTool Studio height no greater than 7 mm.');return}
+ if(res==='pass'&&(!(meas>0)||meas>7)){alert('A passed test requires an actual measured positive height.');return}
+ const entry={id:`${Date.now()}-${Math.floor(Math.random()*10000)}`,date:new Date().toISOString().slice(0,10),material:v.material,variant:v.variant,name,mode:$('calMode').value,studioHeight:studio,measured:meas,primer:$('calPrimer').value.trim(),result:res,notes:$('calNotes').value.trim()};calibrationRecords.push(entry);calSave();renderCalRecords();updateCalibrationGuide();$('status').textContent='✓ Print test saved locally';}
+const productPresets={
+ 'hat-leather':{w:3.5,h:2.5,shape:'rounded',material:'leather'},
+ 'hat-oval':{w:3.5,h:2.25,shape:'oval',material:'leather'},
+ 'garment-square':{w:3,h:3,shape:'rounded',material:'leather'},
+ 'chest-small':{w:2.5,h:2.5,shape:'circle',material:'leather'},
+ 'heat-transfer':{w:3.5,h:2.5,shape:'rounded',material:'film'},
+ 'metal-tag':{w:4,h:3,shape:'rectangle',material:'metal'}
+};
+function applyProductPreset(){const p=productPresets[$('productPreset').value];if(!p)return;
+ $('width').value=p.w;$('height').value=p.h;$('patchShape').value=p.shape;
+ if($('material').value!==p.material){$('material').value=p.material;applyMaterialProfile()}
+ renderSoon();}
+function applySheetChoice(){let sheet=$('sheet').value,size=sheetSize(values());if(sheet!=='custom'){$('sheetW').value=size[0];$('sheetH').value=size[1]}for(let key of ['sheetW','sheetH'])$(key).disabled=sheet!=='custom';renderSoon()}
+for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','autoAngles','patchShape','sheetW','sheetH','margin','gap','quantity']){
+ let el=$(key);el.addEventListener('input',()=>renderSoon());el.addEventListener('change',()=>renderSoon());
+}
+$('sheet').addEventListener('change',applySheetChoice);
+$('productPreset').addEventListener('change',applyProductPreset);
+$('recordCalibration').onclick=addCalibrationRecord;
+$('exportCalibrationJSON').onclick=()=>saveBytes('skilledcrafting-uv-calibrations.json',textBytes(JSON.stringify(calibrationRecords,null,2)),'application/json');
+$('coupon').onclick=exportCoupon;
+$('exportCalibration').onclick=()=>saveBytes('skilledcrafting-uv-calibration-records.csv',textBytes(calibrationCSV()),'text/csv');
+$('importCalibration').onclick=()=>$('calImport').click();
+$('calImport').addEventListener('change',async e=>{let f=e.target.files?.[0];if(!f)return;try{let a=JSON.parse(await f.text());if(!Array.isArray(a))throw Error('Expected JSON array of records');calibrationRecords=a.filter(r=>r&&typeof r==='object'&&r.material&&r.variant&&r.id).slice(-400);calSave();renderCalRecords();updateCalibrationGuide();$('status').textContent='✓ Calibration records imported';}catch(err){alert('Import failed: '+err.message)}finally{e.target.value=''}});
+$('layoutZip').onclick=()=>exportV03Zip(true);
+$('all').onclick=()=>exportV03Zip(false);
+$('outlineSvg').onclick=()=>saveBytes(filename()+'-patch-outline.svg',textBytes(patchOutlineSVG(values())),'image/svg+xml');
+$('save').onclick=()=>saveBytes(filename()+'-project-v03.json',textBytes(exportProjectJSON()),'application/json');
+// Load both old v0.2 projects and new v0.3 projects.
+// Original project handler also loads v0.3's known keys; restore the extra region override state after it completes.
+$('projectInput').addEventListener('change',async e=>{let f=e.target.files?.[0];if(!f)return;try{const obj=JSON.parse(await f.text());if(obj.type==='SC_UV_STUDIO_PROJECT'){
+ regionOverrides={...(obj.settings?.regionOverrides||{})};selectedCalibrationId=obj.settings?.selectedCalibrationId||null;
+ if(Array.isArray(obj.calibrationRecords)){calibrationRecords=obj.calibrationRecords;calSave();renderCalRecords();}
+ setTimeout(()=>{renderSoon();updateCalibrationGuide()},100);
+ }}catch(err){}},false);
+applySheetChoice();renderCalRecords();UI();
+
+
+
+
+/* Operator-measured fixture geometry. Layouts remain design references, not device coordinates. */
+const scOriginalLayoutPlan=layoutPlan;
+layoutPlan=function(v){
+ const base=scOriginalLayoutPlan(v),w=v.width,h=v.height;
+ const x=Number(v.jigX),y=Number(v.jigY),gx=Number(v.jigGapX),gy=Number(v.jigGapY);
+ const originX=Math.max(0,Number.isFinite(x)?x:base.margin);
+ const originY=Math.max(0,Number.isFinite(y)?y:base.margin);
+ const gapX=Math.max(.05,Number.isFinite(gx)?gx:base.gap);
+ const gapY=Math.max(.05,Number.isFinite(gy)?gy:base.gap);
+ const cols=Math.max(0,Math.floor((base.sw-originX-base.margin+gapX)/(w+gapX)));
+ const rows=Math.max(0,Math.floor((base.sh-originY-base.margin+gapY)/(h+gapY)));
+ const capacity=cols*rows;
+ return {...base,originX,originY,gapX,gapY,cols,rows,capacity,sheets:capacity?Math.ceil(base.quantity/capacity):0,
+   fullSheets:capacity?Math.floor(base.quantity/capacity):0,remainder:capacity?base.quantity%capacity:0};
+};
+const scBaseSheetSVG=batchSheetSvg;
+batchSheetSvg=function(v,plan,count){
+ let result=scBaseSheetSVG(v,{...plan,margin:plan.originX??plan.margin,gap:plan.gapX??plan.gap},count);
+ if(plan.originY!==plan.originX ||plan.gapY!==plan.gapX){
+  const W=plan.sw*25.4,H=plan.sh*25.4;
+  const paths=Array.from({length:count},(_,i)=>{
+   const x=(plan.originX+(i%plan.cols)*(v.width+plan.gapX))*25.4;
+   const y=(plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*25.4;
+   const shape=outlinePath(v.width*25.4,v.height*25.4,v.patchShape,Math.min(v.width,v.height)*.45);
+   return '<g transform="translate('+x.toFixed(3)+' '+y.toFixed(3)+')"><path d="'+shape+'" fill="none" stroke="#ef4444" stroke-width=".1"/></g>';
+  }).join('');
+  result='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+paths+'</svg>';
+ }
+ if(v.registrationMarks){
+  const mx=5,my=5,W=plan.sw*25.4,H=plan.sh*25.4;
+  const mark=(x,y)=>'<path d="M'+(x-2)+' '+y+'h4 M'+x+' '+(y-2)+'v4" stroke="#1788ef" stroke-width=".15" fill="none"/>';
+  result=result.replace('</svg>',mark(mx,my)+mark(W-mx,my)+mark(mx,H-my)+mark(W-mx,H-my)+'</svg>');
+ }
+ return result;
+};
+const scBaseSheetCanvas=makeSheetCanvas;
+makeSheetCanvas=function(p,v,plan,count,proof=false){
+ // Keep production artwork on physical 300 DPI coordinates.
+ const sheet=scBaseSheetCanvas(p,v,{...plan,margin:plan.originX??plan.margin,gap:plan.gapX??plan.gap},count,proof);
+ if(plan.originX!==plan.originY||plan.gapX!==plan.gapY){
+  const ctx=sheet.getContext('2d');ctx.clearRect(0,0,sheet.width,sheet.height);
+  const art=imageCanvas(p,'color');
+  for(let i=0;i<count;i++){
+   const x=Math.round((plan.originX+(i%plan.cols)*(v.width+plan.gapX))*DPI),
+     y=Math.round((plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*DPI);
+   ctx.drawImage(art,x,y,p.w,p.h);
+   if(proof){ctx.strokeStyle='#ef4444';ctx.stroke(new Path2D(outlinePath(p.w,p.h,v.patchShape,4)));}
+  }
+ }
+ if(proof&&v.registrationMarks){
+  const ctx=sheet.getContext('2d');ctx.strokeStyle='#1687dc';ctx.lineWidth=2;
+  const crosses=[[30,30],[sheet.width-30,30],[30,sheet.height-30],[sheet.width-30,sheet.height-30]];
+  for(const [x,y] of crosses){ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke();}
+ }
+ return sheet;
+};
+const scBaseValuesForJig=values;
+values=function(){return {...scBaseValuesForJig(),jigX:Number($('jigX').value),jigY:Number($('jigY').value),
+ jigGapX:Number($('jigGapX').value),jigGapY:Number($('jigGapY').value),registrationMarks:$('registrationMarks').checked};};
+for(const id of ['jigX','jigY','jigGapX','jigGapY','registrationMarks'])$(id).addEventListener('input',renderSoon);
+
+/* Design Pro extensions; preserve the v0.3 texture engine and manufacturer-controlled print processing. */
+const scBasePaint = paintBase;
+paintBase = function(w,h){
+  const data=scBasePaint(w,h);
+  if(!$('cleanupWhite')?.checked)return data;
+  const a=data.data, limit=Number($('cleanThreshold').value||245);
+  for(let i=0;i<a.length;i+=4){
+    if(a[i]>=limit&&a[i+1]>=limit&&a[i+2]>=limit)a[i+3]=0;
+  }
+  return data;
+};
+const scPriorValues=values;
+values=function(){return {...scPriorValues(),cleanupWhite:$('cleanupWhite').checked,
+  cleanThreshold:+$('cleanThreshold').value,effectStyle:$('effectStyle').value};};
+const scPriorProduce=produce;
+produce=function(w,h,v){
+ const r=scPriorProduce(w,h,v),type=v.effectStyle;
+ if(type==='embroidery')return r;
+ const px=r.mask.length;
+ for(let i=0;i<px;i++){
+  if(!r.mask[i])continue;
+  const z=i*4,x=i%w,y=(i/w)|0,orig=r.gray[i]/255;
+  const noise=.5+.5*Math.sin(x*.43+y*.73)*Math.sin(x*.67-y*.31);
+  let h=orig,mul=1.0;
+  if(type==='chenille'){h=.30+.40*noise+.30*orig;mul=.78+noise*.42;}
+  if(type==='molded'){h=.78+.18*orig;mul=.96+orig*.13;}
+  if(type==='embossed'){h=.28+orig*.54;mul=.77+orig*.30;}
+  if(type==='metallic'){h=.39+.36*orig;mul=.70+.47*Math.abs(Math.sin(y*.16+x*.012));}
+  if(type==='gloss'){h=.58+.40*orig;mul=.83+.35*orig;}
+  r.gray[i]=colorClamped(h*255);
+  r.height[z]=r.height[z+1]=r.height[z+2]=r.gray[i];r.height[z+3]=255;
+  for(let c=0;c<3;c++)r.color[z+c]=colorClamped(r.color[z+c]*mul);
+  if(type==='gloss'){r.varnish[z]=r.varnish[z+1]=r.varnish[z+2]=255;r.varnish[z+3]=255;}
+ }
+ return r;
+};
+function scRosterRows(){
+ const raw=($('personalizationRows').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ if(raw.length>250)throw Error('Max 250 roster rows per export');
+ const rows=raw.map((line,i)=>{
+  const [name,number]=line.split(',').map(s=>(s||'').trim());
+  if(!name||name.length>36||!number||number.length>12)throw Error('Roster row '+(i+1)+': require name (up to 36 characters) and number (up to 12).');
+  return {name,number};
+ });return rows;
+}
+function scCsvCell(v){
+ const x=String(v??'').replace(/^[\s]*[=+@-]/,t=>"'"+t);
+ return '"'+x.replace(/"/g,'""')+'"';
+}
+$('downloadRosterCsv').onclick=()=>{
+ try{const rows=scRosterRows(),csv=[['name','number'],...rows.map(r=>[r.name,r.number])].map(r=>r.map(scCsvCell).join(',')).join('\r\n');
+  saveBytes(filename()+'-roster.csv',textBytes(csv),'text/csv');$('status').textContent='✓ Roster worksheet ready';}
+ catch(e){$('status').textContent=e.message;}
+};
+function scProductProof(){
+ if(!output)throw Error('Upload a logo first');
+ const el=$('productProofCanvas'),ctx=el.getContext('2d'),w=el.width,h=el.height;
+ const mode=$('proofSurface').value;ctx.clearRect(0,0,w,h);
+ const bg=ctx.createLinearGradient(0,0,w,h);bg.addColorStop(0,'#0d2030');bg.addColorStop(1,'#10161c');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
+ ctx.save();ctx.translate(w/2,h/2);
+ if(mode==='hat'){
+  ctx.fillStyle='#181d24';ctx.beginPath();ctx.ellipse(0,82,345,95,0,0,Math.PI*2);ctx.fill();
+  const crown=ctx.createLinearGradient(0,-180,0,170);crown.addColorStop(0,'#4d5562');crown.addColorStop(1,'#111821');ctx.fillStyle=crown;
+  ctx.beginPath();ctx.moveTo(-265,80);ctx.quadraticCurveTo(-240,-188,0,-203);ctx.quadraticCurveTo(240,-188,265,80);ctx.quadraticCurveTo(0,168,-265,80);ctx.fill();
+ }else if(mode==='hoodie'){
+  ctx.fillStyle='#222935';ctx.beginPath();ctx.moveTo(-260,190);ctx.lineTo(-210,-122);ctx.lineTo(-116,-191);ctx.quadraticCurveTo(0,-148,116,-191);ctx.lineTo(215,-122);ctx.lineTo(260,190);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#697480';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,-148,78,0,Math.PI);ctx.stroke();
+ }else{
+  const plate=ctx.createLinearGradient(-280,-180,280,180);
+  if(mode==='metal'){plate.addColorStop(0,'#a6afb5');plate.addColorStop(.5,'#43505b');plate.addColorStop(1,'#b5bdc5');}
+  else{plate.addColorStop(0,'#a06b39');plate.addColorStop(.5,'#422d22');plate.addColorStop(1,'#94613f');}
+  ctx.fillStyle=plate;ctx.beginPath();ctx.roundRect(-300,-160,600,320,22);ctx.fill();
+ }
+ const art=canvases.color;
+ const ratio=Math.min(420/art.width,230/art.height),dw=art.width*ratio,dh=art.height*ratio;
+ ctx.shadowColor='#000a';ctx.shadowBlur=20;ctx.shadowOffsetY=10;
+ ctx.fillStyle=mode==='metal'?'#161e28':'#6b4d37';
+ ctx.beginPath();ctx.roundRect(-dw/2-18,-dh/2-18,dw+36,dh+36,16);ctx.fill();
+ ctx.shadowColor='transparent';ctx.drawImage(art,-dw/2,-dh/2,dw,dh);
+ ctx.restore();
+ ctx.fillStyle='#d9e8ed';ctx.font='16px system-ui';ctx.fillText('SKILLED CRAFTING · STYLIZED CONCEPT PROOF',22,h-22);
+ ctx.font='13px system-ui';ctx.fillText('Not a photograph or calibrated representation of ink buildup',22,27);
+}
+$('generateProductProof').onclick=()=>{try{scProductProof();$('status').textContent='✓ Mockup preview ready'}catch(e){$('status').textContent=e.message}};
+$('downloadProductProof').onclick=async()=>{try{scProductProof();saveBytes(filename()+'-stylized-proof.png',await pngBytes($('productProofCanvas')),'image/png');$('status').textContent='✓ Proof exported'}catch(e){$('status').textContent=e.message}};
+$('downloadRosterSheet').onclick=async()=>{
+ if(busy)return;busy=true;
+ try{
+  const rows=scRosterRows();if(!rows.length)throw Error('Enter at least one roster entry');
+  const p=await prod(),v=values(),plan=layoutPlan(v);if(!plan.capacity)throw Error('Patch format does not fit the selected sheet');
+  const files=[],sheetCount=Math.ceil(rows.length/plan.capacity),art=imageCanvas(p,'color');
+  for(let sheet=0;sheet<sheetCount;sheet++){
+   const canvas=document.createElement('canvas');canvas.width=Math.round(plan.sw*DPI);canvas.height=Math.round(plan.sh*DPI);
+   const ctx=canvas.getContext('2d');const qty=Math.min(plan.capacity,rows.length-sheet*plan.capacity);
+   for(let n=0;n<qty;n++){
+    const item=rows[sheet*plan.capacity+n];
+    const x=Math.round((plan.margin+(n%plan.cols)*(v.width+plan.gap))*DPI),y=Math.round((plan.margin+Math.floor(n/plan.cols)*(v.height+plan.gap))*DPI);
+    ctx.drawImage(art,x,y,p.w,p.h);
+    ctx.save();ctx.font='bold '+Math.max(13,Math.round(p.h*.075))+'px system-ui';ctx.textAlign='center';
+    ctx.strokeStyle='#061423';ctx.lineWidth=Math.max(2,p.h*.012);
+    const label=item.name+'  #'+item.number;
+    ctx.strokeText(label,x+p.w*.5,y+p.h*.82,p.w*.85);
+    ctx.fillStyle='#fff';ctx.fillText(label,x+p.w*.5,y+p.h*.82,p.w*.85);
+    ctx.restore();
+   }
+   files.push({name:'personalized-sheet-'+String(sheet+1).padStart(2,'0')+'.png',data:await pngBytes(canvas)});
+  }
+  files.push({name:'personalization-roster.csv',data:textBytes([['name','number'],...rows.map(r=>[r.name,r.number])].map(x=>x.map(scCsvCell).join(',')).join('\r\n'))});
+  files.push({name:'READ-ME.txt',data:textBytes('PERSONALIZED UV ARTWORK — TEST/PROOF ONLY. Names and numbers must be visually approved by customer. Inspect registration, patch edges and minimum text size. Exporting this ZIP does not set Omni printer parameters.')});
+  saveBytes(filename()+'-personalization.zip',zipStore(files),'application/zip');$('status').textContent='✓ '+rows.length+' personalized pieces exported';
+ }catch(e){$('status').textContent='Personalization error: '+e.message}finally{busy=false;currentProduction=null}
+};
+['cleanupWhite','cleanThreshold','effectStyle'].forEach(id=>$(id).addEventListener('input',renderSoon));
+
+/* Same-origin bridge to Skilled Crafting application: transfers recipe metadata only.
+   Original art is not uploaded. Operators must preserve the local source and exported production files. */
+async function scUvCloudPacket(type){
+ if(type==='SC_UV_EXPORT_EDITABLE'){
+  if(!imageDataURL)throw Error('Import artwork before saving the cloud-editable project.');
+  return {type:'SC_UV_EXPORT_RESULT',mime_type:'application/json',asset_kind:'editable',
+    file_name:filename()+'-editable.json',contents:JSON.stringify({
+      type:'SC_UV_STUDIO_PROJECT',settings:values(),artworkDataURL:imageDataURL,
+      calibrationRecords:calibrationRecords.slice(-100),regionOverrides
+    })};
+ }
+ if(type==='SC_UV_EXPORT_PACK'){
+  if(!imageDataURL)throw Error('Upload source artwork before generating a production pack.');
+  const p=await prod(),files=[],v=values();
+  for(const [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],
+    ['white','white-underbase.png'],['varnish','varnish-highlights.png']]){
+   files.push({name,data:await pngBytes(imageCanvas(p,key))});
+  }
+  files.push({name:'outline-cutline.svg',data:textBytes(patchOutlineSVG(v))});
+  files.push({name:'manifest.json',data:textBytes(JSON.stringify(manifest(v,p),null,2))});
+  files.push({name:'print-notes.txt',data:textBytes(printNotes(v))});
+  const zip=zipStore(files);
+  if(zip.byteLength>52428800)throw Error('Cloud print pack exceeds 50 MB; export locally instead.');
+  return {type:'SC_UV_EXPORT_RESULT',mime_type:'application/zip',asset_kind:'production_zip',
+    file_name:filename()+'-production.zip',buffer:zip.buffer.slice(zip.byteOffset,zip.byteOffset+zip.byteLength)};
+ }
+ if(type==='SC_UV_EXPORT_PROOF'){
+  scProductProof();
+  const bytes=await pngBytes($('productProofCanvas'));
+  return {type:'SC_UV_EXPORT_RESULT',mime_type:'image/png',asset_kind:'proof',
+    file_name:filename()+'-customer-proof.png',buffer:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)};
+ }
+ throw Error('Invalid export kind');
+}
+window.addEventListener('message', async(event)=>{
+ if(event.origin!==window.location.origin||event.source!==window.parent)return;
+ const msg=event.data||{};
+ if(!['SC_UV_EXPORT_EDITABLE','SC_UV_EXPORT_PACK','SC_UV_EXPORT_PROOF','SC_UV_IMPORT_EDITABLE'].includes(msg.type))return;
+ try{
+  if(msg.type==='SC_UV_IMPORT_EDITABLE'){
+   if(typeof msg.contents!=='string'||msg.contents.length>45_000_000)throw Error('Editable project is not valid');
+   const p=JSON.parse(msg.contents);
+   if(p.type!=='SC_UV_STUDIO_PROJECT'||typeof p.artworkDataURL!=='string'||!p.artworkDataURL.startsWith('data:image/'))throw Error('Invalid editable UV project');
+   for(const [key,value] of Object.entries(p.settings||{})){
+     const el=$(key);if(!el)continue;
+     if(el.type==='checkbox')el.checked=!!value;else el.value=value;
+   }
+   if(p.settings?.material&&profiles[p.settings.material]){
+     $('material').value=p.settings.material;loadVariants(p.settings.variant);
+   }
+   if(p.settings?.preset)settings.preset=p.settings.preset;
+   if(p.regionOverrides&&typeof p.regionOverrides==='object')regionOverrides=p.regionOverrides;
+   if(Array.isArray(p.calibrationRecords)){calibrationRecords=p.calibrationRecords.slice(-400);renderCalRecords();}
+   await useImage(p.artworkDataURL);renderSoon();
+   window.parent.postMessage({type:'SC_UV_IMPORT_ACCEPTED',requestId:msg.requestId},event.origin);
+   return;
+  }
+  const result=await scUvCloudPacket(msg.type);
+  const payload={...result,requestId:msg.requestId};
+  if(payload.buffer)window.parent.postMessage(payload,event.origin,[payload.buffer]);
+  else window.parent.postMessage(payload,event.origin);
+ }catch(err){
+  window.parent.postMessage({type:'SC_UV_EXPORT_ERROR',requestId:msg.requestId,message:String(err.message||err)},event.origin);
+ }finally{currentProduction=null}
+});
+
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin || event.source !== window.parent) return;
+  if (event.data?.type !== 'SC_UV_REQUEST_SNAPSHOT') return;
+  try {
+    const data = values();
+    window.parent.postMessage({
+      type: 'SC_UV_SNAPSHOT',requestId:event.data.requestId,
+      data,hasSourceArtwork:!!imageDataURL,
+      calibrationRecordsCount:calibrationRecords.length,
+      warning:'Metadata only. Uploaded source artwork and exported PNGs remain local until R2 integration is verified.'
+    }, event.origin);
+  } catch(err) {
+    window.parent.postMessage({type:'SC_UV_SNAPSHOT_ERROR',requestId:event.data.requestId,message:String(err.message||err)}, event.origin);
+  }
+});
+
+})();
+</script>
+</body></html>
