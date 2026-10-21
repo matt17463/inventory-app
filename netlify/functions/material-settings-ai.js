@@ -3,9 +3,19 @@ import { authorizeEmployee, jsonResponse, auditFunctionSecurity } from './_share
 const EQUIPMENT = new Set(['mopa_fiber','xtool_s1','xtool_p2','xtool_omni','heat_press','sublimation_press']);
 const OPERATIONS = new Set(['color_engrave','etch','score','cut','engrave','uv_flat','uv_texture','uv_relief','uv_varnish','heat_transfer','sublimation']);
 const LASERS = new Set(['mopa_fiber','xtool_s1','xtool_p2']);
-const DANGEROUS = /(?:^|\W)(?:pvc|polyvinyl chloride|vinyl chloride|chlorinated plastic|unknown plastic|unidentified plastic)(?:$|\W)/i;
+const DANGEROUS = /(?:^|\W)(?:pvc|polyvinyl chloride|vinyl|vinyl chloride|chlorinated plastic|unknown plastic|unidentified plastic)(?:$|\W)/i;
 const clip=(v,n=250)=>String(v??'').trim().slice(0,n);
 function bodyResponse(status, data, event) {return jsonResponse(status,data,event);}
+function stripUngroundedNumbers(input){
+  // This endpoint currently has no server-verified numerical manufacturer records.
+  // Prevent model-generated power/speed/temperature numbers from reaching the UI as advice.
+  if(typeof input==='number')return 'verify in manufacturer manual and coupon test';
+  if(typeof input==='string' && /\d\s*(?:%|°|mm\/s|mm|cm\/s|kHz|MHz|ns|s|sec|seconds|watts?|W\b|F\b|C\b)/i.test(input))
+    return 'verify exact numeric setting in manufacturer manual and coupon test';
+  if(Array.isArray(input))return input.slice(0,24).map(stripUngroundedNumbers);
+  if(input&&typeof input==='object')return Object.fromEntries(Object.entries(input).slice(0,50).map(([k,v])=>[k,stripUngroundedNumbers(v)]));
+  return input;
+}
 function cleanSources(sources) {
   return (Array.isArray(sources)?sources:[]).slice(0,4).map(x=>({
     label: clip(x?.label,120), url:clip(x?.url,500),
@@ -29,12 +39,14 @@ export async function handler(event) {
       return bodyResponse(422,{blocked:true,message:'Do not laser PVC, vinyl chloride, or unidentified plastics. Check the manufacturer SDS and use a safe alternative.'},event);
     if(!model || !configuration)
       return bodyResponse(422,{message:'Enter the exact machine model/module and configuration (wattage or ink/press setup) before requesting settings.'},event);
-    const vetted=cleanSources(body.sources).filter(s=>s.verified);
+    // Source-link truth cannot be confirmed from client-supplied flags. Treat all as unverified.
+    const unverifiedLinks=cleanSources(body.sources).map(s=>({...s,verified:false}));
+    const vetted=[];
     const key=process.env.OPENAI_API_KEY;
     if(!key)return bodyResponse(503,{message:'AI suggestions are not configured. Existing verified recipes remain available.'},event);
     const requestContext={
       machine_type:machine,machine_model:model,machine_configuration:configuration,
-      operation,material_name:material,material_brand:brand,material_finish:finish,thickness_mm:thickness,notes,known_reference_links:vetted
+      operation,material_name:material,material_brand:brand,material_finish:finish,thickness_mm:thickness,notes,known_reference_links:vetted,user_reference_links_unverified:unverifiedLinks
     };
     const system=[
       'You are a manufacturing prepress assistant for Skilled Crafting. Your answer is a cautious TEST PLAN, never a production guarantee.',
@@ -64,12 +76,12 @@ export async function handler(event) {
     if(!suggestion||typeof suggestion!=='object'||Array.isArray(suggestion))throw Error('Malformed model output');
     const output={
       summary:clip(suggestion.summary,1200),
-      candidate_settings:suggestion.candidate_settings&&typeof suggestion.candidate_settings==='object'&&!Array.isArray(suggestion.candidate_settings)?suggestion.candidate_settings:{},
+      candidate_settings:suggestion.candidate_settings&&typeof suggestion.candidate_settings==='object'&&!Array.isArray(suggestion.candidate_settings)?stripUngroundedNumbers(suggestion.candidate_settings):{},
       test_steps:(Array.isArray(suggestion.test_steps)?suggestion.test_steps:[]).slice(0,9).map(x=>clip(x,400)),
       warnings:(Array.isArray(suggestion.warnings)?suggestion.warnings:[]).slice(0,8).map(x=>clip(x,400)),
       questions:(Array.isArray(suggestion.questions)?suggestion.questions:[]).slice(0,6).map(x=>clip(x,260)),
       evidence_note:'AI-generated test plan. No manufacturer website was queried; numeric settings require independently verified documentation. Not approved for production.',
-      review_required:true,confidence:'unverified',sources:vetted
+      review_required:true,confidence:'unverified',sources:unverifiedLinks
     };
     await auditFunctionSecurity({functionName:'material-settings-ai',action:'suggest',outcome:'success',userId:auth.user.id,role:auth.role,event,metadata:{machine,operation}});
     return bodyResponse(200,output,event);
