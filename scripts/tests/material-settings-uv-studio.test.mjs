@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import { MACHINE_TYPES, OPERATION_LABELS, machineFor, materialSafety, normalizeSettingsJson, formatRecipeCSV } from '../../src/lib/materialSettings.js';
 
 test('all six equipment categories map to supported operations',()=>{
@@ -56,4 +57,14 @@ test('UV Studio and settings are routed and provide secured data migration',()=>
  assert.match(api,/authorizeEmployee/);
  assert.match(api,/OPENAI_API_KEY/);
  assert.match(netlify,/ignore = "node scripts\/netlify-ignore-non-production\.mjs"/);
+});
+
+
+test('embedded UV design editor JavaScript is valid and Design Pro actions are connected',()=>{
+  const html=fs.readFileSync('public/uv-studio/index.html','utf8');
+  const blocks=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+  assert.ok(blocks.length,'At least one inline script must be present');
+  for(const [,script] of blocks)new vm.Script(script,{filename:'uv-studio-inline.js'});
+  for(const id of ['cleanupWhite','effectStyle','productProofCanvas','personalizationRows','downloadRosterSheet']) assert.ok(html.includes('id="'+id+'"'));
+  for(const marker of ['scRosterRows','scProductProof','SC_UV_SNAPSHOT']) assert.ok(html.includes(marker));
 });
