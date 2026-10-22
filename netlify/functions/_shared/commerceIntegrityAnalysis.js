@@ -1,14 +1,21 @@
 // Read-only diagnostic helpers. A shipping-method row is NOT a calculated cart rate.
+export const knownPluginAliases=new Map([
+ ['skilled-crafting-client-stores','skilled-crafting-client-storefronts'],
+ ['wc-sku-builder-manager-v3-clean','wc-sku-builder-manager'],
+]);
+export function wpPluginBasename(value){
+ return String(value||'').toLowerCase().split('/')[0].replace(/[^a-z0-9-]/g,'').slice(0,120);
+}
 export function wpPluginSlug(value) {
- const raw=String(value||'').toLowerCase();
- return raw.split('/')[0].replace(/[^a-z0-9-]/g,'').slice(0,120);
+ const basename=wpPluginBasename(value);
+ return knownPluginAliases.get(basename)||basename;
 }
 export const writerSlugSet=new Set(['wc-sku-builder-manager','woocommerce-product-sku-generator','sku-for-woocommerce']);
 export function summarizePlugins(rows,{expectedStorefrontVersion='0.1.3'}={}){
  const list=Array.isArray(rows)?rows:[],known=new Map();
  for(const p of list){
   const slug=wpPluginSlug(p.plugin||p.slug||'');
-  if(slug)known.set(slug,{slug,version:String(p.version||''),status:String(p.status||'').toLowerCase()});
+  if(slug)known.set(slug,{slug,originalBasename:wpPluginBasename(p.plugin||p.slug||''),version:String(p.version||''),status:String(p.status||'').toLowerCase()});
  }
  const store=known.get('skilled-crafting-client-storefronts');
  const writerPlugins=[...known.values()].filter(p=>writerSlugSet.has(p.slug)&&p.status==='active');
@@ -16,9 +23,10 @@ export function summarizePlugins(rows,{expectedStorefrontVersion='0.1.3'}={}){
  return {
   installedPluginCount:list.length,
   storefront:store?{installedVersion:store.version,expectedVersion:expectedStorefrontVersion,
-    match:store.version===expectedStorefrontVersion,active:store.status==='active'}:null,
-  skuWriters:writerPlugins.map(({slug,version})=>({slug,version})),
+    match:store.version===expectedStorefrontVersion,active:store.status==='active',originalBasename:store.originalBasename}:null,
+  skuWriters:writerPlugins.map(({slug,version,originalBasename})=>({slug,version,originalBasename,internalGenerationEnabled:'unknown-from-rest'})),
   multipleSkuWriterCandidates:writerPlugins.length>1,
+  caveat:'Plugin activation does not prove generation enabled; WP Wham was internally disabled in the October 22 browser audit. Hook ownership requires controlled tests.',
   advancedFreeShippingActive:advanced?.status==='active',
   source:'wordpress-rest',
  };
