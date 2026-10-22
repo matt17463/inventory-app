@@ -1,5 +1,5 @@
 import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
-export const TRAINING_VERSION = '1.4';
+export const TRAINING_VERSION = '1.5';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
