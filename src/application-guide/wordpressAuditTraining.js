@@ -1,4 +1,4 @@
-import audits from './wordpressPluginAudits.json';
+import audits from './wordpressPluginAudits.json' with { type: 'json' };
 const roleModules=[
  {id:'storefronts',slug:'skilled-crafting-client-storefronts',name:'Client storefront templates and approved publishing',
   roles:['marketing','manager','owner-admin'],minutes:25,
