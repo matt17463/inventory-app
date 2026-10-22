@@ -101,7 +101,7 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const setPreset = useCallback((preset) => {
-    updatePreferences({ preset, ...(['midnight-industrial', 'copper-foundry', 'evergreen-workshop', 'aurora-command'].includes(preset) ? { mode: 'dark' } : {}) });
+    updatePreferences({ preset, ...((['midnight-industrial', 'copper-foundry', 'evergreen-workshop'].includes(preset) || preset === 'aurora-command') ? { mode: 'dark' } : {}) });
   }, [updatePreferences]);
 
   const setMode = useCallback((mode) => {
