@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skilled Crafting Client Storefronts
  * Description: Branded WooCommerce category-only client stores, site-native landing pages and coordinated checkout.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Requires Plugins: woocommerce
  * Text Domain: skilled-crafting-stores
  */
@@ -132,6 +132,23 @@ add_filter('the_content',function($content){
     return $content;
 }, 20);
 
+// Related recommendations must respect the same category as the client collection.
+function scs_product_store() {
+    if (!function_exists('is_product') || !is_product()) return null;
+    $slug=isset($_GET['scs_store']) ? sanitize_title(wp_unslash($_GET['scs_store'])) : '';
+    $store=$slug ? get_page_by_path($slug,OBJECT,'sc_client_store') : null;
+    if (!$store || $store->post_type!=='sc_client_store') return null;
+    $allowed=$store->post_status==='publish' || ($store->post_status==='draft'
+        && current_user_can('edit_post',$store->ID) && current_user_can('manage_woocommerce'));
+    return $allowed && scs_product_in_category(get_queried_object_id(),(int)scs_read($store->ID,'category_id',0))
+        ? (int)$store->ID : null;
+}
+add_filter('woocommerce_related_products',function($ids){
+    $store=scs_product_store();
+    if (!$store) return $ids;
+    $category=(int)scs_read($store,'category_id',0);
+    return array_values(array_filter($ids,function($id) use ($category){return scs_product_in_category($id,$category);}));
+},20);
 add_action('template_redirect',function(){
     if (!function_exists('WC') || !WC()->session) return;
     $id=is_singular('sc_client_store') ? get_queried_object_id() : 0;
@@ -170,6 +187,7 @@ function scs_cart_store() {
 }
 add_filter('body_class',function($classes){
     if (is_singular('sc_client_store')) $classes[]='scs-wp-storefront';
+    if (scs_product_store()) $classes[]='scs-client-product';
     if ((is_checkout() || is_cart()) && scs_cart_store()) {
         $classes[]='scs-client-checkout';
         $classes[]='scs-checkout-'.scs_template(scs_read(scs_cart_store(),'template'));
@@ -208,8 +226,8 @@ add_shortcode('sc_client_store_directory',function(){
 });
 add_action('wp_enqueue_scripts',function(){
     $directory=is_page() && get_post() && has_shortcode(get_post()->post_content,'sc_client_store_directory');
-    if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !$directory) return;
-    wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.2');
+    if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !$directory && !scs_product_store()) return;
+    wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.3');
     if (is_cart() || is_checkout()) {
         $id=scs_cart_store();if (!$id)return;
         $p=scs_color(scs_read($id,'primary'),'#16443b');

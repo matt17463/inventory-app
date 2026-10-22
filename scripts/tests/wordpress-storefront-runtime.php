@@ -1,11 +1,17 @@
 <?php
 // Execute the real plugin's cart rules against isolated WordPress/Woo fixtures.
 define('ABSPATH',__DIR__);
+define('OBJECT','OBJECT');
 function add_action(...$args) {}
-function add_filter(...$args) {}
+function add_filter($name,$fn,...$args) {global $filters;$filters[$name][]=$fn;}
 function add_shortcode(...$args) {}
 function register_activation_hook(...$args) {}
 function register_deactivation_hook(...$args) {}
+function is_product(){return true;}
+function sanitize_title($v){return $v;}
+function wp_unslash($v){return $v;}
+function get_queried_object_id(){global $queried;return $queried;}
+function get_page_by_path($slug,...$args){return get_post($slug==='fixture-live'?1:2);}
 function absint($v) { return abs((int)$v); }
 $posts=[1=>(object)['ID'=>1,'post_type'=>'sc_client_store','post_status'=>'publish'],
 2=>(object)['ID'=>2,'post_type'=>'sc_client_store','post_status'=>'draft'],
@@ -43,4 +49,13 @@ $wc->cart->items=[['product_id'=>100]];$wc->session->id=1;
 $_GET=[];$permissions=[];expect(scs_cart_store(),1,'normal published shopper flow remains available');
 expect(scs_ink('#2040a0'),'#ffffff','dark logo secondary uses white button text');
 expect(scs_ink('#f0b83a'),'#000000','light logo secondary uses dark button text');
+$queried=100;$_GET=['scs_store'=>'fixture-live'];$permissions=[];
+expect(scs_product_store(),1,'published product context recognizes client store');
+$related=$filters['woocommerce_related_products'][0];
+expect($related([100,200]),[100],'related recommendations exclude other client categories');
+$_GET=['scs_store'=>'fixture-draft'];
+expect(scs_product_store(),null,'anonymous draft product context is denied');
+$permissions=['edit_post','manage_woocommerce'];
+expect(scs_product_store(),2,'authorized private product preview works');
+$queried=200;expect(scs_product_store(),null,'unrelated current product cannot adopt client context');
 echo "$count WordPress runtime checks passed.\n";

@@ -132,3 +132,6 @@ body.scs-checkout-business .woocommerce-checkout{border-top:0;border-left:1px so
 body.scs-checkout-fundraising .scs-checkout-banner{border-radius:14px;background:var(--scs-primary);border:2px solid var(--scs-secondary);box-shadow:8px 8px 0 var(--scs-secondary)}
 body.scs-checkout-fundraising .scs-checkout-banner strong{font:700 1.55rem Georgia,serif}
 body.scs-checkout-fundraising .woocommerce-checkout{border-top:0;padding-top:10px}
+
+/* Recent-history widgets can contain other clients; omit them in a client product context. */
+body.scs-client-product .widget_recently_viewed_products{display:none!important}
