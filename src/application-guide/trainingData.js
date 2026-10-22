@@ -1,3 +1,4 @@
+import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
 export const TRAINING_VERSION = '1.4';
 
 export const trainingRoles = [
@@ -363,6 +364,9 @@ trainingTutorials.push(
   ],
  }
 );
+
+// Six safe, audit-derived WordPress training modules; no live plugin writes.
+trainingTutorials.push(...wordpressAuditTutorials());
 
 export function tutorialsForRole(roleId) {
   return trainingTutorials.filter((tutorial) => tutorial.roles.includes(roleId));
