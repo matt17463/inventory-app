@@ -36,7 +36,7 @@ $permissions=['edit_post'];expect(scs_cart_store(),null,'page editing alone cann
 $permissions=['edit_post','manage_woocommerce'];$wc->session->id=1;
 expect(scs_cart_store(),2,'authorized employee can review draft checkout');
 expect($wc->session->id,1,'preview never changes the session');
-$_GET=['scs_preview_store'=>'3'];expect(scs_cart_store(),null,'non-store post cannot supply checkout branding');
+$_GET=['scs_preview_store'=>'3'];expect(scs_cart_store(),1,'non-store preview leaves normal published cart branding unchanged');
 $_GET=['scs_preview_store'=>'2'];$wc->cart->items[]=['product_id'=>200];
 expect(scs_cart_store(),null,'authorized draft preview still rejects a mixed cart');
 $wc->cart->items=[['product_id'=>100]];$wc->session->id=1;
