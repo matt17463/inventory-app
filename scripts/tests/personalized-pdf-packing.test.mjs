@@ -58,7 +58,7 @@ test('New packing/signature UI prevents training writes and does not adjust stoc
  assert.match(ui,/recipient.*full name/i);
  assert.match(api,/sc_job_pickup_acknowledgments/);
  assert.match(api,/sc_job_artwork_revision_checks/);
- assert.doesNotMatch(ui,/update-stock|inventory_movements|wooRequest|QuickBooks/);
+ assert.doesNotMatch(ui,/update-stock|inventory_movements|wooRequest|from\('client_orders'\)\.update/);
 });
 test('Family training uses fake scenarios, local state, and never calls network or database',()=>{
  const content=read('../../src/JobTrainingSimulator.jsx');
