@@ -32,15 +32,19 @@ function suggestedActions(stage, jobId) {
     ...common,
   ];
   if (stage === 'ready_to_produce') return [
+    { label:'Create / scan a job traveler', path:'/production-travelers' + (id>0?'?job='+id:'') },
+    { label:'Verify garment production recipe', path:'/manufacturing-recipes' },
     { label:'Prepare approved artwork', path:'/mockup-studio' },
     { label:'Review material recipes', path:'/material-settings' },
     ...common,
   ];
   if (stage === 'in_production') return [
+    { label:'Open production instructions / QR traveler', path:'/production-travelers' + (id>0?'?job='+id:'') },
     ...common,
     { label:'Log defects or misprints', path:'/spoilage' },
   ];
   if (stage === 'qc') return [
+    { label:'Review traveler / packing instructions', path:'/production-travelers' + (id>0?'?job='+id:'') },
     { label:'Complete QC checklist', path:'/qc-checklist' },
     { label:'Photo proof', path:'/production-photo-proof' }, ...common,
   ];
