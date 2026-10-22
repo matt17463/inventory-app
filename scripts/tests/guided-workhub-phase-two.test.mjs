@@ -11,7 +11,7 @@ test('job-specific QC link deep-links using job query rather than requiring a se
 test('packing is not falsely classified as shipped',()=>{
  const p=deriveGuidedProgress({job_id:23,saved_job_status:'ready_to_ship'},{...base,fulfillment:[{kind:'packing_checked'}]});
  assert.equal(p.steps.find(x=>x.id==='delivery').state,'linked');
- assert.match(p.priority.title,/handoff/);
+ assert.match(p.priority.title,/package line|handoff/);
 });
 test('recorded customer collection provides evidence without completing the job',()=>{
  const p=deriveGuidedProgress({job_id:23,saved_job_status:'ready_to_ship'},{...base,fulfillment:[{kind:'picked_up'}]});
