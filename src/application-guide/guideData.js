@@ -1355,6 +1355,95 @@ export const guideChapters = [
   },
 ];
 
+
+// Generated manual and online guide share these closeout operating instructions.
+guideChapters.push({
+ id:'job-closeout-communication',
+ title:'Job Closeout, Package Labels, Delivery Proof & Customer Notifications',
+ description:'Finish customer jobs consistently: accurate packing, correct pickup or shipment evidence, and owner-reviewed customer communications without changing inventory or billing.',
+ sections:[
+  section('closeout-readiness','Understand the closeout status','The Guided Work Hub gathers existing job items, latest QC, packing evidence, payment source, fulfillment and delivery proof into a read-only readiness assessment.',{
+   relatedRoutes:['/work-hub','/qc-checklist','/production-board','/client-orders'],
+   steps:[
+    'Open Work Hub and select a customer job. The Closeout Center appears beneath the packing and pickup verification tools.',
+    'Read the readiness badge and every blocker. The status is guidance: Production Board is still the source of job completion.',
+    'Check whether this job is a recurring WooCommerce checkout order or an occasional QuickBooks-invoiced manual group order. Never recreate the same order in both systems.',
+    'Confirm the latest passing QC; a previous passing record does not override a newer failed inspection.',
+    'Verify that every active order line has an exact packing count. A bag note, a packed flag, and a customer receipt are separate evidence.',
+    'Verify real paid status in the source billing system before releasing customer merchandise.'
+   ],
+   warnings:['If read permissions or source data are missing, treat closeout as blocked rather than assuming the step was completed.', 'This read-only assessment does not write inventory, capture payment, update WordPress or close jobs.'],
+  }),
+  section('closeout-manifest','Print the job packing manifest','The printable letter-size PDF lists the actual source job, each product/color/size, required quantity, latest recorded packing count, warnings, and job QR.',{
+   relatedRoutes:['/work-hub'],
+   steps:[
+    'Select the job and choose Download job packing manifest (PDF).',
+    'Check the displayed customer, order reference, product lines and counts against the physical merchandise. Print on normal letter paper.',
+    'If the manifest is marked DRAFT / NOT READY FOR RELEASE, resolve blockers and regenerate it before handing the goods to a customer.',
+    'A printed manifest is evidence for checking, not a purchase order, shipping label, invoice, or proof of delivery.'
+   ],
+  }),
+  section('closeout-labels','Print 4x6 package labels','Create an internal label for each physical bag or box, with package N of total and a job QR that opens the authenticated Work Hub.',{
+   relatedRoutes:['/work-hub'],
+   steps:[
+    'Under Number of packages, enter 1 to 100 for the batch being printed. Count your actual physical bags or cartons.',
+    'Choose Label purpose: Customer pickup or Internal shipping label.',
+    'Click Download 4x6 package labels (PDF), print at 100% / actual size, and check one test label before a batch run.',
+    'Attach the appropriate package number to each verified bag or box. Test that scanning the QR leads to the correct job after sign-in.',
+    'If readiness is blocked, a hold warning appears on the label. Do not treat these labels as permission to hand over the goods.'
+   ],warnings:['The internal shipping label is NOT prepaid carrier postage and cannot create a UPS, USPS or FedEx shipment.','QR codes link to the staff application and must not expose private customer data without authentication.'],
+  }),
+  section('closeout-carrier','Verify dispatch and actual delivery separately','A shipping record means handed to a carrier, not necessarily delivered. Actual delivery requires an independently checked carrier proof or customer confirmation.',{
+   relatedRoutes:['/work-hub','/production-photo-proof'],
+   steps:[
+    'Before entering delivery proof, record actual shipment and the carrier/tracking reference in the existing fulfillment section after QC and packing checks.',
+    'In the Closeout Center select Verification source: Carrier proof-of-delivery record or Direct customer confirmation.',
+    'Enter Actual evidence reference: a carrier POD event/URL or customer message reference. Keep customer-sensitive evidence in restricted storage.',
+    'Use Verification notes to record the date, method and anything unusual.',
+    'Click Record verified delivery only when the proof establishes real delivery. Shipment tracking created or carrier pickup alone is insufficient.',
+    'The saved proof is append-only and does not finish the job on Production Board. Review closeout and invoice reconciliation there.'
+   ],
+   warnings:['In-person customer pickup is recorded using the existing typed pickup acknowledgment. Do not fabricate a carrier event for an in-shop collection.','Do not declare delivery based solely on a created label or a package scanned into a carrier network.'],
+  }),
+  section('closeout-notifications','Create and log reviewed customer emails','Messages are saved as drafts for manager review. They must be sent from your actual email application; the app does not transmit them.',{
+   relatedRoutes:['/work-hub'],
+   steps:[
+    'The manager chooses Notification type: Ready for pickup, Carrier dispatch, Pickup thank-you, or Delivery follow-up. The available type is gated by actual job evidence.',
+    'Enter and independently verify the Customer email address. Never infer a recipient from unrelated team members or a marketing contact.',
+    'Click Prepare message, then review the Subject and Message fields, adjusting pickup details, shipping wording and customer expectations.',
+    'Choose Save approved email draft. This creates an auditable draft ONLY; nothing is emailed.',
+    'Select Copy email to send, paste the exact draft into your normal email account, verify To/Subject/Body and send externally.',
+    'Only after confirming the real email was sent, click Mark actually sent. The system records a matching immutable manual-send acknowledgment and disallows duplicate acknowledgments for that draft.',
+    'If you discover a bad email address or changed message, create a new draft. Do not claim a message was sent if it was not.'
+   ],
+   warnings:['No SMTP, email API, notification scheduler, or automatic dispatch has been activated. A saved draft is not a message delivered to the customer.', 'Only admin/manager roles have access to the private email queue. Avoid putting full roster/contact details or payment secrets in subject or body.'],
+  }),
+  section('closeout-real-example','Realistic example: soccer pickup and school store shipments','The two order channels share production but keep checkout, payment records and delivery communications separate.',{
+   scenario:'An occasional youth team orders 20 personalized hoodies on a QuickBooks invoice; a school has 30 paid orders through its recurring WooCommerce storefront.',
+   relatedRoutes:['/team-stores','/client-orders','/work-hub'],
+   steps:[
+    'For the youth team: review the signed-off Client Order, confirm QuickBooks payment, match the size/roster, complete production/QC, verify every item in the group packing manifest, print bag labels and collect the signed pickup receipt.',
+    'For the recurring school store: use the paid WooCommerce order jobs, check category/store membership, produce by order and record carrier tracking only after physical dispatch.',
+    'For shipped school orders: do not record carrier delivered until tracking provides proof of delivery or the client independently confirms receipt.',
+    'For either job: prepare a relevant email only after the corresponding stage is recorded, then send from the verified owner email account and log the manual send.',
+    'Finally: reconcile the original Woo order or QuickBooks invoice, materials consumed, replacements/spoilage and official Production Board status once. No duplicate order entry.'
+   ],
+  }),
+  section('closeout-troubleshooting','When a job cannot close','Investigate the source of each blocker before changing any record.',{
+   relatedRoutes:['/exception-center','/operations-integrity','/production-board','/purchasing','/work-hub'],
+   steps:[
+    'Payment missing: check the real WooCommerce transaction or actual QuickBooks invoice receipt. Do not mark paid to bypass release.',
+    'QC missing or failed: inspect the actual items, return to the official QC checklist and correct defects.',
+    'Packed quantity wrong: compare each original order line and package, record the corrected verified packing count, and regenerate printed labels/manifests.',
+    'Shipment not recorded: confirm carrier actually accepted the package and add a valid tracking reference; a print-only 4x6 internal label is not postage.',
+    'No delivery confirmation: wait for carrier proof or real customer reply instead of assuming delivered.',
+    'Email not sent: verify contact address and send from your normal email application before marking sent; you may create a corrected draft without overwriting history.',
+    'Permission denied: verify admin/manager or operator role and table grants/RLS. Never disable RLS to work around a failing form.'
+   ],
+  }),
+ ],
+});
+
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [
     chapter.title,
