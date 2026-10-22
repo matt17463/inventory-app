@@ -107,6 +107,7 @@ export default function WorkHub() {
     <section className="card elevated-card sc-hub-entry">
       <h2>Where should I start?</h2>
       <div className="sc-hub-entry-grid">
+        <Link to="/team-stores"><strong>Team store or fundraiser</strong><span>Organize campaign planning and group ordering</span></Link>
         <Link to="/marketing"><strong>New prospect or customer</strong><span>Research → quote → approval → order</span></Link>
         <Link to="/client-orders"><strong>New client order</strong><span>Review details and prepare a production handoff</span></Link>
         <Link to="/mockup-studio"><strong>Artwork or mockup</strong><span>Preflight artwork and prepare a production packet</span></Link>
