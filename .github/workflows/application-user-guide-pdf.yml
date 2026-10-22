@@ -6,12 +6,24 @@ on:
       - "src/application-guide/**"
       - "src/navigationConfig.js"
       - "src/ApplicationGuide.jsx"
+      - "src/lib/guidedTraining.js"
+      - "src/lib/centralTrainingApi.js"
+      - "src/WordPressCommerceIntegrity.jsx"
+      - "wordpress/skilled-crafting-client-stores/**"
+      - "docs/wordpress-audit/**"
+      - "netlify/functions/training-certifications.js"
       - ".github/workflows/application-user-guide-pdf.yml"
   pull_request:
     paths:
       - "scripts/build-application-guide-pdf.mjs"
       - "src/application-guide/**"
       - "src/ApplicationGuide.jsx"
+      - "src/lib/guidedTraining.js"
+      - "src/lib/centralTrainingApi.js"
+      - "src/WordPressCommerceIntegrity.jsx"
+      - "wordpress/skilled-crafting-client-stores/**"
+      - "docs/wordpress-audit/**"
+      - "netlify/functions/training-certifications.js"
       - ".github/workflows/application-user-guide-pdf.yml"
   workflow_dispatch:
 jobs:
