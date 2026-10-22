@@ -85,6 +85,22 @@ export function setPngDpi(bytes, dpi = DTF_DPI) {
   view.setUint32(8,ppm); view.setUint32(12,ppm);
   chunk[16] = 1;
   view.setUint32(17,crc32(chunk,4,17));
+  // PNG encoders may already write a 96-DPI pHYs chunk. Replace it rather than duplicating.
+  const source = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let pos = afterIhdr;
+  while (pos + 12 <= bytes.length) {
+    const len = source.getUint32(pos);
+    if (pos + 12 + len > bytes.length) throw new Error('Truncated PNG');
+    const type = String.fromCharCode(...bytes.slice(pos + 4, pos + 8));
+    if (type === 'pHYs') {
+      const without = new Uint8Array(bytes.length - (12 + len));
+      without.set(bytes.slice(0,pos));
+      without.set(bytes.slice(pos + 12 + len),pos);
+      return setPngDpi(without,dpi);
+    }
+    if (type === 'IDAT' || type === 'IEND') break;
+    pos += 12 + len;
+  }
   const merged = new Uint8Array(bytes.length + chunk.length);
   merged.set(bytes.slice(0,afterIhdr)); merged.set(chunk,afterIhdr); merged.set(bytes.slice(afterIhdr),afterIhdr+chunk.length);
   return merged;
