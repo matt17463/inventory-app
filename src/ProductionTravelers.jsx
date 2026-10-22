@@ -5,6 +5,7 @@ import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import GarmentPlacementGuide from './components/GarmentPlacementGuide';
 import LocalQrCode from './components/LocalQrCode';
 import './ProductionTravelers.css';
+import { signedAssetUrl } from './lib/mockupStudioApi';
 
 const eventKinds=[
   ['note','Work note'],['placement_checked','Placement measured / checked'],
@@ -35,6 +36,8 @@ export default function ProductionTravelers() {
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [savedJob,setSavedJob]=useState(null);
+  const [artwork,setArtwork]=useState(null);
+  const [artworkUrl,setArtworkUrl]=useState('');
 
   const loadIndex=useCallback(async()=>{
     const [a,b,c]=await Promise.all([
@@ -66,6 +69,15 @@ export default function ProductionTravelers() {
     ]);
     if(ev.error)throw ev.error;if(job.error)throw job.error;
     setSelected(data);setEvents(ev.data||[]);setSavedJob(job.data);setJobId(String(data.job_id));
+    setArtwork(null);setArtworkUrl('');
+    const sourceId=data.recipe_snapshot?.artwork_asset_id;
+    if(sourceId) {
+      const result=await supabase.from('mockup_artwork_assets').select('*').eq('id',sourceId).maybeSingle();
+      if(result.data) {
+        setArtwork(result.data);
+        signedAssetUrl(result.data,3600,{preferPreview:false}).then(setArtworkUrl).catch(()=>setArtworkUrl(''));
+      }
+    }
   },[]);
   useEffect(()=>{loadIndex().catch(e=>setMessage(safeError(e)));},[loadIndex]);
   useEffect(()=>{if(!jobId||travelerId)return;loadForJob(jobId).catch(e=>setMessage(safeError(e)));},[jobId,travelerId,loadForJob]);
@@ -161,8 +173,16 @@ export default function ProductionTravelers() {
         <h3>Garment and decoration</h3>
         <p>{snap.blank?.brand||''} · {snap.blank?.style||''} · {snap.blank?.color||''} · {snap.blank?.size||''} · {snap.blank?.sku||''}</p>
         {snap.placement&&<p>Order placement instruction: {snap.placement}</p>}
-        <p>Approved artwork asset: {snap.artwork_asset_id||'Not attached — verify before production'}</p>
-        <p>Material settings ID: {snap.machine_settings_id||'Not linked — check approved machine instructions'}</p>
+        <p><strong>Decoration method:</strong> {snap.decoration_method||'Confirm approved method'} · <strong>Recipe:</strong> {snap.recipe_name||'Saved revision'}</p>
+        <p><strong>Artwork:</strong> {artwork?.artwork_name||snap.artwork_asset_id||'Not attached — verify before production'}</p>
+        {artworkUrl&&artwork?.mime_type?.startsWith('image/')&&<div className="sc-traveler-approved-art"><img src={artworkUrl} alt={artwork.artwork_name||'Linked production artwork'} /><small>Linked source artwork preview; verify the exact prepared production file and print dimensions before output.</small></div>}
+        {artworkUrl&&<p><a href={artworkUrl} rel="noreferrer" target="_blank">Open linked artwork file ↗</a></p>}
+        {snap.machine_settings?<div className="sc-traveler-machine">
+          <h4>Material / machine settings snapshot</h4>
+          <p><strong>{snap.machine_settings.machine_model}</strong> · {snap.machine_settings.material_name} · {snap.machine_settings.operation} · approved revision {snap.machine_settings.version||'unspecified'}</p>
+          <dl>{Object.entries(snap.machine_settings.settings||{}).map(([k,v])=><div key={k}><dt>{display(k)}</dt><dd>{typeof v==='object'?JSON.stringify(v):String(v)}</dd></div>)}</dl>
+          <p>{snap.machine_settings.safety_notes||'Use machine and material manufacturer safety procedures.'}</p>
+        </div>:<p><strong>Material settings:</strong> Not linked — consult approved machine/material instructions before manufacturing.</p>}
         {snap.production_notes&&<p><strong>Special production notes:</strong> {snap.production_notes}</p>}
       </section>
       <section><h3>Measured decoration placements</h3>
