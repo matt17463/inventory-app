@@ -36,3 +36,29 @@ create policy sc_carrier_label_read on public.sc_carrier_label_jobs
  for select to authenticated
  using ((select public.sc_internal_access_allowed(array['admin','manager'])));
 -- No browser write grants. Quote, buy and recovery use server-only service credentials.
+
+
+-- Existing USPS Click-N-Ship is a manual alternative to avoid duplicate postage;
+-- a Click-N-Ship website login alone is NOT an API authentication credential.
+create table if not exists public.sc_external_usps_labels (
+ id uuid primary key default gen_random_uuid(),
+ job_id bigint not null references public.jobs(id) on delete restrict,
+ package_index integer not null check(package_index between 1 and 100),
+ source text not null default 'usps_click_n_ship' check(source='usps_click_n_ship'),
+ tracking_code text not null check(char_length(btrim(tracking_code)) between 10 and 45),
+ label_reference text not null check(char_length(btrim(label_reference)) between 3 and 180),
+ cost_usd numeric(10,2) check(cost_usd between 0 and 2000),
+ note text not null default '' check(char_length(note)<=700),
+ recorded_by uuid not null,
+ recorded_at timestamptz not null default now(),
+ unique(job_id,package_index),
+ unique(tracking_code)
+);
+create index if not exists sc_external_usps_labels_job_idx on public.sc_external_usps_labels(job_id);
+alter table public.sc_external_usps_labels enable row level security;
+revoke all on public.sc_external_usps_labels from public,anon,authenticated;
+grant select on public.sc_external_usps_labels to authenticated;
+create policy sc_external_usps_labels_read on public.sc_external_usps_labels
+ for select to authenticated
+ using ((select public.sc_internal_access_allowed(array['admin','manager'])));
+-- No browser mutation permissions: Netlify manager-authenticated function records it.
