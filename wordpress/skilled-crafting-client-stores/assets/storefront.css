@@ -94,3 +94,12 @@ body.scs-client-checkout .wp-block-woocommerce-checkout{border-top:5px solid var
 .scs-fundraising .scs-impact{flex-direction:column;gap:6px;text-align:center}
 .scs-athletics .scs-ribbon{flex-direction:column;gap:4px;text-align:center}
 }
+
+/* Find Your Store directory: use [sc_client_store_directory] inside a Divi or WP page. */
+.scs-directory{max-width:1150px;margin:0 auto;padding:28px 20px 65px;color:#172032}
+.scs-directory h2{font-size:clamp(2rem,4vw,3.4rem);margin-bottom:12px}
+.scs-directory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:28px}
+.scs-directory-item{display:flex;align-items:center;flex-direction:column;gap:15px;padding:27px 19px;border:1px solid #d8e1e8;border-radius:10px;text-align:center;background:#fff;box-shadow:0 4px 20px #00000007}
+.scs-directory-item img{height:95px;width:95px;object-fit:contain}
+.scs-directory-item strong{font-size:1.15rem;color:#173d36}
+.scs-directory-item span{color:#0f766e;font-weight:750}
