@@ -42,13 +42,13 @@ test('production and completed steps use saved authoritative statuses without ch
    qc:[{passed:true}],travelers:[{job_item_id:301}],handoffs:[{approved_file_url:'https://example.invalid/art.png'}]});
  assert.equal(completed.priority.kind,'done');
  assert.equal(completed.steps.find(s=>s.id==='qc').state,'verified');
- assert.equal(completed.steps.find(s=>s.id==='delivery').state,'verified');
+ assert.equal(completed.steps.find(s=>s.id==='delivery').state,'review'); // A completed job does not prove actual pickup/shipment.
  assert.equal(completed.steps.length,GUIDED_STEPS.length);
 });
 test('QC stage cannot falsely mark QC complete without a passed record',()=>{
  const r=deriveGuidedProgress({job_id:250,saved_job_status:'qc'},{
    ...base,job:{id:250,woocommerce_order_id:180,woo_payment_status:'paid'},handoffs:[{approved_file_url:'https://example.invalid/art.png'}],travelers:[{job_item_id:301}]});
- assert.equal(r.priority.href,'/qc-checklist');
+ assert.equal(r.priority.href,'/qc-checklist?job=250');
  assert.equal(r.steps.find(s=>s.id==='qc').state,'attention');
 });
 test('inaccessible evidence is marked unknown rather than interpreted as absence',()=>{
