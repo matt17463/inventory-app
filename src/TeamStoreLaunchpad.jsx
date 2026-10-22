@@ -37,7 +37,7 @@ export default function TeamStoreLaunchpad() {
   const [message,setMessage]=useState('');
   async function loadCampaigns() {
     const {data,error}=await supabase.from('sc_team_store_workflows')
-      .select('id,workflow_name,customer_name,store_name,stage,status,coordinator_name,campaign_kind,order_channel,public_order_code,fulfillment_method,fundraiser_model,fundraiser_flat_amount,fundraiser_percent,fundraiser_terms,store_close_date,storefront_slug,storefront_description,customer_approval_at,published_at,last_reconciled_at')
+      .select('id,workflow_name,customer_name,store_name,stage,status,coordinator_name,campaign_kind,order_channel,public_order_code,fulfillment_method,fundraiser_model,fundraiser_flat_amount,fundraiser_percent,fundraiser_terms,store_close_date,storefront_slug,storefront_description,customer_approval_at,published_at,last_reconciled_at,wp_category_id,wp_store_post_id,wp_store_url,wp_template,wp_primary_color,wp_secondary_color,wp_accent_color,wp_logo_media_id,wp_headline,ordering_instructions,delivery_instructions,season_label,wp_draft_created_at,wp_published_at')
       .order('updated_at',{ascending:false}).limit(150);
     if(error)throw error;
     setSavedCampaigns(data||[]);
@@ -172,7 +172,7 @@ export default function TeamStoreLaunchpad() {
       <p><strong>Shared production handoff:</strong> Both order channels reuse customer artwork, production recipes, purchasing, jobs, QR traveler instructions, QC and fulfillment. Payment is handled by their respective existing systems.</p>
     </section>
     {selectedCampaign && (selectedCampaign.order_channel==='quickbooks_invoice'
-      ? <GroupInvoiceWorkflow key={campaignId} campaign={selectedCampaign}/>
+      ? <GroupInvoiceWorkflow key={campaignId} campaign={selectedCampaign} canPublish={canPublish} onUpdated={loadCampaigns}/>
       : <TeamCampaignCommerce key={campaignId} campaign={selectedCampaign} canManage={canManage}
           canPublish={canPublish} onUpdated={loadCampaigns}/>)}
   </main>;
