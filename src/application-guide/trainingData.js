@@ -315,6 +315,55 @@ export const trainingTutorials = [
   },
 ];
 
+
+// Conditional-state exercises cover real decision rules, but NOT live write actions.
+// WordPress plugin exercises remain provisional pending authorized browser audit.
+trainingTutorials.push(
+ {
+  id:'conditional-order-to-delivery-read-only',
+  title:'Conditional Dialogs: Safe Production and Customer Handoffs',
+  roles:['new-employee','production','warehouse','manager','owner-admin'],
+  level:'Required',minutes:30,safeMode:'guided-read-only',
+  summary:'Understand why a button may be hidden/disabled and the difference between a source reference, an approval and a completed handoff.',
+  outcome:'A helper can identify when actual QC, exact packing, client proof or receipt is missing without attempting to bypass an official gate.',
+  steps:[
+   step('Open a job read-only','In Work Hub observe the next-action label and linked evidence. Do not use production write buttons as a practice exercise.',{route:'/work-hub',verify:'You can explain why a linked file is not necessarily approved artwork.'}),
+   step('Review packing checks','Study each order line, ordered quantity, latest verified quantity and what happens if the number differs.',{route:'/work-hub',verify:'You can explain that bag notes do not deduct inventory.'}),
+   step('Inspect pickup availability','Find the pickup section; state which passing QC, completed packing and receipt consent requirements must exist. Do not sign for anyone.',{route:'/work-hub',verify:'You can distinguish packed from actually collected by customer.'}),
+   step('Inspect artwork revision review','Find handoff, revision label and actual client approval-reference fields. Do not mark live proofs approved.',{route:'/work-hub',verify:'You can identify the precise customer-approved file version.'}),
+   step('Inspect delivery and message history','Explain why a label purchase, carrier dispatch, verified delivery and customer email are different events.',{route:'/work-hub',verify:'You can explain what a manual-send confirmation does NOT do.'}),
+   step('Debrief a fictional defect','Describe how to handle one mislabeled hoodie, missing blank or rejected QC result without inventing stock movement.',{verify:'You would stop the handoff, document the exception, and use the authoritative workflow.'}),
+  ],
+ },
+ {
+  id:'conditional-carrier-purchase-read-only',
+  title:'Conditional Dialogs: Shipping Labels and Duplicate-Postage Prevention',
+  roles:['manager','owner-admin'],level:'Advanced',minutes:20,safeMode:'guided-read-only',
+  summary:'Review EasyPost rate quotes versus an existing USPS Click-N-Ship purchase, including live-cost confirmation and uncertain purchase recovery.',
+  outcome:'A manager understands why cost authorization, correct package number and carrier purchase outcome must be verified before shipping.',
+  steps:[
+   step('Review domestic parcel fields','Examine recipient identity, ship-to address, dimensions and package weight in ounces without requesting paid rates.',{route:'/work-hub',verify:'You know the first integration handles domestic parcels only.'}),
+   step('Explain purchasing safeguards','Find test/live mode, quote expiry, exact USD purchase approval and max-cost rule. Do NOT buy a label.',{route:'/work-hub',verify:'A test label is not valid live postage.'}),
+   step('Compare purchase channels','Explain how a label bought in USPS Click-N-Ship can be recorded without paying EasyPost again.',{verify:'Each physical numbered package has only one postage purchase.'}),
+   step('Handle uncertain purchase','Practice explaining why a timeout must be reconciled with EasyPost instead of immediately buying again.',{verify:'You can identify the recovery operation and prohibited retry.'}),
+  ],
+ },
+ {
+  id:'wordpress-conditional-audit-training',
+  title:'WordPress Client Storefronts: Conditional Settings and Approval Gates',
+  roles:['marketing','manager','owner-admin'],level:'Advanced',minutes:25,safeMode:'guided-read-only',
+  summary:'Understand draft versus published WordPress client stores and exactly when a client WooCommerce category is checked. Live WordPress plugin controls are pending audit.',
+  outcome:'A helper can identify product-category isolation, draft approval gates and the different QuickBooks group-order path.',
+  steps:[
+   step('Identify store type','Distinguish recurring WordPress/WooCommerce storefront campaign from occasional QuickBooks invoice/group form.',{route:'/team-stores',verify:'You would never make a second Woo order for a QuickBooks group request.'}),
+   step('Review template and brand colors','Locate theme, logo, headline, client-specific Woo category and delivery instructions. Do not publish a live test store.',{route:'/team-stores',verify:'Client merchandise is limited by its verified category, but product URLs are not necessarily private.'}),
+   step('Review publication conditions','Explain client artwork approval, verified catalog and management permissions, and why an unpublished draft does not create checkout orders.',{verify:'You know publication is gated by WordPress and WooCommerce verification.'}),
+   step('Review administrator/plugin settings safely','Only read authenticated WordPress admin plugin details in a browser under supervision. Do not change a setting to reveal a modal during training.',{verify:'Plugin version and active state must be actually inspected, not assumed from app source.'}),
+   step('Review the final WordPress audit','Compare real verified fields and dialogs to the maintained plugin audit registry when the Work audit is returned.',{verify:'You distinguish source-reviewed from live-verified documentation.'}),
+  ],
+ }
+);
+
 export function tutorialsForRole(roleId) {
   return trainingTutorials.filter((tutorial) => tutorial.roles.includes(roleId));
 }
