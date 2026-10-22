@@ -1,0 +1,27 @@
+name: Graphical theme gallery
+on:
+  pull_request:
+    paths:
+      - 'src/themePresets.js'
+      - 'src/themeGalleryPreferences.js'
+      - 'src/ThemeSettings.jsx'
+      - 'src/ui/ThemeProvider.jsx'
+      - 'src/graphicalDashboardThemes.css'
+      - 'src/main.jsx'
+      - 'scripts/tests/graphical-theme-gallery.test.mjs'
+      - 'package.json'
+      - '.github/workflows/graphical-theme-gallery.yml'
+jobs:
+  verify-visual-themes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:graphical-themes
+      - run: npm run lint
+      - run: npm run build:vite
