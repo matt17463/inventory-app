@@ -172,7 +172,8 @@ add_shortcode('sc_client_store_directory',function(){
     return $html.'</div></div>';
 });
 add_action('wp_enqueue_scripts',function(){
-    if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !is_page()) return;
+    $directory=is_page() && get_post() && has_shortcode(get_post()->post_content,'sc_client_store_directory');
+    if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !$directory) return;
     wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.0');
     if (is_cart() || is_checkout()) {
         $id=scs_cart_store();if (!$id)return;
