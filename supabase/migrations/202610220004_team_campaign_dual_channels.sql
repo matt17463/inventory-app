@@ -18,7 +18,7 @@ create index if not exists sc_client_order_requests_campaign_idx on public.sc_cl
 -- Prevent turning a group-invoice campaign into a storefront after intake, or
 -- converting an existing Woo live storefront into invoice intake.
 create or replace function public.sc_guard_team_order_channel()
-returns trigger language plpgsql security definer set search_path = '' as $
+returns trigger language plpgsql security definer set search_path = '' as $tag$
 begin
   if new.order_channel is distinct from old.order_channel then
     if old.stage in ('live','complete')
@@ -34,7 +34,7 @@ begin
       using errcode='23514';
   end if;
   return new;
-end $$;
+end $tag$;
 drop trigger if exists sc_guard_team_order_channel on public.sc_team_store_workflows;
 create trigger sc_guard_team_order_channel before update on public.sc_team_store_workflows
 for each row execute function public.sc_guard_team_order_channel();
