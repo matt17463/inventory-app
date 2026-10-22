@@ -42,4 +42,8 @@ test('scannable production packet and guided workflow are connected to existing 
   assert.match(read('../../src/App.jsx'),/path="\/artwork-preflight"/);
   assert.match(read('../../src/navigationConfig.js'),/Work Hub — Start Here/);
   assert.match(read('../../src/navigationConfig.js'),/DTF Artwork Preflight/);
+  assert.match(read('../../src/navigationConfig.js'),/Team Stores & Fundraising/);
+  assert.match(read('../../src/App.jsx'),/path="\/team-stores"/);
+  assert.match(read('../../src/lib/employeeAccessContext.js'),/"\/team-stores"/);
+  assert.match(read('../../src/TeamStoreLaunchpad.jsx'),/DRAFT \/ NOT LIVE/);
 });
