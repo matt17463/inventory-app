@@ -93,7 +93,9 @@ begin
     end if;
   end if;
   if new.stage in ('live','complete') and new.stage is distinct from old.stage then
-    if not privileged then raise exception 'Only a manager may publish or close a campaign' using errcode='42501'; end if;
+    if coalesce(auth.jwt()->>'role','') <> 'service_role' then
+      raise exception 'Campaign publishing and closure require the verified server-side WooCommerce workflow' using errcode='42501';
+    end if;
     if new.stage='live' then
       if new.customer_approval_at is null or new.storefront_slug is null
          or new.published_at is null or
