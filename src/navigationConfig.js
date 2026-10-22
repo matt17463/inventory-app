@@ -1,4 +1,5 @@
 export const quickActions = [
+  { label: 'Work Hub', path: '/work-hub', icon: '🧭' },
   { label: 'Command', path: '/command-center', icon: '🧭' },
   { label: 'Exceptions', path: '/exception-center', icon: '🚨' },
   { label: 'Scan', path: '/scan', icon: '📷' },
@@ -16,6 +17,7 @@ export const navSections = [
     icon: '🏠',
     items: [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
+      { label: 'Work Hub — Start Here', path: '/work-hub', keywords: 'guided workflow client project next steps simple order production overview family' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
       { label: 'Equipment TV / Touch', path: '/shop-equipment', keywords: 'equipment monitoring controls remote access television kiosk' },
       { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop' },
@@ -117,6 +119,7 @@ export const navSections = [
     icon: '🎨',
     items: [
       { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
+      { label: 'DTF Artwork Preflight', path: '/artwork-preflight', keywords: 'image png transparency white background remove 300dpi crop DTF artwork' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
       { label: 'UV Studio — Textured Patches', path: '/uv-studio', keywords: 'UV printing faux embroidery dimensional raised patches laser leather vinyl TPU metal texture preview print cut calibration' },
       { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },
