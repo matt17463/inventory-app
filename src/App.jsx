@@ -35,6 +35,8 @@ const ExceptionCenter = lazy(() => import('./ExceptionCenter'));
 const FinishedMatchSuggestions = lazy(() => import('./FinishedMatchSuggestions'));
 const GoogleCalendarIntegration = lazy(() => import('./GoogleCalendarIntegration'));
 const Home = lazy(() => import('./Home'));
+const WorkHub = lazy(() => import('./WorkHub'));
+const ArtworkPreflight = lazy(() => import('./ArtworkPreflight'));
 const InventoryAudit = lazy(() => import('./InventoryAudit'));
 const InventoryImport = lazy(() => import('./InventoryImport'));
 const InventoryValuation = lazy(() => import('./InventoryValuation'));
@@ -174,6 +176,8 @@ function EmployeeRoutes() {
       <Route path="/order-risk" element={<OrderRiskDashboard />} />
       <Route path="/onsite-sales" element={<OnsiteSales />} />
       <Route path="/command-center" element={<DailyCommandCenter />} />
+      <Route path="/work-hub" element={<WorkHub />} />
+      <Route path="/artwork-preflight" element={<ArtworkPreflight />} />
       <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
       <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
       <Route path="/labels" element={<BarcodeLabelGenerator />} />
