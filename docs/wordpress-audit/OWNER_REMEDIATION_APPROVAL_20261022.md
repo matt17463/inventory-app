@@ -3,13 +3,13 @@
 **Prepared:** October 22, 2026
 **Evidence:** Work's read-only findings, merged [PR #106](https://github.com/matt17463/inventory-app/pull/106); read-only application [PR #105](https://github.com/matt17463/inventory-app/pull/105).
 **Live state:** No WordPress settings, product SKUs, Woo orders, Supabase inventory, coupons or checkout rates were changed by the audit.
-**Approval status:** **AWAITING OWNER APPROVAL.** This is an implementation plan and diagnostic-documentation update, not permission to modify production.
+**Approval status:** **COUPON INTENT CONFIRMED; OTHER REMEDIATION AWAITING OWNER APPROVAL.** This is an implementation plan and diagnostic-documentation update, not permission to modify production.
 
 ## Priority decisions (business owner)
 
 | Decision ID | Question | Recommendation | Risk if deferred | Explicit approval |
 |---|---|---|---|---|
-| C1 | Is the published 100% discount/free-shipping coupon meant for a controlled internal purpose? | **Review immediately** in WordPress admin. If unintended, approve a scoped disable/expiry or restrictions after verifying active uses and safe rollback; do not disclose coupon code. | Potential unauthorized 100% discounts; **configuration risk, no misuse observed** | Approve restriction / Intended internal use / Investigate |
+| C1 | Is the published 100% discount/free-shipping coupon intentional? | **Owner confirmed intentional. Keep the coupon and its free-shipping behavior unchanged.** Document intended audience and optional safeguards separately, without assuming limited eligibility. | Broad eligibility still warrants periodic confidential review; **no misuse observed** | **Intent confirmed; no change authorized** |
 | S1 | Which transactions should get free fulfillment? | Distinguish **ordinary shipped merchandise** from free **organization/team distribution**. Prefer one ordinary free-shipping engine at **>= $200** based on **discounted, tax-exclusive merchandise subtotal**, with free-shipping coupons only as deliberately authorized exceptions. | Tax/coupon/exactly-$200 discrepancy and possible unexpected method offerings | Approve policy / Propose alternate basis |
 | S2 | Should paid/expedited rates stay available when a free shipping option exists? | Preserve choices until staging shows how pickup/expedited methods interact. Decide after fixture results, not by blindly enabling Hide other rates. | Duplicate/confusing shipping choices | Decide after staging |
 | S3 | Should Heavy-class fallback have a positive shipping cost or no standard shipping? | Decide explicit national/fallback Heavy fee or carrier quote/manual approval. Keep intentional zero-cost Spirit Wear/Uniform organizational delivery only in eligible fulfillment channels. | A source-derived potential $0 fallback path for Heavy; no undercharge proven | Approve explicit Heavy policy |
@@ -29,11 +29,11 @@
 
 ## Proposed sequence (gated; do not skip)
 
-### Gate 0 — Owner verifies coupon intent and restricts only with explicit approval
+### Gate 0 — Coupon intent confirmed; preserve business policy
 
-1. Owner reviews coupon C1 in WooCommerce admin (confidential redemption details stay there). Confirm campaign owner, intended audience, legitimate historical usage, current eligibility/expiry/limits and refunds. **Do not paste code or share coupon URL in chat.**
-2. If broadly valid 100% coupons are *not* intentional, obtain approval to apply the narrowest safe controls (expiry, product/role/usage limitations, disable or deletion according to business policy). Record before settings privately and rollback method; validate effect only on staging where feasible.
-3. If internal/wholesale/free sample coupon is intentional, explicitly record that exception and recommended access controls. Do not automatically remove the free-shipping checkbox or assume coupon = payment abuse.
+1. **Owner confirmed the 100% coupon is intentional.** Preserve its discount and free-shipping behavior without change. Keep redemption details private; do not paste coupon codes, customer information, or secret redemption links into chat or documentation.
+2. Audience, access limitations, expiry, and usage policy were **not** confirmed by that answer. Review them confidentially with the owner at the next scheduled policy review, without changing current settings.
+3. Do **not** expire, restrict, disable, delete, or silently remove the free-shipping flag. Any later policy change needs separate specific owner approval.
 
 ### Gate 1 — Isolated staging authorization
 
@@ -84,7 +84,7 @@ Implement a staging-tested admin **POST + nonce** operation for the custom SKU b
 
 ## Owner approval: suggested reply
 
-> I approve **read-only diagnostic corrections and preparing an isolated staging plan**. I do not authorize live WordPress changes, coupon edits, SKU regeneration, shipping-rate updates, order modifications or label purchases. I will confirm the purpose of the 100% coupon, free team distribution, ordinary $200 shipping threshold, and whether an isolated test site may be created within an agreed budget.
+> I approve **read-only diagnostic corrections and preparing an isolated staging plan**. I do not authorize live WordPress changes, coupon edits, SKU regeneration, shipping-rate updates, order modifications or label purchases. The 100% coupon is intentional and must remain unchanged. I will separately confirm free team distribution, the ordinary $200 shipping threshold, and whether an isolated test site may be created within an agreed budget.
 
 Or specify individually: **C1, S1, S2, S3, K1, F1, E1**. The assistant must not infer consent to other workstreams from one approved category.
 
