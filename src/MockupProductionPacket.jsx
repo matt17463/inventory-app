@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getMockupProjectBundle, saveProductionPacket, signedUrlsForAssets } from './lib/mockupStudioApi';
 import './MockupStudio.css';
+import LocalQrCode from './components/LocalQrCode';
+import GarmentPlacementGuide from './components/GarmentPlacementGuide';
 
 function downloadText(text, name, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -23,6 +25,7 @@ export default function MockupProductionPacket() {
 
   if (!bundle) return <main className="mockup-production-packet"><p>{message || 'Loading production packet…'}</p></main>;
   const selected = bundle.outputs.filter((row) => row.is_selected);
+  const packetUrl = window.location.origin + '/mockup-studio/' + encodeURIComponent(projectId) + '/production-packet';
   const packetData = {
     project: bundle.project,
     blanks: bundle.blanks,
@@ -58,10 +61,40 @@ export default function MockupProductionPacket() {
       </header>
       {message ? <p className="message">{message}</p> : null}
       <section className="mockup-packet-summary"><div><strong>Status</strong><span>{bundle.project.status}</span></div><div><strong>Decoration placements</strong><span>{bundle.placements.length}</span></div><div><strong>Selected mockups</strong><span>{selected.length}</span></div><div><strong>Created</strong><span>{new Date().toLocaleDateString()}</span></div></section>
+      <section className="sc-packet-scan">
+        <div><LocalQrCode value={packetUrl} size={150} label="Scan this code to reopen the authenticated production packet" /></div>
+        <div>
+          <h2>Scan this recipe / production packet</h2>
+          <p>Scan the QR code to reopen the latest approved artwork, placement views, production notes, and packaging checklist. Employee sign-in is required; the code is not a public sharing token.</p>
+          <p className="sc-packet-link">{packetUrl}</p>
+          <small>This code links to the live project packet. For a fixed snapshot, retain the saved validated packet export alongside the work order.</small>
+        </div>
+      </section>
       <section><h2>Approved mockup references</h2><div className="mockup-packet-images">{selected.map((output) => <figure key={output.id}><img src={urls[output.id]} alt={output.output_name} loading="lazy" decoding="async" /><figcaption>{output.caption_text || output.output_name}<br /><small>{output.approval_status}</small></figcaption></figure>)}</div></section>
       <section><h2>Placement specifications</h2><table><thead><tr><th>Blank / view</th><th>Artwork</th><th>Placement</th><th>Method</th><th>Physical size</th><th>Instructions</th></tr></thead><tbody>{bundle.placements.map((placement) => { const blank = bundle.blanks.find((row) => row.id === placement.blank_asset_id); const art = bundle.artwork.find((row) => row.id === placement.artwork_asset_id); return <tr key={placement.id}><td>{blank?.asset_name}<br /><small>{blank?.product_view} · {blank?.product_color}</small></td><td>{art?.artwork_name}{urls[art?.id] && !/pdf/i.test(art?.mime_type || '') ? <img className="mockup-packet-art" src={urls[art.id]} alt={art.artwork_name} loading="lazy" decoding="async" /> : null}</td><td>{placement.placement_name.replace(/_/g, ' ')}</td><td>{placement.decoration_method}</td><td>{placement.print_width_inches ? `${placement.print_width_inches} in. wide` : `${placement.width_pct}% of image`}{placement.print_height_inches ? ` × ${placement.print_height_inches} in.` : ''}</td><td>{placement.generation_instructions || 'Preserve exact artwork and use the approved mockup as the visual reference.'}</td></tr>; })}</tbody></table></section>
+      <section>
+        <h2>Visual garment placement guides</h2>
+        <p>Starting references only, not calibrated production dimensions. Record the final measured offsets in each placement instruction before running a batch.</p>
+        <div className="sc-packet-placement-grid">
+          {bundle.placements.map((placement) => {
+            const blank = bundle.blanks.find((row) => row.id === placement.blank_asset_id) || {};
+            return <GarmentPlacementGuide key={placement.id} blank={blank} placement={placement} />;
+          })}
+        </div>
+      </section>
       <section><h2>Artwork preflight</h2><ul>{bundle.artwork.map((art) => <li key={art.id}><strong>{art.artwork_name}</strong> — {art.preflight_status}; exact artwork {art.exact_artwork_locked ? 'locked' : 'not locked'}{art.preflight_notes ? `; ${art.preflight_notes}` : ''}</li>)}</ul></section>
-      <section><h2>Production notes</h2><p>{bundle.project.notes || 'No additional notes.'}</p></section>
+      <section><h2>Production & packaging instructions</h2>
+        <p><strong>Saved project notes:</strong> {bundle.project.notes || 'No project-specific packaging instructions have been saved. Confirm customer requirements before packing.'}</p>
+        <div className="sc-packet-checklist">
+          <label><input type="checkbox" /> Compare printed artwork and positioning against approved mockup</label>
+          <label><input type="checkbox" /> Verify garment style, color, sizes, names and numbers</label>
+          <label><input type="checkbox" /> Inspect for scorch, peeling, damage and misprints</label>
+          <label><input type="checkbox" /> Count completed items against order quantities</label>
+          <label><input type="checkbox" /> Confirm folding, bagging, size labels and customer-specific packing requests</label>
+          <label><input type="checkbox" /> Confirm pickup / shipping method before completing the job</label>
+        </div>
+        <p><small>Checklist is a printable guide, not a persisted QC record. Complete the official QC Checklist in the app to record sign-off.</small></p>
+      </section>
     </main>
   );
 }
