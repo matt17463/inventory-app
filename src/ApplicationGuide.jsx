@@ -328,7 +328,7 @@ export default function ApplicationGuide() {
       <section className="sc-guide-wordpress-status" aria-label="WordPress audit verification status">
         <strong>WordPress documentation updated from the October 22 audit — partial coverage</strong>
         <p>Work confirmed 51 installed plugins (50 active, 1 inactive) and inspected 42 screens/sections with 405 recorded controls. Only two shipping-dialog visibility cases have narrowly verified live evidence; no plugin has been certified end-to-end, and 29 still require deeper screen inspection. Read the new WordPress reference and scenario chapters for field-by-field help. Do not assume observed settings have been tested through checkout, synchronization or production.</p>
-        <p><strong>Owner review:</strong> Client Storefronts installed 0.1.2 versus repository 0.1.3; overlapping SKU writers, product option compatibility and shipping rules. These are review findings, not instructions to change live settings.</p>
+        <p><strong>Owner review:</strong> Initial WordPress audit installed 0.1.2 versus current repository 0.1.4; live installed version requires recheck; overlapping SKU writers, product option compatibility and shipping rules. These are review findings, not instructions to change live settings.</p>
       </section>
       <section className="sc-guide-hero">
         <div>
