@@ -97,7 +97,7 @@
       "severity": "high",
       "steps": [
         "Core threshold checks >= $200 post-discount tax-exclusive; Advanced Free Shipping checks EXACT $200 pre-discount tax-inclusive.",
-        "Review whether the 100% coupon with free shipping and broad eligibility is intentional; never expose its redemption code.",
+        "The owner confirmed the 100% discount/free-shipping coupon is intentional. Preserve it unchanged. Intended audience and optional safeguards are a separate confidential policy topic.",
         "Define intended campaign delivery/free-shipping exceptions. Some classes intentionally charge $0; Heavy fallback class is blank.",
         "Test 199.99, 200.00, 200.01 with coupons/tax/classes/zones before any changes."
       ],
@@ -154,6 +154,16 @@
       "siteGroundCopyFound": false,
       "isolationVerified": false,
       "ownerApprovalRequired": true
+    }
+  },
+  "ownerDecisions": {
+    "couponC1": {
+      "intentional": true,
+      "ownerConfirmedAt": "2026-10-22",
+      "status": "intent-confirmed-no-change",
+      "doNotAlter": true,
+      "scopeAndAccessControls": "not yet specified; confidential review only",
+      "productionConfigurationChanged": false
     }
   }
 }
