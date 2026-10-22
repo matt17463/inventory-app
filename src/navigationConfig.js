@@ -1,4 +1,5 @@
 export const quickActions = [
+  { label: 'Work Hub', path: '/work-hub', icon: '🧭' },
   { label: 'Command', path: '/command-center', icon: '🧭' },
   { label: 'Exceptions', path: '/exception-center', icon: '🚨' },
   { label: 'Scan', path: '/scan', icon: '📷' },
@@ -16,6 +17,7 @@ export const navSections = [
     icon: '🏠',
     items: [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
+      { label: 'Work Hub — Start Here', path: '/work-hub', keywords: 'guided workflow client project next steps simple order production overview family' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
       { label: 'Equipment TV / Touch', path: '/shop-equipment', keywords: 'equipment monitoring controls remote access television kiosk' },
       { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop' },
@@ -51,6 +53,8 @@ export const navSections = [
     items: [
       { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
       { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates schedule production deadline pull sheets' },
+      { label: 'Production Recipe Library', path: '/manufacturing-recipes', keywords: 'manufacturing recipe placement guide tee hoodie polo DTF vinyl print measurements' },
+      { label: 'QR Job Travelers', path: '/production-travelers', keywords: 'scannable recipe QR job traveler production form packaging instructions' },
       { label: 'Production Board', path: '/production-board', keywords: 'kanban status ready produce qc ship' },
       { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
       { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
@@ -88,6 +92,7 @@ export const navSections = [
     label: 'Management',
     icon: '📊',
     items: [
+      { label: 'Team Stores & Fundraising', path: '/team-stores', keywords: 'team store group order school spirit wear club campaign fundraising coordinator' },
       { label: 'Marketing & Client Growth', path: '/marketing', keywords: 'marketing leads prospects clients contacts outreach flyers samples pricing profit sharing margin demo storefront handoff pipeline' },
       { label: 'Campaign Forecast', path: '/campaign-forecast', keywords: 'forecast campaign stock demand' },
       { label: 'Customer Reorders', path: '/customer-reorders', keywords: 'reorder intelligence repeat customers' },
@@ -117,6 +122,7 @@ export const navSections = [
     icon: '🎨',
     items: [
       { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
+      { label: 'DTF Artwork Preflight', path: '/artwork-preflight', keywords: 'image png transparency white background remove 300dpi crop DTF artwork' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
       { label: 'UV Studio — Textured Patches', path: '/uv-studio', keywords: 'UV printing faux embroidery dimensional raised patches laser leather vinyl TPU metal texture preview print cut calibration' },
       { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },

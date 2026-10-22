@@ -2,6 +2,7 @@ import { createContext } from "react";
 export const EmployeeAccessContext = createContext(null);
 export const marketingPaths = new Set([
   "/marketing",
+  "/team-stores",
   "/application-guide",
   "/testing-mode",
   "/theme-settings",

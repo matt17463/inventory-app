@@ -35,6 +35,12 @@ const ExceptionCenter = lazy(() => import('./ExceptionCenter'));
 const FinishedMatchSuggestions = lazy(() => import('./FinishedMatchSuggestions'));
 const GoogleCalendarIntegration = lazy(() => import('./GoogleCalendarIntegration'));
 const Home = lazy(() => import('./Home'));
+const WorkHub = lazy(() => import('./WorkHub'));
+const TeamStoreLaunchpad = lazy(() => import('./TeamStoreLaunchpad'));
+const ManufacturingRecipes = lazy(() => import('./ManufacturingRecipes'));
+const ProductionTravelers = lazy(() => import('./ProductionTravelers'));
+
+const ArtworkPreflight = lazy(() => import('./ArtworkPreflight'));
 const InventoryAudit = lazy(() => import('./InventoryAudit'));
 const InventoryImport = lazy(() => import('./InventoryImport'));
 const InventoryValuation = lazy(() => import('./InventoryValuation'));
@@ -108,6 +114,7 @@ function EmployeeRoutes() {
   const access=useContext(EmployeeAccessContext);
   if(access?.role==='marketing') return <Routes>
     <Route path="/marketing" element={<MarketingWorkspace />} />
+    <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
     <Route path="/application-guide" element={<ApplicationGuide />} />
     <Route path="/testing-mode" element={<TestingMode />} />
     <Route path="/theme-settings" element={<ThemeSettings />} />
@@ -174,6 +181,12 @@ function EmployeeRoutes() {
       <Route path="/order-risk" element={<OrderRiskDashboard />} />
       <Route path="/onsite-sales" element={<OnsiteSales />} />
       <Route path="/command-center" element={<DailyCommandCenter />} />
+      <Route path="/work-hub" element={<WorkHub />} />
+      <Route path="/manufacturing-recipes" element={<ManufacturingRecipes />} />
+      <Route path="/production-travelers" element={<ProductionTravelers />} />
+      <Route path="/production-travelers/:travelerId" element={<ProductionTravelers />} />
+      <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
+      <Route path="/artwork-preflight" element={<ArtworkPreflight />} />
       <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
       <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
       <Route path="/labels" element={<BarcodeLabelGenerator />} />
