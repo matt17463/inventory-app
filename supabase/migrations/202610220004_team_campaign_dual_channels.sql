@@ -18,7 +18,7 @@ create index if not exists sc_client_order_requests_campaign_idx on public.sc_cl
 -- Prevent turning a group-invoice campaign into a storefront after intake, or
 -- converting an existing Woo live storefront into invoice intake.
 create or replace function public.sc_guard_team_order_channel()
-returns trigger language plpgsql security invoker set search_path = '' as $$
+returns trigger language plpgsql security definer set search_path = '' as $
 begin
   if new.order_channel is distinct from old.order_channel then
     if old.stage in ('live','complete')
@@ -48,7 +48,7 @@ returns table(id uuid,order_number text,submitted_at timestamptz,organization te
 language plpgsql security definer set search_path = ''
 as $$
 begin
-  if not public.sc_internal_access_allowed(array['admin','manager','operator','marketing','viewer']) then
+  if not public.sc_internal_access_allowed(array['admin','manager','operator','marketing']) then
     raise exception 'Group order access denied' using errcode='42501';
   end if;
   return query
