@@ -103,3 +103,16 @@ body.scs-client-checkout .wp-block-woocommerce-checkout{border-top:5px solid var
 .scs-directory-item img{height:95px;width:95px;object-fit:contain}
 .scs-directory-item strong{font-size:1.15rem;color:#173d36}
 .scs-directory-item span{color:#0f766e;font-weight:750}
+
+/* WordPress/Divi full-width client landing: suppress global multi-client shop navigation
+   inside a dedicated store. Our own store nav and cart link remain accessible. */
+body.scs-wp-storefront #main-header,
+body.scs-wp-storefront #top-header,
+body.scs-wp-storefront header.et-l--header{display:none!important}
+body.scs-wp-storefront #page-container{padding-top:0!important;margin-top:0!important}
+body.scs-wp-storefront #main-content>.container{width:100%!important;max-width:none!important;padding:0!important}
+body.scs-wp-storefront #left-area{float:none;width:100%!important;padding:0!important}
+body.scs-wp-storefront #sidebar,
+body.scs-wp-storefront #main-content .container:before{display:none!important}
+body.scs-wp-storefront #main-content article{margin:0!important;padding:0!important}
+body.scs-wp-storefront #main-content .entry-content{padding:0!important}
