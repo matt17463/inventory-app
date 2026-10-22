@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-22",
+  "description": "Curated conditional interactions based on code. Source-reviewed is NOT production-browser verified. Only mark live-verified after authorized browser testing.",
+  "dialogs": [
+    {
+      "id": "packing-verify-line",
+      "area": "Guided Work Hub",
+      "route": "/work-hub",
+      "sourceFile": "src/GuidedPackingSignoff.jsx",
+      "title": "Verify packed item quantity",
+      "trigger": "Verify line",
+      "visibleWhen": "Signed-in operator, manager, or admin; selected production job with order lines",
+      "fields": [
+        {
+          "name": "Count",
+          "meaning": "Number of physical units checked for the specific job item. Must be an integer between zero and ordered quantity."
+        },
+        {
+          "name": "Bag / pack note",
+          "meaning": "Optional player, bag, box or packing instruction; not a stock reservation."
+        }
+      ],
+      "confirmation": "Confirm actual count for this exact job item",
+      "result": "Appends verified quantity event; does not deduct stock, change invoice, or close the job",
+      "errors": [
+        "Count exceeds the ordered quantity",
+        "Job or item has been canceled",
+        "Testing Mode prevents live writes"
+      ],
+      "trainingScenario": "Fictional 14-hoodie group order; review sizes then practice how to verify exact packed counts without saving to real jobs",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "pickup-signed-acknowledgment",
+      "area": "Guided Work Hub",
+      "route": "/work-hub",
+      "sourceFile": "src/GuidedPackingSignoff.jsx",
+      "title": "Record actual in-person pickup",
+      "trigger": "Record customer pickup signature",
+      "visibleWhen": "Eligible production job; latest QC passed; all active lines packed; operator+ role",
+      "fields": [
+        {
+          "name": "Recipient full name",
+          "meaning": "The actual person physically collecting the packages; serves as typed-name acknowledgment."
+        },
+        {
+          "name": "Recipient relationship / role",
+          "meaning": "Coach, parent, or client representative, when relevant."
+        },
+        {
+          "name": "Number of packages handed over",
+          "meaning": "Physical packages transferred, not garment units."
+        },
+        {
+          "name": "Pickup notes",
+          "meaning": "Location, exception, or handoff detail."
+        },
+        {
+          "name": "Consent checkbox",
+          "meaning": "Confirms recipient acknowledges receipt."
+        }
+      ],
+      "confirmation": "Recipient is present and actually collecting the number of packages",
+      "result": "Records an immutable receipt and a fulfillment event; does not change source job status",
+      "errors": [
+        "Newest QC is missing or failed",
+        "Item packing is incomplete",
+        "Pickup already recorded",
+        "Job canceled"
+      ],
+      "trainingScenario": "Practice with fictional team coach. Never generate a real pickup signature during training.",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "artwork-revision-confirm",
+      "area": "Artwork / Work Hub",
+      "route": "/work-hub",
+      "sourceFile": "src/GuidedPackingSignoff.jsx",
+      "title": "Confirm exact customer-approved artwork revision",
+      "trigger": "Record revision check",
+      "visibleWhen": "Artwork handoff is explicitly linked to selected job; operator+ role",
+      "fields": [
+        {
+          "name": "Approved artwork handoff",
+          "meaning": "A linked file/review record, not necessarily proof of customer approval."
+        },
+        {
+          "name": "Revision or version number",
+          "meaning": "Specific version approved for manufacturing."
+        },
+        {
+          "name": "Customer approval reference",
+          "meaning": "Source message, proof ID or recorded decision."
+        },
+        {
+          "name": "Production file name",
+          "meaning": "Actual output file used to manufacture."
+        },
+        {
+          "name": "Production review note",
+          "meaning": "Supplementary production instructions."
+        }
+      ],
+      "confirmation": "Verify original customer approval and exact revision before producing",
+      "result": "Appends a revision review record; never fabricates customer approval",
+      "errors": [
+        "Handoff not linked to this job",
+        "No approval reference",
+        "No authenticated role"
+      ],
+      "trainingScenario": "Choose the correct approved fictional v3 logo instead of v2",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "easy-postage-purchase",
+      "area": "Carrier Labels",
+      "route": "/work-hub",
+      "sourceFile": "src/CarrierShippingLabels.jsx",
+      "title": "Authorize EasyPost carrier label purchase",
+      "trigger": "Purchase real postage",
+      "visibleWhen": "Manager/admin only; quote present and not expired; package verified; EasyPost live purchasing explicitly enabled",
+      "fields": [
+        {
+          "name": "Package number",
+          "meaning": "Physical parcel identifier, prevents double purchases."
+        },
+        {
+          "name": "Carrier and service",
+          "meaning": "Exact selected rate and service, not guaranteed delivery."
+        },
+        {
+          "name": "Purchase authorization checkbox",
+          "meaning": "Confirms correct address, parcel dimensions, carrier, cost."
+        }
+      ],
+      "confirmation": "Browser asks to approve a real postage charge for exact price",
+      "result": "Purchases carrier postage once. Does not mark package shipped or send notification.",
+      "errors": [
+        "Quote expired",
+        "Job payment/QC/packing gate failed",
+        "Live purchase disabled",
+        "Purchase outcome uncertain—recover, do not retry"
+      ],
+      "trainingScenario": "Compare fictional USPS rates without buying any real postage",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "usps-manual-record",
+      "area": "Carrier Labels",
+      "route": "/work-hub",
+      "sourceFile": "src/CarrierShippingLabels.jsx",
+      "title": "Record previously purchased USPS Click-N-Ship label",
+      "trigger": "Record already-purchased USPS label",
+      "visibleWhen": "Manager/admin, release-ready job, package has no purchased EasyPost label",
+      "fields": [
+        {
+          "name": "USPS tracking number",
+          "meaning": "Tracking printed on existing purchased USPS postage."
+        },
+        {
+          "name": "USPS receipt / purchase reference",
+          "meaning": "Reference proving this label was bought through the external USPS account."
+        },
+        {
+          "name": "USPS postage paid",
+          "meaning": "Optional actual cost; not an automatic purchase."
+        },
+        {
+          "name": "Notes",
+          "meaning": "Additional audit context."
+        }
+      ],
+      "confirmation": "Label was actually purchased through USPS website",
+      "result": "Saves external label receipt and blocks second postage for same package",
+      "errors": [
+        "Duplicate USPS tracking",
+        "EasyPost label already bought",
+        "Invalid tracking or receipt"
+      ],
+      "trainingScenario": "Explain why recording a label is not buying postage or confirming carrier dispatch",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "delivery-proof-confirm",
+      "area": "Job Closeout",
+      "route": "/work-hub",
+      "sourceFile": "src/JobCloseoutCenter.jsx",
+      "title": "Record independently verified delivery",
+      "trigger": "Record verified delivery",
+      "visibleWhen": "After actual carrier dispatch and package/QC verification",
+      "fields": [
+        {
+          "name": "Verification source",
+          "meaning": "Carrier proof-of-delivery or actual customer confirmation."
+        },
+        {
+          "name": "Actual evidence reference",
+          "meaning": "Document, carrier event or reply identifier."
+        },
+        {
+          "name": "Verification notes",
+          "meaning": "Explanation of how confirmation was obtained."
+        }
+      ],
+      "confirmation": "Delivery was independently verified; printed label alone is not delivery",
+      "result": "Creates immutable delivery evidence; leaves Production Board final job closeout separate",
+      "errors": [
+        "No verified dispatch",
+        "No passing QC",
+        "Exact packing counts not complete"
+      ],
+      "trainingScenario": "Compare label purchased, carrier dispatched, and delivered events",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "email-manual-sent-assertion",
+      "area": "Job Closeout",
+      "route": "/work-hub",
+      "sourceFile": "src/JobCloseoutCenter.jsx",
+      "title": "Confirm customer email actually sent",
+      "trigger": "Mark actually sent",
+      "visibleWhen": "Manager/admin; an approved draft exists; related job evidence supports the message type",
+      "fields": [
+        {
+          "name": "Customer email",
+          "meaning": "Verified intended recipient, never guessed."
+        },
+        {
+          "name": "Subject and message",
+          "meaning": "Exact saved draft copied to external mail application."
+        }
+      ],
+      "confirmation": "The exact email was actually sent externally to this recipient",
+      "result": "Creates an immutable manual-send audit event; does not send email",
+      "errors": [
+        "Draft changed",
+        "Duplicate send confirmation",
+        "Current job evidence blocks message"
+      ],
+      "trainingScenario": "Draft fictional pickup email, discuss when and how to record real dispatch",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "woo-production-status-confirm",
+      "area": "Production Board",
+      "route": "/production-board",
+      "sourceFile": "src/ProductionBoard.jsx",
+      "title": "Confirm WooCommerce order status change",
+      "trigger": "Update WooCommerce order status",
+      "visibleWhen": "Woo-connected production job with authorized action",
+      "fields": [
+        {
+          "name": "Next status",
+          "meaning": "Woo order status requested by the actual Production Board action."
+        }
+      ],
+      "confirmation": "Confirm specified WooCommerce order and new state",
+      "result": "May affect Woo order lifecycle; not a training-only toggle",
+      "errors": [
+        "Missing or unauthorized Woo order",
+        "REST/WAF failure",
+        "Job/production state mismatch"
+      ],
+      "trainingScenario": "Review simulated changes; no live status transitions",
+      "status": "source-reviewed",
+      "needsLiveScreenshot": true
+    },
+    {
+      "id": "wordpress-store-publication",
+      "area": "WordPress Client Stores",
+      "route": "/team-stores",
+      "sourceFile": "src/StorefrontDesigner.jsx",
+      "title": "Publish client WordPress store after approval",
+      "trigger": "Publish campaign",
+      "visibleWhen": "Recurring WooCommerce campaign with approved products, client category, WordPress draft and manager approval",
+      "fields": [
+        {
+          "name": "Client logo, template, palette",
+          "meaning": "Visual storefront branding must match approved client identity."
+        },
+        {
+          "name": "Client-specific category",
+          "meaning": "Controls products visible on the client landing page; not product URL privacy."
+        },
+        {
+          "name": "Ordering and delivery instructions",
+          "meaning": "Customer-facing instructions, deadlines, pickup or shipping rules."
+        }
+      ],
+      "confirmation": "Manager verifies customer approval and correct Woo product set before publishing",
+      "result": "Publishes client WordPress page through authenticated server workflow; paid orders still handled in WooCommerce",
+      "errors": [
+        "WordPress plugin not active",
+        "Application Password or WAF invalid",
+        "Category/product approval mismatch"
+      ],
+      "trainingScenario": "Create fictional storefront draft only; do not publish a live customer site",
+      "status": "needs-live-review",
+      "needsLiveScreenshot": true
+    }
+  ]
+}
