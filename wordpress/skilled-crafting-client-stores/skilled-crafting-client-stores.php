@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skilled Crafting Client Storefronts
  * Description: Branded WooCommerce category-only client stores, site-native landing pages and coordinated checkout.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Requires Plugins: woocommerce
  * Text Domain: skilled-crafting-stores
  */
@@ -73,7 +73,9 @@ function scs_products($category_id, $limit=24) {
 }
 function scs_store_markup($id) {
     $post=get_post($id);
-    if (!$post || $post->post_type!=='sc_client_store' || $post->post_status!=='publish') return '';
+    if (!$post || $post->post_type!=='sc_client_store') return '';
+    // Native WordPress previews must show the actual design before publication.
+    if ($post->post_status!=='publish' && !(is_preview() && current_user_can('edit_post',$id))) return '';
     $category=scs_category((int)scs_read($id,'category_id',0));
     if (!$category) return '<p>This store is being configured.</p>';
     $theme=scs_template(scs_read($id,'template'));

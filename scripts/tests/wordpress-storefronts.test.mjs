@@ -100,3 +100,11 @@ test('WordPress configuration accepts legacy secret name without requiring rotat
   assert.equal(wpStoreConfigured(),true);
  } finally { for(const k of keys) { if(before[k]===undefined)delete process.env[k]; else process.env[k]=before[k]; } }
 });
+
+test('draft rendering is restricted to authorized native previews and live campaigns cannot regenerate drafts',()=>{
+ const php=read('../../wordpress/skilled-crafting-client-stores/skilled-crafting-client-stores.php');
+ assert(php.includes("is_preview() && current_user_can('edit_post',$id)"));
+ const site=read('../../netlify/functions/team-store-site.js');
+ const draft=site.slice(site.indexOf("if(action==='draft')"),site.indexOf("if(action==='clone')"));
+ assert(draft.indexOf('requireDraft(c)') < draft.indexOf("upsertWpStore(c,'draft')"));
+});

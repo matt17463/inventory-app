@@ -88,6 +88,7 @@ export async function handler(event){
    return jsonResponse(200,{success:true,media_id:result.id},event);
   }
   if(action==='draft'){
+   requireDraft(c);
    if(!c.wp_category_id)throw Error('Create or choose the client WooCommerce product category first.');
    if(!c.storefront_slug)throw Error('Save the store URL and design before generating WordPress draft.');
    const page=await upsertWpStore(c,'draft');
