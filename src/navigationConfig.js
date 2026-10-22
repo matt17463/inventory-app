@@ -53,6 +53,8 @@ export const navSections = [
     items: [
       { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
       { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates schedule production deadline pull sheets' },
+      { label: 'Production Recipe Library', path: '/manufacturing-recipes', keywords: 'manufacturing recipe placement guide tee hoodie polo DTF vinyl print measurements' },
+      { label: 'QR Job Travelers', path: '/production-travelers', keywords: 'scannable recipe QR job traveler production form packaging instructions' },
       { label: 'Production Board', path: '/production-board', keywords: 'kanban status ready produce qc ship' },
       { label: 'Reservations', path: '/reservations', keywords: 'reserve holds job inventory' },
       { label: 'Finished Products', path: '/return-finished', keywords: 'finished inventory return decorated stock' },
