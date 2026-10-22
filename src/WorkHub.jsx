@@ -7,6 +7,7 @@ import {dueRisk,jobIdentity,deriveGuidedProgress,GUIDED_STEPS} from './lib/guide
 import './WorkHub.css';
 import GuidedJobPhaseTwo from './GuidedJobPhaseTwo';
 import GuidedPackingSignoff from './GuidedPackingSignoff';
+import JobCloseoutCenter from './JobCloseoutCenter';
 
 const STAGES=[
  {id:'new_order',label:'Review order'},
@@ -225,6 +226,7 @@ export default function WorkHub(){
        <p><Link to={'/production-photo-proof?job='+currentId}>View / upload photos for this job →</Link></p>
        <GuidedJobPhaseTwo key={currentId} jobId={currentId} evidence={detail} editable={editable} onRefresh={refreshSelected}/>
        <GuidedPackingSignoff key={'packing-'+currentId} jobId={currentId} evidence={detail} editable={editable} onRefresh={refreshSelected}/>
+       <JobCloseoutCenter key={'closeout-'+currentId} evidence={detail} editable={editable} canNotify={['admin','manager'].includes(access?.role)} onRefresh={refreshSelected}/>
        <section className="sc-hub-handoff">
         <div className="sc-hub-handoff-title"><h4>Owner / family handoff notes</h4>
          <small>Logged guidance only; it does not complete steps or alter production state.</small></div>
