@@ -1,5 +1,5 @@
 import {wordPressAuditChapters} from './wordpressAuditLearning.js';
-export const GUIDE_VERSION = '1.5.1';
+export const GUIDE_VERSION = '1.6.0';
 
 const section = (id, title, summary, options = {}) => ({
   id,
@@ -1536,8 +1536,8 @@ guideChapters.push({
      'Use each Owner verification checklist to plan controlled staging validation and approval.',
      'Keep each business system authoritative: recurring storefront orders are paid in WooCommerce; one-off team forms use QuickBooks/manual jobs; SKU rebuild, Woo sync and blank relink are separate steps.'],
     warnings:['Read-only snapshots do not establish which plugin fires a save hook or what Woo checkout will charge a particular shopper.','SiteGround WAF and WordPress Application Password capabilities may prevent plugin/commerce REST reads without implying the site is broken.']}),
-  section('wp-integrity-storefront','Client Storefronts 0.1.2 vs 0.1.3 — safe comparison',
-   'The WordPress audit observed Client Storefronts installed header 0.1.2, while the GitHub companion plugin header says 0.1.3. A mismatch is not proof of a broken store or that the only difference is the version text.',
+  section('wp-integrity-storefront','Client Storefronts 0.1.2 vs current 0.1.4 — controlled upgrade',
+   'The WordPress audit observed Client Storefronts installed header 0.1.2, while the current GitHub companion plugin header says 0.1.4 (the earlier code audit compared 0.1.3). A mismatch is not proof of a broken store or that the only difference is the version text.',
    {relatedRoutes:['/wordpress-integrity','/team-stores','/application-guide'],
     steps:['Start on the read-only WordPress Commerce Integrity page and run the optional plugin metadata request.',
      'If WordPress denies the plugin-list REST API, open WordPress Plugins → Installed Plugins under an authorized admin and compare the current header manually.',
@@ -1585,13 +1585,13 @@ guideChapters.push({
      'Test intended coupon eligibility in a truly isolated WordPress fixture, not with real customer orders.',
      'Record coupon intent as confirmed; do not interpret this confirmation as approval of unrelated shipping, SKU or storefront changes.'
     ],warnings:['No coupon was applied, no discount abuse was observed and a coupon settings page alone cannot prove real checkout eligibility.']}),
-  section('commerce-storefront-safe-upgrade','Stage the Client Storefronts 0.1.3 context safeguards',
-   'Installed 0.1.2 PHP and CSS were compared with repository 0.1.3: new context resolver, client-category related product filter and private-ish history widget suppression are absent in 0.1.2.',
+  section('commerce-storefront-safe-upgrade','Validate Client Storefronts 0.1.4 context safeguards',
+   'Installed 0.1.2 PHP and CSS were previously compared with repository 0.1.3; current candidate is 0.1.4: new context resolver, client-category related product filter and private-ish history widget suppression are absent in 0.1.2.',
    {relatedRoutes:['/team-stores','/wordpress-integrity'],
     steps:[
      'Prepare an isolated fictional organization store and back up the installed 0.1.2 two-file plugin package.',
      'Test the current store preview, product context, child categories, recommended products, recent history, four themed layouts, draft permissions and mixed cart before applying candidate files.',
-     'Apply only the two reviewed 0.1.3 PHP/CSS files on staging. Check approved context and absence of cross-client recommendations, classic and block checkout and mobile styling.',
+     'Validate the current 0.1.4 PHP/CSS plugin package on staging or in a separately approved controlled live smoke test. Check approved context and absence of cross-client recommendations, classic and block checkout and mobile styling.',
      'Document exact before/after behavior and rehearse reverting both files together. A plugin header bump is not a reason for an untested live deployment.',
      'After the business owner approves the evidence and release window, deploy narrowly and verify live public functionality. Do not overwrite database orders.'
     ],warnings:['No actual cross-client product leak was demonstrated in the observed QA preview.']}),
@@ -1623,7 +1623,7 @@ guideChapters.push({
      'Have the owner approve a staging budget and whether fictional-data setup or an isolated clone is permitted.',
      'Before first boot of a clone, block outbound email and HTTP, replace payments, webhooks, Supabase, QuickBooks, Woo, storage and carrier credentials, inspect scheduled actions, use fake customers and products, protect the site from indexing.',
      'Demonstrate that no request reaches production inventory, customer email recipients or live payment accounts. Keep proof of isolation without recording secrets.',
-     'Only then test SKU creation, version 0.1.3 store behavior, shipping cart quote fixtures and rollback.',
+     'Only then test SKU creation, current 0.1.4 store behavior, shipping cart quote fixtures and rollback.',
      'Create a specific change request for each proposed production modification; carry out none solely on the basis of the audit.'
     ],warnings:['Work estimated 12–24 engineering hours to create/verify isolation and selected staging acceptance tests before remediation, not a quote or a completed setup.']}),
  ]
