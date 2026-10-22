@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './App.css';
 import './themes.css';
+import './graphicalDashboardThemes.css';
 import { ThemeProvider } from './ui/ThemeProvider.jsx';
 import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 
