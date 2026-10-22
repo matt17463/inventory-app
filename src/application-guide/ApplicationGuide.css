@@ -384,3 +384,5 @@
 .sc-guide-pdf-actions summary{cursor:pointer;font-weight:750}
 .sc-guide-pdf-frame{display:block;width:100%;height:min(75vh,650px);min-height:350px;margin-top:.85rem;border:1px solid var(--sc-border,#d9dee7);border-radius:8px;background:#fff}
 @media(max-width:750px){.sc-guide-pdf-download{grid-template-columns:1fr}.sc-guide-pdf-frame{height:420px}}
+
+.sc-guide-wordpress-status{padding:1.05rem 1.2rem;background:var(--sc-surface,#fff);border:1px solid var(--sc-border,#d9dee7);border-left:4px solid #64748b;border-radius:11px}.sc-guide-wordpress-status p{line-height:1.55;font-size:.88rem;margin:.6rem 0}.sc-guide-wordpress-status strong{font-weight:800}
