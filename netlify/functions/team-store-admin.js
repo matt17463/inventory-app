@@ -40,6 +40,7 @@ export async function handler(event){
     const c=await getCampaign(sb,body.campaign_id);
     if(action==='add'){
       if(!canEdit(c))throw Error('Add products before publishing or use a new campaign.');
+      if(body.confirm_dedicated!==true)throw Error('Confirm this WooCommerce product is dedicated to this school/team campaign.');
       const productId=Number(body.woo_product_id);
       if(!Number.isSafeInteger(productId)||productId<=0)throw Error('Choose a Woo product.');
       const p=verifiedWooProduct(await wooRequest('products/'+productId),wooBaseUrl());
