@@ -12,6 +12,8 @@ function sanitize_title($v){return $v;}
 function wp_unslash($v){return $v;}
 function get_queried_object_id(){global $queried;return $queried;}
 function get_page_by_path($slug,...$args){return get_post($slug==='fixture-live'?1:2);}
+function get_post_field($field,$id){return $id===1?'fixture-live':'fixture-draft';}
+function add_query_arg($key,$value,$url){return $url.(strpos($url,'?')===false?'?':'&').$key.'='.rawurlencode($value);}
 function absint($v) { return abs((int)$v); }
 $posts=[1=>(object)['ID'=>1,'post_type'=>'sc_client_store','post_status'=>'publish'],
 2=>(object)['ID'=>2,'post_type'=>'sc_client_store','post_status'=>'draft'],
@@ -53,9 +55,13 @@ $queried=100;$_GET=['scs_store'=>'fixture-live'];$permissions=[];
 expect(scs_product_store(),1,'published product context recognizes client store');
 $related=$filters['woocommerce_related_products'][0];
 expect($related([100,200]),[100],'related recommendations exclude other client categories');
+$link=$filters['woocommerce_loop_product_link'][0];
+expect($link('https://example.test/product/?size=m'),'https://example.test/product/?size=m&scs_store=fixture-live','related product links preserve client context and existing options');
 $_GET=['scs_store'=>'fixture-draft'];
 expect(scs_product_store(),null,'anonymous draft product context is denied');
+expect($link('https://example.test/product/'),'https://example.test/product/','anonymous draft cannot propagate private context');
 $permissions=['edit_post','manage_woocommerce'];
 expect(scs_product_store(),2,'authorized private product preview works');
 $queried=200;expect(scs_product_store(),null,'unrelated current product cannot adopt client context');
+$_GET=[];expect($link('https://example.test/product/'),'https://example.test/product/','ordinary catalog links remain unchanged');
 echo "$count WordPress runtime checks passed.\n";

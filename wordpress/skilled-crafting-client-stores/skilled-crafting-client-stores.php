@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skilled Crafting Client Storefronts
  * Description: Branded WooCommerce category-only client stores, site-native landing pages and coordinated checkout.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Requires Plugins: woocommerce
  * Text Domain: skilled-crafting-stores
  */
@@ -149,6 +149,10 @@ add_filter('woocommerce_related_products',function($ids){
     $category=(int)scs_read($store,'category_id',0);
     return array_values(array_filter($ids,function($id) use ($category){return scs_product_in_category($id,$category);}));
 },20);
+add_filter('woocommerce_loop_product_link',function($url){
+    $store=scs_product_store();
+    return $store ? add_query_arg('scs_store',get_post_field('post_name',$store),$url) : $url;
+},20);
 add_action('template_redirect',function(){
     if (!function_exists('WC') || !WC()->session) return;
     $id=is_singular('sc_client_store') ? get_queried_object_id() : 0;
@@ -227,7 +231,7 @@ add_shortcode('sc_client_store_directory',function(){
 add_action('wp_enqueue_scripts',function(){
     $directory=is_page() && get_post() && has_shortcode(get_post()->post_content,'sc_client_store_directory');
     if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !$directory && !scs_product_store()) return;
-    wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.3');
+    wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.4');
     if (is_cart() || is_checkout()) {
         $id=scs_cart_store();if (!$id)return;
         $p=scs_color(scs_read($id,'primary'),'#16443b');
