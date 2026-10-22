@@ -1,5 +1,5 @@
 import {wordPressAuditChapters} from './wordpressAuditLearning.js';
-export const GUIDE_VERSION = '1.5.0';
+export const GUIDE_VERSION = '1.5.1';
 
 const section = (id, title, summary, options = {}) => ({
   id,
