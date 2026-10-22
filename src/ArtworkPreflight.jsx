@@ -110,14 +110,14 @@ export default function ArtworkPreflight() {
       const result=await addArtworkAsset({
         projectId,file:prepared,
         values:{artwork_name:preparedName,pixel_width:output.outputWidth,pixel_height:output.outputHeight,
-          has_transparency:true,background_removed:white,preflight_status:'needs_review',
+          has_transparency:true,background_removed:white,preflight_status:'warning',
           exact_artwork_locked:true,metadata:{artwork_prep:'DTF',file_role:'derived',
             source_artwork_asset_id:sourceId,dpi:300,white_cleanup_applied:white,
             background_removed_pixels:output.removed,effective_source_dpi:output.source.effectiveDpi,
             preparation_tool:'artwork-preflight-v1',requires_visual_approval:true}},
       });
       setSavedPrepared(result.id);
-      setMessage('Original and prepared artwork saved in Mockup Studio storage for this project. The prepared copy requires visual approval.');
+      setMessage('Original and prepared artwork saved in Mockup Studio storage for this project. The prepared copy is flagged with a preflight warning until visually reviewed.');
     }catch(e){setMessage('Storage could not finish: '+(e.message||'error')+'. If the original was saved it remains in the project; retry to save the derivative.');}
     finally{setUploadBusy(false);}
   }
@@ -180,7 +180,7 @@ export default function ArtworkPreflight() {
             <button type="button" onClick={saveToProject} disabled={!projectId||uploadBusy||Boolean(savedPrepared)}>
               {uploadBusy?'Saving to artwork storage…':savedPrepared?'Files saved':'Save original + prepared PNG'}
             </button>
-            <p>Files use the established authenticated Mockup Studio storage pipeline (R2 when configured). The source is preserved; the prepared file starts as <strong>needs review</strong>, not approved for production.</p>
+            <p>Files use the established authenticated Mockup Studio storage pipeline (R2 when configured). The source is preserved; the prepared file starts as <strong>warning / requires review</strong>, not approved for production.</p>
             {savedPrepared&&<p>Prepared artwork ID: <code>{savedPrepared}</code> · <Link to="/mockup-studio">Open Mockup Studio →</Link></p>}
           </div>
         </>}
