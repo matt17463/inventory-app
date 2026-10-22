@@ -305,6 +305,128 @@
       "trainingScenario": "Create fictional storefront draft only; do not publish a live customer site",
       "status": "needs-live-review",
       "needsLiveScreenshot": true
+    },
+    {
+      "id": "wordpress-free-shipping-edit",
+      "area": "WordPress / WooCommerce",
+      "route": "https://skilledcrafting.com/wp-admin/admin.php?page=wc-settings&tab=shipping&zone_id=1",
+      "sourceFile": "External installed WooCommerce 11.2.1; docs/wordpress-audit/screen-audit.md",
+      "title": "Inspect free-shipping eligibility fields",
+      "trigger": "Shipping > Kitsap County > Free shipping > Edit",
+      "visibleWhen": "Administrator viewing an existing Free shipping method.",
+      "fields": [
+        {
+          "name": "Name",
+          "meaning": "Name shown to shoppers for this method. Observed Free shipping."
+        },
+        {
+          "name": "Free shipping requires",
+          "meaning": "Choose coupon and minimum-spend eligibility. Persisted setting observed: A minimum order amount OR coupon. Selecting No requirement only in the unsaved modal hid the minimum/coupon-discount controls; modal was closed without saving."
+        },
+        {
+          "name": "Minimum order amount",
+          "meaning": "Set the qualifying spend. Observed 200.00 for this zone; visible with persisted OR requirement."
+        },
+        {
+          "name": "Apply minimum order rule before coupon discount",
+          "meaning": "Choose whether discount is ignored for spend qualification. Observed unchecked; hidden under unsaved No requirement choice."
+        }
+      ],
+      "confirmation": "Save was not clicked; Close modal panel was used.",
+      "result": "Modal opens; persisted OR minimum/coupon condition shows minimum and discount controls. Unsaved No requirement selection hides them; close discards the selection.",
+      "errors": [
+        "Save/server validation not tested under the production read-only audit restriction."
+      ],
+      "trainingScenario": "Use a staged copy of this zone. Open the existing method with Edit, inspect fields, and close without saving. Never purchase a label or place an order.",
+      "status": "live-verified",
+      "needsLiveScreenshot": true,
+      "auditEvidence": {
+        "reviewedAt": "2026-10-22",
+        "reviewedBy": "Codex, authorized WordPress browser session",
+        "verificationScope": "Opening and closing modal, existing OR condition, and unsaved No requirement visibility only.",
+        "missingConditions": [
+          "Save persistence, validation failures and other role/device states not verified."
+        ]
+      }
+    },
+    {
+      "id": "wordpress-flat-rate-edit",
+      "area": "WordPress / WooCommerce",
+      "route": "https://skilledcrafting.com/wp-admin/admin.php?page=wc-settings&tab=shipping&zone_id=1",
+      "sourceFile": "External installed WooCommerce 11.2.1; docs/wordpress-audit/screen-audit.md",
+      "title": "Inspect flat-rate and shipping-class charges",
+      "trigger": "Shipping > Kitsap County > Flat rate > Edit",
+      "visibleWhen": "Administrator viewing an existing Flat rate method.",
+      "fields": [
+        {
+          "name": "Name",
+          "meaning": "Name displayed at checkout. Observed Flat rate."
+        },
+        {
+          "name": "Tax status",
+          "meaning": "Choose if shipping itself is taxable. Observed Taxable."
+        },
+        {
+          "name": "Cost",
+          "meaning": "Base cost excluding tax; supports documented formulas. Observed 0.00. Help describes [qty], [cost] and [fee percent=\"10\" min_fee=\"20\" max_fee=\"\"]."
+        },
+        {
+          "name": "\"Clothing\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 7.50 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"Drinkware\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 8.75 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"Heavy\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 12.00 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"Local Stock\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 2.00 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"Spirit Wear Campaign\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 0.00 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"Sublimated Uniforms\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 12.00 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"Uniform Bulk Order\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 0.00 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "\"USPS Mail\" shipping class cost",
+          "meaning": "Set an added cost for products assigned this class. Observed 1.00 in Kitsap County only; not a universal shipping price."
+        },
+        {
+          "name": "No shipping class cost",
+          "meaning": "Set cost for products with no assigned class. Observed 8.00."
+        },
+        {
+          "name": "Calculation type",
+          "meaning": "Add each class cost or use the highest class cost. Observed Per order."
+        }
+      ],
+      "confirmation": "Save was not clicked; Close modal panel was used.",
+      "result": "Modal displays base cost, tax status, per-class costs and calculation type; closed without saving.",
+      "errors": [
+        "Save/server validation not tested under the production read-only audit restriction."
+      ],
+      "trainingScenario": "Use a staged copy of this zone. Open the existing method with Edit, inspect fields, and close without saving. Never purchase a label or place an order.",
+      "status": "live-verified",
+      "needsLiveScreenshot": true,
+      "auditEvidence": {
+        "reviewedAt": "2026-10-22",
+        "reviewedBy": "Codex, authorized WordPress browser session",
+        "verificationScope": "Existing method modal and displayed choices only; no changed charge or save tested.",
+        "missingConditions": [
+          "Save persistence, validation failures and other role/device states not verified."
+        ]
+      }
     }
   ]
 }

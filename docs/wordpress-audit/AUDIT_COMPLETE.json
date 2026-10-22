@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "status": "partial",
+  "completedAt": "2026-10-22T17:00:13.398567+00:00",
+  "site": "https://skilledcrafting.com",
+  "reviewedBy": "Codex, authorized signed-in WordPress browser",
+  "auditedCounts": {
+    "installedPlugins": 51,
+    "activePlugins": 50,
+    "inactivePlugins": 1,
+    "dropIns": 2,
+    "pluginsWithScreenRecords": 22,
+    "inventoryOnlyPlugins": 29,
+    "screenSectionRecords": 42,
+    "controlRecords": 405,
+    "fullyLiveVerifiedPlugins": 0,
+    "liveVerifiedDialogVisibilityCases": 2,
+    "sanitizedScreenshots": 0
+  },
+  "reportPaths": [
+    "docs/wordpress-audit/active-plugin-inventory.md",
+    "docs/wordpress-audit/screen-audit.md",
+    "docs/wordpress-audit/operations-integrity.md",
+    "docs/wordpress-audit/validation.md"
+  ],
+  "registryPaths": [
+    "src/application-guide/wordpressPluginAudits.json",
+    "src/application-guide/conditionalDialogs.json"
+  ],
+  "remainingGaps": [
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woo-variation-gallery",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "advanced-coupons-for-woocommerce-free",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woo-order-export-lite",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "sg-ai-studio",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "akismet",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "classic-editor",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "code-snippets",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "bp-custom-order-status-for-woocommerce",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woo-extra-product-options",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "google-listings-and-ads",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "jetpack",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "product-sales-report-for-woocommerce",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "order-export-and-more-for-woocommerce",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "permalink-manager",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woocommerce-product-sku-generator",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woo-product-slider",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "skilled-crafting-woo-bulk-brand-style-editor",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "skilled-crafting-manual-pull-sheet-generator",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "sku-for-woocommerce",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "ultimate-addons-for-gutenberg",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "sg-cachepress",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "astra-sites",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "updraftplus",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "wc-attribute-export-tool",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woocommerce-filter-orders-by-coupon",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woocommerce-legacy-rest-api",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woocommerce-com-product-add-ons",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woocommerce-variation-batch-updater",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "inventory-only-plugin",
+      "slug": "woocommerce-com-woo-update-manager",
+      "gap": "Plugin-specific administration, field options, conditional dialogs, defaults, validation and role/device states remain unreviewed."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "Full meaningful conditional-state, role and mobile/responsive coverage is incomplete for inspected plugins."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "No production saves, order/payment/label purchases, email, migration, sync, repair, SKU rewrite, backfill or inventory outcomes were tested. Nonproduction fixtures needed."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "Artwork request-level review/revision/approval/vault/reorder dialogs and event delivery/retries not verified."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "Complete product editor/bulk-action fields, order actions and third-party plugin settings remain incomplete."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "No sanitized screenshots retained; only authored redacted text evidence."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "Client Storefronts installed header 0.1.2 differs from repository 0.1.3; deployed code equivalence and intended branded-settings interface ownership unresolved."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "All shipping zones, coupon/rate combinations, checkout totals and validation errors not comprehensively tested."
+    },
+    {
+      "kind": "cross-workflow",
+      "gap": "Final guide/training/PDF integration and full PDF visual review belong to original Skilled Crafting conversation. PDF generator caveats require updating for partial evidence."
+    }
+  ],
+  "safeForGuideBuild": false,
+  "partialFindingsReusable": true,
+  "safeForGuideBuildExplanation": "False means this must not be consumed as a completed comprehensive audit. Sanitized findings can be integrated with explicit scope/gaps after original-conversation review.",
+  "productionWritesPerformed": false,
+  "netlifyPreviewRequested": false,
+  "validation": {
+    "documentationRegistry": "passed with open live QA",
+    "tests": "387 passed",
+    "lint": "0 errors, 33 warnings",
+    "pdfRegeneration": "passed; 191 pages; samples visually inspected; final integration pending"
+  },
+  "handbackMessage": "Work finished the WordPress audit. Review the findings and complete the guide, training, and PDF integration."
+}

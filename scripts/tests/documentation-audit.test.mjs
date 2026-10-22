@@ -30,13 +30,35 @@ test('conditional dialogs contain novice field definitions, triggers, risks and 
  }
  const r=documentationCoverage({screens:[],dialogs:dialogs.dialogs,plugins:[]});
  assert.deepEqual(r.invalid,[]);
- assert.equal(r.liveVerifiedDialogs,0,'Source examples cannot claim live verification');
+ const live=dialogs.dialogs.filter(d=>d.status==='live-verified');
+ for(const d of live){
+  assert(d.auditEvidence?.reviewedAt,d.id+' lacks review date');
+  assert(d.auditEvidence?.reviewedBy,d.id+' lacks reviewer');
+  assert(d.auditEvidence?.verificationScope,d.id+' lacks verification boundary');
+ }
+ assert(dialogs.dialogs.filter(d=>!d.id.startsWith('wordpress-')).every(d=>d.status==='source-reviewed'),
+  'WordPress review must not promote source-only application examples');
 });
-test('WordPress inventory makes no unverified installation claims',()=>{
- assert.equal(wp.auditStatus,'awaiting-live-wordpress-review');
+test('WordPress inventory distinguishes verified installation from incomplete operating review',()=>{
+ assert.equal(wp.auditStatus,'partial');
  assert(wp.pluginCandidatesToCheck.some(x=>x.includes('WooCommerce')));
- assert(wp.plugins.every(p=>p.reviewStatus==='source-only'||p.reviewStatus==='unverified'));
- assert(wp.plugins.every(p=>p.activationStatus==='unverified'));
+ assert.match(wp.notes,/starter file is NOT a verified list/);
+ assert.equal(wp.plugins.length,wp.inventoryEvidence.installedPluginCount);
+ assert.equal(wp.plugins.filter(p=>p.activationStatus==='active').length,wp.inventoryEvidence.activeCount);
+ assert.equal(wp.plugins.filter(p=>p.activationStatus==='inactive').length,wp.inventoryEvidence.inactiveCount);
+ for(const p of wp.plugins){
+  assert(p.installedVersion,p.slug+' lacks installed version');
+  assert.equal(p.reviewStatus,'partial-live-review');
+  assert(p.auditEvidence?.inventoryVerified,p.slug+' lacks inventory evidence');
+  assert(p.auditEvidence?.missingConditions?.length,p.slug+' hides incomplete coverage');
+  for(const s of [...p.adminScreens,...p.publicScreens]){
+   assert(s.verificationScope,s.name+' lacks scope');
+   for(const control of s.controls){
+    for(const key of ['label','type','purpose','advancedNotes','when','required','options','effect','errors','safety','relatedWorkflow'])
+     assert(Object.hasOwn(control,key),p.slug+'/'+control.label+' lacks '+key);
+   }
+  }
+ }
 });
 test('admin audit is hidden from marketing users, and publicly served screenshots are forbidden',()=>{
  const guide=read('../../src/ApplicationGuide.jsx');
