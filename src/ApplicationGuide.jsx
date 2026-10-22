@@ -1,6 +1,8 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import DocumentationAuditPanel from './application-guide/DocumentationAuditPanel';
+import TrainingCertificationBoard from './application-guide/TrainingCertificationBoard';
+import {getMyTraining,saveTrainingProgress} from './lib/centralTrainingApi';
 import { PageHeader } from './components/UIPrimitives';
 import { navSections } from './navigationConfig';
 import {
@@ -136,26 +138,72 @@ function TrainingTutorial({tutorial,progress,onToggle}){
   );
 }
 
-function EmployeeTraining(){
+function EmployeeTraining({canAudit=false}){
   const [role,setRole]=useState('new-employee');
   const [progress,setProgress]=useState(loadTrainingProgress);
+  const [syncStatus,setSyncStatus]=useState('loading');
+  const [syncError,setSyncError]=useState('');
+  const [savingTraining,setSavingTraining]=useState(false);
   const tutorials=useMemo(()=>tutorialsForRole(role),[role]);
   const completed=tutorials.filter(t=>progress[t.id]?.complete).length;
   const totalSteps=tutorials.reduce((sum,t)=>sum+t.steps.length,0);
   const checkedSteps=tutorials.reduce((sum,t)=>sum+Object.values(progress[t.id]?.steps||{}).filter(Boolean).length,0);
 
   useEffect(()=>{window.localStorage.setItem(TRAINING_PROGRESS_KEY,JSON.stringify(progress));},[progress]);
-
-  function toggle(tutorial,index){
-    setProgress(current=>{
-      const record=current[tutorial.id]||{steps:{},complete:false};
-      if(index==='complete') return {...current,[tutorial.id]:{...record,complete:!record.complete}};
-      return {...current,[tutorial.id]:{...record,steps:{...record.steps,[index]:!record.steps?.[index]}}};
+  useEffect(()=>{
+    let mounted=true;
+    getMyTraining().then(data=>{
+      if(!mounted)return;
+      const server={};
+      for(const record of data.records||[]){
+        const steps={};
+        for(const index of record.completed_steps||[])steps[index]=true;
+        server[record.tutorial_id]={steps,complete:Boolean(record.completed)};
+      }
+      // The server is authoritative for any tutorial stored centrally. Old local
+      // checklists are retained only when no central record exists.
+      setProgress(current=>({...current,...server}));
+      setSyncStatus('central');
+      setSyncError('');
+    }).catch(error=>{
+      if(!mounted)return;
+      setSyncStatus('unavailable');
+      setSyncError(error.message||'Central training storage unavailable; progress shown is from this browser only.');
     });
+    return()=>{mounted=false;};
+  },[]);
+
+
+  async function toggle(tutorial,index){
+    if(savingTraining)return;
+    const current=progress[tutorial.id]||{steps:{},complete:false};
+    const nextSteps={...current.steps};
+    let complete=false;
+    if(index==='complete'){
+      complete=!current.complete;
+      if(complete&&Object.values(current.steps).filter(Boolean).length!==tutorial.steps.length){
+        setSyncError('Complete every tutorial step before marking this module finished.');
+        return;
+      }
+    }else{
+      nextSteps[index]=!nextSteps[index];
+      // A changed learning step requires renewed training completion.
+      complete=false;
+    }
+    const completedSteps=Object.keys(nextSteps).filter(key=>nextSteps[key]).map(Number).sort((x,y)=>x-y);
+    setSavingTraining(true);setSyncError('');
+    try{
+      await saveTrainingProgress(tutorial.id,completedSteps,complete);
+      setProgress(prev=>({...prev,[tutorial.id]:{steps:nextSteps,complete}}));
+      setSyncStatus('central');
+    }catch(error){
+      setSyncStatus('unavailable');
+      setSyncError('Change was NOT saved centrally: '+(error.message||'Service unavailable'));
+    }finally{setSavingTraining(false);}
   }
 
   function reset(){
-    if(!window.confirm('Reset all training progress saved in this browser?')) return;
+    if(!window.confirm('Clear this browser’s checklist copy? Central training records and manager signoffs will NOT be deleted.')) return;
     setProgress({});
   }
 
@@ -163,9 +211,15 @@ function EmployeeTraining(){
   return (
     <section className="sc-training-workspace" id="employee-training">
       <div className="sc-training-hero">
-        <div><span className="sc-guide-version">Training v{TRAINING_VERSION}</span><h2>Employee Training Center</h2><p>Role-based, step-by-step instruction for employees who are new to Skilled Crafting. Use the checkboxes as an onboarding checklist. Progress is stored only in this browser.</p></div>
+        <div><span className="sc-guide-version">Training v{TRAINING_VERSION}</span><h2>Employee Training Center</h2><p>Role-based, guided employee onboarding. Completed steps are saved centrally to the signed-in employee account when the training service is available. Manager qualification is recorded separately.</p></div>
         <div className="sc-training-summary"><div><strong>{completed}/{tutorials.length}</strong><span>tutorials complete</span></div><div><strong>{checkedSteps}/{totalSteps}</strong><span>steps checked</span></div></div>
       </div>
+      <p role="status" className="sc-training-central-status">
+        {syncStatus==='central'?'Central employee training storage connected. Your latest changes sync to your account.':
+          syncStatus==='loading'?'Loading your central training progress…':
+          'Central training storage unavailable; changes cannot be certified or synchronized.'}
+      </p>
+      {syncError&&<p role="alert" className="sc-training-central-error">{syncError}</p>}
       <div className="sc-training-safety">
         <strong>Training rule: when unsure, stop before changing data.</strong>
         <p>New employees should begin with read-only tutorials. Any tutorial marked supervised-live should be completed with a manager until the employee is signed off. Testing Mode only simulates writes on workflows that explicitly support simulation.</p>
@@ -176,10 +230,11 @@ function EmployeeTraining(){
         <select value={role} onChange={e=>setRole(e.target.value)}>{trainingRoles.map(item=><option value={item.id} key={item.id}>{item.label}</option>)}</select>
         <div className="button-row">
           <button type="button" className="primary-button" onClick={()=>startGuidedTraining(role)}>Start online guided training</button>
-          <button type="button" className="secondary-button" onClick={reset}>Reset checklist</button>
+          <button type="button" className="secondary-button" onClick={reset}>Clear browser checklist copy</button>
         </div>
       </div>
       <div className="sc-training-tutorial-list">{tutorials.map(tutorial=><TrainingTutorial key={tutorial.id} tutorial={tutorial} progress={progress[tutorial.id]} onToggle={toggle}/>)}</div>
+      {canAudit?<TrainingCertificationBoard/>:null}
       <section className="sc-training-signoff">
         <h3>Recommended employee sign-off</h3>
         <p>Before an employee works independently, have a manager observe one real task in each assigned core workflow and confirm that the employee can explain what data changes, how to verify success, and when to stop and escalate.</p>
@@ -273,7 +328,7 @@ export default function ApplicationGuide() {
       <section className="sc-guide-wordpress-status" aria-label="WordPress audit verification status">
         <strong>WordPress documentation updated from the October 22 audit — partial coverage</strong>
         <p>Work confirmed 51 installed plugins (50 active, 1 inactive) and inspected 42 screens/sections with 405 recorded controls. Only two shipping-dialog visibility cases have narrowly verified live evidence; no plugin has been certified end-to-end, and 29 still require deeper screen inspection. Read the new WordPress reference and scenario chapters for field-by-field help. Do not assume observed settings have been tested through checkout, synchronization or production.</p>
-        <p><strong>Owner review:</strong> Client Storefronts installed 0.1.2 versus repository 0.1.3; overlapping SKU writers, product option compatibility and shipping rules. These are review findings, not instructions to change live settings.</p>
+        <p><strong>Owner review:</strong> Initial WordPress audit installed 0.1.2 versus current repository 0.1.4; live installed version requires recheck; overlapping SKU writers, product option compatibility and shipping rules. These are review findings, not instructions to change live settings.</p>
       </section>
       <section className="sc-guide-hero">
         <div>
@@ -323,7 +378,7 @@ export default function ApplicationGuide() {
         </div>
       </section>}
 
-      {guideMode==='audit'&&canAudit?<DocumentationAuditPanel/>:guideMode==='training'?<EmployeeTraining/>:<div className="sc-guide-layout">
+      {guideMode==='audit'&&canAudit?<DocumentationAuditPanel/>:guideMode==='training'?<EmployeeTraining canAudit={canAudit}/>:<div className="sc-guide-layout">
         <aside className="sc-guide-sidebar">
           <div className="sc-guide-sidebar-card">
             <strong>Guide chapters</strong>

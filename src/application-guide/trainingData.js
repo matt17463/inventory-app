@@ -1,5 +1,5 @@
 import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
-export const TRAINING_VERSION = '1.5';
+export const TRAINING_VERSION = '1.6.0';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
@@ -380,7 +380,7 @@ trainingTutorials.push({
    route:'/wordpress-integrity',verify:'You can explain why a historic snapshot is not current-state proof.'}),
   step('Run safe read-only diagnostics','Select Run read-only checks. Distinguish live observed, partial and unavailable results. Do not try to fix a 403 by disabling WordPress security.',{
    route:'/wordpress-integrity',verify:'You can identify what was observed and what needs authorized manual WordPress review.'}),
-  step('Compare storefront versions','Review installed 0.1.2 versus repository 0.1.3. Explain why equal version labels do not by themselves establish matching deployed PHP behavior.',{
+  step('Compare storefront versions','Review the earlier 0.1.2 browser audit versus current repository 0.1.4. Recheck the live installed version. Explain why equal version labels do not by themselves establish matching deployed PHP behavior.',{
    route:'/wordpress-integrity',verify:'You would inspect/compare code with a backup on staging before updating.'}),
   step('Identify SKU writers','Review WC SKU Builder, Product SKU Generator and SKU Generator candidates. Do not regenerate or disable any plugin. Distinguish a sampled collision count from a complete catalog check.',{
    route:'/wordpress-integrity',verify:'You know SKU ownership, Woo product sync and blank-master relink must each be verified.'}),
@@ -397,7 +397,7 @@ trainingTutorials.push({
  id:'wp-commerce-confirmed-risks-owner-approval-20261022',
  title:'Owner: Approving WordPress Commerce Integrity Remediation',
  roles:['manager','owner-admin'],level:'Advanced',minutes:25,safeMode:'guided-read-only',
- summary:'Review confirmed 0.1.2/0.1.3 storefront differences, enabled SKU save hooks, the owner-approved intentional coupon policy, and shipping policies. Complete no transactional actions in this exercise.',
+ summary:'Review audited 0.1.2/0.1.3 differences and current 0.1.4 candidate, enabled SKU save hooks, the owner-approved intentional coupon policy, and shipping policies. Complete no transactional actions in this exercise.',
  outcome:'The owner can distinguish a source-confirmed configuration risk from an observed customer incident and authorize staged remediation without changing live transactions.',
  steps:[
   step('Identify owner decisions','Review the approval pack in the Application Guide. List decisions for the published 100% coupon, normal shipping versus free organization distribution, Heavy fallback, SKU immutability and staging setup.',{

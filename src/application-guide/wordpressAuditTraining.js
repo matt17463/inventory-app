@@ -3,7 +3,7 @@ const roleModules=[
  {id:'storefronts',slug:'skilled-crafting-client-storefronts',name:'Client storefront templates and approved publishing',
   roles:['marketing','manager','owner-admin'],minutes:25,
   scenario:'Example Woodland School wants a recurring branded shop. Identify a QA draft, client product category, logo colors and public landing instructions. Do not publish a live storefront.',
-  caution:'Installed storefront header is 0.1.2; repository shows 0.1.3. Actual live PHP behavior is not established by this UI audit.'},
+  caution:'The October 22 initial WordPress audit saw 0.1.2; GitHub now offers 0.1.4. Recheck the installed live header; previous 0.1.3 source comparisons are historical, not new live verification.'},
  {id:'personalization',slug:'skilled-crafting-product-options',name:'Product personalization and legacy metadata',
   roles:['marketing','artwork','production','manager','owner-admin'],minutes:25,
   scenario:'Example youth team requires player names and jersey numbers. Locate native options and legacy reading mode, then explain where order-line metadata should be retained.',

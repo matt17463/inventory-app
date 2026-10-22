@@ -73,7 +73,7 @@
       "steps": [
         "The deployed 0.1.2 PHP/CSS lacks the 0.1.3 context/category restrictions; no cross-client leak has been observed.",
         "Prepare an isolated test store and confirm four templates, categories, related products, history widget, draft permissions, cart/checkout and mobile layout.",
-        "Back up both existing plugin files and validate 0.1.3 plus rollback; obtain owner approval before live update."
+        "Back up both existing plugin files and validate current 0.1.4 plus rollback; obtain owner approval before live update."
       ],
       "notPermitted": "Do not update/deactivate the live plugin as a diagnostic."
     },
@@ -154,7 +154,9 @@
       "siteGroundCopyFound": false,
       "isolationVerified": false,
       "ownerApprovalRequired": true
-    }
+    },
+    "currentRepositoryVersion": "0.1.4",
+    "note": "The initial 0.1.2-versus-0.1.3 comparison is historical; a 0.1.4 source build does not by itself establish that WordPress has installed 0.1.4."
   },
   "ownerDecisions": {
     "couponC1": {

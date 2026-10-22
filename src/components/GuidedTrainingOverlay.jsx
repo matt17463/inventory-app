@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {saveTrainingProgress} from '../lib/centralTrainingApi';
 import {
   advanceGuidedTraining,
   getGuidedTrainingSession,
@@ -17,6 +18,8 @@ export default function GuidedTrainingOverlay(){
   const location=useLocation();
   const navigate=useNavigate();
   const [session,setSession]=useState(getGuidedTrainingSession());
+  const [saving,setSaving]=useState(false);
+  const [syncError,setSyncError]=useState('');
 
   useEffect(()=>{
     const handler=(event)=>setSession(event.detail||getGuidedTrainingSession());
@@ -53,9 +56,29 @@ export default function GuidedTrainingOverlay(){
   }
 
   function previous(){ setSession(advanceGuidedTraining(session,-1)); }
-  function next(){ setSession(advanceGuidedTraining(session,1)); }
+  async function next(){
+    if(saving)return;
+    setSyncError('');
+    if(tutorial.id==='full-application-tour'){
+      // The tour is generated from current navigation and differs by role.
+      // Until it is separately versioned, retain its progress in the browser.
+      setSession(advanceGuidedTraining(session,1));
+      return;
+    }
+    const prefix=tutorial.id+':';
+    const existing=(session.completed||[]).filter(key=>key.startsWith(prefix))
+      .map(key=>Number(key.slice(prefix.length))).filter(Number.isInteger);
+    const indexes=[...new Set([...existing,Number(session.stepIndex||0)])].sort((a,b)=>a-b);
+    setSaving(true);
+    try{
+      await saveTrainingProgress(tutorial.id,indexes,indexes.length===tutorial.steps.length);
+      setSession(advanceGuidedTraining(session,1));
+    }catch(error){
+      setSyncError('Your step was not saved centrally. Please retry: '+(error.message||'Training service unavailable.'));
+    }finally{setSaving(false);}
+  }
   function exit(){
-    if(!window.confirm('Exit guided training? Your progress will stay saved in this browser.')) return;
+    if(!window.confirm('Exit guided training? Completed lessons already synchronized to your account will remain; the generated screen tour is browser-only.')) return;
     setSession(stopGuidedTraining({leaveTestingMode:true}));
   }
 
@@ -64,7 +87,7 @@ export default function GuidedTrainingOverlay(){
       <div className="sc-guided-training-bar">
         <strong>🎓 Guided Training</strong>
         <span>{trainingRoleLabel(session.role)}</span>
-        <span>Test mode + simulated writes enabled</span>
+        <span>Test Mode on · only supported actions are simulated</span>
         <span>{overallDone}/{overallTotal} steps</span>
         <button type="button" onClick={exit}>Exit training</button>
       </div>
@@ -82,9 +105,11 @@ export default function GuidedTrainingOverlay(){
         {!onExpectedPage&&step.route&&(
           <button type="button" className="sc-guided-training-open" onClick={goToStep}>Open the page for this step →</button>
         )}
+        {tutorial.id==='full-application-tour'&&<p className="sc-guided-training-readonly">The automatically generated navigation tour is saved in this browser only. Named role lessons synchronize centrally.</p>}
+        {syncError&&<p role="alert" className="sc-guided-training-warning">{syncError}</p>}
         <div className="sc-guided-training-actions">
           <button type="button" onClick={previous} disabled={(session.tutorialIndex||0)===0&&(session.stepIndex||0)===0}>← Back</button>
-          <button type="button" className="primary-button" onClick={next}>{overallDone+1>=overallTotal?'Finish training':'I completed this step →'}</button>
+          <button type="button" className="primary-button" onClick={next} disabled={saving}>{saving?'Saving…':overallDone+1>=overallTotal?'Finish training':'I completed this step →'}</button>
         </div>
         <details>
           <summary>Why test mode is on</summary>

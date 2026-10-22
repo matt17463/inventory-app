@@ -386,3 +386,17 @@
 @media(max-width:750px){.sc-guide-pdf-download{grid-template-columns:1fr}.sc-guide-pdf-frame{height:420px}}
 
 .sc-guide-wordpress-status{padding:1.05rem 1.2rem;background:var(--sc-surface,#fff);border:1px solid var(--sc-border,#d9dee7);border-left:4px solid #64748b;border-radius:11px}.sc-guide-wordpress-status p{line-height:1.55;font-size:.88rem;margin:.6rem 0}.sc-guide-wordpress-status strong{font-weight:800}
+
+
+/* Central employee training and manager certification. */
+.sc-training-central-status{padding:.65rem .9rem;border:1px solid var(--sc-border,#cbd5e1);border-radius:8px;font-size:.85rem}
+.sc-training-central-error{padding:.65rem .9rem;border-left:3px solid #b45309;background:var(--sc-surface-2,#fff7ed);font-size:.86rem}
+.sc-training-certification{padding:1.1rem;border:1px solid var(--sc-border,#cbd5e1);border-radius:12px;margin-top:1.5rem}
+.sc-training-certification h3{margin:0 0 .7rem}
+.sc-training-board-list{max-height:18rem;overflow-y:auto;margin:.8rem 0}
+.sc-training-board-list>div{border-bottom:1px solid var(--sc-border,#cbd5e1);padding:.6rem 0}
+.sc-training-board-list small{display:block;line-height:1.6;color:var(--sc-muted,#64748b)}
+.sc-training-signoff-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.7rem;margin-top:1rem}
+.sc-training-signoff-controls label{display:grid;gap:.3rem}
+.sc-training-signoff-controls textarea{min-height:5.5rem}
+.sc-training-signoff-controls button{align-self:end}
