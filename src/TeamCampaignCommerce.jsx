@@ -168,9 +168,9 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
           Publish live storefront</button>
       </div>}
       {canPublish&&isLive&&<div className="sc-team-close">
-        <p>Closing a campaign makes its dedicated Woo products drafts so direct product checkout links stop accepting new orders. Existing Woo orders remain intact.</p>
-        <button disabled={busy} onClick={()=>{if(window.confirm('Close this campaign and unpublish ALL of its dedicated WooCommerce products?'))
-          run(async()=>{await adminCall('close',{campaign_id:id});return 'Campaign closed and Woo products unpublished.';});}}>
+        <p>Closing the campaign disables its campaign storefront and does not modify WooCommerce products or existing orders. If you also need to stop direct purchases, archive the dedicated product separately in WooCommerce.</p>
+        <button disabled={busy} onClick={()=>{if(window.confirm('Close this campaign storefront? WooCommerce products will remain purchasable from their normal shop links.'))
+          run(async()=>{await adminCall('close',{campaign_id:id});return 'Campaign storefront closed. WooCommerce products remain unchanged.';});}}>
           Close store and stop checkout</button>
       </div>}
       {isClosed&&<p>Campaign closed. Past Woo orders remain in the existing production system.</p>}
