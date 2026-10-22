@@ -129,6 +129,13 @@ const wordpressAudit=JSON.parse(fs.readFileSync(path.join(src,'application-guide
 const auditReport=documentationCoverage({
  screens,dialogs:conditionalAudit.dialogs||[],plugins:wordpressAudit.plugins||[]
 });
+const auditHandoff=JSON.parse(fs.readFileSync(path.join(root,'docs','wordpress-audit','AUDIT_COMPLETE.json'),'utf8'));
+if(auditHandoff.status!==wordpressAudit.auditStatus)throw Error('WordPress audit report/registry status mismatch.');
+const inspectedWordPressScreens=wordpressAudit.plugins.reduce((sum,p)=>sum+
+ [...(p.adminScreens||[]),...(p.publicScreens||[])].length,0);
+const inspectedWordPressFields=wordpressAudit.plugins.reduce((sum,p)=>sum+
+ [...(p.adminScreens||[]),...(p.publicScreens||[])].reduce((n,page)=>n+(page.controls||[]).length,0),0);
+
 if(auditReport.invalid.length)throw Error('Documentation registry invalid: '+auditReport.invalid.join('; '));
 fs.writeFileSync(path.join(root,'public','documentation-audit-report.json'),
  JSON.stringify(auditReport,null,2)+'\n');
@@ -200,7 +207,7 @@ pdf.text('Complete User Guide',margin,181);
 pdf.setFontSize(10);pdf.setFont('helvetica','normal');
 pdf.text('NOVICE WALKTHROUGHS  -  OWNER SCENARIOS  -  ADVANCED OPERATIONS',margin,224);
 y=320;heading('Release reference '+GUIDE_VERSION,{level:2});
-para('This guide is built automatically from the application reference, navigation, training tutorials, and the names of on-screen controls found in the source code. It is intended to be read before making live changes.');
+para('This guide combines the application source with the October 22 live WordPress browser audit. The WordPress plugin inventory was checked, but the audit is partial. A visually observed control is not proof of saving, checkout, shipping, synchronization or printing.');
 callout('SAFETY FIRST','Source-derived control listings are an interface inventory, not proof that every control is visible to every role or that it is safe to click. Buttons that save, synchronize, delete, place orders, email, publish, receive, or change stock must be practiced in read-only training or under supervision.');
 para(chapterCount+' detailed guide chapters | '+screens.length+' navigation-linked screens | '+controlCount+' named interface controls and nested UI references.');
 para('Generated: '+new Date().toISOString().slice(0,10)+'. Application routes and plugin interfaces may change after this build. Consult the live screen for current labels.');
@@ -390,53 +397,47 @@ for(const tutorial of trainingTutorials){
  }
 }
 
-heading('Part VIII - Conditional Dialogs & External WordPress Plugin Audit',{level:1});
-para('A source-code scan inventories many page controls, but cannot verify hidden menus, modal dialogs, validation branches, access restrictions or externally installed WordPress plugins. The following records identify what is reviewed from code and what still requires browser inspection. Never treat source-reviewed as live-verified.');
-para('Audit status: '+auditReport.sourceReviewedDialogs+' of '+auditReport.dialogCount+
- ' conditional cases reviewed from source; '+auditReport.liveVerifiedDialogs+
- ' cases independently live-verified. WordPress: '+auditReport.pluginsLive+
- ' of '+auditReport.pluginCount+' registered plugins live-verified. Screenshots may be unavailable if privacy review is incomplete.');
-for(const d of conditionalAudit.dialogs||[]){
- heading(d.title+' | '+d.route,{level:2});
- mini('Audit status: '+d.status+' | Source: '+d.sourceFile+' | Trigger: '+d.trigger);
- para('Visible/eligible when: '+d.visibleWhen);
- for(const f of d.fields||[])bullet(f.name+': '+f.meaning);
- para('Before confirming: '+(d.confirmation||'Follow the on-screen approval requirements.'));
- para('Effect: '+d.result);
- if(d.errors?.length)mini('Errors/stop conditions: '+d.errors.join(' | '));
- if(d.trainingScenario)mini('Read-only training example: '+d.trainingScenario);
- if(d.status!=='live-verified')mini('LIVE AUDIT PENDING: Verify actual interface and capture a redacted screenshot using an authorized account.');
-}
-heading('WordPress plugin audit register',{level:2});
-para('These plugin entries are a maintained audit registry, NOT a claim that each plugin is active on the live WordPress site.');
+heading('Part VIII - WordPress Audit Evidence and Open Verification',{level:1});
+para('Audit completed October 22, 2026 with PARTIAL status. WordPress installed-plugin inventory: '+
+ auditHandoff.auditedCounts.installedPlugins+' plugins ('+auditHandoff.auditedCounts.activePlugins+' active, '+
+ auditHandoff.auditedCounts.inactivePlugins+' inactive), '+auditHandoff.auditedCounts.dropIns+
+ ' drop-ins. '+inspectedWordPressScreens+' screen/section references, '+inspectedWordPressFields+
+ ' actual observed field/control records. '+auditHandoff.auditedCounts.inventoryOnlyPlugins+
+ ' plugins received inventory-only coverage. No plugin has been fully certified end-to-end.');
+callout('READ THE VERIFICATION LEVEL','The full per-field novice and advanced descriptions are in Part III under the WordPress Audit Chapters. A verified screen means the administrator saw it, not that a save, migration, shipment, customer email, or transaction was executed. Never perform such operations just to complete documentation.');
+para('Conditional dialog audit: '+auditReport.dialogCount+' cases, '+auditReport.liveVerifiedDialogs+
+ ' narrowly live-verified shipping visibility cases. Existing application dialog examples remain source reviewed or pending. No raw WordPress screenshots were included.');
+heading('Important owner findings',{level:2});
+[
+ 'Client Storefronts installed 0.1.2 but repository code header 0.1.3. Do not assume equal behavior; compare actual deployed code in a separate controlled task.',
+ 'Skilled Crafting Product Options runs in observed Replacement mode while legacy option reading is enabled. Preserve existing order line metadata and test representative products before change.',
+ 'Several active SKU generators/bulk editors can potentially modify identifiers. Confirm one SKU owner before changing any Woo variation IDs and separately verify Supabase sync and blank pairing.',
+ 'WooCommerce core shipping and Advanced Free Shipping can overlap. Observed Kitsap County core free shipping: $200 minimum OR coupon; not necessarily the rule for every address or cart.',
+ 'Print Documents generation logging and browser auto-open do not prove physical printing, correct packing or handoff.',
+ 'Navigation uses both /shop-new/ and /find-your-store/ paths; verify intended customer journey before simplifying.',
+].forEach((v,i)=>bullet(v,i+1));
+heading('Partial verification inventory',{level:2});
+para('Each plugin listed below was included in the signed-in WordPress inventory. This section identifies how much of its UI was reviewed; it does not duplicate the 405 field definitions already in Part III.');
 for(const p of wordpressAudit.plugins||[]){
- heading(p.name+' | '+(p.installedVersion||p.versionFromRepository||'Version unknown'),{level:3});
- para(p.businessPurpose||'Purpose needs verification.');
- mini('Status: '+p.reviewStatus+' | Activation: '+p.activationStatus+
-  ' | Code source: '+(p.source||'External / not available in repository'));
- const pluginScreens=[...(p.adminScreens||[]),...(p.publicScreens||[])];
- for(const page of pluginScreens){
-  heading(page.name+' | '+(page.verified?'Live reviewed':'Not verified'),{level:3});
-  mini('Location: '+(page.pathHint||page.url||'Not yet captured'));
-  if(page.conditions?.length)mini('Visibility conditions: '+page.conditions.join('; '));
-  if(!page.controls?.length)mini('Field-by-field audit pending.');
-  for(const control of page.controls||[]){
-   bullet((control.label||control.name||'Control')+': '+(control.purpose||control.meaning||'Purpose not yet documented'));
-   if(control.when)mini('Appears when: '+control.when);
-   if(control.effect)mini('Effect: '+control.effect);
-   if(control.errors?.length)mini('Errors: '+control.errors.join(' | '));
-  }
-  if(page.screenshot)mini('Redacted screenshot reference (review required): '+page.screenshot);
- }
- if(p.securityNotes?.length)mini('Safety: '+p.securityNotes.join(' | '));
+ const pages=[...(p.adminScreens||[]),...(p.publicScreens||[])];
+ const ctrls=pages.reduce((n,x)=>n+(x.controls||[]).length,0);
+ mini(p.name+' / '+(p.installedVersion||'unknown')+' / '+p.activationStatus+
+  ' / '+pages.length+' observed sections / '+ctrls+' controls / '+p.reviewStatus);
 }
-if(wordpressAudit.auditStatus!=='complete')callout('WORDPRESS AUDIT OPEN',
- 'The live WordPress plugin inventory and actual admin-screen walkthrough have not yet been verified by ChatGPT Work. The owner must review the Work audit before this guide can be called exhaustive.');
+heading('Important remaining work',{level:2});
+[
+ 'Twenty-nine installed plugins need their plugin-specific administrative screens and conditional options reviewed.',
+ 'All consequential save, checkout, product sync, plugin compatibility, SKU rewrite, document print, label purchase and order/invoice behaviors need safe nonproduction evidence.',
+ 'Role/device differences, customer forms, artwork request-level approval dialogs and many shipping zone/coupon conditions are not exhaustively verified.',
+ 'No sanitized live WordPress screenshots were retained; visual tutorials can use approved fictional screenshots after a safe capture workflow.',
+ 'No documentation status should be upgraded to complete until these gaps are closed and the business owner reviews high-impact settings.'
+].forEach((v,i)=>bullet(v,i+1));
+if(auditHandoff.status!=='complete')callout('AUDIT PARTIALLY COMPLETE','The WordPress inventory is verified but operating- and dialog-level coverage is incomplete. Keep this edition labelled partially verified; use the admin Documentation Audit tab to track remaining work.');
 
 heading('Guide coverage and maintenance notes',{level:1});
 para('This PDF is built from '+screens.length+' navigation-linked screens, '+extras.length+' additional JSX components, '+chapterCount+' reference chapters, '+trainingTutorials.length+' named training modules and '+controlCount+' unique source-observed controls. A source scan cannot prove all controls are visible or that each dynamic field was captured. It is a high-coverage development reference rather than a substitute for checking the live interface.');
-para('Update this documentation whenever a workflow, label, option, state or plugin changes. The online Application Guide is the living resource; this PDF is an offline snapshot generated with the deployed source.');
+para('Update this manual after every new application workflow, plugin update or authenticated audit. The online Application Guide and its Documentation Audit tab track which behaviors have actually been verified. This PDF is a dated snapshot, not a guarantee of current production state.');
 finish();
 fs.mkdirSync(path.dirname(out),{recursive:true});
 pdf.save(out);
-console.log(JSON.stringify({file:out,pages:pdf.getNumberOfPages(),bytes:fs.statSync(out).size,screens:screens.length,extraComponents:extras.length,controls:controlCount,chapters:chapterCount},null,2));
+console.log(JSON.stringify({file:out,pages:pdf.getNumberOfPages(),bytes:fs.statSync(out).size,screens:screens.length,extraComponents:extras.length,controls:controlCount,chapters:chapterCount,wordpressPlugins:wordpressAudit.plugins.length,wordpressInspectedScreens:inspectedWordPressScreens,wordpressObservedFields:inspectedWordPressFields,auditStatus:auditHandoff.status},null,2));
