@@ -91,7 +91,7 @@ export default function WordPressCommerceIntegrity(){
     </details>)}</div>
     {shipping.inaccessibleZones?.length>0&&<p className="sc-preflight-warning">Some zones could not be read: {shipping.inaccessibleZones.join(', ')}.</p>}
    </>:<p className="sc-preflight-warning">Live Woo shipping method data {shipping?status(shipping):'not requested'}. The dated WordPress audit remains the only available evidence.</p>}
-   <p>Work found a published 100% coupon with free shipping enabled. **The owner confirmed it is intentional; preserve the existing coupon and free-shipping behavior.** Its intended audience and safeguards have not been separately specified. Some Spirit Wear and Uniform classes intentionally have $0 delivery fees; Heavy fallback has a blank class fee requiring explicit owner policy. **No checkout totals were calculated.** Test staging carts at $199.99/$200/$200.01 with coupons, classes and addresses.</p>
+   <p>Work found a published 100% coupon with free shipping enabled. The owner confirmed it is intentional; preserve the existing coupon and free-shipping behavior. Its intended audience and safeguards have not been separately specified. Some Spirit Wear and Uniform classes intentionally have $0 delivery fees; Heavy fallback has a blank class fee requiring explicit owner policy. No checkout totals were calculated. Test staging carts at $199.99/$200/$200.01 with coupons, classes and addresses.</p>
   </section>
   <section className="card sc-preflight-caution">
    <h2>Owner decisions required before any remediation</h2>
