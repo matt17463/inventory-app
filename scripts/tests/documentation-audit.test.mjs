@@ -72,7 +72,7 @@ test('admin audit is hidden from marketing users, and publicly served screenshot
 test('PDF generator includes conditional dialog annex, plugin records and coverage export',()=>{
  const pdf=read('../../scripts/build-application-guide-pdf.mjs');
  assert.match(pdf,/documentation-audit-report\.json/);
- assert.match(pdf,/Part VIII - Conditional Dialogs & External WordPress Plugin Audit/);
+ assert.match(pdf,/Part VIII - WordPress Audit Evidence and Open Verification/);
  assert.match(pdf,/WORDPRESS AUDIT OPEN/);
  assert.match(pdf,/liveVerifiedDialogs/);
  assert.match(pdf,/pluginScreens/);
