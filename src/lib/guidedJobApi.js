@@ -7,7 +7,7 @@ function successOrUnavailable(key,result,unavailable){
 export async function loadGuidedJobEvidence(jobId){
  const numeric=Number(jobId);
  if(!Number.isSafeInteger(numeric)||numeric<=0)throw Error('Select a valid production job.');
- const [jobResult,itemsResult,reservationsResult,travelersResult,qcResult,handoffsResult,notesResult,fulfillmentResult,artworkLinksResult,photosResult,packingResult,pickupResult,revisionChecksResult]=await Promise.all([
+ const [jobResult,itemsResult,reservationsResult,travelersResult,qcResult,handoffsResult,notesResult,fulfillmentResult,artworkLinksResult,photosResult,packingResult,pickupResult,revisionChecksResult,deliveryResult,customerMessagesResult]=await Promise.all([
    supabase.from('jobs').select('id,customer_name,job_name,order_source,status,due_date,woocommerce_order_id,manual_order_id,woo_order_number,woo_payment_status,payment_received,source_invoice_number,production_started_at,production_completed_at,production_priority,notes').eq('id',numeric).single(),
    supabase.from('job_items').select('id,job_id,quantity,status,blank_product_id,inventory_required,order_sku,sku,ordered_product_name,item_name,selected_color,selected_size,pairing_warning').eq('job_id',numeric).order('id').limit(500),
    supabase.from('inventory_reservations').select('id,job_id,job_item_id,quantity,quantity_reserved,status,blank_product_id').eq('job_id',numeric).limit(500),
@@ -21,6 +21,8 @@ export async function loadGuidedJobEvidence(jobId){
    supabase.from('sc_job_packing_line_events').select('id,job_id,job_item_id,packed_quantity,packaging_note,recorded_by,created_at').eq('job_id',numeric).order('created_at',{ascending:false}).limit(700),
    supabase.from('sc_job_pickup_acknowledgments').select('id,job_id,recipient_name,relationship,package_count,signed_method,signed_at').eq('job_id',numeric).limit(1),
    supabase.from('sc_job_artwork_revision_checks').select('id,job_id,handoff_id,revision_label,approval_reference,production_filename,review_note,reviewed_at').eq('job_id',numeric).order('reviewed_at',{ascending:false}).limit(100),
+   supabase.from('sc_job_delivery_confirmations').select('id,job_id,proof_type,proof_reference,note,verified_by,created_at').eq('job_id',numeric).order('created_at',{ascending:false}).limit(60),
+   supabase.from('sc_job_customer_messages').select('id,job_id,event_type,state,recipient_email,subject,message_body,source_draft_id,recorded_by,created_at').eq('job_id',numeric).order('created_at',{ascending:false}).limit(100),
  ]);
  if(jobResult.error)throw Error('Could not read this production job: '+failMessage(jobResult.error));
  const unavailable={};
@@ -45,7 +47,11 @@ export async function loadGuidedJobEvidence(jobId){
  const revisionChecks=successOrUnavailable('revisionChecks',revisionChecksResult,unavailable);
  if(packing.length===700)unavailable.packing='Packing event history truncated; review individual job line counts.';
  if(revisionChecks.length===100)unavailable.revisionChecks='Artwork version review history truncated.';
- return {job:jobResult.data,items,reservations,travelers,qc,handoffs,notes,fulfillment,artworkLinks,photos,packing,pickup,revisionChecks,unavailable};
+ const deliveryConfirmations=successOrUnavailable('deliveryConfirmations',deliveryResult,unavailable);
+ const customerMessages=successOrUnavailable('customerMessages',customerMessagesResult,unavailable);
+ if(deliveryConfirmations.length===60)unavailable.deliveryConfirmations='Only the latest 60 delivery confirmations were read.';
+ if(customerMessages.length===100)unavailable.customerMessages='Only the latest 100 customer communications were read.';
+ return {job:jobResult.data,items,reservations,travelers,qc,handoffs,notes,fulfillment,artworkLinks,photos,packing,pickup,revisionChecks,deliveryConfirmations,customerMessages,unavailable};
 }
 export async function addGuidedJobNote({jobId,kind,note}){
  const id=Number(jobId),text=String(note||'').trim();
