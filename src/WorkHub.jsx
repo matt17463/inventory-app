@@ -221,6 +221,7 @@ export default function WorkHub(){
          Item #{r.job_item_id||'—'} · {r.status||'Unknown state'} · Reserved {r.quantity_reserved??r.quantity??'—'}
         </p>):<p>No reservation records found. Confirm with Purchasing.</p>}</div>
        </div>}
+       <p><Link to={'/production-photo-proof?job='+currentId}>View / upload photos for this job →</Link></p>
        <GuidedJobPhaseTwo key={currentId} jobId={currentId} evidence={detail} editable={editable} onRefresh={refreshSelected}/>
        <section className="sc-hub-handoff">
         <div className="sc-hub-handoff-title"><h4>Owner / family handoff notes</h4>
