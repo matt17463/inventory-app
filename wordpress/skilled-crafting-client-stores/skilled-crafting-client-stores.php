@@ -154,7 +154,10 @@ function scs_cart_store() {
 }
 add_filter('body_class',function($classes){
     if (is_singular('sc_client_store')) $classes[]='scs-wp-storefront';
-    if ((is_checkout() || is_cart()) && scs_cart_store()) $classes[]='scs-client-checkout';
+    if ((is_checkout() || is_cart()) && scs_cart_store()) {
+        $classes[]='scs-client-checkout';
+        $classes[]='scs-checkout-'.scs_template(scs_read(scs_cart_store(),'template'));
+    }
     return $classes;
 });
 add_action('woocommerce_before_checkout_form',function(){
@@ -223,6 +226,9 @@ add_action('rest_api_init',function(){
             $data=['post_type'=>'sc_client_store','post_title'=>$title,'post_name'=>$slug,
                    'post_status'=>$status,'post_content'=>'[sc_client_storefront]'];
             if ($existing) $data['ID']=(int)$existing[0];
+            $conflict=get_page_by_path($slug,OBJECT,'sc_client_store');
+            if ($conflict && (!$existing || (int)$conflict->ID!==(int)$existing[0]))
+                return new WP_Error('store_slug_taken','The WordPress store slug is already in use',['status'=>409]);
             $id=wp_insert_post(wp_slash($data),true);
             if (is_wp_error($id))return $id;
             $map=[
