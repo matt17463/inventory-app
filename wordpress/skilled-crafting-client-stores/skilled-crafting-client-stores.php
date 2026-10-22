@@ -121,6 +121,7 @@ add_action('template_redirect',function(){
     $id=get_queried_object_id();
     if (get_post_status($id)!=='publish') return;
     WC()->session->set('scs_store_id',(int)$id);
+    if (method_exists(WC()->session,'set_customer_session_cookie')) WC()->session->set_customer_session_cookie(true);
 });
 function scs_cart_store() {
     if (!function_exists('WC') || !WC()->session || !WC()->cart) return null;
@@ -144,11 +145,34 @@ add_action('woocommerce_before_checkout_form',function(){
     $id=scs_cart_store();
     if ($id) echo '<div class="scs-checkout-banner"><strong>'.esc_html(scs_read($id,'organization',get_the_title($id))).' checkout</strong><span>'.esc_html(scs_read($id,'delivery','Shipping and pickup confirmed below.')).'</span></div>';
 },5);
-add_action('woocommerce_blocks_enqueue_checkout_block_scripts_after',function(){
-    // CSS is applied separately to Checkout Blocks; classic hooks may not appear in blocks.
+add_filter('the_content',function($content){
+    if (function_exists('is_checkout') && is_checkout() && is_main_query() && in_the_loop()
+        && function_exists('has_block') && has_block('woocommerce/checkout',get_the_ID())) {
+        $id=scs_cart_store();
+        if ($id) {
+            $banner='<div class="scs-checkout-banner"><strong>'.
+              esc_html(scs_read($id,'organization',get_the_title($id))).' checkout</strong><span>'.
+              esc_html(scs_read($id,'delivery','Shipping and pickup confirmed below.')).'</span></div>';
+            return $banner.$content;
+        }
+    }
+    return $content;
+},21);
+add_shortcode('sc_client_storefront',function(){return is_singular('sc_client_store')?scs_store_markup(get_the_ID()):'';});
+add_shortcode('sc_client_store_directory',function(){
+    $pages=get_posts(['post_type'=>'sc_client_store','post_status'=>'publish','numberposts'=>100,'orderby'=>'title','order'=>'ASC']);
+    if (!$pages) return '<p>New team stores are being prepared. Please check back soon.</p>';
+    $html='<div class="scs-directory"><h2>Find Your Store</h2><p>Choose your organization to browse its approved merchandise.</p><div class="scs-directory-grid">';
+    foreach ($pages as $page) {
+        $logo=wp_get_attachment_image((int)scs_read($page->ID,'logo_media_id',0),'thumbnail');
+        $html.='<a class="scs-directory-item" href="'.esc_url(get_permalink($page->ID)).'">'.$logo.
+          '<strong>'.esc_html(scs_read($page->ID,'organization',$page->post_title)).'</strong>'.
+          '<span>Open storefront →</span></a>';
+    }
+    return $html.'</div></div>';
 });
 add_action('wp_enqueue_scripts',function(){
-    if (!is_singular('sc_client_store') && !is_cart() && !is_checkout()) return;
+    if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !is_page()) return;
     wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.0');
     if (is_cart() || is_checkout()) {
         $id=scs_cart_store();if (!$id)return;
