@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:vite && npm run build:verify",
+    "prebuild": "npm run guide:pdf",
+    "guide:pdf": "node scripts/build-application-guide-pdf.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "schema:contract": "python3 scripts/build_database_contract.py && python3 scripts/generate_step2_sql.py",
