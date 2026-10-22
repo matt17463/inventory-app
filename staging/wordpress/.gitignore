@@ -1,0 +1,8 @@
+.env
+packages/
+*.zip
+*.sql
+*.sqlite
+*.log
+runtime/
+screenshots/

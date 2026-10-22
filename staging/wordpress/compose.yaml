@@ -1,0 +1,72 @@
+name: skilledcrafting-fictional-staging
+services:
+  db:
+    image: mariadb:11.4
+    restart: "no"
+    environment:
+      MARIADB_DATABASE: fictional_wordpress
+      MARIADB_USER: fictional_wp
+      MARIADB_PASSWORD: ${STAGE_DATABASE_PASSWORD:?Missing staging password}
+      MARIADB_ROOT_PASSWORD: ${STAGE_DB_ROOT_PASSWORD:?Missing staging root password}
+    volumes:
+      - fictional_db:/var/lib/mysql
+    networks: [internal_only]
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 8s
+      timeout: 5s
+      retries: 20
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8088:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: fictional_wordpress
+      WORDPRESS_DB_USER: fictional_wp
+      WORDPRESS_DB_PASSWORD: ${STAGE_DATABASE_PASSWORD:?Missing staging password}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_ENVIRONMENT_TYPE', 'local');
+        define('DISABLE_WP_CRON', true);
+        define('WP_AUTO_UPDATE_CORE', false);
+        define('AUTOMATIC_UPDATER_DISABLED', true);
+        define('WP_HTTP_BLOCK_EXTERNAL', true);
+    volumes:
+      - fictional_wp:/var/www/html
+      - ./packages/woocommerce:/var/www/html/wp-content/plugins/woocommerce:ro
+      - ../../wordpress/skilled-crafting-client-stores:/var/www/html/wp-content/plugins/skilled-crafting-client-stores:ro
+      - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+    networks: [internal_only]
+
+  wpcli:
+    image: wordpress:cli-php8.3
+    profiles: [maintenance]
+    user: "33:33"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: fictional_wordpress
+      WORDPRESS_DB_USER: fictional_wp
+      WORDPRESS_DB_PASSWORD: ${STAGE_DATABASE_PASSWORD:?Missing staging password}
+    volumes:
+      - fictional_wp:/var/www/html
+      - ./packages/woocommerce:/var/www/html/wp-content/plugins/woocommerce:ro
+      - ../../wordpress/skilled-crafting-client-stores:/var/www/html/wp-content/plugins/skilled-crafting-client-stores:ro
+      - ./mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+      - ./fixtures:/fixtures:ro
+    networks: [internal_only]
+
+volumes:
+  fictional_db: {}
+  fictional_wp: {}
+
+networks:
+  internal_only:
+    internal: true

@@ -1,0 +1,29 @@
+{
+  "status": "not-deployed",
+  "environmentType": null,
+  "siteUrl": null,
+  "createdAt": null,
+  "checkedBy": null,
+  "extraHostingChargeUSD": null,
+  "costVerified": false,
+  "privateAccessProtected": false,
+  "separateDatabase": false,
+  "fictionalDataOnly": false,
+  "wpCronDisabled": false,
+  "paymentsDisabled": false,
+  "mailDisabled": false,
+  "webhooksDisabled": false,
+  "externalHttpBlocked": false,
+  "rawCurlOutboundBlocked": false,
+  "supabaseDisconnected": false,
+  "productionSecretsAbsent": false,
+  "carrierPurchasesDisabled": false,
+  "safeToRunFictionalWrites": false,
+  "verificationEvidence": [],
+  "remainingRisks": [
+    "This is only a template. SiteGround site has not been created and Docker containers have not been run.",
+    "Staging can never be marked safe solely because WP cron is disabled or email filters are installed.",
+    "Work must verify SiteGround entitlement and no incremental charges before creating a new installation."
+  ],
+  "ownerApprovedScope": "New fictional-data staging only. No production data or live WordPress/plugin/order changes. Extra spending requires separate approval."
+}
