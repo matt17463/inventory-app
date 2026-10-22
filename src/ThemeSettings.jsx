@@ -10,6 +10,12 @@ import {
 } from './components/UIPrimitives';
 import DarkModeToggle from './components/DarkModeToggle';
 import { THEME_PRESETS, getThemePreset } from './themePresets';
+import {
+  THEME_GALLERY_STORAGE_KEY,
+  getVisibleThemePresets,
+  normalizeHiddenThemeIds,
+  toggleHiddenThemeId,
+} from './themeGalleryPreferences';
 import { useTheme } from './ui/themeContext';
 
 function ThemePreviewCard({ preset, selected, onSelect }) {
@@ -78,6 +84,7 @@ function ThemePreviewCard({ preset, selected, onSelect }) {
           {selected ? <StatusBadge status="Selected" tone="success" /> : null}
         </div>
         <p>{preset.description}</p>
+        {preset.layout ? <small className="sc-theme-layout-note"><strong>Layout:</strong> {preset.layout}</small> : null}
         <small><strong>Best for:</strong> {preset.bestFor}</small>
         <div className="sc-theme-traits" aria-label={`${preset.name} graphical traits`}>
           {preset.traits.map((trait) => <span key={trait}>{trait}</span>)}
@@ -131,6 +138,27 @@ export default function ThemeSettings() {
     resetTheme,
   } = useTheme();
   const activePreset = getThemePreset(theme.preset);
+  const [hiddenThemeIds, setHiddenThemeIds] = React.useState(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(THEME_GALLERY_STORAGE_KEY) || '[]');
+      return normalizeHiddenThemeIds(stored, THEME_PRESETS);
+    } catch {
+      return [];
+    }
+  });
+  const visiblePresets = getVisibleThemePresets(THEME_PRESETS, hiddenThemeIds, theme.preset);
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem(THEME_GALLERY_STORAGE_KEY, JSON.stringify(hiddenThemeIds));
+    } catch {
+      // Browsers without storage can still manage the gallery for this session.
+    }
+  }, [hiddenThemeIds]);
+
+  const toggleGalleryTheme = (themeId) => {
+    setHiddenThemeIds((current) =>
+      toggleHiddenThemeId(current, themeId, THEME_PRESETS, theme.preset));
+  };
 
   const handleReset = () => {
     const confirmed = window.confirm(
@@ -168,10 +196,10 @@ export default function ThemeSettings() {
 
       <SectionCard
         title="Choose a visual theme"
-        description="Each preset has its own graphical design language. Select one for an immediate live preview; every preset supports light, dark, and system appearance modes."
+        description="Each preset has a distinct navigation, panel, and dashboard treatment. Changes are immediately visible throughout the application, and hidden presets are always recoverable."
       >
         <div className="sc-theme-choice-grid">
-          {THEME_PRESETS.map((preset) => (
+          {visiblePresets.map((preset) => (
             <ThemePreviewCard
               key={preset.id}
               preset={preset}
@@ -180,6 +208,46 @@ export default function ThemeSettings() {
             />
           ))}
         </div>
+        <details className="sc-theme-gallery-manager">
+          <summary>
+            Manage visible themes ({visiblePresets.length} shown, {THEME_PRESETS.length - visiblePresets.length} hidden)
+          </summary>
+          <p className="helper-text">
+            Hide themes you do not want in the selector. No themes are deleted, and your current
+            theme cannot be hidden until you select another. Hidden themes can be restored here.
+            These choices apply to this browser only.
+          </p>
+          <div className="sc-theme-gallery-manager__list">
+            {THEME_PRESETS.map((preset) => {
+              const hidden = hiddenThemeIds.includes(preset.id) && theme.preset !== preset.id;
+              const active = theme.preset === preset.id;
+              return (
+                <div className="sc-theme-gallery-manager__item" key={preset.id}>
+                  <span>
+                    <span aria-hidden="true">{preset.icon}</span>
+                    <strong>{preset.name}</strong>
+                    <small>{active ? 'Currently applied' : hidden ? 'Hidden from gallery' : 'Visible in gallery'}</small>
+                  </span>
+                  <button
+                    type="button"
+                    className="sc-theme-gallery-manager__toggle"
+                    onClick={() => toggleGalleryTheme(preset.id)}
+                    disabled={active}
+                    aria-label={active ? `Current theme: ${preset.name}` : `${hidden ? 'Show' : 'Hide'} ${preset.name} in theme gallery`}
+                    aria-pressed={!hidden}
+                  >
+                    {active ? 'In use' : hidden ? 'Show' : 'Hide'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {hiddenThemeIds.length > 0 ? (
+            <ActionButton tone="secondary" onClick={() => setHiddenThemeIds([])}>
+              Restore All Themes
+            </ActionButton>
+          ) : null}
+        </details>
       </SectionCard>
 
       <SectionCard
