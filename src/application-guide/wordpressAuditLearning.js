@@ -1,5 +1,5 @@
-import wordpressAudit from './wordpressPluginAudits.json';
-import conditionalAudit from './conditionalDialogs.json';
+import wordpressAudit from './wordpressPluginAudits.json' with { type: 'json' };
+import conditionalAudit from './conditionalDialogs.json' with { type: 'json' };
 
 const field=(c)=>[
   (c.label||'Control')+' ('+(c.type||'control')+').',
