@@ -71,18 +71,28 @@ create index if not exists sc_job_travelers_job_idx on public.sc_job_travelers(j
 
 create or replace function public.sc_guard_job_traveler_insert()
 returns trigger language plpgsql security invoker set search_path = '' as $$
-declare v public.sc_manufacturing_recipe_versions%rowtype; item public.job_items%rowtype; recipe public.sc_manufacturing_recipes%rowtype;
+declare v public.sc_manufacturing_recipe_versions%rowtype; item public.job_items%rowtype; recipe public.sc_manufacturing_recipes%rowtype; material public.sc_material_recipes%rowtype;
 begin
   select * into v from public.sc_manufacturing_recipe_versions where id=new.recipe_version_id and status='approved';
   if not found then raise exception 'A verified and approved recipe version is required' using errcode='23514'; end if;
   select * into item from public.job_items where id=new.job_item_id and job_id=new.job_id;
   if not found then raise exception 'The job item does not belong to this job' using errcode='23514'; end if;
   select * into recipe from public.sc_manufacturing_recipes where id=v.recipe_id;
+  if v.machine_settings_id is not null then
+    select * into material from public.sc_material_recipes where id=v.machine_settings_id and status='approved';
+    if not found then raise exception 'Linked material settings are not currently approved' using errcode='23514'; end if;
+  end if;
   new.recipe_snapshot := jsonb_build_object(
     'recipe_name',recipe.name,'garment_type',recipe.garment_type,'decoration_method',recipe.decoration_method,
     'recipe_id',v.recipe_id,'recipe_version_id',v.id,'revision',v.revision,
     'placements',v.placements,'process_steps',v.process_steps,'packaging',v.packaging,
     'production_notes',v.production_notes,'machine_settings_id',v.machine_settings_id,
+    'machine_settings',case when material.id is null then null else jsonb_build_object(
+      'machine_model',material.machine_model,'machine_type',material.machine_type,
+      'operation',material.operation,'material_name',material.material_name,
+      'material_sku',material.material_sku,'settings',material.settings,
+      'safety_notes',material.safety_notes,'version',material.version,'approved_at',material.approved_at)
+    end,
     'artwork_asset_id',v.artwork_asset_id,'approved_at',v.approved_at,
     'blank',jsonb_build_object('brand',item.brand,'style',item.selected_style,'color',item.color,'size',item.size,'sku',coalesce(item.order_sku,item.sku),'product_type',item.product_type),
     'item_name',coalesce(item.ordered_product_name,item.item_name,item.name),
