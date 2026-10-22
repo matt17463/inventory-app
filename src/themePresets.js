@@ -145,6 +145,67 @@ export const THEME_PRESETS = [
       text: '#1c252c',
     },
   },
+
+  {
+    id: 'ecom-canvas',
+    name: 'Ecom Canvas',
+    icon: '▤',
+    category: 'Editorial dashboard',
+    visualStyle: 'ecom',
+    layout: 'Split navigation and editorial KPI cards',
+    description: 'A bright commerce dashboard with a light navigation workspace, editorial metrics, clean hairline charts, and quiet orange highlights.',
+    bestFor: 'Daily operations, inventory summaries, WooCommerce orders, and purchasing',
+    traits: ['Light sidebar', 'Editorial metrics', 'Graph-paper details', 'Compact insights'],
+    preview: {
+      background: '#f0f2f5', panel: '#ffffff', sidebar: '#ffffff',
+      primary: '#e95d35', accent: '#0e9d8a', text: '#202b37',
+    },
+  },
+  {
+    id: 'aurora-command',
+    name: 'Aurora Command',
+    icon: '✦',
+    category: 'Immersive dark',
+    visualStyle: 'aurora',
+    layout: 'Floating glass console and layered panels',
+    description: 'An immersive midnight control deck, with distinct layered glass panels, vibrant aurora highlights, navigation capsules, and luminous charts.',
+    bestFor: 'Equipment monitoring, late-shift production, and overview dashboards',
+    traits: ['Glass consoles', 'Neon data strips', 'Floating navigation', 'Luminous charts'],
+    preview: {
+      background: '#070b2a', panel: '#151e4a', sidebar: '#0d163e',
+      primary: '#9275ff', accent: '#24c9e5', text: '#f3f5ff',
+    },
+  },
+  {
+    id: 'prism-ledger',
+    name: 'Prism Ledger',
+    icon: '◧',
+    category: 'Financial workspace',
+    visualStyle: 'ledger',
+    layout: 'Dual-rail workspace with report cards',
+    description: 'A polished finance-and-reporting workspace with a narrow dark utility rail, distinct white data panels, purple graphs, and green performance markers.',
+    bestFor: 'Sales, pricing, purchasing, invoicing, analytics, and contractor reports',
+    traits: ['Dual-rail feel', 'Report panels', 'Purple graph accents', 'Clear transactions'],
+    preview: {
+      background: '#e9eaf1', panel: '#ffffff', sidebar: '#171522',
+      primary: '#7652f4', accent: '#13aa78', text: '#252536',
+    },
+  },
+  {
+    id: 'workflow-gallery',
+    name: 'Workflow Gallery',
+    icon: '◫',
+    category: 'Project canvas',
+    visualStyle: 'workflow',
+    layout: 'Floating canvas and timeline-like cards',
+    description: 'A playful project-management canvas with pastel task panels, timeline-inspired card treatments, a pill-shaped toolbar, and airy navigation.',
+    bestFor: 'Production board, artwork requests, team orders, training, and projects',
+    traits: ['Pastel task lanes', 'Floating shell', 'Timeline cards', 'Soft gradients'],
+    preview: {
+      background: '#eae7f9', panel: '#ffffff', sidebar: '#ffffff',
+      primary: '#7667e9', accent: '#ea85bb', text: '#292840',
+    },
+  },
 ];
 
 export function normalizeThemePreset(presetId) {
