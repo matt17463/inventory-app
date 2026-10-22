@@ -40,7 +40,7 @@ export async function handler(event){
       return jsonResponse(400,{success:false,error:'Unsupported campaign action'},event);
     const c=await getCampaign(sb,body.campaign_id);
     if(action==='add'){
-      if(!canEdit(c))throw Error('Add products before publishing or use a new campaign.');
+      if(!canEdit(c)||c.customer_approval_at)throw Error('Change the product assortment before approval; a previously approved storefront must be reapproved.');
       if(body.confirm_dedicated!==true)throw Error('Confirm this WooCommerce product is dedicated to this school/team campaign.');
       const productId=Number(body.woo_product_id);
       if(!Number.isSafeInteger(productId)||productId<=0)throw Error('Choose a Woo product.');
@@ -53,7 +53,7 @@ export async function handler(event){
       if(error)throw error;return jsonResponse(200,{success:true,product:data},event);
     }
     if(action==='remove'){
-      if(!canEdit(c))throw Error('Published campaign assortments are locked.');
+      if(!canEdit(c)||c.customer_approval_at)throw Error('Approved/published product assortments are locked.');
       if(!validId(body.entry_id))throw Error('Select a campaign product.');
       const {error}=await sb.from('sc_team_store_products').delete().eq('campaign_id',c.id).eq('id',body.entry_id);
       if(error)throw error;return jsonResponse(200,{success:true},event);
@@ -72,6 +72,7 @@ export async function handler(event){
       if(!c.customer_approval_at)throw Error('Record confirmed client approval before opening the store.');
       const slug=slugify(body.slug||c.storefront_slug||c.store_name);
       if(!/^[a-z0-9][a-z0-9-]{2,59}$/.test(slug))throw Error('A valid store slug is required.');
+      if(slug!==c.storefront_slug)throw Error('Save the URL in WordPress Store Design before publishing; the approved draft slug must match.');
       if(c.store_close_date && c.store_close_date < pacificDate())throw Error('Ordering deadline has passed.');
       const products=await getProducts(sb,c.id);if(!products.length)throw Error('At least one Woo product is required.');
       await wcCategory(c.wp_category_id);
