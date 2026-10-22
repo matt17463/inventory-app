@@ -1576,14 +1576,14 @@ guideChapters.push({
  description:'Follow the October 22 Work read-only review (PR #106). No customer charge error, SKU corruption, or cross-client disclosure was demonstrated, and no live commerce changes have been authorized.',
  sections:[
   section('commerce-owner-coupon-policy','Urgent owner review: confidential 100% coupon with free shipping',
-   'The browser audit found a published coupon configured for 100% discount and free shipping, without observed product, user, expiry or usage limitations. This is a settings finding, not proof of abuse.',
+   'The browser audit found a published coupon configured for 100% discount and free shipping. The owner subsequently confirmed this coupon is intentional. No misuse was observed and no change to its discount or shipping behavior has been authorized.',
    {relatedRoutes:['/wordpress-integrity','/application-guide'],
     steps:[
      'As WordPress owner, review the coupon privately under WooCommerce > Marketing > Coupons. Never copy the code or discount link into this guide or a customer message.',
-     'Confirm whether it is intended for internal samples, marketing giveaways or privileged customer use, and examine legitimate usage before altering its access.',
-     'If not intended to be broadly redeemable, explicitly approve the narrowest restrictions, expiry or disabling path after recording current settings and rollback requirements.',
+     'The owner confirmed coupon intent; its intended audience and access-control details were not specified. Review them only in a separate confidential policy conversation if needed.',
+     'Preserve the existing coupon without expiry, restriction, disabling or changes to its free-shipping flag. A subsequent alteration requires new explicit owner approval.',
      'Test intended coupon eligibility in a truly isolated WordPress fixture, not with real customer orders.',
-     'Record owner decision before applying any production changes.'
+     'Record coupon intent as confirmed; do not interpret this confirmation as approval of unrelated shipping, SKU or storefront changes.'
     ],warnings:['No coupon was applied, no discount abuse was observed and a coupon settings page alone cannot prove real checkout eligibility.']}),
   section('commerce-storefront-safe-upgrade','Stage the Client Storefronts 0.1.3 context safeguards',
    'Installed 0.1.2 PHP and CSS were compared with repository 0.1.3: new context resolver, client-category related product filter and private-ish history widget suppression are absent in 0.1.2.',
