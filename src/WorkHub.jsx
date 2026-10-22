@@ -44,7 +44,7 @@ export default function WorkHub(){
  const [rows,setRows]=useState([]);
  const [search,setSearch]=useState('');
  const [filter,setFilter]=useState('active');
- const [selectedId,setSelectedId]=useState(()=>params.get('job')||'');
+ const selectedId=params.get('job')||'';
  const [boardBusy,setBoardBusy]=useState(true);
  const [boardError,setBoardError]=useState('');
  const [detail,setDetail]=useState(null);
@@ -63,7 +63,6 @@ export default function WorkHub(){
   finally{setBoardBusy(false);}
  }
  useEffect(()=>{reloadBoard();},[]);
- useEffect(()=>{const id=params.get('job')||'';if(id&&id!==selectedId)setSelectedId(id);},[params,selectedId]);
 
  const counts=useMemo(()=>stageCount(rows),[rows]);
  const visible=useMemo(()=>rows.filter(row=>{
@@ -71,6 +70,7 @@ export default function WorkHub(){
   if(filter==='active'&&['completed','cancelled'].includes(step))return false;
   if(filter==='attention'){
    const risk=dueRisk(row.due_date||row.order_due_date).kind;
+   if(['completed','cancelled'].includes(step))return false;
    if(!['needs_attention','on_hold'].includes(step)&&!row.blocking_issues?.length&&!['late','soon'].includes(risk))return false;
   }
   if(!['active','all','attention'].includes(filter)&&step!==filter)return false;
@@ -96,7 +96,6 @@ export default function WorkHub(){
  const stepCounts=steps.reduce((count,s)=>{if(s.state==='verified')count++;return count;},0);
  function choose(row){
   const id=jobIdentity(row);if(!id)return;
-  setSelectedId(String(id));
   const next=new URLSearchParams(params);next.set('job',String(id));setParams(next,{replace:true});
  }
  async function refreshSelected(){
