@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { parseRosterCsv, rosterCsv } from './lib/teamStoreRoster';
 import './TeamCampaignCommerce.css';
+import StorefrontDesigner from './StorefrontDesigner';
+import TeamCampaignOperations from './TeamCampaignOperations';
 
 const money=v=>Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD'});
 async function adminCall(action,args={},method='POST'){
@@ -76,7 +78,7 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
   const isLive=stage==='live';
   const isClosed=stage==='complete';
   const draft=!isLive&&!isClosed;
-  const publicUrl=campaign?.storefront_slug?window.location.origin+'/stores/'+campaign.storefront_slug:'';
+  const publicUrl=campaign.wp_store_url||'';
   const uniquePaidOrders=new Set(sales.filter(s=>s.payment_confirmed).map(s=>s.woo_order_id));
   const totals=useMemo(()=>sales.reduce((v,row)=>{
     v.eligible+=Number(row.net_eligible_sales||0);
@@ -129,6 +131,9 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
     </div>
     {message&&<p className="message" role="status">{message}</p>}
     <section className="sc-team-commerce-section">
+      <StorefrontDesigner campaign={campaign} canManage={canManage} onUpdated={onUpdated}/>
+    </section>
+    <section className="sc-team-commerce-section">
       <h3>1. Approved WooCommerce products</h3>
       <p>Use dedicated campaign products. A Woo product can belong to only one campaign. Use a dedicated product—every Woo order containing its product ID will be counted for this campaign, even if the shopper used a direct product link.</p>
       <div className="sc-team-product-grid">{items.map(p=><article key={p.id}>
@@ -167,12 +172,12 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
         <label>Customer storefront address (slug)<input value={storeSlug} onChange={e=>setStoreSlug(e.target.value)} placeholder="school-winter-spirit-wear" /></label>
         <button disabled={busy||!items.length||!campaign.customer_approval_at} type="button"
           onClick={()=>{if(window.confirm('Publish this campaign? Products must already be purchasable in WooCommerce.'))
-            run(async()=>{const r=await adminCall('publish',{campaign_id:id,slug:storeSlug});return 'Store published: '+window.location.origin+r.url;});}}>
+            run(async()=>{const r=await adminCall('publish',{campaign_id:id,slug:storeSlug});return 'Store published on WordPress: '+r.url;});}}>
           Publish live storefront</button>
       </div>}
       {canPublish&&isLive&&<div className="sc-team-close">
         <p>Closing the campaign disables its campaign storefront and does not modify WooCommerce products or existing orders. If you also need to stop direct purchases, archive the dedicated product separately in WooCommerce.</p>
-        <button disabled={busy} onClick={()=>{if(window.confirm('Close this campaign storefront? WooCommerce products will remain purchasable from their normal shop links.'))
+        <button disabled={busy} onClick={()=>{if(window.confirm('Close this client's WordPress storefront landing page? WooCommerce products will remain purchasable from their normal shop links.'))
           run(async()=>{await adminCall('close',{campaign_id:id});return 'Campaign storefront closed. WooCommerce products remain unchanged.';});}}>
           Close store and stop checkout</button>
       </div>}
@@ -226,5 +231,6 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
         </tbody></table></div>
       </details>}
     </section>
+    <TeamCampaignOperations campaign={campaign} canPublish={canPublish} onUpdated={onUpdated}/>
   </section>;
 }
