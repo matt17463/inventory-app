@@ -75,7 +75,7 @@ test('PDF generator includes conditional dialog annex, plugin records and covera
  assert.match(pdf,/Part VIII - WordPress Audit Evidence and Open Verification/);
  assert.match(pdf,/AUDIT PARTIALLY COMPLETE/);
  assert.match(pdf,/liveVerifiedDialogs/);
- assert.match(pdf,/pluginScreens/);
+ assert.match(pdf,/inspectedWordPressScreens/);
 });
 test('reviewer handoff instructs no transactional testing, redaction, and original chat return',()=>{
  const handoff=read('../../docs/wordpress-audit/WORK_HANDOFF.md');
