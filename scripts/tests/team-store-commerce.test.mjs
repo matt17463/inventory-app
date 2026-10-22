@@ -68,7 +68,7 @@ test('public browsing cannot access admin campaign financial tables or payment p
  const publicApi=read('../../netlify/functions/team-store-public.js');
  const publicUi=read('../../src/PublicTeamStore.jsx');
  const admin=read('../../netlify/functions/team-store-admin.js');
- assert.match(sql,/revoke all .* from public,anon,authenticated/);
+ assert.match(sql,/revoke all[\\s\\S]*?from public,anon,authenticated/);
  assert.doesNotMatch(sql,/grant .* to anon;/i);
  assert.match(publicApi,/select\('woo_product_id,product_name,product_permalink,image_url,display_price,currency'\)/);
  assert.doesNotMatch(publicApi,/woo_order_id|contact_email|payment_token/);
