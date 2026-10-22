@@ -48,7 +48,7 @@ export default function WordPressCommerceIntegrity(){
   </header>
   <section className="card sc-preflight-caution">
    <strong>Evidence boundaries</strong>
-   <p>The October 22 WordPress browser audit is a historical snapshot, not proof of current plugin code or checkout behavior. The optional checks below only read metadata and small samples; they cannot confirm which plugin writes SKUs or calculate real cart rates. Unavailable checks remain unavailable rather than being counted as passing.</p>
+   <p>Work confirmed in read-only source review that deployed Storefronts 0.1.2 lacks several 0.1.3 category-context safeguards; the two enabled SKU hook writers can overlap; and core versus extension free-shipping rules use different threshold bases. This is NOT a checkout or save-path test. Current API checks still only read metadata and small samples.</p>
    <p>Last live read: <strong>{date(result?.checkedAt)}</strong>. No changes or test orders are performed.</p>
    {error&&<p role="alert">{error}</p>}
   </section>
@@ -63,11 +63,11 @@ export default function WordPressCommerceIntegrity(){
     {liveStore.match?'Plugin version matches the repository header; deployed code equivalence still needs review.':
      'Version mismatch confirmed in current WordPress metadata. Do not install or overwrite plugin code without a controlled comparison.'}</p>:
     <p className="sc-preflight-warning">Plugin metadata was not verified through the WordPress REST endpoint. WordPress Application Password accounts may lack plugin-list access. Recheck in the WordPress administrator plugin list or have Work inspect the installed files.</p>}
-   <p>To finish: compare the deployed plugin's PHP/REST behavior against version {baseline.pluginSnapshot.storefront.repositoryVersion}, create a backup, and test the candidate version on staging before a live update. The existing draft store preview does not prove the checkout integration.</p>
+   <p>Work already compared installed PHP/CSS against 0.1.3. The missing product-context resolver, store-specific related-product filter and recently-viewed widget suppression are confirmed code differences—not a demonstrated customer data leak. Next: approve a staged frontend/checkout regression and two-file rollback rehearsal before updating production.</p>
   </section>
   <section className="card">
    <h2>2. SKU generator ownership</h2>
-   <p>{plugin?status(plugin):'Using dated WordPress audit'}: {candidateWriters.length} possible active SKU writer(s). Multiple active plugins are not proof that they overwrite each other; hooks, options, and save paths still require code/configuration review.</p>
+   <p>{plugin?status(plugin):'Using dated WordPress audit'}: {candidateWriters.length} active SKU-capable plugin(s). Work found two registering enabled write paths (the custom builder and SkyVerge); WP Wham was active but its generation switch was OFF as of the browser audit. Active installation alone does not prove a plugin writes SKUs. End-to-end save precedence still requires staging.</p>
    <ul>{candidateWriters.map(s=><li key={s.slug}><strong>{pluginNames[s.slug]||s.name||s.slug}</strong> · {s.version||'Version not recorded'}</li>)}</ul>
    <p>One-off product edits, variation batch updates, and SKU rebuilds can use different logic. **Rebuilding SKUs does not automatically synchronize Supabase**, and Woo product sync does not necessarily repair blank-master links.</p>
    {sku?.status==='observed'||sku?.status==='partial'?<div className="sc-preflight-metrics">
@@ -75,11 +75,11 @@ export default function WordPressCommerceIntegrity(){
     <div><small>Without SKU in sample</small><strong>{sku.withoutSku}</strong><span>Parent products may legitimately have no SKU</span></div>
     <div><small>Duplicate SKU values</small><strong>{sku.duplicateSkuCount}</strong><span>Sample only, not exhaustive</span></div>
    </div>:<p className="sc-preflight-warning">WooCommerce SKU sampling {sku?status(sku):'not run'}. No SKU collisions can be ruled out.</p>}
-   <p>To finish: designate a single authoritative writer and document its hooks and precedence in a staging site. Compare old/new SKU matrices, run separately approved Woo sync, verify blank pairing, and inspect a test pull sheet before deploying changes.</p>
+   <p>Important: the custom SKU rebuild is a capability-checked state-changing GET operation without nonce validation, and the SkyVerge code has a callback spelling inconsistency. Do not run the rebuild. Choose one SKU authority only after isolated create/edit/AJAX/bulk/REST tests, Woo sync and blank-pairing checks.</p>
   </section>
   <section className="card">
    <h2>3. WooCommerce shipping method overlap</h2>
-   <p>The October 22 audit observed Kitsap County core free shipping with a $200 minimum OR coupon, a taxable flat-rate configuration, and a separate Advanced Free Shipping rule named "Spend $200 get free shipping!". These are snapshots, not an exact checkout price calculation.</p>
+   <p>Confirmed source mismatch: core Woo free shipping uses a ≥$200 threshold on discounted, tax-exclusive subtotal (or an eligible free-shipping coupon), while Advanced Free Shipping uses an exact ==$200 pre-discount, tax-inclusive subtotal. This is not a verified customer charge error. Flat-rate base $0 does not mean all products ship free; class costs matter.</p>
    {shipping?.zones?.length?<>
     <p><strong>{status(shipping)}:</strong> {shipping.checkedZones} Woo shipping zone(s) read.{shipping.zoneLimitReached?' Only the first eight zones were inspected.':''}</p>
     <div className="sc-preflight-zones">{shipping.zones.map(z=><details key={z.zoneId}>
@@ -91,7 +91,15 @@ export default function WordPressCommerceIntegrity(){
     </details>)}</div>
     {shipping.inaccessibleZones?.length>0&&<p className="sc-preflight-warning">Some zones could not be read: {shipping.inaccessibleZones.join(', ')}.</p>}
    </>:<p className="sc-preflight-warning">Live Woo shipping method data {shipping?status(shipping):'not requested'}. The dated WordPress audit remains the only available evidence.</p>}
-   <p>Advanced Free Shipping plugin rules may not appear in the WooCommerce core shipping REST API. **No checkout totals were calculated.** Use staging fixtures for local/out-of-zone addresses, coupons, tax, and mixed shipping classes at $199.99, $200.00, and $200.01.</p>
+   <p>Work found a published 100% coupon with free shipping enabled. The owner confirmed it is intentional; preserve the existing coupon and free-shipping behavior. Its intended audience and safeguards have not been separately specified. Some Spirit Wear and Uniform classes intentionally have $0 delivery fees; Heavy fallback has a blank class fee requiring explicit owner policy. No checkout totals were calculated. Test staging carts at $199.99/$200/$200.01 with coupons, classes and addresses.</p>
+  </section>
+  <section className="card sc-preflight-caution">
+   <h2>Owner decisions required before any remediation</h2>
+   <p>1. <strong>Resolved:</strong> The 100% coupon is intentional. Keep its discount, eligibility, and free-shipping behavior unchanged unless the owner explicitly authorizes a later policy revision.</p>
+   <p>2. Should organization distribution remain free, and should ordinary merchandise use one ≥$200 after-discount rule?</p>
+   <p>3. May we create a genuinely isolated staging site for fictional tests, with email, payments, Woo webhooks, Netlify and Supabase disconnected?</p>
+   <p>4. After tests, may we replace the two-file Client Storefronts plugin with 0.1.3 and harden the SKU builder before changing its ownership?</p>
+   <p><strong>No business policy change has been applied.</strong> See GitHub's WordPress commerce integrity audit PR #106.</p>
   </section>
   <section className="card">
    <h2>Owner action plan</h2>
