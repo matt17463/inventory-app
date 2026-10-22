@@ -116,3 +116,16 @@ body.scs-wp-storefront #sidebar,
 body.scs-wp-storefront #main-content .container:before{display:none!important}
 body.scs-wp-storefront #main-content article{margin:0!important;padding:0!important}
 body.scs-wp-storefront #main-content .entry-content{padding:0!important}
+
+/* Theme-coordinated checkout treatments beyond simple accent color changes. */
+body.scs-checkout-athletics .scs-checkout-banner{border-bottom:6px solid var(--scs-secondary);clip-path:polygon(0 0,100% 0,98% 100%,0 100%);text-transform:uppercase;letter-spacing:.1em;font-weight:900}
+body.scs-checkout-athletics .woocommerce-checkout h3{font-weight:950;text-transform:uppercase}
+body.scs-checkout-scholastic .scs-checkout-banner{text-align:center;background:#fdf9ee;color:var(--scs-primary);border:4px double var(--scs-primary);font-family:Georgia,serif}
+body.scs-checkout-scholastic .scs-checkout-banner strong{font-size:1.45rem}
+body.scs-checkout-scholastic .woocommerce-checkout h3,body.scs-checkout-scholastic .wc-block-components-title{font-family:Georgia,serif}
+body.scs-checkout-business .scs-checkout-banner{background:#fff;color:var(--scs-primary);border-left:8px solid var(--scs-primary);border-radius:0}
+body.scs-checkout-business .scs-checkout-banner strong{text-transform:uppercase;letter-spacing:.14em;font-size:.8rem}
+body.scs-checkout-business .woocommerce-checkout{border-top:0;border-left:1px solid #d6e1e7;padding-left:22px}
+body.scs-checkout-fundraising .scs-checkout-banner{border-radius:14px;background:var(--scs-primary);border:2px solid var(--scs-secondary);box-shadow:8px 8px 0 var(--scs-secondary)}
+body.scs-checkout-fundraising .scs-checkout-banner strong{font:700 1.55rem Georgia,serif}
+body.scs-checkout-fundraising .woocommerce-checkout{border-top:0;padding-top:10px}
