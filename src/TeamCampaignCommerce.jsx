@@ -177,9 +177,9 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
       </div>}
       {canPublish&&isLive&&<div className="sc-team-close">
         <p>Closing the campaign disables its campaign storefront and does not modify WooCommerce products or existing orders. If you also need to stop direct purchases, archive the dedicated product separately in WooCommerce.</p>
-        <button disabled={busy} onClick={()=>{if(window.confirm('Close this client's WordPress storefront landing page? WooCommerce products will remain purchasable from their normal shop links.'))
+        <button disabled={busy} onClick={()=>{if(window.confirm("Close this client's WordPress storefront landing page? WooCommerce products will remain purchasable from their normal shop links."))
           run(async()=>{await adminCall('close',{campaign_id:id});return 'Campaign storefront closed. WooCommerce products remain unchanged.';});}}>
-          Close store and stop checkout</button>
+          Close WordPress store landing page</button>
       </div>}
       {isClosed&&<p>Campaign closed. Past Woo orders remain in the existing production system.</p>}
       {!canPublish&&<p>Store publication, approval and closure require manager access. Marketing users can prepare draft products and roster records.</p>}
