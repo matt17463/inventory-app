@@ -62,3 +62,35 @@ create policy sc_external_usps_labels_read on public.sc_external_usps_labels
  for select to authenticated
  using ((select public.sc_internal_access_allowed(array['admin','manager'])));
 -- No browser mutation permissions: Netlify manager-authenticated function records it.
+
+
+-- Serialize same package writes across the two billing paths, even if two
+-- staff members submit at once. Recording USPS separately is allowed while
+-- an unused EasyPost quote exists, but never during or after an API purchase.
+create or replace function public.sc_guard_easypost_label_duplicates()
+returns trigger language plpgsql security definer set search_path='' as $sc$
+begin
+ perform pg_advisory_xact_lock(hashtextextended('sc-shipping-label:'||new.job_id||':'||new.package_index,0));
+ if exists(select 1 from public.sc_external_usps_labels x
+  where x.job_id=new.job_id and x.package_index=new.package_index) then
+  raise exception 'USPS Click-N-Ship label already recorded for this package; do not purchase twice' using errcode='23505';
+ end if;
+ return new;
+end $sc$;
+drop trigger if exists sc_guard_easypost_label_duplicates on public.sc_carrier_label_jobs;
+create trigger sc_guard_easypost_label_duplicates before insert or update of state
+ on public.sc_carrier_label_jobs for each row execute function public.sc_guard_easypost_label_duplicates();
+
+create or replace function public.sc_guard_external_usps_label_duplicates()
+returns trigger language plpgsql security definer set search_path='' as $sc$
+begin
+ perform pg_advisory_xact_lock(hashtextextended('sc-shipping-label:'||new.job_id||':'||new.package_index,0));
+ if exists(select 1 from public.sc_carrier_label_jobs x
+  where x.job_id=new.job_id and x.package_index=new.package_index and x.state<>'quoted') then
+  raise exception 'EasyPost postage already purchased or unresolved; reconcile it before recording USPS postage' using errcode='23505';
+ end if;
+ return new;
+end $sc$;
+drop trigger if exists sc_guard_external_usps_label_duplicates on public.sc_external_usps_labels;
+create trigger sc_guard_external_usps_label_duplicates before insert
+ on public.sc_external_usps_labels for each row execute function public.sc_guard_external_usps_label_duplicates();
