@@ -130,7 +130,7 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
     {message&&<p className="message" role="status">{message}</p>}
     <section className="sc-team-commerce-section">
       <h3>1. Approved WooCommerce products</h3>
-      <p>Use dedicated campaign products. A Woo product can belong to only one campaign so order attribution and fundraising calculations remain unambiguous.</p>
+      <p>Use dedicated campaign products. A Woo product can belong to only one campaign. Use a dedicated product—every Woo order containing its product ID will be counted for this campaign, even if the shopper used a direct product link.</p>
       <div className="sc-team-product-grid">{items.map(p=><article key={p.id}>
         {p.image_url&&<img src={p.image_url} alt="" />}
         <div><strong>{p.product_name}</strong><small>Woo #{p.woo_product_id} · {p.display_price==null?'See Woo pricing':money(p.display_price)}</small>
@@ -146,7 +146,10 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
         {wooResults.map(p=><div className="sc-team-search-hit" key={p.woo_product_id}>
           <span>{p.product_name} · #{p.woo_product_id}</span>
           <button type="button" disabled={busy||items.some(x=>x.woo_product_id===p.woo_product_id)}
-            onClick={()=>run(async()=>{await adminCall('add',{campaign_id:id,woo_product_id:p.woo_product_id});return 'Woo product added.';})}>
+            onClick={()=>{if(window.confirm('Is this WooCommerce product dedicated ONLY to this school/team campaign? All orders containing this product ID will count toward this campaign, even outside its storefront.'))run(async()=>{
+              await adminCall('add',{campaign_id:id,woo_product_id:p.woo_product_id,confirm_dedicated:true});
+              return 'Dedicated Woo product linked to campaign.';
+            });}}>
             Add to campaign</button>
         </div>)}
       </div>}
@@ -203,7 +206,7 @@ export default function TeamCampaignCommerce({campaign,canManage,canPublish,onUp
     </section>
     <section className="sc-team-commerce-section">
       <h3>4. WooCommerce sales & fundraising estimate</h3>
-      <p>Calculated from verified WooCommerce order line totals after discounts and allocated line refunds, excluding taxes and shipping. Unpaid orders and ambiguous refunds do not accrue revenue until reconciled.</p>
+      <p>Estimated by dedicated WooCommerce product ID, not checkout URL. All purchases of a linked product count toward its assigned campaign. Totals use Woo line prices after discounts and allocated refunds, excluding taxes and shipping. Unpaid orders and ambiguous refunds do not accrue revenue until reconciled.</p>
       <div className="sc-team-stat-grid">
         <div><small>Paid orders represented</small><strong>{uniquePaidOrders.size}</strong></div>
         <div><small>Eligible product sales</small><strong>{money(totals.eligible)}</strong></div>
