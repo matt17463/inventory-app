@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { EmployeeAccessContext } from './lib/employeeAccessContext';
+import DocumentationAuditPanel from './application-guide/DocumentationAuditPanel';
 import { PageHeader } from './components/UIPrimitives';
 import { navSections } from './navigationConfig';
 import {
@@ -221,6 +223,8 @@ function ScreenReference() {
 }
 
 export default function ApplicationGuide() {
+  const access = useContext(EmployeeAccessContext);
+  const canAudit = access?.role === 'admin' || access?.role === 'manager';
   const [query, setQuery] = useState('');
   const [activeChapter, setActiveChapter] = useState('all');
   const [guideMode,setGuideMode]=useState('training');
@@ -285,6 +289,7 @@ export default function ApplicationGuide() {
       <section className="sc-guide-mode-switch" aria-label="Guide mode">
         <button type="button" className={guideMode==='training'?'active':''} onClick={()=>setGuideMode('training')}><strong>Employee Training</strong><span>Guided onboarding + checklists</span></button>
         <button type="button" className={guideMode==='reference'?'active':''} onClick={()=>setGuideMode('reference')}><strong>Owner / Manager Reference</strong><span>Full application operating manual</span></button>
+        {canAudit&&<button type="button" className={guideMode==='audit'?'active':''} onClick={()=>setGuideMode('audit')}><strong>Documentation Audit</strong><span>Conditional controls + WordPress plugins</span></button>}
       </section>
 
       {guideMode==='reference'&&<section className="sc-guide-tools" aria-label="Guide search and chapter filter">
@@ -313,7 +318,7 @@ export default function ApplicationGuide() {
         </div>
       </section>}
 
-      {guideMode==='training'?<EmployeeTraining/>:<div className="sc-guide-layout">
+      {guideMode==='audit'&&canAudit?<DocumentationAuditPanel/>:guideMode==='training'?<EmployeeTraining/>:<div className="sc-guide-layout">
         <aside className="sc-guide-sidebar">
           <div className="sc-guide-sidebar-card">
             <strong>Guide chapters</strong>

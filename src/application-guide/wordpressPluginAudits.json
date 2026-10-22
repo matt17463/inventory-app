@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "auditStatus": "awaiting-live-wordpress-review",
+  "site": "https://skilledcrafting.com",
+  "lastAuditedAt": null,
+  "notes": "This starter file is NOT a verified list of installed or active plugins. ChatGPT Work must inspect Plugins > Installed Plugins and fill audited records without copying secrets or customer information.",
+  "pluginCandidatesToCheck": [
+    "Skilled Crafting Client Storefronts",
+    "WooCommerce",
+    "WooCommerce/Supabase synchronization plugin",
+    "Custom product options/personalization",
+    "Artwork request/integration plugins",
+    "Invoices, packing slips and document plugins",
+    "Checkout, tax, shipping and payment plugins",
+    "Divi/theme and caching integration affecting frontend"
+  ],
+  "plugins": [
+    {
+      "slug": "skilled-crafting-client-stores",
+      "name": "Skilled Crafting Client Storefronts",
+      "source": "wordpress/skilled-crafting-client-stores/skilled-crafting-client-stores.php",
+      "versionFromRepository": "0.1.3",
+      "installedVersion": null,
+      "activationStatus": "unverified",
+      "reviewStatus": "source-only",
+      "businessPurpose": "Creates branded client landing pages restricted to a WooCommerce product category and coordinates checkout appearance.",
+      "adminScreens": [
+        {
+          "name": "Client Storefronts",
+          "pathHint": "WordPress Admin > Client Storefronts",
+          "conditions": [
+            "Requires plugin activated",
+            "Requires WooCommerce"
+          ],
+          "controls": [],
+          "screenshot": null,
+          "verified": false
+        }
+      ],
+      "publicScreens": [
+        {
+          "name": "Client storefront landing",
+          "pathHint": "/stores/{slug}/",
+          "controls": [],
+          "screenshot": null,
+          "verified": false
+        },
+        {
+          "name": "Store directory shortcode",
+          "pathHint": "[sc_client_store_directory]",
+          "controls": [],
+          "screenshot": null,
+          "verified": false
+        }
+      ],
+      "conditionalDialogs": [],
+      "integrationPoints": [
+        "/wp-json/skilled-crafting/v1/client-store",
+        "WooCommerce product categories",
+        "Divi checkout rendering",
+        "Skilled Crafting Team Stores"
+      ],
+      "dependencies": [
+        "WooCommerce",
+        "WordPress page editing permission",
+        "WordPress Application Password on application server"
+      ],
+      "securityNotes": [
+        "Never include Application Password, private API keys or customer data in screenshots"
+      ],
+      "knownTroubleshooting": [
+        "WordPress REST/WAF failures",
+        "Client category visibility",
+        "Checkout block versus classic checkout styling"
+      ],
+      "sourceReviewNotes": "Available repository code is informative; all real admin settings/screens and version must be verified on the site."
+    }
+  ]
+}
