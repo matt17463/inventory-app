@@ -69,7 +69,7 @@ export default function JobCloseoutCenter({evidence,onRefresh,editable=false,can
     subject:subject.trim(),message_body:messageBody.trim(),recorded_by:data.user.id,
    });
    if(insertError)throw insertError;
-   setSubject('');setMessageBody('');setSourceDraftId('');
+   setSubject('');setMessageBody('');
   });
  }
  async function markManuallySent(draft){
@@ -158,7 +158,7 @@ export default function JobCloseoutCenter({evidence,onRefresh,editable=false,can
    <h4>3. Customer notifications — reviewed and manually sent</h4>
    <p>No automatic messages are sent. A manager can prepare a message only when the relevant job evidence supports it, copy the approved text to an email application, and log that it was actually sent. Recipient addresses are entered deliberately, not guessed from order records.</p>
    {canNotify&&<div className="sc-closeout-controls">
-    <label>Notification type<select value={kind} onChange={e=>{setKind(e.target.value);setSubject('');setMessageBody('');setSourceDraftId('');}}>
+    <label>Notification type<select value={kind} onChange={e=>{setKind(e.target.value);setSubject('');setMessageBody('');}}>
      {kinds.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
     <label>Customer email<input type="email" autoComplete="email" placeholder="Verified client contact email"
      value={recipient} onChange={e=>setRecipient(e.target.value)}/></label>
