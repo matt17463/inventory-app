@@ -397,7 +397,7 @@ trainingTutorials.push({
  id:'wp-commerce-confirmed-risks-owner-approval-20261022',
  title:'Owner: Approving WordPress Commerce Integrity Remediation',
  roles:['manager','owner-admin'],level:'Advanced',minutes:25,safeMode:'guided-read-only',
- summary:'Review confirmed 0.1.2/0.1.3 storefront differences, enabled SKU save hooks, the owner's intentional coupon policy, and shipping policies. Complete no transactional actions in this exercise.',
+ summary:'Review confirmed 0.1.2/0.1.3 storefront differences, enabled SKU save hooks, the owner-approved intentional coupon policy, and shipping policies. Complete no transactional actions in this exercise.',
  outcome:'The owner can distinguish a source-confirmed configuration risk from an observed customer incident and authorize staged remediation without changing live transactions.',
  steps:[
   step('Identify owner decisions','Review the approval pack in the Application Guide. List decisions for the published 100% coupon, normal shipping versus free organization distribution, Heavy fallback, SKU immutability and staging setup.',{
