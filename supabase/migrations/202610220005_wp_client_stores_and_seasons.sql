@@ -64,15 +64,17 @@ begin
  return query
  with campaign as (
   select id,order_channel from public.sc_team_store_workflows where id=p_campaign_id
- ), source_jobs as (
-  select distinct j.id
-  from public.jobs j
+ ), source_item_ids as (
+  select distinct i.id from public.job_items i
+  join public.jobs j on j.id=i.job_id
   join campaign c on c.order_channel='woocommerce'
   join public.sc_team_store_order_lines l on l.campaign_id=c.id
-    and l.woo_order_id=j.woocommerce_order_id
-    and l.payment_confirmed=true and l.quantity>l.refunded_quantity
+   and l.woo_order_id=j.woocommerce_order_id
+   and l.woo_line_item_id=i.woocommerce_line_item_id
+   and l.payment_confirmed=true and l.quantity>l.refunded_quantity
   union
-  select distinct j.id from public.jobs j
+  select distinct i.id from public.job_items i
+  join public.jobs j on j.id=i.job_id
   join public.sc_client_order_requests o on o.generated_job_id=j.id
   join campaign c on c.order_channel='quickbooks_invoice' and o.campaign_id=c.id
   where o.payment_received_at is not null
@@ -85,7 +87,7 @@ begin
     coalesce(i.selected_size,i.size,'') demand_size,
     count(*) line_count,sum(greatest(0,i.quantity)) unit_count
   from public.job_items i
-  join source_jobs s on s.id=i.job_id
+  join source_item_ids s on s.id=i.id
   where lower(coalesce(i.status,'')) not in
   ('complete','completed','cancelled','canceled','void','voided','returned','consumed','removed','released')
     and coalesce(i.inventory_required,true)=true
@@ -106,3 +108,25 @@ begin
 end $fn$;
 revoke all on function public.sc_team_campaign_purchasing(uuid) from public,anon;
 grant execute on function public.sc_team_campaign_purchasing(uuid) to authenticated;
+
+
+-- Protect published layout/category settings from direct browser writes.
+create or replace function public.scs_guard_published_wp_details()
+returns trigger language plpgsql security invoker set search_path='' as $scs$
+begin
+ if old.stage in ('live','complete') and
+  (new.wp_category_id,new.wp_store_post_id,new.wp_store_url,new.wp_template,new.wp_primary_color,
+   new.wp_secondary_color,new.wp_accent_color,new.wp_logo_media_id,new.wp_headline,
+   new.ordering_instructions,new.delivery_instructions,new.season_label)
+  is distinct from
+  (old.wp_category_id,old.wp_store_post_id,old.wp_store_url,old.wp_template,old.wp_primary_color,
+   old.wp_secondary_color,old.wp_accent_color,old.wp_logo_media_id,old.wp_headline,
+   old.ordering_instructions,old.delivery_instructions,old.season_label)
+  and coalesce(auth.jwt()->>'role','') <> 'service_role'
+ then raise exception 'Published WordPress designs require the verified server workflow' using errcode='42501';
+ end if;
+ return new;
+end $scs$;
+drop trigger if exists scs_guard_published_wp_details on public.sc_team_store_workflows;
+create trigger scs_guard_published_wp_details before update on public.sc_team_store_workflows
+for each row execute function public.scs_guard_published_wp_details();
