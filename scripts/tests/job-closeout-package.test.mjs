@@ -10,6 +10,7 @@ const data={job,items,qc:[{passed:true,qc_completed_at:'2026-10-20T17:00:00Z'}],
           {job_item_id:22,packed_quantity:2,created_at:'2026-10-20T12:00:00Z'}],
  fulfillment:[],pickup:[],deliveryConfirmations:[],unavailable:{}};
 test('one source of truth: exact packing, paid Woo and passed QC permit ready, not delivered',()=>{
+ assert.equal(latestPackingByItem(data.packing).size,2);
  const r=closeoutReadiness(data);
  assert.equal(r.kind,'ready');assert.equal(r.packingComplete,true);
  assert.equal(r.hasPickup,false);assert.equal(r.isWoo,true);
@@ -41,7 +42,7 @@ test('pickup acknowledgment differs from packing and existing shipment without t
 test('notification templates never imply an email is automatically sent',()=>{
  const msg=closeoutMessage({kind:'ready_for_pickup',job,channel:'unselected'});
  assert.match(msg.subject,/ready for pickup/i);
- assert.match(msg.body,/confirm a? the pickup time/i);
+ assert.match(msg.body,/confirm the pickup time/i);
  assert.throws(()=>closeoutMessage({kind:'shipped',job,channel:'pickup'}),/dispatch/);
 });
 test('migration enforces role-specific immutable delivery proof and manual send deduplication',()=>{
