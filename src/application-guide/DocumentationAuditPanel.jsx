@@ -7,7 +7,7 @@ import './DocumentationAuditPanel.css';
 
 const knownRoutes=navSections.flatMap(s=>s.items.map(i=>({path:i.path,title:i.label,section:s.label,controls:[]})));
 const verified=status=>status==='live-verified';
-const safeScreenshot=src=>typeof src==='string'&&/^\/documentation-audit\/screenshots\/[a-z0-9/_-]+\.(?:png|jpe?g|webp)$/i.test(src);
+
 export default function DocumentationAuditPanel(){
  const [report,setReport]=useState(null);
  const [filter,setFilter]=useState('');
@@ -97,7 +97,7 @@ export default function DocumentationAuditPanel(){
      <p>{screen.pathHint||screen.url||'Location not recorded'}</p>
      {screen.conditions?.length>0&&<p>Conditions: {screen.conditions.join('; ')}</p>}
      {(screen.controls||[]).map((control,index)=><p key={index}><strong>{control.label||control.name}:</strong> {control.purpose||control.meaning||'Needs documentation'}</p>)}
-     {safeScreenshot(screen.screenshot)&&<img loading="lazy" src={screen.screenshot} alt={'Redacted documentation example: '+screen.name}/>}
+     {screen.screenshot&&<p><strong>Redacted screenshot in private audit repository:</strong> {screen.screenshot}. Request a reviewed, approved image for public guide inclusion.</p>}
     </details>)}
     {p.securityNotes?.length>0&&<p><strong>Security:</strong> {p.securityNotes.join('; ')}</p>}
    </article>)}
