@@ -251,6 +251,21 @@ export default function ApplicationGuide() {
         description="Living operating manual for inventory, WooCommerce, purchasing, production, artwork, custom plugins, administration, troubleshooting, and real Skilled Crafting workflows."
       />
 
+      <section className="sc-guide-pdf-download" aria-label="Printable application guide">
+        <div>
+          <p className="sc-guide-kicker">OFFLINE REFERENCE</p>
+          <h2>Download the complete application &amp; WordPress user guide</h2>
+          <p>A printable, searchable PDF for new family helpers, production staff and the business owner. It includes page-by-page controls, daily procedures, real customer scenarios, WordPress plugins, and technical troubleshooting. A fresh snapshot is generated from application source during each production build.</p>
+          <p><small>For current procedures, the interactive guide remains the primary reference; verify live settings, access permissions and customer data before changing production records.</small></p>
+        </div>
+        <div className="sc-guide-pdf-actions">
+          <a className="primary-button" href="/skilled-crafting-application-user-guide.pdf" download="Skilled-Crafting-Complete-User-Guide.pdf">Download PDF user guide</a>
+          <a className="secondary-button" href="/skilled-crafting-application-user-guide.pdf" target="_blank" rel="noreferrer">Open or print PDF</a>
+          <details><summary>View the guide inside this application</summary>
+            <iframe title="Skilled Crafting PDF user guide" loading="lazy" src="/skilled-crafting-application-user-guide.pdf#view=FitH" className="sc-guide-pdf-frame" />
+          </details>
+        </div>
+      </section>
       <section className="sc-guide-hero">
         <div>
           <span className="sc-guide-version">Guide v{GUIDE_VERSION}</span>
