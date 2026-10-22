@@ -146,6 +146,7 @@ export const navSections = [
       { label: 'Non-Inventory Rules', path: '/non-inventory-rules', keywords: 'non inventory product rules fees rush artwork no blank pull sheet close' },
       { label: 'Product Data Health', path: '/product-data-health', keywords: 'product data health missing attributes cost barcode supplier reports' },
       { label: 'Product Integrity Center', path: '/product-integrity', keywords: 'duplicate products sku barcode brand style color size conflicts integrity diagnostic' },
+      { label: 'WordPress Commerce Integrity', path: '/wordpress-integrity', keywords: 'wordpress wp plugin storefront version mismatch sku writer shipping zone free shipping overlap read only diagnostic' },
       { label: 'Operations Integrity', path: '/operations-integrity', keywords: 'product identity resolver duplicate review receiving inbox reconciliation integration jobs team store workflow guarded creation' },
       { label: 'Audit Trail', path: '/audit-trail', keywords: 'audit trail log activity history changes' },
       { label: 'Activity Feed', path: '/activity', keywords: 'activity log history timeline' },
