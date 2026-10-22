@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import {
   PageHeader,
@@ -952,6 +952,12 @@ export default function PullSheetView() {
         description="Compare what the customer ordered against the blank item the app paired to the order line."
         actions={jobActions}
       />
+
+      <section className="card elevated-card">
+        <strong>Production instructions and QR job traveler</strong>
+        <p>Open the approved garment recipe, placement rulers, artwork, machine settings and packing details for this job. The traveler can be printed with a scannable QR code.</p>
+        <p><Link to={'/production-travelers?job='+encodeURIComponent(resolvedJobId)}>Open or create this job's traveler →</Link> · <Link to="/manufacturing-recipes">Review the Recipe Library →</Link></p>
+      </section>
 
       <HelpPanel>
         <p>Each card shows the finished product ordered by the customer on the left and the blank item the app plans to pull on the right. If the pairing is wrong, use Override Blank Pairing before production starts.</p>
