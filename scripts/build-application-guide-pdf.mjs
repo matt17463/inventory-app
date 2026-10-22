@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import { guideChapters, GUIDE_VERSION } from '../src/application-guide/guideData.js';
 import { navSections } from '../src/navigationConfig.js';
 import { trainingTutorials } from '../src/application-guide/trainingData.js';
+import { documentationCoverage } from '../src/application-guide/documentationCoverage.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const src=path.join(root,'src');
@@ -120,6 +121,18 @@ const catalog={version:GUIDE_VERSION,generatedAt:new Date().toISOString(),screen
  visibleRoutes:screens.length,controls:screens.reduce((n,x)=>n+x.controls.length,0),additionalControls:extras.reduce((n,x)=>n+x.controls.length,0)};
 fs.mkdirSync(path.dirname(catalogFile),{recursive:true});
 fs.writeFileSync(catalogFile,JSON.stringify(catalog,null,2)+'\n');
+
+// Audit records are deliberately separated into code-reviewed examples and
+// independently verified browser/plugin screens. Do not claim full coverage.
+const conditionalAudit=JSON.parse(fs.readFileSync(path.join(src,'application-guide','conditionalDialogs.json'),'utf8'));
+const wordpressAudit=JSON.parse(fs.readFileSync(path.join(src,'application-guide','wordpressPluginAudits.json'),'utf8'));
+const auditReport=documentationCoverage({
+ screens,dialogs:conditionalAudit.dialogs||[],plugins:wordpressAudit.plugins||[]
+});
+if(auditReport.invalid.length)throw Error('Documentation registry invalid: '+auditReport.invalid.join('; '));
+fs.writeFileSync(path.join(root,'public','documentation-audit-report.json'),
+ JSON.stringify(auditReport,null,2)+'\n');
+
 
 // The PDF is a static generated public asset; browsing or downloading it requires no database role.
 const pdf=new jsPDF({orientation:'portrait',unit:'pt',format:'letter',compress:true});
@@ -376,6 +389,50 @@ for(const tutorial of trainingTutorials){
   if(step.warning)mini('Stop: '+step.warning);
  }
 }
+
+heading('Part VIII - Conditional Dialogs & External WordPress Plugin Audit',{level:1});
+para('A source-code scan inventories many page controls, but cannot verify hidden menus, modal dialogs, validation branches, access restrictions or externally installed WordPress plugins. The following records identify what is reviewed from code and what still requires browser inspection. Never treat source-reviewed as live-verified.');
+para('Audit status: '+auditReport.sourceReviewedDialogs+' of '+auditReport.dialogCount+
+ ' conditional cases reviewed from source; '+auditReport.liveVerifiedDialogs+
+ ' cases independently live-verified. WordPress: '+auditReport.pluginsLive+
+ ' of '+auditReport.pluginCount+' registered plugins live-verified. Screenshots may be unavailable if privacy review is incomplete.');
+for(const d of conditionalAudit.dialogs||[]){
+ heading(d.title+' | '+d.route,{level:2});
+ mini('Audit status: '+d.status+' | Source: '+d.sourceFile+' | Trigger: '+d.trigger);
+ para('Visible/eligible when: '+d.visibleWhen);
+ for(const f of d.fields||[])bullet(f.name+': '+f.meaning);
+ para('Before confirming: '+(d.confirmation||'Follow the on-screen approval requirements.'));
+ para('Effect: '+d.result);
+ if(d.errors?.length)mini('Errors/stop conditions: '+d.errors.join(' | '));
+ if(d.trainingScenario)mini('Read-only training example: '+d.trainingScenario);
+ if(d.status!=='live-verified')mini('LIVE AUDIT PENDING: Verify actual interface and capture a redacted screenshot using an authorized account.');
+}
+heading('WordPress plugin audit register',{level:2});
+para('These plugin entries are a maintained audit registry, NOT a claim that each plugin is active on the live WordPress site.');
+for(const p of wordpressAudit.plugins||[]){
+ heading(p.name+' | '+(p.installedVersion||p.versionFromRepository||'Version unknown'),{level:3});
+ para(p.businessPurpose||'Purpose needs verification.');
+ mini('Status: '+p.reviewStatus+' | Activation: '+p.activationStatus+
+  ' | Code source: '+(p.source||'External / not available in repository'));
+ const pluginScreens=[...(p.adminScreens||[]),...(p.publicScreens||[])];
+ for(const page of pluginScreens){
+  heading(page.name+' | '+(page.verified?'Live reviewed':'Not verified'),{level:3});
+  mini('Location: '+(page.pathHint||page.url||'Not yet captured'));
+  if(page.conditions?.length)mini('Visibility conditions: '+page.conditions.join('; '));
+  if(!page.controls?.length)mini('Field-by-field audit pending.');
+  for(const control of page.controls||[]){
+   bullet((control.label||control.name||'Control')+': '+(control.purpose||control.meaning||'Purpose not yet documented'));
+   if(control.when)mini('Appears when: '+control.when);
+   if(control.effect)mini('Effect: '+control.effect);
+   if(control.errors?.length)mini('Errors: '+control.errors.join(' | '));
+  }
+  if(page.screenshot)mini('Redacted screenshot reference (review required): '+page.screenshot);
+ }
+ if(p.securityNotes?.length)mini('Safety: '+p.securityNotes.join(' | '));
+}
+if(wordpressAudit.auditStatus!=='complete')callout('WORDPRESS AUDIT OPEN',
+ 'The live WordPress plugin inventory and actual admin-screen walkthrough have not yet been verified by ChatGPT Work. The owner must review the Work audit before this guide can be called exhaustive.');
+
 heading('Guide coverage and maintenance notes',{level:1});
 para('This PDF is built from '+screens.length+' navigation-linked screens, '+extras.length+' additional JSX components, '+chapterCount+' reference chapters, '+trainingTutorials.length+' named training modules and '+controlCount+' unique source-observed controls. A source scan cannot prove all controls are visible or that each dynamic field was captured. It is a high-coverage development reference rather than a substitute for checking the live interface.');
 para('Update this documentation whenever a workflow, label, option, state or plugin changes. The online Application Guide is the living resource; this PDF is an offline snapshot generated with the deployed source.');
