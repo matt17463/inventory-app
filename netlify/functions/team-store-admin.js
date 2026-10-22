@@ -76,17 +76,13 @@ export async function handler(event){
     }
     if(action==='close'){
       if(c.stage!=='live')throw Error('Only open stores can be closed.');
-      const products=await getProducts(sb,c.id),failures=[];
-      for(const p of products){
-        try {
-          const current=await wooRequest('products/'+p.woo_product_id);
-          if(current.status!=='draft')await wooRequest('products/'+p.woo_product_id,{method:'PUT',body:{status:'draft'}});
-        }catch(err){failures.push(String(p.woo_product_id)+': '+err.message);}
-      }
-      if(failures.length)return jsonResponse(502,{success:false,error:'Some Woo products could not be unpublished. Campaign remains open; retry closure.',failures},event);
+      // Closing a campaign disables its campaign landing page. Do not unpublish
+      // Woo products: they may be referenced by ordinary customers elsewhere.
       const {error}=await sb.from('sc_team_store_workflows')
         .update({stage:'complete',status:'complete',closed_at:new Date().toISOString()}).eq('id',c.id);
-      if(error)throw error;return jsonResponse(200,{success:true,closed:true},event);
+      if(error)throw error;
+      return jsonResponse(200,{success:true,closed:true,
+        warning:'Campaign landing page closed. Dedicated Woo products remain purchasable through direct links until separately archived in WooCommerce.'},event);
     }
     return jsonResponse(400,{success:false,error:'Unsupported action'},event);
   } catch(error){
