@@ -11,8 +11,8 @@ const STORE_STEPS = [
   { name:'Select approved products', detail:'Use verified supplier catalog items, real sizes/colors and your normal pricing rules.', ops:false, path:'/marketing', link:'Review catalog & pricing' },
   { name:'Prepare and approve artwork', detail:'Confirm all logos, decorations, sample mockups and customer proof before selling.', ops:false, path:'/marketing', link:'Prepare client proof' },
   { name:'Agree on fundraiser terms', detail:'Document fixed/percent amount, eligible products, discounts/refunds, tax, shipping, statement date and responsible recipient.', ops:false, path:'/marketing', link:'Record deal terms' },
-  { name:'Create the campaign/store', detail:'Existing Marketing store previews are concepts, not live WooCommerce transactional stores. Public team-order form currently collects order requests.', ops:false, path:'/team-order', link:'Preview order request form' },
-  { name:'Consolidate orders and manufacture', detail:'Use existing Client Orders, purchasing and Production Board to fulfill approved paid or invoiced orders.', ops:true, path:'/work-hub', link:'Open Work Hub' },
+  { name:'Publish the recurring WooCommerce store', detail:'Choose approved, dedicated Woo products below. A manager confirms customer approval before opening the customer storefront.', ops:false, path:'/team-stores', link:'Configure storefront' },
+  { name:'Fulfill paid WooCommerce orders', detail:'Use existing WooCommerce order sync, purchasing, production jobs and manufacturing recipes. Do not create a duplicate manual-invoice order.', ops:true, path:'/work-hub', link:'Open Work Hub' },
   { name:'Pack by player / team and close out', detail:'Verify names/numbers, individual bag labels, pickup list and an independently reconciled fundraiser statement.', ops:true, path:'/qc-checklist', link:'Open QC' },
 ];
 
