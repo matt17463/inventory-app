@@ -111,6 +111,7 @@ function EmployeeRoutes() {
   const access=useContext(EmployeeAccessContext);
   if(access?.role==='marketing') return <Routes>
     <Route path="/marketing" element={<MarketingWorkspace />} />
+    <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
     <Route path="/application-guide" element={<ApplicationGuide />} />
     <Route path="/testing-mode" element={<TestingMode />} />
     <Route path="/theme-settings" element={<ThemeSettings />} />
