@@ -4,8 +4,12 @@ import {closeoutReadiness} from '../../src/lib/jobCloseout.js';
 
 const idOk=x=>Number.isSafeInteger(Number(x))&&Number(x)>0;
 const pkgOk=x=>Number.isSafeInteger(Number(x))&&Number(x)>=1&&Number(x)<=100;
-const pathSafe=String;
 const errResponse=(event,e)=>jsonResponse(400,{success:false,error:String(e.message||'Carrier request failed').slice(0,420)},event);
+async function externalRow(sb,jobId,packageIndex){
+ const {data,error}=await sb.from('sc_external_usps_labels').select('*')
+  .eq('job_id',jobId).eq('package_index',packageIndex).maybeSingle();
+ if(error)throw error;return data;
+}
 async function row(sb,jobId,packageIndex){
  const {data,error}=await sb.from('sc_carrier_label_jobs').select('*').eq('job_id',jobId).eq('package_index',packageIndex).maybeSingle();
  if(error)throw error;return data;
@@ -58,13 +62,45 @@ export async function handler(event){
   const id=Number(body.job_id),index=Number(body.package_index||1);
   if(!idOk(id)||!pkgOk(index))throw Error('Choose an existing production job and package 1–100.');
   if(action==='list'){
-   const {data,error}=await sb.from('sc_carrier_label_jobs').select('*').eq('job_id',id).order('package_index');
-   if(error)throw error;
-   return jsonResponse(200,{success:true,config:configSummary(),shipments:(data||[]).map(publicRow)},event);
+   const [easypost,external]=await Promise.all([
+    sb.from('sc_carrier_label_jobs').select('*').eq('job_id',id).order('package_index'),
+    sb.from('sc_external_usps_labels').select('id,job_id,package_index,tracking_code,label_reference,cost_usd,note,recorded_at')
+     .eq('job_id',id).order('package_index'),
+   ]);
+   if(easypost.error)throw easypost.error;
+   if(external.error)throw external.error;
+   return jsonResponse(200,{success:true,config:configSummary(),
+    shipments:(easypost.data||[]).map(publicRow),external_labels:external.data||[]},event);
+  }
+  if(action==='register_click_n_ship'){
+   const job=await evidence(sb,id);
+   const prior=await row(sb,id,index),out=await externalRow(sb,id,index);
+   if(out)throw Error('This package already has a saved USPS Click-N-Ship label. Do not add it again.');
+   if(prior&&prior.state!=='quoted')
+    throw Error('This package already has EasyPost postage purchasing/purchased or unresolved. Reconcile it before recording USPS postage.');
+   const tracking=String(body.tracking_code||'').trim().replace(/\s/g,'');
+   const reference=String(body.label_reference||'').trim();
+   const amount=body.cost_usd===''||body.cost_usd===null||body.cost_usd===undefined?null:Number(body.cost_usd);
+   if(!/^[A-Z0-9]{10,45}$/i.test(tracking)||reference.length<3||reference.length>180)
+    throw Error('Enter the USPS tracking code and a Click-N-Ship purchase reference from the USPS receipt.');
+   if(amount!==null&&(!Number.isFinite(amount)||amount<0||amount>2000))
+    throw Error('USPS postage amount must be 0–2000 USD, or left blank if unknown.');
+   if(body.confirm_external!==true)
+    throw Error('Confirm that the USPS Click-N-Ship label was actually purchased separately.');
+   const result=await sb.from('sc_external_usps_labels').insert({
+    job_id:job.id,package_index:index,tracking_code:tracking.toUpperCase(),
+    label_reference:reference,cost_usd:amount,note:String(body.note||'').slice(0,700),
+    recorded_by:auth.user.id,
+   }).select('id,job_id,package_index,tracking_code,label_reference,cost_usd,note,recorded_at').single();
+   if(result.error)throw result.error;
+   return jsonResponse(200,{success:true,external_label:result.data,
+    notice:'USPS Click-N-Ship label recorded. No new postage was purchased here. Verify the printed USPS label and actual carrier acceptance separately.'},event);
   }
   if(!cfg.enabled)throw Error('EasyPost '+cfg.mode+' API key is not configured.');
   if(action==='quote'){
    const job=await evidence(sb,id);
+   const external=await externalRow(sb,id,index);
+   if(external)throw Error('USPS Click-N-Ship postage is already recorded for this package. No EasyPost label may be bought.');
    const existing=await row(sb,id,index);
    if(existing&&existing.state!=='quoted')throw Error('This package is already purchasing/purchased or needs manual reconciliation. Do not request or buy duplicate postage.');
    const to=normalizeAddress(body.to_address),parcel=normalizeParcel(body.parcel);
@@ -106,6 +142,7 @@ export async function handler(event){
    return jsonResponse(409,{success:false,error:'Carrier has not confirmed a purchased label. Do not retry purchasing. Reconcile in EasyPost before releasing the package.'},event);
   }
   if(action!=='buy')throw Error('Unknown carrier action.');
+  if(await externalRow(sb,id,index))throw Error('This package has an externally purchased USPS label. Do not buy a second postage label.');
   if(current.state==='purchased')return jsonResponse(200,{success:true,shipment:publicRow(current),already_purchased:true},event);
   if(current.state!=='quoted')throw Error('Purchase state is not safe to retry. Use Recover label / EasyPost dashboard.');
   if(!cfg.canBuy)throw Error('Live label purchases are disabled; set SC_EASYPOST_LIVE_BUY_ENABLED=true after test-mode verification.');
