@@ -1521,6 +1521,54 @@ guideChapters.push({
 // Verified UI observations and open audit gaps supplement, not replace, operational source docs.
 guideChapters.push(...wordPressAuditChapters());
 
+
+guideChapters.push({
+ id:'wordpress-commerce-integrity-preflight',
+ title:'WordPress Commerce Integrity — Storefronts, SKUs and Checkout Shipping',
+ description:'Owner-first read-only diagnostics for live WordPress plugin metadata, SKU ownership candidates and WooCommerce shipping methods, with clear evidence limits.',
+ sections:[
+  section('wp-integrity-overview','Launch WordPress Commerce Integrity',
+   'Tools & Admin → WordPress Commerce Integrity combines the October 22, 2026 WordPress audit baseline with limited, authorized live GET-only checks. It does not update settings, product identifiers, orders or postage.',
+   {relatedRoutes:['/wordpress-integrity','/application-guide','/deployment-health'],
+    steps:['Sign in using an administrator or manager role. Other roles cannot run the server diagnostics.',
+     'Review the dated baseline. Click Run read-only checks to request the current plugin list (when WordPress permissions allow), Woo shipping-zone methods and a small Woo SKU sample.',
+     'Read the checked-at timestamp, status and any unavailable section. No result is silently treated as passing.',
+     'Use each Owner verification checklist to plan controlled staging validation and approval.',
+     'Keep each business system authoritative: recurring storefront orders are paid in WooCommerce; one-off team forms use QuickBooks/manual jobs; SKU rebuild, Woo sync and blank relink are separate steps.'],
+    warnings:['Read-only snapshots do not establish which plugin fires a save hook or what Woo checkout will charge a particular shopper.','SiteGround WAF and WordPress Application Password capabilities may prevent plugin/commerce REST reads without implying the site is broken.']}),
+  section('wp-integrity-storefront','Client Storefronts 0.1.2 vs 0.1.3 — safe comparison',
+   'The WordPress audit observed Client Storefronts installed header 0.1.2, while the GitHub companion plugin header says 0.1.3. A mismatch is not proof of a broken store or that the only difference is the version text.',
+   {relatedRoutes:['/wordpress-integrity','/team-stores','/application-guide'],
+    steps:['Start on the read-only WordPress Commerce Integrity page and run the optional plugin metadata request.',
+     'If WordPress denies the plugin-list REST API, open WordPress Plugins → Installed Plugins under an authorized admin and compare the current header manually.',
+     'For definitive comparison, obtain a controlled backup/copy of installed plugin files and compare its PHP/CSS/routes against wordpress/skilled-crafting-client-stores/ in GitHub.',
+     'Set up a nonproduction store draft using a fictional team, confirm category-only product listing, templates, checkout styling, client approval gate and public directory.',
+     'Only when version differences are understood should the owner approve a backed-up plugin update during a safe maintenance window.'],
+    warnings:['Do not update or deactivate the live plugin solely to make the version numbers match.','Do not send WordPress Application Passwords or installed plugin source archives containing secrets in customer messages.']}),
+  section('wp-integrity-sku','Choose one authoritative SKU writer and protect blank mappings',
+   'Multiple installed SKU generators and batch catalog utilities are active. Their exact hooks and override precedence remain unverified. The diagnostic may show active candidates and a limited sample of Woo SKUs, but it cannot certify unique identifiers site-wide.',
+   {relatedRoutes:['/wordpress-integrity','/woo-sync','/product-integrity','/product-blank-mappings'],
+    steps:['Identify each enabled SKU writer and whether it runs on product save, variation create, or bulk rebuild.',
+     'Designate one approved source of canonical SKU: brand, style, color, size and stable variation identifier as relevant to the catalog.',
+     'Before any change, export a limited test fixture of parent/variation IDs, SKU, prices, attributes, outstanding Woo orders and Supabase blank links.',
+     'Apply test changes ONLY in an isolated staging environment and verify no SKU collisions, order-link regressions or mismatched colors/sizes.',
+     'After a separately approved production change, reconcile Woo→Supabase product sync and blank-master relink as independent tasks and check one physical pull sheet.',
+     'Never use a timed-out or partial bulk operation as evidence nothing occurred. Audit its logs and records first.'],
+    warnings:['A Woo SKU sample of up to 25 products and three groups of variations is not a complete collision scan.', 'Disable or remove no live SKU plugins without a controlled compatibility assessment.']}),
+  section('wp-integrity-shipping','Reconcile Woo shipping zones and free-shipping extensions',
+   'WooCommerce core shipping zones and the separate Advanced Free Shipping extension can both affect checkout. The read-only view shows methods returned by core Woo REST, not an actual calculated cart.',
+   {relatedRoutes:['/wordpress-integrity','/work-hub','/team-stores'],
+    scenario:'A family places a $199.99, $200.00 and $200.01 school-store order with and without a coupon and mixed shipping classes.',
+    steps:['Open WordPress Commerce Integrity → Run read-only checks. Expand each available zone/method to inspect enabled state and source-returned amount requirements.',
+     'Review the dated Kitsap County audit: core free shipping minimum $200 OR coupon and a separate Advanced Free Shipping rule called Spend $200 get free shipping!. This is not a universal zone setting.',
+     'Do not infer precedence or actual rates from those configuration settings: tax, coupon, address, class, weight and other extension rules can alter eligibility.',
+     'Prepare staging checkout fixtures for local, out-of-zone and unrecognized addresses, at $199.99/$200/$200.01; with/without coupons, taxable/non-taxable, and individual/mixed shipping classes.',
+     'Record the complete checkout option list and final displayed cart totals for each fixture, then assess accidental free/duplicate methods before any live edit.',
+     'Keep paid carrier label purchasing and physical dispatch as separate events. A Woo checkout shipping charge is not proof a USPS/EasyPost label was bought or delivered.'],
+    warnings:['The native Woo API may not expose all Advanced Free Shipping rule conditions. Confirm them independently in the actual plugin UI.', 'No orders or real postage are created by the integrity review.']}),
+ ]
+});
+
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [
     chapter.title,

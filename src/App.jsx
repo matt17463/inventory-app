@@ -60,6 +60,7 @@ const OrderRiskDashboard = lazy(() => import('./OrderRiskDashboard'));
 const OnsiteSales = lazy(() => import('./OnsiteSales'));
 const OperationsCalendar = lazy(() => import('./OperationsCalendar'));
 const ApplicationGuide = lazy(() => import('./ApplicationGuide'));
+const WordPressCommerceIntegrity = lazy(() => import('./WordPressCommerceIntegrity'));
 const ApplicationIntegrityCenter = lazy(() => import('./ApplicationIntegrityCenter'));
 const PricingRules = lazy(() => import('./PricingRules'));
 const ProductDataHealth = lazy(() => import('./ProductDataHealth'));
@@ -211,6 +212,7 @@ function EmployeeRoutes() {
       <Route path="/product-data-health" element={<ProductDataHealth />} />
       <Route path="/product-integrity" element={<ProductIntegrityCenter />} />
       <Route path="/operations-integrity" element={<ApplicationIntegrityCenter />} />
+      <Route path="/wordpress-integrity" element={<WordPressCommerceIntegrity />} />
       <Route path="/marketing" element={<MarketingWorkspace />} />
       <Route path="/inventory-audit" element={<InventoryAudit />} />
       <Route path="/production-photo-proof" element={<ProductionPhotoProof />} />

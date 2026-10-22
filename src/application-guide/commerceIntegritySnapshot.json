@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-22",
+  "source": "Authorized WordPress browser audit (PR #103): docs/wordpress-audit/AUDIT_COMPLETE.json and operations-integrity.md.",
+  "sourceStatus": "partial-audit-not-live-certified",
+  "pluginSnapshot": {
+    "storefront": {
+      "slug": "skilled-crafting-client-storefronts",
+      "installedVersion": "0.1.2",
+      "repositoryVersion": "0.1.3",
+      "active": true
+    },
+    "skuWriters": [
+      {
+        "slug": "wc-sku-builder-manager",
+        "name": "WC SKU Builder Manager",
+        "version": "2.4.0-batched-no-save-timeout-fix"
+      },
+      {
+        "slug": "woocommerce-product-sku-generator",
+        "name": "Product SKU Generator for WooCommerce",
+        "version": "2.5.1"
+      },
+      {
+        "slug": "sku-for-woocommerce",
+        "name": "SKU Generator for WooCommerce",
+        "version": "1.6.6"
+      }
+    ],
+    "supportTools": [
+      {
+        "slug": "skilled-crafting-woo-bulk-brand-style-editor",
+        "name": "Woo Bulk Brand & Style Editor"
+      },
+      {
+        "slug": "woocommerce-variation-batch-updater",
+        "name": "Woo Variation Batch Updater"
+      },
+      {
+        "slug": "wc-brand-style-manager-v3",
+        "name": "WC Brand Style Manager V3"
+      }
+    ],
+    "inventorySync": {
+      "slug": "woocommerce-to-supabase-product-sync",
+      "version": "2.9.1-brand-normalized-rpc-fix",
+      "relationship": "SKU builder rebuild does NOT automatically sync Supabase; sync and blank relinking are separate operations."
+    },
+    "personalization": {
+      "slug": "skilled-crafting-product-options",
+      "mode": "Replacement",
+      "legacyRead": true,
+      "claim": "Plugin displays parity MATCH and readiness YES; those claims were not independently checkout-tested."
+    },
+    "shipping": {
+      "zoneName": "Kitsap County",
+      "zoneRequirements": "minimum order amount OR coupon",
+      "freeShippingMinimum": "200.00",
+      "flatRateBase": "0.00",
+      "flatRateTaxable": true,
+      "shippingClassCalculation": "highest class cost per order",
+      "advancedFreeShippingRule": "Spend $200 get free shipping!",
+      "extensionSlug": "woocommerce-advanced-free-shipping",
+      "caveat": "Specific inspected zone only; coupon, tax, discount and cart/zone combinations were not tested."
+    }
+  },
+  "pendingChecks": [
+    {
+      "id": "storefront-deployed-code",
+      "area": "storefront",
+      "label": "Verify installed PHP matches intended plugin",
+      "severity": "high",
+      "steps": [
+        "Compare live installed plugin files/header 0.1.2 with repository 0.1.3 using authorized WordPress file access or staged copy.",
+        "Confirm whether REST route and branded storefront settings are equivalent before updating.",
+        "Test draft, preview, category isolation and checkout on nonproduction fixture."
+      ],
+      "notPermitted": "Do not update/deactivate the live plugin as a diagnostic."
+    },
+    {
+      "id": "sku-single-writer",
+      "area": "sku",
+      "label": "Choose exactly one authoritative SKU generator",
+      "severity": "high",
+      "steps": [
+        "Document which plugin runs on individual Woo product save and on batch updates.",
+        "Confirm primary SKU schema includes brand/style/color/size and stable variation mapping.",
+        "Audit possible overwrite/collision for test variants before enabling any bulk job.",
+        "Follow SKU change with separately approved Woo→Supabase sync and blank-master relink."
+      ],
+      "notPermitted": "Do not regenerate, disable plugins, change SKU or execute bulk repair on production."
+    },
+    {
+      "id": "shipping-zone-fixtures",
+      "area": "shipping",
+      "label": "Reconcile shipping across zones, coupons and classes",
+      "severity": "high",
+      "steps": [
+        "Read Woo shipping zone and method configuration; compare core free shipping to Advanced Free Shipping rule.",
+        "Prepare staging cart test fixtures: $199.99/$200/$200.01; with/without coupon; local/out-of-zone; single/mixed shipping classes.",
+        "Check address zone match, tax and total, before/after discount behavior, and enabled method order.",
+        "Confirm customer quotes in staging; only then consider editing live rules."
+      ],
+      "notPermitted": "Do not create orders, buy postage, or change zone/rules for these diagnostics."
+    }
+  ]
+}
