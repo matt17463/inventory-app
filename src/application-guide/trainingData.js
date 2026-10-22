@@ -397,12 +397,12 @@ trainingTutorials.push({
  id:'wp-commerce-confirmed-risks-owner-approval-20261022',
  title:'Owner: Approving WordPress Commerce Integrity Remediation',
  roles:['manager','owner-admin'],level:'Advanced',minutes:25,safeMode:'guided-read-only',
- summary:'Review confirmed 0.1.2/0.1.3 storefront differences, enabled SKU save hooks, coupon and shipping policies. Complete no transactional actions in this exercise.',
+ summary:'Review confirmed 0.1.2/0.1.3 storefront differences, enabled SKU save hooks, the owner's intentional coupon policy, and shipping policies. Complete no transactional actions in this exercise.',
  outcome:'The owner can distinguish a source-confirmed configuration risk from an observed customer incident and authorize staged remediation without changing live transactions.',
  steps:[
   step('Identify owner decisions','Review the approval pack in the Application Guide. List decisions for the published 100% coupon, normal shipping versus free organization distribution, Heavy fallback, SKU immutability and staging setup.',{
    route:'/wordpress-integrity',verify:'You can name what needs explicit owner approval before any production action.'}),
-  step('Review the confidential coupon policy','In approved owner-only discussion, check whether a broad 100% discount plus free shipping has a deliberate internal purpose. Do not disclose its code, apply it or change settings as a training step.',{
+  step('Review the confidential coupon policy','In approved owner-only discussion, recognize that the owner confirmed the 100% discount plus free-shipping coupon is intentional. Do not disclose its code, apply it or change settings as a training step.',{
    verify:'You can explain that configured eligibility is not proof of actual misuse or customer checkout behavior.'}),
   step('Explain competing SKU routes','Review custom builder save hooks, SkyVerge AJAX hooks, the dormant WP Wham internal switch and Mockup Studio publisher scheme. Do not run a batch SKU rebuild.',{
    route:'/wordpress-integrity',verify:'You can explain why plugin activation does not prove actual SKU writer authority.'}),
