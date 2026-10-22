@@ -50,31 +50,50 @@ function controlDescription(item){
  return 'Enter '+label+'. Use the current job, customer, SKU, product, artwork or material as appropriate; review the value before submitting.';
 }
 function controlsIn(file){
- const s=fs.readFileSync(file,'utf8');
- const found=[];
- const regex=/<(input|select|textarea|button)\b([\s\S]{0,1600}?)>/g;
- let match;
- while((match=regex.exec(s))!==null){
-  const tag=match[1],props=match[2],start=match.index;
-  const before=s.slice(Math.max(0,start-550),start);
-  const after=s.slice(regex.lastIndex,regex.lastIndex+240);
+ const s=fs.readFileSync(file,'utf8'),found=[];
+ // Parse JSX tags by balanced braces, so callback arrows do not look like tag ends.
+ const openings=/<(input|select|textarea|button)\b/g;let match;
+ while((match=openings.exec(s))!==null){
+  const tag=match[1],start=match.index;
+  let brace=0,quote='',end=-1;
+  for(let i=openings.lastIndex;i<Math.min(s.length,openings.lastIndex+6000);i++){
+   const c=s[i],previous=s[i-1];
+   if(quote){if(c===quote&&previous!=='\\')quote='';continue;}
+   if(c==="'"||c==='"'||c===String.fromCharCode(96)){quote=c;continue;}
+   if(c==='{')brace++;
+   else if(c==='}')brace=Math.max(0,brace-1);
+   else if(c==='>'&&brace===0){end=i;break;}
+  }
+  if(end<0)continue;
+  const props=s.slice(openings.lastIndex,end);
+  const before=s.slice(Math.max(0,start-650),start);
+  const after=s.slice(end+1,end+650);
   const aria=props.match(/aria-label\s*=\s*["']([^"']+)["']/)?.[1];
   const placeholder=props.match(/placeholder\s*=\s*["']([^"']+)["']/)?.[1];
   const name=props.match(/\bname\s*=\s*["']([^"']+)["']/)?.[1];
-  const labelCandidates=[...before.matchAll(/<label\b[^>]*>([\s\S]{0,350})/g)];
-  const rawLabel=labelCandidates.length?labelCandidates.at(-1)[1]:'';
-  let label=normalize(rawLabel.split(/<(?:input|select|textarea|button|div)\b/)[0]);
-  const rawText=tag==='button'?normalize(after.split('</button>')[0].replace(/<[^>]+>/g,' ')):'';
-  label=normalize(aria||label||rawText||placeholder||name||'');
-  if(!label||/^\{|\$\{|=>|className|onClick|disabled\s?/.test(label))label=normalize(placeholder||name||rawText||aria||'');
-  if(label.length<2||label.length>140)continue;
+  const lastLabel=before.lastIndexOf('<label');
+  const labelFragment=lastLabel>=0?before.slice(lastLabel):'';
+  const labelValid=labelFragment&&!labelFragment.includes('</label>');
+  const nearbyLabel=labelValid?normalize(labelFragment.slice(labelFragment.indexOf('>')+1).split(/<(?:input|select|textarea|button|div)\b/)[0]):'';
+  const closing=tag==='button'?after.indexOf('</button>'):-1;
+  const buttonInside=tag==='button'?(closing>=0?after.slice(0,closing):after.slice(0,160)):'';
+  let visible=normalize(buttonInside.replace(/\{[^{}]{0,500}\}/g,' ').replace(/<[^>]*>/g,' '));
+  if(!visible&&tag==='button'){
+   const labels=[...buttonInside.matchAll(/['"]([A-Z][^'"]{2,65})['"]/g)].map(x=>x[1]);
+   visible=labels.length?normalize(labels.at(-1)):'';
+  }
+  let label=normalize(aria||(tag==='button'?visible:'')||nearbyLabel||placeholder||name||'');
+  const bad=/[{}=><]|\b(?:className|onClick|setState|setParams|disabled|onChange|event|onSubmit|filter|map|return)\b/i;
+  if(!label||bad.test(label)||label.length>130)label=normalize(aria||placeholder||name||'');
+  if(!label||label.length<2||label.length>130||bad.test(label))continue;
   const type=tag==='input'?(props.match(/\btype\s*=\s*["']([^"']+)["']/)?.[1]||'text'):tag;
-  const options=tag==='select'?[...after.matchAll(/<option[^>]*>([^<]{1,80})<\/option>/g)].map(x=>x[1]):[];
-  const action=tag==='button'?(props.match(/onClick\s*=\s*\{([^}]{1,100})/)?.[1]||''): '';
+  const opts=tag==='select'?s.slice(end+1,end+1700):'';
+  const options=tag==='select'?[...opts.matchAll(/<option[^>]*>([^<]{1,80})<\/option>/g)].map(x=>x[1]):[];
+  const onClick=tag==='button'?(props.match(/onClick\s*=\s*\{\s*([A-Za-z_][\w.]*)\s*\}/)?.[1]||''):'';
   const item={type,label,description:controlDescription({type,label})};
-  if(placeholder&&placeholder!==label)item.placeholder=normalize(placeholder);
+  if(placeholder&&normalize(placeholder)!==label)item.placeholder=normalize(placeholder);
   if(options.length)item.options=options.slice(0,10).map(normalize);
-  if(action&&/^[a-zA-Z0-9_.]+$/.test(action))item.action=action;
+  if(onClick)item.action=onClick;
   found.push(item);
  }
  const seen=new Set();
