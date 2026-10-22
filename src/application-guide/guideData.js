@@ -1569,6 +1569,66 @@ guideChapters.push({
  ]
 });
 
+
+guideChapters.push({
+ id:'wordpress-commerce-audit-confirmed-20261022',
+ title:'WordPress Commerce: Confirmed Risks and Owner-Approved Remediation',
+ description:'Follow the October 22 Work read-only review (PR #106). No customer charge error, SKU corruption, or cross-client disclosure was demonstrated, and no live commerce changes have been authorized.',
+ sections:[
+  section('commerce-owner-coupon-policy','Urgent owner review: confidential 100% coupon with free shipping',
+   'The browser audit found a published coupon configured for 100% discount and free shipping. The owner subsequently confirmed this coupon is intentional. No misuse was observed and no change to its discount or shipping behavior has been authorized.',
+   {relatedRoutes:['/wordpress-integrity','/application-guide'],
+    steps:[
+     'As WordPress owner, review the coupon privately under WooCommerce > Marketing > Coupons. Never copy the code or discount link into this guide or a customer message.',
+     'The owner confirmed coupon intent; its intended audience and access-control details were not specified. Review them only in a separate confidential policy conversation if needed.',
+     'Preserve the existing coupon without expiry, restriction, disabling or changes to its free-shipping flag. A subsequent alteration requires new explicit owner approval.',
+     'Test intended coupon eligibility in a truly isolated WordPress fixture, not with real customer orders.',
+     'Record coupon intent as confirmed; do not interpret this confirmation as approval of unrelated shipping, SKU or storefront changes.'
+    ],warnings:['No coupon was applied, no discount abuse was observed and a coupon settings page alone cannot prove real checkout eligibility.']}),
+  section('commerce-storefront-safe-upgrade','Stage the Client Storefronts 0.1.3 context safeguards',
+   'Installed 0.1.2 PHP and CSS were compared with repository 0.1.3: new context resolver, client-category related product filter and private-ish history widget suppression are absent in 0.1.2.',
+   {relatedRoutes:['/team-stores','/wordpress-integrity'],
+    steps:[
+     'Prepare an isolated fictional organization store and back up the installed 0.1.2 two-file plugin package.',
+     'Test the current store preview, product context, child categories, recommended products, recent history, four themed layouts, draft permissions and mixed cart before applying candidate files.',
+     'Apply only the two reviewed 0.1.3 PHP/CSS files on staging. Check approved context and absence of cross-client recommendations, classic and block checkout and mobile styling.',
+     'Document exact before/after behavior and rehearse reverting both files together. A plugin header bump is not a reason for an untested live deployment.',
+     'After the business owner approves the evidence and release window, deploy narrowly and verify live public functionality. Do not overwrite database orders.'
+    ],warnings:['No actual cross-client product leak was demonstrated in the observed QA preview.']}),
+  section('commerce-sku-write-security','Harden the SKU rebuild route and choose a single owner',
+   'The installed custom builder and SkyVerge register enabled SKU-writing callbacks. WP Wham was active with its internal generation switch OFF. A custom GET rebuild handler lacks nonce validation.',
+   {relatedRoutes:['/wordpress-integrity','/woo-sync','/product-integrity','/product-blank-mappings'],
+    steps:[
+     'Do NOT open the custom batch rebuild endpoint until it is protected by proper POST plus nonce and scope validation. Its admin capability check alone does not prove request intent.',
+     'On isolated fixtures, trace simple/parent save, variation save, Woo AJAX, Woo bulk, batch rebuild and Mockup Studio REST publish paths separately.',
+     'Record original variation IDs, SKUs, lookup data, Woo order links and blank mappings before and after each fictional operation; test second-run stability.',
+     'The custom builder resembles a human-readable schema but can overwrite existing identifiers; the application publisher uses a different hash scheme. Decide whether original SKUs should become immutable.',
+     'Only after tests and owner approval choose a single writer, update plugins/settings and separately run Woo product sync, blank relink and a fictional pull-sheet test.'
+    ],warnings:['The diagnostic alias fix recognizes installed plugin folders but does NOT prove that all active plugins currently generate identifiers.', 'Current 50-record sample without duplicates cannot certify the full catalog.']}),
+  section('commerce-shipping-owner-policy','Reconcile core and extension free-shipping conditions without accidental giveaways',
+   'Core checks >= $200 on discounted tax-exclusive subtotal OR a free-shipping coupon; Advanced Free Shipping checks exactly $200 before discounts including tax. Class-specific fees determine whether zero-base flat rate is actually free.',
+   {relatedRoutes:['/wordpress-integrity','/team-stores','/work-hub'],
+    scenario:'A fictional school cart at $199.99, $200.00 and $200.01 plus a mixed-class cart tests intended ordinary shipping against club pickup/distribution.',
+    steps:[
+     'First approve the desired policy: ordinary shipped items, coupon exceptions, separate no-cost Spirit Wear and Uniform distribution, Heavy-class national fallback, and whether paid expedited options should remain.',
+     'Use isolated staging to test all three thresholds, tax-on/off, ordinary discounts and a fictional free-shipping coupon, local/outside-zone addresses, Clothing, Drinkware, Heavy, Uniform, Spirit Wear and mixed classes.',
+     'Compare current core and extension methods with a single coherent post-discount threshold design. Only remove the redundant exact-$200 extension rule when staged acceptance shows no intended use is lost.',
+     'Verify actual customer-facing methods and taxes without submitting paid orders or purchasing labels.',
+     'Do not confuse WooCommerce checkout shipping charges with carrier postage purchased later through Click-N-Ship or EasyPost.'
+    ],warnings:['Flat base zero does not prove everyone gets free shipping. A zero/blank shipping-class path may nonetheless produce a zero rate; actual cart evidence is still pending.']}),
+  section('commerce-isolated-testing','Staging isolation and owner approval checklist',
+   'SiteGround showed no existing staging copy. A Netlify preview with production Supabase credentials is NOT an acceptable test environment.',
+   {relatedRoutes:['/application-guide','/deployment-health'],
+    steps:[
+     'Have the owner approve a staging budget and whether fictional-data setup or an isolated clone is permitted.',
+     'Before first boot of a clone, block outbound email and HTTP, replace payments, webhooks, Supabase, QuickBooks, Woo, storage and carrier credentials, inspect scheduled actions, use fake customers and products, protect the site from indexing.',
+     'Demonstrate that no request reaches production inventory, customer email recipients or live payment accounts. Keep proof of isolation without recording secrets.',
+     'Only then test SKU creation, version 0.1.3 store behavior, shipping cart quote fixtures and rollback.',
+     'Create a specific change request for each proposed production modification; carry out none solely on the basis of the audit.'
+    ],warnings:['Work estimated 12–24 engineering hours to create/verify isolation and selected staging acceptance tests before remediation, not a quote or a completed setup.']}),
+ ]
+});
+
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [
     chapter.title,
