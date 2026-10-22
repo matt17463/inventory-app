@@ -37,6 +37,7 @@ const GoogleCalendarIntegration = lazy(() => import('./GoogleCalendarIntegration
 const Home = lazy(() => import('./Home'));
 const WorkHub = lazy(() => import('./WorkHub'));
 const TeamStoreLaunchpad = lazy(() => import('./TeamStoreLaunchpad'));
+const PublicTeamStore = lazy(() => import('./PublicTeamStore'));
 const ManufacturingRecipes = lazy(() => import('./ManufacturingRecipes'));
 const ProductionTravelers = lazy(() => import('./ProductionTravelers'));
 
@@ -237,6 +238,7 @@ export default function App() {
         <Routes>
           <Route path="/customer-portal" element={<CustomerPortal />} />
           <Route path="/team-order" element={<PublicClientOrderForm />} />
+          <Route path="/stores/:slug" element={<PublicTeamStore />} />
           <Route path="/mockup-review" element={<MockupCustomerReview />} />
           <Route path="/marketing-review" element={<MarketingClientReview />} />
           <Route

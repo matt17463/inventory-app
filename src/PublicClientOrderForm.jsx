@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import './operationsFeatures.css';
 
 const sizes = ['YXS','YS','YM','YL','YXL','AXS','AS','AM','AL','AXL','A2XL','A3XL','A4XL','One Size','NA'];
@@ -48,6 +49,11 @@ function importCsv(text) {
 }
 
 export default function PublicClientOrderForm() {
+  const [params]=useSearchParams();
+  const campaignCode=params.get('campaign_code')||'';
+  const [groupCampaign,setGroupCampaign]=useState(null);
+  const [groupCampaignError,setGroupCampaignError]=useState('');
+
   const [form,setForm]=useState({
     organization:'', contact_name:'', contact_email:'', contact_phone:'', order_type:'Team / Club Apparel',
     desired_completion_date:'', event_date:'', delivery_method:'Pickup', preferred_contact_method:'Email',
@@ -55,6 +61,20 @@ export default function PublicClientOrderForm() {
     customization_notes:'', customer_notes:'', website:''
   });
   const [items,setItems]=useState([emptyLine()]);
+  useEffect(()=>{
+    if(!campaignCode)return;
+    let active=true;
+    fetch('/.netlify/functions/client-order-submit?campaign_code='+encodeURIComponent(campaignCode))
+      .then(async r=>{const payload=await r.json();if(!r.ok||!payload.success)throw Error(payload.error||'Group link unavailable');return payload;})
+      .then(payload=>{
+        if(!active)return;
+        setGroupCampaign(payload.campaign);
+        setForm(p=>({...p,organization:payload.campaign.organization,
+          order_type:'Team / Club Apparel',desired_completion_date:payload.campaign.deadline||p.desired_completion_date,
+          delivery_method:payload.campaign.delivery_method||p.delivery_method}));
+      }).catch(e=>{if(active)setGroupCampaignError(e.message||'This group form has closed.');});
+    return()=>{active=false;};
+  },[campaignCode]);
   const [files,setFiles]=useState([]);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -113,7 +133,7 @@ export default function PublicClientOrderForm() {
     try {
       const response=await fetch('/.netlify/functions/client-order-submit',{
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({...form, items, customer_confirmation:{approved:true,approved_at:new Date().toISOString(),statement:'Names and numbers will be printed exactly as entered; customer reviewed spelling, capitalization, garment color, size, name text color, and jersey number.'}, attachments:await filePayloads()})
+        body:JSON.stringify({...form, campaign_code:campaignCode||undefined, items, customer_confirmation:{approved:true,approved_at:new Date().toISOString(),statement:'Names and numbers will be printed exactly as entered; customer reviewed spelling, capitalization, garment color, size, name text color, and jersey number.'}, attachments:await filePayloads()})
       });
       const payload=await response.json().catch(()=>({}));
       if(!response.ok || payload.success===false) throw new Error(payload.error||'Submission failed.');
@@ -127,6 +147,7 @@ export default function PublicClientOrderForm() {
   if (reviewing && !submitted) return (
     <main className="sc-public-order-page">
       <section className="sc-public-order-shell sc-public-order-confirmation">
+        {groupCampaign&&<p className="sc-form-message"><strong>{groupCampaign.name}</strong> · Group order request; invoicing handled by Skilled Crafting through QuickBooks.</p>}
         <header className="sc-public-order-header">
           <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" className="sc-public-order-logo" />
           <div><p className="eyebrow">Final review required</p><h1>Confirm Your Order Details</h1><p>Please review every item before submitting your request.</p></div>
@@ -137,6 +158,8 @@ export default function PublicClientOrderForm() {
           <p>Check spelling, capitalization, garment color, size, name on back, name text color, and jersey/employee number for every line. Skilled Crafting will use the information below as your approved personalization instructions.</p>
         </section>
 
+        {campaignCode&&!groupCampaign&&<div className="sc-form-message" role="status">{groupCampaignError||'Validating group order link…'}</div>}
+        {groupCampaign&&<div className="sc-form-message"><strong>{groupCampaign.name}</strong> · {groupCampaign.organization}. This is an occasional group order. After review, Skilled Crafting will invoice through QuickBooks; no online store is required.</div>}
         {message && <div className="sc-form-message">{message}</div>}
 
         <section className="sc-form-section">
@@ -186,6 +209,7 @@ export default function PublicClientOrderForm() {
   if (submitted) return (
     <main className="sc-public-order-page">
       <section className="sc-public-order-shell sc-public-order-success">
+        {groupCampaign&&<p>{groupCampaign.name}</p>}
         <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" className="sc-public-order-logo" />
         <h1>Order request received</h1>
         <p className="sc-public-order-number">{submitted}</p>
@@ -310,7 +334,7 @@ export default function PublicClientOrderForm() {
 
         <footer className="sc-public-order-submit">
           <p>Submitting this form creates an order request, not a final priced order. Skilled Crafting will review availability, artwork, and pricing with you before production.</p>
-          <button disabled={busy} type="submit">Review order before submitting</button>
+          <button disabled={busy||Boolean(campaignCode&&!groupCampaign)} type="submit">Review order before submitting</button>
         </footer>
       </form>
     </main>
