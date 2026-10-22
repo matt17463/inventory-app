@@ -368,6 +368,30 @@ trainingTutorials.push(
 // Six safe, audit-derived WordPress training modules; no live plugin writes.
 trainingTutorials.push(...wordpressAuditTutorials());
 
+
+trainingTutorials.push({
+ id:'wp-commerce-integrity-operator-review',
+ title:'Manager: WordPress Storefront, SKU and Shipping Integrity Preflight',
+ roles:['manager','owner-admin'],level:'Advanced',minutes:30,safeMode:'guided-read-only',
+ summary:'Practice recognizing dated audit findings versus live configuration, conflicting SKU writer candidates and overlapping Woo shipping rules without making production changes.',
+ outcome:'A manager can plan a safe storefront plugin compatibility review, select a single SKU ownership path and design shipping staging fixtures.',
+ steps:[
+  step('Open the integrity review','Go to Tools & Admin → WordPress Commerce Integrity. Read the dated October 22 baseline before running any checks.',{
+   route:'/wordpress-integrity',verify:'You can explain why a historic snapshot is not current-state proof.'}),
+  step('Run safe read-only diagnostics','Select Run read-only checks. Distinguish live observed, partial and unavailable results. Do not try to fix a 403 by disabling WordPress security.',{
+   route:'/wordpress-integrity',verify:'You can identify what was observed and what needs authorized manual WordPress review.'}),
+  step('Compare storefront versions','Review installed 0.1.2 versus repository 0.1.3. Explain why equal version labels do not by themselves establish matching deployed PHP behavior.',{
+   route:'/wordpress-integrity',verify:'You would inspect/compare code with a backup on staging before updating.'}),
+  step('Identify SKU writers','Review WC SKU Builder, Product SKU Generator and SKU Generator candidates. Do not regenerate or disable any plugin. Distinguish a sampled collision count from a complete catalog check.',{
+   route:'/wordpress-integrity',verify:'You know SKU ownership, Woo product sync and blank-master relink must each be verified.'}),
+  step('Design fictional shipping fixtures','For a fictional school-store cart compare $199.99, $200 and $200.01 with and without a coupon, local and out-of-zone addresses and mixed shipping classes. No checkout submission.',{
+   route:'/wordpress-integrity',verify:'You know core shipping zones and Advanced Free Shipping extension may both affect offered rates.'}),
+  step('Document pending actions for the owner','Review the three action checklists. Escalate any plugin mismatch, collisions or ambiguous shipping rates to a separate authorized nonproduction test.',{
+   route:'/application-guide',verify:'You can identify the highest-risk action that must NOT be used as a training exercise.',
+   warning:'Never save plugin settings, create paid orders, buy postage, rebuild SKUs, synchronize inventory or repair mappings during documentation training.'}),
+ ]
+});
+
 export function tutorialsForRole(roleId) {
   return trainingTutorials.filter((tutorial) => tutorial.roles.includes(roleId));
 }
