@@ -1444,6 +1444,79 @@ guideChapters.push({
  ],
 });
 
+
+// Carrier label workflow: linked from the guided Work Hub and generated PDF manual.
+guideChapters.push({
+ id:'usps-easypost-carrier-labels',
+ title:'Carrier Postage Labels: USPS Click-N-Ship and EasyPost',
+ description:'Make the least-cost practical shipping choice without paying twice for one package. Click-N-Ship remains a separate website account; EasyPost Wallet provides an API for live USPS/other-carrier rates and printing postage labels.',
+ sections:[
+  section('carrier-choices','Choose the label source: existing USPS or EasyPost Wallet',
+   'Your USPS Click-N-Ship login is not an API credential. For external USPS labels, buy on the USPS website, then record the purchased tracking and receipt in Skilled Crafting. For automated USPS/UPS options, connect an EasyPost Wallet account.',
+   {relatedRoutes:['/work-hub'],useWhen:['After packaging the actual customer order and finishing official QC.'],
+    steps:[
+     'Open Work Hub, select the exact job, check invoice/Woo payment, latest QC and exact line-by-line packing.',
+     'Open Carrier Shipping Labels. Choose one package number for each actual physical box or mailer.',
+     'For USPS Click-N-Ship, follow the official USPS link, buy/print there and record its tracking code and receipt reference after purchase.',
+     'For integrated pricing, use EasyPost Wallet after Netlify credentials and ship-from configuration are complete. Measure length, width, height and total packed ounces.',
+     'Compare the actual USPS, UPS or other returned carrier costs. The least expensive service can vary by destination, weight, speed and season.',
+     'Never buy from both services for one package. The app and database block duplicate label purchases by package number.'
+    ],
+    warnings:['EasyPost Wallet is free to use for up to 3,000 wallet labels per month, excluding postage; fees and discounts can change. No EasyPost subscriptions or BYOCA fees are required to use wallet carriers.','Click-N-Ship account credentials alone do not authorize USPS direct Labels APIs, which require additional enrollment and Enterprise Payment Account configuration.','Pirate Ship has no public API, so it cannot directly create labels in the Skilled Crafting application.']}),
+  section('carrier-netlify','Configure EasyPost and shipping origin securely',
+   'The server-only function reads EasyPost and ship-from configuration from Netlify. Keys are not exposed in the browser or stored in the product database.',
+   {relatedRoutes:['/deployment-health','/work-hub'],steps:[
+    'Create a free EasyPost account and activate USPS Wallet Carrier in EasyPost. Compare postage with your USPS Click-N-Ship account on a sample package.',
+    'Use EasyPost Settings > API Keys to obtain a TEST key. In Netlify production environment set SC_EASYPOST_TEST_KEY to this test value.',
+    'Set SC_EASYPOST_MODE=test. Do not configure production postage purchasing yet; test labels are not valid for shipment.',
+    'Set SC_SHIP_FROM_NAME, SC_SHIP_FROM_COMPANY (optional), SC_SHIP_FROM_STREET1, SC_SHIP_FROM_STREET2 (optional), SC_SHIP_FROM_CITY, SC_SHIP_FROM_STATE, SC_SHIP_FROM_ZIP and SC_SHIP_FROM_PHONE with your physical shipping origin.',
+    'Deploy production Functions after setting Netlify environment variables. Test US destination verification, several physical package dimensions, rate sorting, one test label PDF, and safe retry/recovery.',
+    'When real-world validation is complete, set SC_EASYPOST_PRODUCTION_KEY, SC_EASYPOST_MODE=production, and only then SC_EASYPOST_LIVE_BUY_ENABLED=true. Define SC_EASYPOST_MAX_LABEL_USD for your own maximum acceptable single-label charge.',
+    'For EasyPost Wallet billing, consider ACH funding: EasyPost reports a credit-card wallet load convenience fee. Verify current terms with the provider.'
+   ],warnings:['Never place API keys in VITE_ public variables, a client form, WordPress shortcode or this guide.','Switching test to production changes actual billing; a manager must explicitly confirm each shipping cost in the application.']}),
+  section('carrier-domestic','Get accurate domestic address and parcel quotes',
+   'All shipping address fields are required except Company and Apartment/Suite. Strict address verification rejects unverified destinations. Weight is in ounces; dimensions are inches.',
+   {relatedRoutes:['/work-hub'],steps:[
+    'Choose Package number 1 to 100. The package number matches the numbered internal 4x6 package label and should correspond to only one actual box.',
+    'Fill Recipient name, Company, Street address, Apartment/Suite, City, State (two letters), ZIP code and Recipient phone. Review the intended recipient instead of assuming it is the payer or school coordinator.',
+    'Record Length, Width and Height in inches and Total packed weight in ounces. Weigh the sealed package with packing material.',
+    'Click Verify address and get live carrier quotes. The server verifies the address strictly and creates a temporary carrier shipment/rate list.',
+    'Choose All carriers sorted by price or USPS services only. Rates appear with service, approximate transit days and USD total. Estimates are not guarantees.',
+    'Quotes expire after 20 minutes; if expired, verify details and request fresh rates. Requoting does not buy postage.'
+   ],warnings:['First release supports US domestic packages only and does not generate customs declarations.','Unexpected lack of rates can indicate incorrect measurements, unsupported addresses, disabled carrier Wallet accounts or EasyPost configuration.']}),
+  section('carrier-buy','Purchase or recover an EasyPost postage label',
+   'This is a billable manager-only function. Live purchases require the production key, explicit enablement and a confirmed exact postage cost.',
+   {relatedRoutes:['/work-hub'],steps:[
+    'Inspect the selected carrier, service, destination, exact package number, rate, transit estimate and quote expiry.',
+    'Check the authorization checkbox acknowledging the exact price. Click Purchase test label in test mode, or Purchase real postage after production enablement.',
+    'Confirm the native purchase dialog. An EasyPost production purchase deducts postage from your EasyPost Wallet or account; a test purchase does not produce valid postage.',
+    'On success, open the actual carrier PDF label and print at the provider-recommended size. Check that barcode, return address, destination and tracking are readable.',
+    'If network or provider state is uncertain, do not retry purchase. Use Recover label from EasyPost, then inspect EasyPost transaction history.',
+    'A purchased label is NOT proof that the carrier accepted the parcel. Record shipped/dispatch in the existing fulfillment section only after actual handoff.',
+    'After carrier scan or verified delivery, use the existing delivery proof and closeout tools; those are separate records.'
+   ],warnings:['An existing USPS Click-N-Ship label for this package blocks a second EasyPost postage purchase.','Label void/refund workflows are not included in this first integration. Handle cancellations and refunds in the carrier provider dashboard and record the outcome before new postage is bought.']}),
+  section('carrier-existing-usps','Record a purchased USPS Click-N-Ship label',
+   'This records external USPS postage without requiring an additional shipping integration subscription or charging EasyPost.',
+   {relatedRoutes:['/work-hub'],steps:[
+    'Log in to your existing USPS Click-N-Ship account through the official USPS link. Buy and print the USPS label there as usual.',
+    'In the same Guided Work Hub job and package number, enter USPS tracking number, USPS purchase receipt or label reference and optional postage paid and notes.',
+    'Click Record already-purchased USPS label. This logs the external purchase only; it does not print it, charge another provider, mark the order shipped or email a customer.',
+    'Print the original USPS postage label from Click-N-Ship. Verify the package number and tracking match the job and package label.',
+    'After physically handing the package to USPS, record the actual shipped event and tracking in the fulfillment section. Never infer shipment from label purchase.',
+    'If the job already has an EasyPost purchase or uncertain purchase state for that package, reconcile it before logging USPS postage.'
+   ]}),
+  section('carrier-two-client-scenarios','Example: school shipment versus one-time QuickBooks order',
+   'Two sample clients show how billing stays separate while shipping is shared.',
+   {scenario:'A school spirit store gets paid WooCommerce orders; a youth soccer team pays one consolidated QuickBooks invoice.',
+    relatedRoutes:['/team-stores','/client-orders','/work-hub'],steps:[
+      'School: use WooCommerce source orders and verified paid status, QR production travelers, official QC and packing counts. Compare USPS Ground Advantage and other EasyPost rates per actual package.',
+      'Group: complete the actual QuickBooks invoice and manual production job. Do not create a duplicate Woo order to print a shipping label.',
+      'For either job, if USPS Click-N-Ship has a lower quoted price, purchase from USPS manually and record that tracking instead of buying EasyPost postage.',
+      'For both, buying a label does not mark the order shipped, trigger customer messages, or automatically finish the production job.'
+    ]}),
+ ],
+});
+
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [
     chapter.title,
