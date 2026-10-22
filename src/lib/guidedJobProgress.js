@@ -40,6 +40,9 @@ export function deriveGuidedProgress(row,evidence={}){
  const artworkLinks=evidence.artworkLinks||[];
  const fulfillment=evidence.fulfillment||[];
  const photos=evidence.photos||[];
+ const packing=evidence.packing||[];
+ const pickup=evidence.pickup||[];
+ const revisionChecks=evidence.revisionChecks||[];
  const status=clean(row?.saved_job_status||job.status||row?.board_column||'');
  const completed=terminal.has(status);
  const cancelledJob=cancelled.has(status);
@@ -53,8 +56,15 @@ export function deriveGuidedProgress(row,evidence={}){
  const latestQc=[...qc].sort((a,b)=>new Date(b.qc_completed_at||b.created_at||0)-new Date(a.qc_completed_at||a.created_at||0))[0];
  const qcPassed=latestQc?.passed===true;
  const artworkLinked=artworkLinks.some(x=>Boolean(x.handoff?.approved_file_url)) || handoffs.some(h=>Boolean(h.approved_file_url));
- const hasPacking=fulfillment.some(f=>f.kind==='packing_checked');
- const handedOff=fulfillment.some(f=>['picked_up','shipped'].includes(f.kind));
+ const latestPacking=new Map();
+ for(const e of [...packing].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))){
+  if(!latestPacking.has(Number(e.job_item_id)))latestPacking.set(Number(e.job_item_id),e);
+ }
+ const activeLines=items.filter(i=>!['cancelled','canceled','void','voided','removed'].includes(clean(i.status)));
+ const packingComplete=activeLines.length>0&&activeLines.every(i=>
+  Number(latestPacking.get(Number(i.id))?.packed_quantity??-1)===Number(i.quantity||0));
+ const hasPacking=packingComplete||fulfillment.some(f=>f.kind==='packing_checked');
+ const handedOff=pickup.length>0||fulfillment.some(f=>['picked_up','shipped'].includes(f.kind));
  const allTraveled=required.length>0&&required.every(i=>travelers.some(t=>Number(t.job_item_id)===Number(i.id)));
  const productionStarted=producing.has(status)||Boolean(job.production_started_at);
  const pastQc=qcStage.has(status);
@@ -102,7 +112,7 @@ export function deriveGuidedProgress(row,evidence={}){
  add('delivery',missing.fulfillment?'unknown':handedOff?'verified':hasPacking?'linked':'review',null,
     missing.fulfillment?'Fulfillment evidence unavailable. Review packing records.':
     handedOff?'A shipment/collection record is linked; confirm actual customer receipt and close the job on Production Board.':
-    hasPacking?'Packing was logged but no actual pickup or shipment is recorded. Confirm fulfillment.':
+    hasPacking?'Line packing has been checked but actual pickup or shipment is not recorded. Confirm the customer handoff.':
     'No recorded packing or customer handoff. QC and completion alone do not prove delivery.',
     jobId?'/work-hub?job='+jobId:'/production-board');
  if(cancelledJob)return {steps,priority:{title:'Order cancelled / on hold',reason:'Do not produce. Confirm cancellation and reservation release in the Production Board.',href:'/production-board',kind:'blocked'},
@@ -115,7 +125,7 @@ export function deriveGuidedProgress(row,evidence={}){
  else if(blockerMessage.length)priority={title:'Resolve Production Board blockers',reason:blockerMessage.join(' · '),href:'/exception-center',kind:'blocked'};
  else if(unpaired.length)priority={title:'Pair '+unpaired.length+' blank line(s)',reason:'Product-to-blank mapping is missing; review the pull sheet before production.',href:pull,kind:'blocked'};
  else if(status==='qc'&&!qcPassed)priority={title:'Record official QC',reason:'The job is at QC without a passing inspection.',href:jobId?'/qc-checklist?job='+jobId:'/qc-checklist',kind:'action'};
- else if(status==='ready_to_ship')priority={title:handedOff?'Close out completed delivery':'Record packing and customer handoff',reason:handedOff?'A delivery event was logged; confirm Production Board closeout.':'Record actual packing/pickup/shipping evidence here after official QC.',href:handedOff?'/production-board':'/work-hub?job='+jobId,kind:'action'};
+ else if(status==='ready_to_ship')priority={title:handedOff?'Close out completed delivery':packingComplete?'Collect pickup signature or record shipment':'Verify every package line',reason:handedOff?'Receipt/delivery is recorded; confirm Production Board closeout.':packingComplete?'Packing counts match the order. Confirm actual pickup/shipment after QC.':'Pack every active job item to the exact ordered count before customer handoff.',href:handedOff?'/production-board':'/work-hub?job='+jobId,kind:'action'};
  else if(!artworkLinked)priority={title:'Verify approved artwork',reason:'No linked approved artwork file was found. This may be an unlinked legacy project; review client proof and print-ready file.',href:'/approval-automation',kind:'action'};
  else if(!allTraveled&&required.length)priority={title:'Prepare recipe and QR traveler',reason:'Create approved production instructions for each item as applicable.',href:traveler,kind:'action'};
  else if(status==='needs_attention'||status==='on_hold')priority={title:'Resolve current hold',reason:'Review the Production Board and purchasing exceptions before advancing.',href:'/exception-center',kind:'blocked'};

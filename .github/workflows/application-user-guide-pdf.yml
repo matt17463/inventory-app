@@ -1,0 +1,39 @@
+name: Skilled Crafting Comprehensive PDF Guide
+on:
+  push:
+    paths:
+      - "scripts/build-application-guide-pdf.mjs"
+      - "src/application-guide/**"
+      - "src/navigationConfig.js"
+      - "src/ApplicationGuide.jsx"
+      - ".github/workflows/application-user-guide-pdf.yml"
+  pull_request:
+    paths:
+      - "scripts/build-application-guide-pdf.mjs"
+      - "src/application-guide/**"
+      - "src/ApplicationGuide.jsx"
+      - ".github/workflows/application-user-guide-pdf.yml"
+  workflow_dispatch:
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Build complete PDF user guide
+        run: npm run guide:pdf
+      - name: Validate guide length, metadata and PDF format
+        run: |
+          test -s public/skilled-crafting-application-user-guide.pdf
+          file public/skilled-crafting-application-user-guide.pdf | grep -q PDF
+          test "$(stat -c%s public/skilled-crafting-application-user-guide.pdf)" -gt 25000
+          node -e "const x=require('./src/application-guide/controlCatalog.generated.json');if(x.visibleRoutes<60||x.controls<250)process.exit(1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skilled-crafting-complete-user-guide
+          path: public/skilled-crafting-application-user-guide.pdf
+          retention-days: 60
