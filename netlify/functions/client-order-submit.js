@@ -3,6 +3,23 @@ import { createServiceClient, getHeader } from './_shared/security.js';
 import { putOperationalObject } from './_shared/operationalStorage.js';
 
 const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
+const uuidCode=(v)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||''));
+function todayPacific(){
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const partsMap=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+  return partsMap.year+'-'+partsMap.month+'-'+partsMap.day;
+}
+async function resolveGroupCampaign(db,code){
+  if(!uuidCode(code))throw Error('This group order link is invalid.');
+  const {data,error}=await db.from('sc_team_store_workflows')
+    .select('id,customer_name,workflow_name,store_close_date,fulfillment_method,order_channel,status,stage')
+    .eq('public_order_code',code).maybeSingle();
+  if(error)throw error;
+  if(!data||data.order_channel!=='quickbooks_invoice'||data.status!=='active'||['complete','cancelled'].includes(data.stage)
+    ||(data.store_close_date&&data.store_close_date<todayPacific()))
+    throw Error('This group ordering link is closed or unavailable.');
+  return data;
+}
 const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 const allowedOrigin = (event) => {
   const origin = getHeader(event, 'origin');
@@ -53,6 +70,18 @@ function normalizeItems(items) {
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: publicHeaders(event), body: '' };
+  if(event.httpMethod === 'GET') {
+    if(!allowedOrigin(event))return reply(403,{success:false,error:'Unapproved origin'},event);
+    const code=clean(event.queryStringParameters?.campaign_code,40);
+    if(!code)return reply(400,{success:false,error:'Group order code required'},event);
+    try {
+      const campaign=await resolveGroupCampaign(createServiceClient(),code);
+      return reply(200,{success:true,campaign:{
+        organization:campaign.customer_name,name:campaign.workflow_name,deadline:campaign.store_close_date,
+        delivery_method:campaign.fulfillment_method,
+      }},event);
+    }catch {return reply(404,{success:false,error:'This group order form is not currently available.'},event);}
+  }
   if (event.httpMethod !== 'POST') return reply(405, { success: false, error: 'Method not allowed.' }, event);
   if (!allowedOrigin(event)) return reply(403, { success: false, error: 'This form may only be submitted from an approved Skilled Crafting site.' }, event);
 
@@ -60,7 +89,10 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}');
     if (clean(body.website, 200)) return reply(200, { success: true, message: 'Thank you.' }, event); // honeypot
 
-    const organization = clean(body.organization, 160);
+    const campaignCode=clean(body.campaign_code,40);
+    const supabase = createServiceClient();
+    const campaign=campaignCode?await resolveGroupCampaign(supabase,campaignCode):null;
+    const organization = campaign?campaign.customer_name:clean(body.organization, 160);
     const contactName = clean(body.contact_name, 160);
     const contactEmail = clean(body.contact_email, 200).toLowerCase();
     const items = normalizeItems(body.items);
@@ -71,7 +103,6 @@ export async function handler(event) {
     if (!items.length) return reply(400, { success: false, error: 'Add at least one garment/order line.' }, event);
     if (body.customer_confirmation?.approved !== true) return reply(400, { success: false, error: 'Review and approve the order details before submitting.' }, event);
 
-    const supabase = createServiceClient();
     const forwarded = getHeader(event, 'x-forwarded-for').split(',')[0].trim() || 'unknown';
     const salt = process.env.SC_PUBLIC_ORDER_RATE_SALT || process.env.GOOGLE_CALENDAR_STATE_SECRET || 'sc-client-orders';
     const ipHash = crypto.createHash('sha256').update(`${salt}:${forwarded}`).digest('hex');
@@ -83,6 +114,7 @@ export async function handler(event) {
 
     const requestPayload = {
       organization,
+      campaign_id: campaign?.id||null,
       contact_name: contactName,
       contact_email: contactEmail,
       contact_phone: clean(body.contact_phone, 80) || null,
@@ -98,7 +130,7 @@ export async function handler(event) {
       customization_notes: clean(body.customization_notes, 4000) || null,
       customer_notes: clean(body.customer_notes, 4000) || null,
       status: 'submitted',
-      source: 'public_order_form',
+      source: campaign?'group_invoice_order_form':'public_order_form',
     };
     const created = await supabase.from('sc_client_order_requests').insert(requestPayload).select('id,order_number').single();
     if (created.error) throw created.error;
