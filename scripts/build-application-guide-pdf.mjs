@@ -153,15 +153,20 @@ function ensure(height=30){if(y+height>735)newPage();}
 function textLines(v,{size=9.2,color=dark,weight='normal',indent=0,leading=13,spaceAfter=5}={}){
  const text=ascii(v);if(!text)return;
  pdf.setFont('helvetica',weight);pdf.setFontSize(size);pdf.setTextColor(...color);
- const lines=pdf.splitTextToSize(text,bodyW-indent);
- for(const line of lines){ensure(leading+2);pdf.text(line,margin+indent,y);y+=leading;}
+ const lines=pdf.splitTextToSize(text,bodyW-indent-20);
+ for(const line of lines){
+  ensure(leading+2);
+  // Reserve extra width for glyph spacing differences across PDF renderers.
+  pdf.text(line,margin+indent,y,{maxWidth:bodyW-indent-12});
+  y+=leading;
+ }
  y+=spaceAfter;
 }
 function heading(v,{level=1}={}){
  ensure(level===1?65:40);
  const size=level===1?17:level===2?12.5:10.5;
  pdf.setFont('helvetica','bold');pdf.setFontSize(size);pdf.setTextColor(...(level===1?navy:teal));
- const lines=pdf.splitTextToSize(ascii(v),bodyW);
+ const lines=pdf.splitTextToSize(ascii(v),bodyW-22);
  y+=level===1?16:10;
  for(const line of lines){ensure(size+5);pdf.text(line,margin,y);y+=size+3;}
  y+=level===1?11:7;
@@ -408,11 +413,15 @@ callout('READ THE VERIFICATION LEVEL','The full per-field novice and advanced de
 para('Conditional dialog audit: '+auditReport.dialogCount+' cases, '+auditReport.liveVerifiedDialogs+
  ' narrowly live-verified shipping visibility cases. Existing application dialog examples remain source reviewed or pending. No raw WordPress screenshots were included.');
 heading('Important owner findings',{level:2});
+para('A deeper source-and-configuration review from Work (PR #106) now confirms several implementation differences. This is still not staging acceptance or proof of a faulty real checkout charge.');
+
 [
- 'Client Storefronts installed 0.1.2 but repository code header 0.1.3. Do not assume equal behavior; compare actual deployed code in a separate controlled task.',
+ 'Installed Storefronts 0.1.2 PHP/CSS was compared directly with repository 0.1.3. The deployed version lacks product-page client-context resolution, store category related-product filtering and recently-viewed widget suppression. No cross-client exposure was observed. Stage/test before any two-file update.',
  'Skilled Crafting Product Options runs in observed Replacement mode while legacy option reading is enabled. Preserve existing order line metadata and test representative products before change.',
- 'Several active SKU generators/bulk editors can potentially modify identifiers. Confirm one SKU owner before changing any Woo variation IDs and separately verify Supabase sync and blank pairing.',
- 'WooCommerce core shipping and Advanced Free Shipping can overlap. Observed Kitsap County core free shipping: $200 minimum OR coupon; not necessarily the rule for every address or cart.',
+ 'Custom SKU Builder and SkyVerge register overlapping enabled SKU-writing hooks; active WP Wham had its internal generation switch OFF. The custom batch rebuild lacks nonce protection on a state-changing GET and should NOT be used until hardened. Staging must determine actual save paths.',
+ 'Woo core free shipping requires >= $200 on post-discount tax-exclusive displayed subtotal OR a valid free-shipping coupon. The separate Advanced Free Shipping rule uses exact equality at tax-inclusive pre-discount subtotal $200. No real checkout totals were measured.',
+ 'A published 100% coupon with free shipping enabled and broadly configured eligibility requires owner review for intended purpose and safeguards; no misuse was observed, and the private coupon code is deliberately omitted.',
+ 'Some Spirit Wear classes intentionally offer no-charge distribution. Zero flat-rate base alone does not mean all parcels ship free; no-class fees and shipping-class costs vary, while a blank Heavy fallback fee permits a potential zero-cost path.',
  'Print Documents generation logging and browser auto-open do not prove physical printing, correct packing or handoff.',
  'Navigation uses both /shop-new/ and /find-your-store/ paths; verify intended customer journey before simplifying.',
 ].forEach((v,i)=>bullet(v,i+1));
@@ -430,7 +439,8 @@ heading('Important remaining work',{level:2});
  'All consequential save, checkout, product sync, plugin compatibility, SKU rewrite, document print, label purchase and order/invoice behaviors need safe nonproduction evidence.',
  'Role/device differences, customer forms, artwork request-level approval dialogs and many shipping zone/coupon conditions are not exhaustively verified.',
  'No sanitized live WordPress screenshots were retained; visual tutorials can use approved fictional screenshots after a safe capture workflow.',
- 'No documentation status should be upgraded to complete until these gaps are closed and the business owner reviews high-impact settings.'
+ 'No documentation status should be upgraded to complete until these gaps are closed and the business owner reviews high-impact settings.',
+ 'Read-only owner remediation decisions are documented in docs/wordpress-audit/OWNER_REMEDIATION_APPROVAL_20261022.md. No staging, plugin updates, SKU repairs, coupon restrictions or rate changes are approved simply by this manual.'
 ].forEach((v,i)=>bullet(v,i+1));
 if(auditHandoff.status!=='complete')callout('AUDIT PARTIALLY COMPLETE','The WordPress inventory is verified but operating- and dialog-level coverage is incomplete. Keep this edition labelled partially verified; use the admin Documentation Audit tab to track remaining work.');
 
