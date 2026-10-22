@@ -491,3 +491,66 @@ html[data-preset='workflow-gallery'] thead th { letter-spacing: .03em; }
   html[data-preset='prism-ledger'] .sc-topbar,
   html[data-preset='workflow-gallery'] .sc-topbar { flex-direction: column; }
 }
+
+/* Explicit, accessible gallery management; keep hidden presets recoverable. */
+.sc-theme-layout-note { display: block; margin: 4px 0 8px; color: var(--sc-muted); line-height: 1.45; }
+.sc-theme-gallery-manager {
+  margin-top: 24px;
+  padding: 16px 18px;
+  background: var(--sc-panel-2);
+  border: 1px solid var(--sc-card-border);
+  border-radius: max(13px, var(--sc-radius, 13px));
+  color: var(--sc-text);
+}
+.sc-theme-gallery-manager > summary {
+  cursor: pointer;
+  font-weight: 850;
+  color: var(--sc-text);
+  min-height: 28px;
+}
+.sc-theme-gallery-manager[open] > summary { margin-bottom: 8px; }
+.sc-theme-gallery-manager .helper-text { margin: 10px 0 16px; color: var(--sc-muted); }
+.sc-theme-gallery-manager__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sc-theme-gallery-manager__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 10px;
+  background: var(--sc-panel);
+  padding: 10px 12px;
+  border: 1px solid var(--sc-card-border);
+  border-radius: 12px;
+}
+.sc-theme-gallery-manager__item > span {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+.sc-theme-gallery-manager__item small {
+  grid-column: 2;
+  color: var(--sc-muted);
+  font-size: .76rem;
+}
+.sc-theme-gallery-manager__item strong {
+  min-width: 0;
+  line-height: 1.2;
+}
+.sc-theme-gallery-manager__toggle {
+  border: 1px solid var(--sc-control-border);
+  background: var(--sc-secondary-bg);
+  color: var(--sc-secondary-text);
+  border-radius: 11px;
+  cursor: pointer;
+  padding: 7px 12px;
+  min-width: 60px;
+  font-weight: 750;
+}
+.sc-theme-gallery-manager__toggle:disabled { cursor: default; opacity: .55; }
