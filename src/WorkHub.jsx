@@ -5,6 +5,7 @@ import {boardColumnForRow,listProductionStatusBoard} from './lib/productionStatu
 import {loadGuidedJobEvidence,addGuidedJobNote} from './lib/guidedJobApi';
 import {dueRisk,jobIdentity,deriveGuidedProgress,GUIDED_STEPS} from './lib/guidedJobProgress';
 import './WorkHub.css';
+import GuidedJobPhaseTwo from './GuidedJobPhaseTwo';
 
 const STAGES=[
  {id:'new_order',label:'Review order'},
@@ -192,6 +193,7 @@ export default function WorkHub(){
         <span>{progress.indicators.travelers} QR travelers</span>
         <span>{progress.indicators.activeReservations} reservation records</span>
         <span>QC: {progress.indicators.qcPassed?'Pass recorded':'Not confirmed here'}</span>
+        <span>Photos: {detail.photos?.length||0} linked</span>
        </div>
        {Object.keys(unknowns).length>0&&<div className="sc-hub-unknowns">
         <strong>Some records could not be verified</strong><p>This workspace will not assume they are approved or complete.</p>
@@ -219,6 +221,7 @@ export default function WorkHub(){
          Item #{r.job_item_id||'—'} · {r.status||'Unknown state'} · Reserved {r.quantity_reserved??r.quantity??'—'}
         </p>):<p>No reservation records found. Confirm with Purchasing.</p>}</div>
        </div>}
+       <GuidedJobPhaseTwo key={currentId} jobId={currentId} evidence={detail} editable={editable} onRefresh={refreshSelected}/>
        <section className="sc-hub-handoff">
         <div className="sc-hub-handoff-title"><h4>Owner / family handoff notes</h4>
          <small>Logged guidance only; it does not complete steps or alter production state.</small></div>
