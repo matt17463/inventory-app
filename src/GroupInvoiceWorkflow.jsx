@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import './TeamCampaignCommerce.css';
+import TeamCampaignOperations from './TeamCampaignOperations';
 
-export default function GroupInvoiceWorkflow({campaign}){
+export default function GroupInvoiceWorkflow({campaign,canPublish,onUpdated}){
   const [orders,setOrders]=useState([]);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -50,5 +51,6 @@ export default function GroupInvoiceWorkflow({campaign}){
       <p>After a QuickBooks invoice is paid and confirmed, the existing Client Orders conversion creates the manual order and production job. Use the production Work Hub and QR manufacturing traveler to complete the work.</p>
       <p><Link to="/work-hub">Open Work Hub →</Link></p>
     </div>
+    <TeamCampaignOperations campaign={campaign} canPublish={canPublish} onUpdated={onUpdated}/>
   </section>;
 }

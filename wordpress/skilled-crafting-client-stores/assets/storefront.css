@@ -1,0 +1,131 @@
+
+/* Isolated WordPress/Divi companion-plugin storefront layouts.
+   Templates alter structure and hierarchy as well as colors. */
+.scs-store{--scs-primary:#16443b;--scs-secondary:#f0b83a;--scs-accent:#f6f9fb;background:#f7f8fa;color:#172032;font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:none;margin:0;overflow:hidden}
+.scs-store *{box-sizing:border-box}.scs-store a{text-decoration:none}
+.scs-store-nav{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1rem max(18px,calc((100vw - 1160px)/2));background:#fff;border-bottom:1px solid #d8dee6;font-size:.85rem;font-weight:650}
+.scs-store-nav a{color:var(--scs-primary)}
+.scs-store-inner{max-width:1160px;margin:0 auto;padding:0 24px}
+.scs-hero{padding:clamp(30px,6vw,85px) max(25px,calc((100vw - 1160px)/2));min-height:270px}
+.scs-hero h1{font-size:clamp(2.25rem,5vw,4.8rem)!important;line-height:1.04!important;margin:12px 0 18px;color:inherit!important}
+.scs-hero p{max-width:690px;line-height:1.6;font-size:1.06rem}
+.scs-kicker{letter-spacing:.14em;text-transform:uppercase;font-size:.75rem!important;font-weight:800}
+.scs-logo{width:118px;height:118px;object-fit:contain;border-radius:8px}
+.scs-logo-fallback{display:grid;place-items:center;border:4px solid currentColor;width:118px;height:118px;font-size:4rem;font-weight:900;border-radius:15px}
+.scs-button{display:inline-flex;align-items:center;justify-content:center;padding:13px 22px;border-radius:7px;background:var(--scs-primary);color:white!important;font-weight:780;font-size:.95rem;line-height:1.35;white-space:normal}
+.scs-button:hover{filter:brightness(1.1)}
+.scs-section-heading{margin:0 0 22px}.scs-section-heading p:first-child{font-size:.75rem;letter-spacing:.16em;font-weight:800;color:var(--scs-primary)}
+.scs-section-heading h2{font-size:2rem;margin:8px 0;color:#111827}
+.scs-shop{padding:54px 0}
+.scs-products{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:23px}
+.scs-product{background:#fff;overflow:hidden;border-radius:12px;box-shadow:0 7px 30px #0000000c;border:1px solid #e4e8ef}
+.scs-product-thumb{display:grid;place-items:center;min-height:210px;aspect-ratio:4/3;background:#f2f4f7;padding:15px}
+.scs-product-thumb img{width:100%;height:210px;object-fit:contain}
+.scs-product-body{padding:20px;display:flex;flex-direction:column;align-items:start;gap:12px;min-height:185px}
+.scs-product-body h3{font-size:1.05rem!important;line-height:1.3;margin:0;color:#1f2937}
+.scs-price{font-weight:800;margin:0;color:#263346}.scs-price del{opacity:.55}
+.scs-product-body .scs-button{margin-top:auto}
+.scs-details{display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:24px 0 70px}
+.scs-details>div{background:#fff;border:1px solid #dce1e8;padding:26px;border-radius:10px}
+.scs-details h2{font-size:1.45rem;margin-bottom:.7rem}.scs-details p{line-height:1.6}
+.scs-deadline{padding:10px 15px;background:var(--scs-accent);border-left:5px solid var(--scs-primary)}
+.scs-store-footer{display:flex;justify-content:space-between;gap:16px;border-top:1px solid #d4dae2;padding:22px 0 55px;font-size:.84rem}
+.scs-store-footer a{color:var(--scs-primary);font-weight:800}
+/* Athletics: angled full-bleed scoreboard, stripes and bold condensed energy. */
+.scs-athletics .scs-hero{background:linear-gradient(117deg,var(--scs-primary) 0%,var(--scs-primary) 65%,#091823 65%);color:#fff;position:relative}
+.scs-athletics .scs-scoreboard{display:flex;gap:24px;justify-content:space-between;font-size:.7rem;letter-spacing:.2em;font-weight:900;border-top:2px solid var(--scs-secondary);border-bottom:2px solid var(--scs-secondary);padding:8px 0;max-width:300px}
+.scs-athletics .scs-hero-core{display:flex;align-items:center;gap:50px;max-width:1140px;margin:22px auto}
+.scs-athletics .scs-hero h1{font-weight:950;text-transform:uppercase;letter-spacing:-.035em}
+.scs-athletics .scs-logo,.scs-athletics .scs-logo-fallback{background:#ffffff12;border:2px solid #ffffff6b;padding:7px;box-shadow:7px 7px 0 var(--scs-secondary)}
+.scs-athletics .scs-button{background:var(--scs-secondary);color:#0c1a23!important;border-radius:2px;text-transform:uppercase}
+.scs-athletics .scs-ribbon{display:flex;justify-content:center;gap:30px;background:var(--scs-secondary);color:#152535;padding:12px 20px;transform:skewY(-1deg);text-transform:uppercase;letter-spacing:.07em;font-weight:800}
+.scs-athletics .scs-product{border-bottom:5px solid var(--scs-primary);border-radius:5px}
+/* School: ceremonial centered crest, paper-white editorial typography and class schedule band */
+.scs-scholastic{background:#f6f1e8}
+.scs-scholastic .scs-scholastic-hero{text-align:center;background:radial-gradient(ellipse at center,#fff 0%,#fff 41%,var(--scs-accent) 42%,#f7f0e5 100%);border-bottom:5px double var(--scs-primary);color:var(--scs-primary)}
+.scs-scholastic .scs-school-overline{font-size:.8rem;font-weight:850;letter-spacing:.18em;margin-bottom:25px}
+.scs-scholastic .scs-logo,.scs-scholastic .scs-logo-fallback{margin:auto;border-radius:50%;border:3px solid var(--scs-primary);background:#fff;padding:10px}
+.scs-scholastic .scs-hero h1{font-family:Georgia,serif!important;font-weight:800!important;max-width:950px;margin:24px auto}
+.scs-scholastic .scs-hero p{margin:10px auto 26px}
+.scs-scholastic .scs-school-band{display:flex;justify-content:center;gap:clamp(35px,10vw,160px);background:var(--scs-primary);color:white;padding:18px;font-family:Georgia,serif;font-size:1.1rem;font-style:italic}
+.scs-scholastic .scs-product{border:1px solid #dacdb6;box-shadow:2px 3px 0 #cabaa5;border-radius:3px}
+/* Business: asymmetrical two-column clean typography, steps and muted panels */
+.scs-business{background:#f6f8fa}
+.scs-business .scs-business-hero{display:grid;grid-template-columns:1.4fr .8fr;gap:40px;align-items:center;background:linear-gradient(125deg,#fff 0%,#fff 62%,var(--scs-accent) 62%);color:#172032}
+.scs-business .scs-hero h1{font-weight:770!important;letter-spacing:-.045em}
+.scs-business .scs-kicker{color:var(--scs-primary)}
+.scs-business .scs-business-seal{display:grid;justify-items:center;gap:18px;padding:50px 15px;border:1px solid var(--scs-primary);max-width:330px;margin:auto;background:#fff;box-shadow:15px 15px 0 var(--scs-primary)}
+.scs-business .scs-business-seal span{font-size:.7rem;letter-spacing:.2em;font-weight:900;color:var(--scs-primary)}
+.scs-business .scs-business-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:36px}
+.scs-business .scs-business-steps>div{border-left:3px solid var(--scs-primary);padding:16px;background:#fff;font-weight:650}
+.scs-business .scs-business-steps b{display:block;color:var(--scs-primary);font-size:1.6rem;margin-bottom:8px}
+/* Fundraising: impact callout, striking warm background and inviting serif heading */
+.scs-fundraising{background:#fffaf0}
+.scs-fundraising .scs-fundraiser-hero{display:grid;grid-template-columns:.4fr 1fr;align-items:center;gap:35px;background:var(--scs-primary);color:#fff}
+.scs-fundraising .scs-hero h1{font-family:Georgia,serif!important;font-weight:750!important}
+.scs-fundraising .scs-fundraiser-mark{display:grid;place-items:center;background:#ffffff1c;border-radius:50%;aspect-ratio:1/1;max-width:270px;outline:2px dashed var(--scs-secondary);outline-offset:10px}
+.scs-fundraising .scs-impact{background:var(--scs-secondary);padding:24px;display:flex;align-items:center;justify-content:center;gap:30px;color:#1b2838}
+.scs-fundraising .scs-impact strong{font-family:Georgia,serif;font-size:1.6rem}
+.scs-fundraising .scs-product{border-radius:20px 20px 5px 5px}
+/* Checkout: classic checkout and WooCommerce blocks share restrained campaign brand. */
+body.scs-client-checkout .woocommerce-checkout h3,
+body.scs-client-checkout .woocommerce-checkout h2,
+body.scs-client-checkout .wp-block-woocommerce-checkout h2{color:var(--scs-primary)}
+body.scs-client-checkout .woocommerce button.button.alt,
+body.scs-client-checkout .woocommerce #payment #place_order,
+body.scs-client-checkout .wc-block-components-checkout-place-order-button,
+body.scs-client-checkout .wc-block-cart__submit-button{background:var(--scs-primary)!important;color:#fff!important;border:0}
+body.scs-client-checkout .woocommerce-checkout,
+body.scs-client-checkout .wp-block-woocommerce-checkout{border-top:5px solid var(--scs-secondary);padding-top:20px}
+.scs-checkout-banner{background:var(--scs-primary);color:white;display:grid;gap:6px;padding:24px;margin:0 0 20px}
+.scs-checkout-banner span{font-size:.85rem}
+@media(max-width:780px){
+.scs-products{grid-template-columns:repeat(2,minmax(0,1fr))}.scs-details{grid-template-columns:1fr}
+.scs-athletics .scs-hero-core{flex-direction:column;align-items:start;gap:20px}
+.scs-business .scs-business-hero{grid-template-columns:1fr}
+.scs-fundraising .scs-fundraiser-hero{grid-template-columns:1fr}
+.scs-business .scs-business-steps{grid-template-columns:1fr}
+.scs-fundraising .scs-fundraiser-mark{width:150px}
+}
+@media(max-width:520px){
+.scs-products{grid-template-columns:1fr}.scs-store-nav{padding:12px 17px;flex-wrap:wrap}
+.scs-hero{padding:35px 22px}.scs-hero h1{font-size:2.3rem!important}
+.scs-scholastic .scs-school-band{gap:13px;font-size:.9rem}
+.scs-fundraising .scs-impact{flex-direction:column;gap:6px;text-align:center}
+.scs-athletics .scs-ribbon{flex-direction:column;gap:4px;text-align:center}
+}
+
+/* Find Your Store directory: use [sc_client_store_directory] inside a Divi or WP page. */
+.scs-directory{max-width:1150px;margin:0 auto;padding:28px 20px 65px;color:#172032}
+.scs-directory h2{font-size:clamp(2rem,4vw,3.4rem);margin-bottom:12px}
+.scs-directory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:28px}
+.scs-directory-item{display:flex;align-items:center;flex-direction:column;gap:15px;padding:27px 19px;border:1px solid #d8e1e8;border-radius:10px;text-align:center;background:#fff;box-shadow:0 4px 20px #00000007}
+.scs-directory-item img{height:95px;width:95px;object-fit:contain}
+.scs-directory-item strong{font-size:1.15rem;color:#173d36}
+.scs-directory-item span{color:#0f766e;font-weight:750}
+
+/* WordPress/Divi full-width client landing: suppress global multi-client shop navigation
+   inside a dedicated store. Our own store nav and cart link remain accessible. */
+body.scs-wp-storefront #main-header,
+body.scs-wp-storefront #top-header,
+body.scs-wp-storefront header.et-l--header{display:none!important}
+body.scs-wp-storefront #page-container{padding-top:0!important;margin-top:0!important}
+body.scs-wp-storefront #main-content>.container{width:100%!important;max-width:none!important;padding:0!important}
+body.scs-wp-storefront #left-area{float:none;width:100%!important;padding:0!important}
+body.scs-wp-storefront #sidebar,
+body.scs-wp-storefront #main-content .container:before{display:none!important}
+body.scs-wp-storefront #main-content article{margin:0!important;padding:0!important}
+body.scs-wp-storefront #main-content .entry-content{padding:0!important}
+
+/* Theme-coordinated checkout treatments beyond simple accent color changes. */
+body.scs-checkout-athletics .scs-checkout-banner{border-bottom:6px solid var(--scs-secondary);clip-path:polygon(0 0,100% 0,98% 100%,0 100%);text-transform:uppercase;letter-spacing:.1em;font-weight:900}
+body.scs-checkout-athletics .woocommerce-checkout h3{font-weight:950;text-transform:uppercase}
+body.scs-checkout-scholastic .scs-checkout-banner{text-align:center;background:#fdf9ee;color:var(--scs-primary);border:4px double var(--scs-primary);font-family:Georgia,serif}
+body.scs-checkout-scholastic .scs-checkout-banner strong{font-size:1.45rem}
+body.scs-checkout-scholastic .woocommerce-checkout h3,body.scs-checkout-scholastic .wc-block-components-title{font-family:Georgia,serif}
+body.scs-checkout-business .scs-checkout-banner{background:#fff;color:var(--scs-primary);border-left:8px solid var(--scs-primary);border-radius:0}
+body.scs-checkout-business .scs-checkout-banner strong{text-transform:uppercase;letter-spacing:.14em;font-size:.8rem}
+body.scs-checkout-business .woocommerce-checkout{border-top:0;border-left:1px solid #d6e1e7;padding-left:22px}
+body.scs-checkout-fundraising .scs-checkout-banner{border-radius:14px;background:var(--scs-primary);border:2px solid var(--scs-secondary);box-shadow:8px 8px 0 var(--scs-secondary)}
+body.scs-checkout-fundraising .scs-checkout-banner strong{font:700 1.55rem Georgia,serif}
+body.scs-checkout-fundraising .woocommerce-checkout{border-top:0;padding-top:10px}

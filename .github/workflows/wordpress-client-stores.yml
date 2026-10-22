@@ -1,0 +1,30 @@
+name: WordPress Client Stores Plugin
+on:
+  push:
+    paths:
+      - "wordpress/skilled-crafting-client-stores/**"
+      - ".github/workflows/wordpress-client-stores.yml"
+  pull_request:
+    paths:
+      - "wordpress/skilled-crafting-client-stores/**"
+      - ".github/workflows/wordpress-client-stores.yml"
+  workflow_dispatch:
+
+jobs:
+  php-lint-and-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check WordPress PHP plugin
+        run: php -l wordpress/skilled-crafting-client-stores/skilled-crafting-client-stores.php
+      - name: Package installable WordPress plugin
+        run: |
+          cd wordpress
+          zip -r ../skilled-crafting-client-stores.zip skilled-crafting-client-stores/
+          unzip -t ../skilled-crafting-client-stores.zip
+      - name: Upload WordPress installation ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: skilled-crafting-client-stores-wordpress-plugin
+          path: skilled-crafting-client-stores.zip
+          retention-days: 30
