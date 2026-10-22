@@ -36,6 +36,7 @@ const FinishedMatchSuggestions = lazy(() => import('./FinishedMatchSuggestions')
 const GoogleCalendarIntegration = lazy(() => import('./GoogleCalendarIntegration'));
 const Home = lazy(() => import('./Home'));
 const WorkHub = lazy(() => import('./WorkHub'));
+const TeamStoreLaunchpad = lazy(() => import('./TeamStoreLaunchpad'));
 const ArtworkPreflight = lazy(() => import('./ArtworkPreflight'));
 const InventoryAudit = lazy(() => import('./InventoryAudit'));
 const InventoryImport = lazy(() => import('./InventoryImport'));
@@ -177,6 +178,7 @@ function EmployeeRoutes() {
       <Route path="/onsite-sales" element={<OnsiteSales />} />
       <Route path="/command-center" element={<DailyCommandCenter />} />
       <Route path="/work-hub" element={<WorkHub />} />
+      <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
       <Route path="/artwork-preflight" element={<ArtworkPreflight />} />
       <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
       <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
