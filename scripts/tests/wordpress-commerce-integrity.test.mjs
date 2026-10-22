@@ -14,17 +14,21 @@ test('plugin snapshot makes historic source dated and does not claim end-to-end 
 });
 test('WordPress plugin API normalization identifies active SKU candidates and storefront version mismatch',()=>{
  const rows=[
-  {plugin:'skilled-crafting-client-storefronts/skilled-crafting-client-stores',version:'0.1.2',status:'active'},
-  {plugin:'wc-sku-builder-manager/main',version:'2.4',status:'active'},
+  {plugin:'skilled-crafting-client-stores/skilled-crafting-client-stores.php',version:'0.1.2',status:'active'},
+  {plugin:'wc-sku-builder-manager-v3-clean/wc-sku-builder-manager-v3-clean.php',version:'2.4',status:'active'},
   {plugin:'woocommerce-product-sku-generator/main',version:'2.5',status:'active'},
   {plugin:'sku-for-woocommerce/main',version:'1.6',status:'inactive'},
   {plugin:'woocommerce-advanced-free-shipping/main',version:'1.1',status:'active'},
  ];
  assert.equal(wpPluginSlug(rows[0].plugin),'skilled-crafting-client-storefronts');
+ assert.equal(wpPluginSlug(rows[1].plugin),'wc-sku-builder-manager');
  const result=summarizePlugins(rows);
  assert.equal(result.storefront.match,false);
+ assert.equal(result.storefront.originalBasename,'skilled-crafting-client-stores');
  assert.equal(result.multipleSkuWriterCandidates,true);
  assert.equal(result.skuWriters.length,2);
+ assert(result.skuWriters.some(x=>x.slug==='wc-sku-builder-manager'&&x.originalBasename==='wc-sku-builder-manager-v3-clean'));
+ assert(result.skuWriters.every(x=>x.internalGenerationEnabled==='unknown-from-rest'));
  assert.equal(result.advancedFreeShippingActive,true);
 });
 test('Woo shipping methods show configuration, not calculated checkout rates',()=>{
@@ -63,7 +67,7 @@ test('manager UI states unmatched details and never allows editing SKU or shippi
  const app=read('../../src/App.jsx'),nav=read('../../src/navigationConfig.js');
  assert.match(src,/access\?\.role==='admin'\|\|access\?\.role==='manager'/);
  assert.match(src,/Run read-only checks/);
- assert.match(src,/not.*an exact checkout price calculation/i);
+ assert.match(src,/not a verified customer charge error/i);
  assert.match(src,/not confirmed/i);
  assert.match(src,/baseline\.pendingChecks/);
  assert.match(app,/path="\/wordpress-integrity"/);
