@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import GarmentPlacementGuide from './components/GarmentPlacementGuide';
@@ -16,11 +16,12 @@ const itemLabel=(item)=>item?.ordered_product_name||item?.item_name||item?.name|
 const safeError=(err)=>err?.message||'Could not load production traveler.';
 export default function ProductionTravelers() {
   const {travelerId}=useParams();
+  const [params]=useSearchParams();
   const navigate=useNavigate();
   const access=useContext(EmployeeAccessContext);
   const editable=['admin','manager','operator'].includes(access?.role);
   const [jobs,setJobs]=useState([]);
-  const [jobId,setJobId]=useState('');
+  const [jobId,setJobId]=useState(()=>/^\d+$/.test(params.get('job')||'')?params.get('job'):'');
   const [items,setItems]=useState([]);
   const [travelerList,setTravelerList]=useState([]);
   const [recipeVersions,setRecipeVersions]=useState([]);
