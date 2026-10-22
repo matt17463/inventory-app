@@ -8,8 +8,8 @@ test('plugin snapshot makes historic source dated and does not claim end-to-end 
  assert.equal(snapshot.sourceStatus,'partial-audit-not-live-certified');
  assert.equal(snapshot.pluginSnapshot.storefront.installedVersion,'0.1.2');
  const php=read('../../wordpress/skilled-crafting-client-stores/skilled-crafting-client-stores.php');
- assert.match(php,/Version:\s*0\.1\.3/);
- assert.equal(snapshot.pluginSnapshot.storefront.repositoryVersion,'0.1.3');
+ assert.equal(php.match(/Version:\s*(\S+)/)?.[1],snapshot.pluginSnapshot.storefront.repositoryVersion);
+ assert.equal(snapshot.pluginSnapshot.storefront.repositoryVersion,'0.1.4');
  assert.equal(snapshot.pendingChecks.length,3);
 });
 test('WordPress plugin API normalization identifies active SKU candidates and storefront version mismatch',()=>{

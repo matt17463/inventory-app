@@ -11,7 +11,7 @@ export function wpPluginSlug(value) {
  return knownPluginAliases.get(basename)||basename;
 }
 export const writerSlugSet=new Set(['wc-sku-builder-manager','woocommerce-product-sku-generator','sku-for-woocommerce']);
-export function summarizePlugins(rows,{expectedStorefrontVersion='0.1.3'}={}){
+export function summarizePlugins(rows,{expectedStorefrontVersion='0.1.4'}={}){
  const list=Array.isArray(rows)?rows:[],known=new Map();
  for(const p of list){
   const slug=wpPluginSlug(p.plugin||p.slug||'');
