@@ -38,6 +38,7 @@ const Home = lazy(() => import('./Home'));
 const WorkHub = lazy(() => import('./WorkHub'));
 const TeamStoreLaunchpad = lazy(() => import('./TeamStoreLaunchpad'));
 const PublicTeamStore = lazy(() => import('./PublicTeamStore'));
+const CoordinatorDashboard = lazy(() => import('./CoordinatorDashboard'));
 const ManufacturingRecipes = lazy(() => import('./ManufacturingRecipes'));
 const ProductionTravelers = lazy(() => import('./ProductionTravelers'));
 
@@ -239,6 +240,7 @@ export default function App() {
           <Route path="/customer-portal" element={<CustomerPortal />} />
           <Route path="/team-order" element={<PublicClientOrderForm />} />
           <Route path="/stores/:slug" element={<PublicTeamStore />} />
+          <Route path="/coordinator/:token" element={<CoordinatorDashboard />} />
           <Route path="/mockup-review" element={<MockupCustomerReview />} />
           <Route path="/marketing-review" element={<MarketingClientReview />} />
           <Route
