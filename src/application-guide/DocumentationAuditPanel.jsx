@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {navSections} from '../navigationConfig';
+import DocumentationQaTriage from './DocumentationQaTriage';
 import conditional from './conditionalDialogs.json';
 import wordpress from './wordpressPluginAudits.json';
 import {documentationCoverage} from './documentationCoverage';
@@ -41,6 +42,7 @@ export default function DocumentationAuditPanel(){
    <h2>Documentation and conditional-dialog audit</h2>
    <p>Inspect what has source documentation, what has actually been verified in a browser, and what must be audited in WordPress. This page is read-only; it never opens dialogs or changes live customer orders.</p>
   </header>
+  <DocumentationQaTriage/>
   <div className="sc-doc-audit-stats">
    <div><strong>{summary.routeCount}</strong><span>Application pages inventoried</span></div>
    <div><strong>{report?summary.sourceControlCount:'—'}</strong><span>Source-detected page controls</span></div>
@@ -86,7 +88,7 @@ export default function DocumentationAuditPanel(){
   </div>}
   {focus==='wordpress'&&<div className="sc-doc-audit-list">
    <p>ChatGPT Work inventoried 51 installed WordPress plugins (50 active, one inactive) on October 22, 2026. It observed 42 screen/section references with 405 controls, but the audit is PARTIAL: 29 plugins have inventory-only coverage. No plugin has undergone complete end-to-end operation verification; two shipping-dialog visibility cases were narrowly verified.</p>
-   <p><strong>Priority checks:</strong> Installed Client Storefronts 0.1.2 versus repository 0.1.3; multiple active SKU writers; native/legacy personalization overlap; and overlapping shipping rules. Do not change settings or process test orders to resolve documentation gaps.</p>
+   <p><strong>Priority checks:</strong> Historically audited Client Storefronts 0.1.2 versus current repository 0.1.4 (verify installed production version separately); multiple active SKU writers; native/legacy personalization overlap; and overlapping shipping rules. Do not change settings or process test orders to resolve documentation gaps.</p>
    <p><strong>Items to check:</strong> {(wordpress.pluginCandidatesToCheck||[]).join('; ')}.</p>
    {matchingPlugins.map(p=><article key={p.slug} className="sc-doc-audit-item">
     <div className="sc-doc-audit-title"><h3>{p.name}</h3><span className={verified(p.reviewStatus)?'verified':'pending'}>{p.reviewStatus}</span></div>
