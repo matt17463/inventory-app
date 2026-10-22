@@ -25,7 +25,6 @@ export default function JobCloseoutCenter({evidence,onRefresh,editable=false,can
  const [recipient,setRecipient]=useState('');
  const [subject,setSubject]=useState('');
  const [messageBody,setMessageBody]=useState('');
- const [sourceDraftId,setSourceDraftId]=useState('');
  const [busy,setBusy]=useState(false);
  const [notice,setNotice]=useState('');
  const records=evidence?.customerMessages||[];
@@ -54,7 +53,7 @@ export default function JobCloseoutCenter({evidence,onRefresh,editable=false,can
   try{
    const suggested=closeoutMessage({kind,job,channel:state.channel,
      reference:(evidence?.fulfillment||[]).find(x=>x.kind==='shipped')?.carrier_reference||''});
-   setSubject(suggested.subject);setMessageBody(suggested.body);setSourceDraftId('');
+   setSubject(suggested.subject);setMessageBody(suggested.body);
    setNotice('Template loaded. Confirm the customer email, message wording and readiness before saving.');
   }catch(e){setNotice(e.message);}
  }
@@ -77,7 +76,7 @@ export default function JobCloseoutCenter({evidence,onRefresh,editable=false,can
   await recordAction('Manual send confirmation',async()=>{
    if(!canNotify)throw Error('Manager access required.');
    if(!notifyAllowed[draft.event_type])throw Error('Job is no longer verified for this notification. Re-check QC, packaging and fulfillment before messaging.');
-   if(!window.confirm('Only continue if you ACTUALLY SENT this exact email outside Skilled Crafting to '+draft.recipient_email+'. This does not send email automatically.'))return;
+   if(!window.confirm('Only continue if you ACTUALLY SENT this exact email outside Skilled Crafting to '+draft.recipient_email+'. This does not send email automatically.'))throw Error('No send confirmation recorded.');
    const {data,error}=await supabase.auth.getUser();
    if(error||!data.user)throw Error('Sign in first.');
    const {error:insertError}=await supabase.from('sc_job_customer_messages').insert({
@@ -99,7 +98,7 @@ export default function JobCloseoutCenter({evidence,onRefresh,editable=false,can
    if(!editable)throw Error('Production access required.');
    if(!state.shipped||!state.readyForRelease)throw Error('First verify actual carrier dispatch, tracking, paid source, QC and exact packing.');
    if(proofRef.trim().length<5)throw Error('Provide a carrier POD event/URL or actual customer confirmation reference.');
-   if(!window.confirm('Did you independently verify delivery, not merely the package being shipped?'))return;
+   if(!window.confirm('Did you independently verify delivery, not merely the package being shipped?'))throw Error('Delivery confirmation canceled.');
    const {data,error}=await supabase.auth.getUser();if(error||!data.user)throw Error('Sign in first.');
    const {error:writeError}=await supabase.from('sc_job_delivery_confirmations').insert({
     job_id:Number(job.id),proof_type:proofType,proof_reference:proofRef.trim(),
