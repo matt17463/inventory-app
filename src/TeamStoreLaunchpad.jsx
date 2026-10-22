@@ -3,8 +3,10 @@ import { supabase } from './supabaseClient';
 import { Link } from 'react-router-dom';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import './TeamStoreLaunchpad.css';
+import TeamCampaignCommerce from './TeamCampaignCommerce';
+import GroupInvoiceWorkflow from './GroupInvoiceWorkflow';
 
-const STEPS = [
+const STORE_STEPS = [
   { name:'Identify organization and coordinator', detail:'Record the club, school, business or fundraiser coordinator in Marketing & Client Growth.', ops:false, path:'/marketing', link:'Open Marketing CRM' },
   { name:'Select approved products', detail:'Use verified supplier catalog items, real sizes/colors and your normal pricing rules.', ops:false, path:'/marketing', link:'Review catalog & pricing' },
   { name:'Prepare and approve artwork', detail:'Confirm all logos, decorations, sample mockups and customer proof before selling.', ops:false, path:'/marketing', link:'Prepare client proof' },
@@ -14,18 +16,28 @@ const STEPS = [
   { name:'Pack by player / team and close out', detail:'Verify names/numbers, individual bag labels, pickup list and an independently reconciled fundraiser statement.', ops:true, path:'/qc-checklist', link:'Open QC' },
 ];
 
+const GROUP_STEPS = [
+  {name:'Open the group order form',detail:'Send a campaign-specific order form for consolidated roster, sizes, names and numbers.',ops:false,path:'/team-order',link:'Open client form'},
+  {name:'Review products and pricing',detail:'Use the existing Client Orders product mapping, artwork instructions and pricing rules.',ops:true,path:'/client-orders',link:'Review client orders'},
+  {name:'Prepare and send QuickBooks invoice',detail:'Export QBO CSV and create the customer invoice through the existing invoice process.',ops:true,path:'/client-orders',link:'QBO invoice / quote'},
+  {name:'Confirm approval and payment',detail:'Record approval and payment in Client Orders before conversion. No WooCommerce checkout needed.',ops:true,path:'/client-orders',link:'Record payment'},
+  {name:'Convert to production',detail:'Existing conversion creates the manual order, production job, purchasing and pull sheet.',ops:true,path:'/work-hub',link:'Production Work Hub'},
+  {name:'Produce and deliver',detail:'Use QR travelers, QC, packing and customer pickup instructions.',ops:true,path:'/production-travelers',link:'Manufacturing travelers'},
+];
 export default function TeamStoreLaunchpad() {
   const access = useContext(EmployeeAccessContext);
   const marketingOnly = access?.role === 'marketing';
+  const canManage = ['admin','manager','marketing'].includes(access?.role);
+  const canPublish = ['admin','manager'].includes(access?.role);
   const [form,setForm] = useState({ organization:'',campaign:'',coordinator:'',deadline:'',delivery:'Team pickup',
-    kind:'team_store',fundraiser:'none',flatAmount:'',percent:'',terms:'' });
+    kind:'team_store',channel:'woocommerce',fundraiser:'none',flatAmount:'',percent:'',terms:'',description:'' });
   const [campaignId,setCampaignId]=useState('');
   const [savedCampaigns,setSavedCampaigns]=useState([]);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   async function loadCampaigns() {
     const {data,error}=await supabase.from('sc_team_store_workflows')
-      .select('id,workflow_name,customer_name,store_name,stage,status,coordinator_name,campaign_kind,fulfillment_method,fundraiser_model,fundraiser_flat_amount,fundraiser_percent,fundraiser_terms,store_close_date')
+      .select('id,workflow_name,customer_name,store_name,stage,status,coordinator_name,campaign_kind,order_channel,public_order_code,fulfillment_method,fundraiser_model,fundraiser_flat_amount,fundraiser_percent,fundraiser_terms,store_close_date,storefront_slug,storefront_description,customer_approval_at,published_at,last_reconciled_at')
       .order('updated_at',{ascending:false}).limit(150);
     if(error)throw error;
     setSavedCampaigns(data||[]);
@@ -33,26 +45,30 @@ export default function TeamStoreLaunchpad() {
   useEffect(()=>{loadCampaigns().catch(e=>setMessage('Could not load saved campaigns: '+e.message));},[]);
   function openCampaign(id) {
     const row=savedCampaigns.find(c=>c.id===id);
-    if(!row){setCampaignId('');setForm({organization:'',campaign:'',coordinator:'',deadline:'',delivery:'Team pickup',kind:'team_store',fundraiser:'none',flatAmount:'',percent:'',terms:''});return;}
+    if(!row){setCampaignId('');setForm({organization:'',campaign:'',coordinator:'',deadline:'',delivery:'Team pickup',kind:'team_store',channel:'woocommerce',fundraiser:'none',flatAmount:'',percent:'',terms:'',description:''});return;}
     setCampaignId(row.id);
     setForm({organization:row.customer_name||'',campaign:row.workflow_name||row.store_name||'',
       coordinator:row.coordinator_name||'',deadline:row.store_close_date||'',
-      delivery:row.fulfillment_method||'Team pickup',kind:row.campaign_kind||'team_store',
+      delivery:row.fulfillment_method||'Team pickup',kind:row.campaign_kind||'team_store',channel:row.order_channel||'woocommerce',
       fundraiser:row.fundraiser_model||'none',flatAmount:row.fundraiser_flat_amount??'',
-      percent:row.fundraiser_percent??'',terms:row.fundraiser_terms||''});
+      percent:row.fundraiser_percent??'',terms:row.fundraiser_terms||'',description:row.storefront_description||''});
     setMessage('Existing '+row.stage+' campaign opened. Changes remain draft until explicitly saved.');
   }
   async function saveCampaign() {
     setBusy(true);setMessage('');
     try {
       if(!form.organization.trim()||!form.campaign.trim())throw Error('Enter organization and campaign name.');
+      if(selectedCampaign?.stage==='live'||selectedCampaign?.stage==='complete')
+        throw Error('This campaign is already live/closed. Create a new campaign for structural changes.');
+      if(isInvoice && form.kind==='team_store')throw Error('One-time invoiced orders should use group_order campaign type.');
       const amount=form.fundraiser==='fixed_per_eligible_item'?Number(form.flatAmount):null;
       const percent=form.fundraiser==='percent_of_eligible_sales'?Number(form.percent):null;
       if(amount!==null&&(!Number.isFinite(amount)||amount<0))throw Error('Enter a valid fixed fundraising amount.');
       if(percent!==null&&(!Number.isFinite(percent)||percent<0||percent>100))throw Error('Enter a fundraiser percentage between 0 and 100.');
       const payload={workflow_name:form.campaign.trim(),customer_name:form.organization.trim(),
         store_name:form.campaign.trim(),coordinator_name:form.coordinator.trim(),
-        campaign_kind:form.kind,fulfillment_method:form.delivery,
+        campaign_kind:form.kind,order_channel:form.channel,storefront_description:form.description,
+        fulfillment_method:form.delivery,
         fundraiser_model:form.fundraiser,fundraiser_flat_amount:amount,fundraiser_percent:percent,
         fundraiser_terms:form.terms.trim(),store_close_date:form.deadline||null,due_date:form.deadline||null};
       if(campaignId) {
@@ -72,6 +88,8 @@ export default function TeamStoreLaunchpad() {
     finally{setBusy(false);}
   }
   const [copied,setCopied] = useState('');
+  const selectedCampaign=savedCampaigns.find(c=>c.id===campaignId);
+  const isInvoice=form.channel==='quickbooks_invoice';
   const update=(name,value)=>setForm(current=>({...current,[name]:value}));
   const brief = [
     'Skilled Crafting — team store / group order campaign brief',
@@ -81,6 +99,7 @@ export default function TeamStoreLaunchpad() {
     'Proposed ordering deadline: ' + (form.deadline||'Not supplied'),
     'Fulfillment: ' + form.delivery,
     'Campaign kind: ' + form.kind,
+    'Processing channel: ' + (isInvoice?'One-time QuickBooks invoice after client form':'Recurring WooCommerce store'),
     'Fundraiser model: ' + form.fundraiser,
     'Fundraising amount / percent: ' + (form.flatAmount||'—') + ' / ' + (form.percent||'—'),
     'Terms to approve: ' + (form.terms||'Not supplied'),
@@ -97,6 +116,15 @@ export default function TeamStoreLaunchpad() {
       <p>Plan a school, club or fundraising campaign step-by-step. Use the existing Marketing, Client Orders, WooCommerce and production tools without guessing where to go next.</p>
     </div></section>
     <section className="card elevated-card">
+      <h2>Choose how this customer orders</h2>
+      <div className="sc-team-channel-grid" role="group" aria-label="Customer order processing channel">
+        <label className={isInvoice?'':'selected'}><input type="radio" name="order-channel" checked={!isInvoice}
+          onChange={()=>setForm(p=>({...p,channel:'woocommerce',kind:'team_store'}))}/>
+          <strong>Recurring school or team store</strong><span>WooCommerce products, customer checkout, repeat ordering and store fundraising reports.</span></label>
+        <label className={isInvoice?'selected':''}><input type="radio" name="order-channel" checked={isInvoice}
+          onChange={()=>setForm(p=>({...p,channel:'quickbooks_invoice',kind:'group_order'}))}/>
+          <strong>Occasional team / group order</strong><span>Client submits the order form; you invoice through QuickBooks and convert it to production after payment.</span></label>
+      </div>
       <h2>Start or reopen a campaign</h2>
       <label className="sc-team-long">Previously saved campaigns<select value={campaignId} onChange={e=>openCampaign(e.target.value)}>
         <option value="">+ Start new campaign</option>
@@ -107,7 +135,8 @@ export default function TeamStoreLaunchpad() {
         <label>Organization<input value={form.organization} onChange={e=>update('organization',e.target.value)} placeholder="School, team or club" /></label>
         <label>Campaign / season<input value={form.campaign} onChange={e=>update('campaign',e.target.value)} placeholder="Winter spirit wear 2026" /></label>
         <label>Campaign type<select value={form.kind} onChange={e=>update('kind',e.target.value)}>
-          <option value="team_store">Team / school store</option><option value="group_order">Group order</option><option value="fundraiser">Fundraiser</option>
+          {isInvoice?<><option value="group_order">Occasional group order</option><option value="fundraiser">Group fundraiser (manual reconciliation)</option></>:
+            <><option value="team_store">Recurring team / school store</option><option value="fundraiser">Fundraising store</option></>}
         </select></label>
         <label>Coordinator name / reference<input value={form.coordinator} onChange={e=>update('coordinator',e.target.value)} placeholder="Client contact" /></label>
         <label>Target order close date<input type="date" value={form.deadline} onChange={e=>update('deadline',e.target.value)} /></label>
@@ -119,10 +148,12 @@ export default function TeamStoreLaunchpad() {
       </div>
       {form.fundraiser==='fixed_per_eligible_item'&&<label className="sc-team-long">Planned fundraiser amount per eligible item ($)<input type="number" min="0" step=".01" value={form.flatAmount} onChange={e=>update('flatAmount',e.target.value)}/></label>}
       {form.fundraiser==='percent_of_eligible_sales'&&<label className="sc-team-long">Planned eligible-sales percentage (%)<input type="number" min="0" max="100" step=".1" value={form.percent} onChange={e=>update('percent',e.target.value)}/></label>}
+      {!isInvoice&&<label className="sc-team-long">Public store introduction<textarea rows="2" value={form.description}
+        onChange={e=>update('description',e.target.value)} placeholder="Welcome to your school spirit-wear store…" /></label>}
       <label className="sc-team-long">Fundraising / approval terms<textarea rows="3" value={form.terms} onChange={e=>update('terms',e.target.value)}
         placeholder="Enter agreed payout, eligibility, refund rules, shipping and sales tax treatment. Confirm with client before publishing." /></label>
       <div className="sc-team-controls">
-        <button type="button" onClick={saveCampaign} disabled={busy}>{busy?'Saving…':campaignId?'Update campaign draft':'Save campaign draft'}</button>
+        <button type="button" onClick={saveCampaign} disabled={busy||!canManage||['live','complete'].includes(selectedCampaign?.stage)}>{busy?'Saving…':campaignId?'Update campaign draft':'Save campaign draft'}</button>
         <button type="button" onClick={copy}>Copy campaign brief</button>
         <Link to="/marketing">Open Marketing CRM to save details →</Link>
       </div>
@@ -133,12 +164,16 @@ export default function TeamStoreLaunchpad() {
     </section>
     <section className="card elevated-card">
       <h2>Campaign launch checklist</h2>
-      <ol className="sc-team-steps">{STEPS.map((step,i)=>
+      <ol className="sc-team-steps">{(isInvoice?GROUP_STEPS:STORE_STEPS).map((step,i)=>
         <li key={step.name}>
           <div><strong>{i+1}. {step.name}</strong><p>{step.detail}</p></div>
           {marketingOnly && step.ops ? <span>Operations staff follow-up</span> : <Link to={step.path}>{step.link} →</Link>}
         </li>)}</ol>
-      <p><strong>Next build:</strong> Real transactional Woo campaign publishing, roster-to-order import, order bundling, per-player packing, coordinator portal and auditable fundraiser ledger. These capabilities require new durable records and end-to-end financial tests; this launchpad does not claim they exist yet.</p>
+      <p><strong>Shared production handoff:</strong> Both order channels reuse customer artwork, production recipes, purchasing, jobs, QR traveler instructions, QC and fulfillment. Payment is handled by their respective existing systems.</p>
     </section>
+    {selectedCampaign && (selectedCampaign.order_channel==='quickbooks_invoice'
+      ? <GroupInvoiceWorkflow key={campaignId} campaign={selectedCampaign}/>
+      : <TeamCampaignCommerce key={campaignId} campaign={selectedCampaign} canManage={canManage}
+          canPublish={canPublish} onUpdated={loadCampaigns}/>)}
   </main>;
 }
