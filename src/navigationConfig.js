@@ -90,6 +90,7 @@ export const navSections = [
     label: 'Management',
     icon: '📊',
     items: [
+      { label: 'Team Stores & Fundraising', path: '/team-stores', keywords: 'team store group order school spirit wear club campaign fundraising coordinator' },
       { label: 'Marketing & Client Growth', path: '/marketing', keywords: 'marketing leads prospects clients contacts outreach flyers samples pricing profit sharing margin demo storefront handoff pipeline' },
       { label: 'Campaign Forecast', path: '/campaign-forecast', keywords: 'forecast campaign stock demand' },
       { label: 'Customer Reorders', path: '/customer-reorders', keywords: 'reorder intelligence repeat customers' },
