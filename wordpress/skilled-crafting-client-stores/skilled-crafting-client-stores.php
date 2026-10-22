@@ -39,6 +39,14 @@ function scs_category($id) {
     $term = get_term((int)$id,'product_cat');
     return $term && !is_wp_error($term) ? $term : null;
 }
+function scs_product_in_category($product_id,$category_id) {
+    $cats=wp_get_post_terms((int)$product_id,'product_cat',['fields'=>'ids']);
+    if (is_wp_error($cats)) return false;
+    foreach ($cats as $child) {
+        if ((int)$child===(int)$category_id || term_is_ancestor_of((int)$category_id,(int)$child,'product_cat')) return true;
+    }
+    return false;
+}
 function scs_products($category_id, $limit=24) {
     if (!class_exists('WooCommerce')) return '<p>WooCommerce is unavailable.</p>';
     $q = new WP_Query([
@@ -53,11 +61,11 @@ function scs_products($category_id, $limit=24) {
         $product=wc_get_product(get_the_ID());
         if (!$product || !$product->is_visible()) continue;
         echo '<article class="scs-product">';
-        echo '<a href="'.esc_url(get_permalink()).'" class="scs-product-thumb">';
+        echo '<a href="'.esc_url(add_query_arg('scs_store',get_post_field('post_name',get_queried_object_id()),get_permalink())).'" class="scs-product-thumb">';
         echo get_the_post_thumbnail(get_the_ID(),'woocommerce_thumbnail',['loading'=>'lazy']);
         echo '</a><div class="scs-product-body"><h3>'.esc_html(get_the_title()).'</h3>';
         echo '<p class="scs-price">'.wp_kses_post($product->get_price_html()).'</p>';
-        echo '<a class="scs-button" href="'.esc_url(get_permalink()).'">Select options &amp; shop</a></div></article>';
+        echo '<a class="scs-button" href="'.esc_url(add_query_arg('scs_store',get_post_field('post_name',get_queried_object_id()),get_permalink())).'">Select options &amp; shop</a></div></article>';
     }
     wp_reset_postdata();
     echo '</div>';
@@ -117,9 +125,17 @@ add_filter('the_content',function($content){
 }, 20);
 
 add_action('template_redirect',function(){
-    if (!is_singular('sc_client_store') || !function_exists('WC') || !WC()->session) return;
-    $id=get_queried_object_id();
-    if (get_post_status($id)!=='publish') return;
+    if (!function_exists('WC') || !WC()->session) return;
+    $id=is_singular('sc_client_store') ? get_queried_object_id() : 0;
+    if (!$id && function_exists('is_product') && is_product() && isset($_GET['scs_store'])) {
+        $slug=sanitize_title(wp_unslash($_GET['scs_store']));
+        $candidate=get_page_by_path($slug,OBJECT,'sc_client_store');
+        if ($candidate && $candidate->post_status==='publish'
+            && scs_product_in_category(get_queried_object_id(),(int)scs_read($candidate->ID,'category_id',0))) {
+            $id=$candidate->ID;
+        }
+    }
+    if (!$id || get_post_status($id)!=='publish') return;
     WC()->session->set('scs_store_id',(int)$id);
     if (method_exists(WC()->session,'set_customer_session_cookie')) WC()->session->set_customer_session_cookie(true);
 });
@@ -130,7 +146,7 @@ function scs_cart_store() {
     $category=(int)scs_read($id,'category_id',0);
     if (!$category) return null;
     foreach (WC()->cart->get_cart() as $cart_item) {
-        if (!has_term($category,'product_cat',$cart_item['product_id'])) {
+        if (!scs_product_in_category($cart_item['product_id'],$category)) {
             return null; // Mixed cart is deliberately neutral, not misbranded.
         }
     }
