@@ -96,14 +96,14 @@ export default function ArtworkPreflight() {
     try {
       let sourceId=savedSource;
       if(!sourceId) {
-        const source=await addArtworkAsset({
+        const sourceAsset=await addArtworkAsset({
           projectId,file,
           values:{artwork_name:safeBase(file.name)+' — original source',pixel_width:source?.width||null,
             pixel_height:source?.height||null,has_transparency:file.type==='image/png',
             preflight_status:'pending',exact_artwork_locked:true,
             metadata:{artwork_prep:'DTF',file_role:'original',original_unchanged:true}},
         });
-        sourceId=source.id;setSavedSource(sourceId);
+        sourceId=sourceAsset.id;setSavedSource(sourceId);
       }
       const preparedName=safeBase(file.name)+'-dtf-'+width+'x'+height+'-300dpi.png';
       const prepared=new File([output.blob],preparedName,{type:'image/png'});
