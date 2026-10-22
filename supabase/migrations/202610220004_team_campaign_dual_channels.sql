@@ -38,3 +38,26 @@ end $$;
 drop trigger if exists sc_guard_team_order_channel on public.sc_team_store_workflows;
 create trigger sc_guard_team_order_channel before update on public.sc_team_store_workflows
 for each row execute function public.sc_guard_team_order_channel();
+
+
+-- Internal summary RPC, avoids broad browser SELECT grants on all public client orders.
+create or replace function public.sc_group_campaign_requests(p_campaign_id uuid)
+returns table(id uuid,order_number text,submitted_at timestamptz,organization text,
+  contact_name text,status text,external_invoice_number text,manual_order_id bigint,
+  generated_job_id bigint,payment_received_at timestamptz)
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not public.sc_internal_access_allowed(array['admin','manager','operator','marketing','viewer']) then
+    raise exception 'Group order access denied' using errcode='42501';
+  end if;
+  return query
+    select o.id,o.order_number,o.submitted_at,o.organization,o.contact_name,o.status,
+           o.external_invoice_number,o.manual_order_id,o.generated_job_id,o.payment_received_at
+    from public.sc_client_order_requests o
+    join public.sc_team_store_workflows w on w.id=o.campaign_id
+    where o.campaign_id=p_campaign_id and w.order_channel='quickbooks_invoice'
+    order by o.submitted_at desc limit 250;
+end $$;
+revoke all on function public.sc_group_campaign_requests(uuid) from public,anon;
+grant execute on function public.sc_group_campaign_requests(uuid) to authenticated;
