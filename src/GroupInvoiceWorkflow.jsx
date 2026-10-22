@@ -11,9 +11,7 @@ export default function GroupInvoiceWorkflow({campaign}){
   const formUrl=code?window.location.origin+'/team-order?campaign_code='+encodeURIComponent(code):'';
   const load=useCallback(async()=>{
     if(!campaign.id)return;
-    const {data,error:dbError}=await supabase.from('sc_client_order_requests')
-      .select('id,order_number,submitted_at,organization,contact_name,status,external_invoice_number,manual_order_id,generated_job_id,payment_received_at')
-      .eq('campaign_id',campaign.id).order('submitted_at',{ascending:false}).limit(250);
+    const {data,error:dbError}=await supabase.rpc('sc_group_campaign_requests',{p_campaign_id:campaign.id});
     if(dbError)throw dbError;setOrders(data||[]);
   },[campaign.id]);
   useEffect(()=>{load().catch(e=>setError(e.message));},[load]);
