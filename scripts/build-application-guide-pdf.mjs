@@ -420,7 +420,7 @@ para('A deeper source-and-configuration review from Work (PR #106) now confirms 
  'Skilled Crafting Product Options runs in observed Replacement mode while legacy option reading is enabled. Preserve existing order line metadata and test representative products before change.',
  'Custom SKU Builder and SkyVerge register overlapping enabled SKU-writing hooks; active WP Wham had its internal generation switch OFF. The custom batch rebuild lacks nonce protection on a state-changing GET and should NOT be used until hardened. Staging must determine actual save paths.',
  'Woo core free shipping requires >= $200 on post-discount tax-exclusive displayed subtotal OR a valid free-shipping coupon. The separate Advanced Free Shipping rule uses exact equality at tax-inclusive pre-discount subtotal $200. No real checkout totals were measured.',
- 'A published 100% coupon with free shipping enabled and broadly configured eligibility requires owner review for intended purpose and safeguards; no misuse was observed, and the private coupon code is deliberately omitted.',
+ 'The owner confirmed the existing 100% coupon with free shipping is intentional. Do not disable, expire, or restrict it without a separate explicit decision; the private coupon code is omitted.',
  'Some Spirit Wear classes intentionally offer no-charge distribution. Zero flat-rate base alone does not mean all parcels ship free; no-class fees and shipping-class costs vary, while a blank Heavy fallback fee permits a potential zero-cost path.',
  'Print Documents generation logging and browser auto-open do not prove physical printing, correct packing or handoff.',
  'Navigation uses both /shop-new/ and /find-your-store/ paths; verify intended customer journey before simplifying.',
