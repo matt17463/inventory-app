@@ -38,7 +38,7 @@ test('QA triage is not verification certification',()=>{
  assert.throws(()=>validateReview({targetType:'application-route',targetId:'<script>',reviewState:'blocked'}),/Unrecognized/);
 });
 test('migration denies client grants, enables RLS, keeps server-only tables',()=>{
- const sql=read('../../supabase/migrations/202610220009_training_guide_certifications.sql');
+ const sql=read('../../supabase/migrations/20261022202700_training_guide_certifications.sql');
  for(const table of ['sc_training_progress','sc_training_certifications','sc_documentation_qa_reviews']){
   assert.match(sql,new RegExp('create table if not exists public\\.'+table));
   assert.match(sql,new RegExp('alter table public\\.'+table+' enable row level security'));
