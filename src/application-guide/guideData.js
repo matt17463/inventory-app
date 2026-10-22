@@ -1,3 +1,4 @@
+import {wordPressAuditChapters} from './wordpressAuditLearning.js';
 export const GUIDE_VERSION = '1.5.0';
 
 const section = (id, title, summary, options = {}) => ({
@@ -1516,6 +1517,9 @@ guideChapters.push({
     ]}),
  ],
 });
+
+// Verified UI observations and open audit gaps supplement, not replace, operational source docs.
+guideChapters.push(...wordPressAuditChapters());
 
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [
