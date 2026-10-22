@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skilled Crafting Client Storefronts
  * Description: Branded WooCommerce category-only client stores, site-native landing pages and coordinated checkout.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires Plugins: woocommerce
  * Text Domain: skilled-crafting-stores
  */
@@ -30,6 +30,12 @@ function scs_read($id, $key, $default = '') {
 function scs_color($value, $fallback) {
     $value = sanitize_hex_color($value);
     return $value ?: $fallback;
+}
+function scs_ink($hex) {
+    $rgb=[hexdec(substr($hex,1,2)),hexdec(substr($hex,3,2)),hexdec(substr($hex,5,2))];
+    $linear=array_map(function($v){$v/=255;return $v<=0.04045?$v/12.92:pow(($v+0.055)/1.055,2.4);},$rgb);
+    $l=0.2126*$linear[0]+0.7152*$linear[1]+0.0722*$linear[2];
+    return ($l+0.05)/0.05 >= 1.05/($l+0.05) ? '#000000' : '#ffffff';
 }
 function scs_template($value) {
     return in_array($value,['athletics','scholastic','business','fundraising'],true) ? $value : 'athletics';
@@ -89,7 +95,7 @@ function scs_store_markup($id) {
     $instructions=scs_read($id,'instructions','Select an item, choose your options, and finish checkout securely on Skilled Crafting.');
     $delivery=scs_read($id,'delivery','Delivery and pickup choices are confirmed at checkout.');
     $deadline=scs_read($id,'deadline');
-    $style='--scs-primary:'.esc_attr($primary).';--scs-secondary:'.esc_attr($secondary).';--scs-accent:'.esc_attr($accent).';';
+    $style='--scs-primary:'.esc_attr($primary).';--scs-secondary:'.esc_attr($secondary).';--scs-accent:'.esc_attr($accent).';--scs-primary-ink:'.scs_ink($primary).';--scs-secondary-ink:'.scs_ink($secondary).';';
     $cart_url=wc_get_cart_url();
     ob_start();
     echo '<main class="scs-store scs-'.esc_attr($theme).'" style="'.esc_attr($style).'">';
@@ -143,8 +149,16 @@ add_action('template_redirect',function(){
 });
 function scs_cart_store() {
     if (!function_exists('WC') || !WC()->session || !WC()->cart) return null;
+    // Review checkout branding for an unpublished store without making it public
+    // or persisting that draft in the shopper's session.
+    $preview_id=isset($_GET['scs_preview_store']) ? absint($_GET['scs_preview_store']) : 0;
+    $preview=get_post($preview_id);
+    $authorized_preview=$preview_id && $preview && $preview->post_type==='sc_client_store'
+        && $preview->post_status==='draft' && current_user_can('edit_post',$preview_id)
+        && current_user_can('manage_woocommerce');
     $id=(int)WC()->session->get('scs_store_id');
-    if (!$id || get_post_status($id)!=='publish') return null;
+    if ($authorized_preview) $id=$preview_id;
+    if (!$id || (!$authorized_preview && get_post_status($id)!=='publish')) return null;
     $category=(int)scs_read($id,'category_id',0);
     if (!$category) return null;
     foreach (WC()->cart->get_cart() as $cart_item) {
@@ -195,13 +209,13 @@ add_shortcode('sc_client_store_directory',function(){
 add_action('wp_enqueue_scripts',function(){
     $directory=is_page() && get_post() && has_shortcode(get_post()->post_content,'sc_client_store_directory');
     if (!is_singular('sc_client_store') && !is_cart() && !is_checkout() && !$directory) return;
-    wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.0');
+    wp_enqueue_style('scs-client-stores',plugins_url('assets/storefront.css',__FILE__),[], '0.1.2');
     if (is_cart() || is_checkout()) {
         $id=scs_cart_store();if (!$id)return;
         $p=scs_color(scs_read($id,'primary'),'#16443b');
         $s=scs_color(scs_read($id,'secondary'),'#f0b83a');
         wp_add_inline_style('scs-client-stores',
-            'body.scs-client-checkout{--scs-primary:'.esc_html($p).';--scs-secondary:'.esc_html($s).';}');
+            'body.scs-client-checkout{--scs-primary:'.esc_html($p).';--scs-secondary:'.esc_html($s).';--scs-primary-ink:'.scs_ink($p).';--scs-secondary-ink:'.scs_ink($s).';}');
     }
 });
 

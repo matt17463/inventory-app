@@ -108,3 +108,13 @@ test('draft rendering is restricted to authorized native previews and live campa
  const draft=site.slice(site.indexOf("if(action==='draft')"),site.indexOf("if(action==='clone')"));
  assert(draft.indexOf('requireDraft(c)') < draft.indexOf("upsertWpStore(c,'draft')"));
 });
+
+test('unpublished checkout previews require both post editing and Woo permissions without session changes',()=>{
+ const php=read('../../wordpress/skilled-crafting-client-stores/skilled-crafting-client-stores.php');
+ assert(php.includes("current_user_can('edit_post',$preview_id)"));
+ assert(php.includes("current_user_can('manage_woocommerce')"));
+ const body=php.slice(php.indexOf('function scs_cart_store()'),php.indexOf("add_filter('body_class'"));
+ assert(!body.includes("->set("));
+ assert(body.includes("$preview->post_status==='draft'"));
+ assert(body.includes('scs_product_in_category'));
+});
