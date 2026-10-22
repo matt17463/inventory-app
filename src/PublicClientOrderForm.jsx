@@ -53,6 +53,14 @@ export default function PublicClientOrderForm() {
   const campaignCode=params.get('campaign_code')||'';
   const [groupCampaign,setGroupCampaign]=useState(null);
   const [groupCampaignError,setGroupCampaignError]=useState('');
+
+  const [form,setForm]=useState({
+    organization:'', contact_name:'', contact_email:'', contact_phone:'', order_type:'Team / Club Apparel',
+    desired_completion_date:'', event_date:'', delivery_method:'Pickup', preferred_contact_method:'Email',
+    garment_types:[], preferred_colors:[], artwork_choice:'Existing artwork / logo', artwork_reference_url:'',
+    customization_notes:'', customer_notes:'', website:''
+  });
+  const [items,setItems]=useState([emptyLine()]);
   useEffect(()=>{
     if(!campaignCode)return;
     let active=true;
@@ -67,13 +75,6 @@ export default function PublicClientOrderForm() {
       }).catch(e=>{if(active)setGroupCampaignError(e.message||'This group form has closed.');});
     return()=>{active=false;};
   },[campaignCode]);
-  const [form,setForm]=useState({
-    organization:'', contact_name:'', contact_email:'', contact_phone:'', order_type:'Team / Club Apparel',
-    desired_completion_date:'', event_date:'', delivery_method:'Pickup', preferred_contact_method:'Email',
-    garment_types:[], preferred_colors:[], artwork_choice:'Existing artwork / logo', artwork_reference_url:'',
-    customization_notes:'', customer_notes:'', website:''
-  });
-  const [items,setItems]=useState([emptyLine()]);
   const [files,setFiles]=useState([]);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
