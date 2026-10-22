@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { alphaBounds, DTF_DPI, removeEdgeConnectedWhite, setPngDpi, sourcePreflight, validatePrintDimensions } from './lib/dtfPreflight';
 import './ArtworkPreflight.css';
+import { addArtworkAsset, listMockupProjects } from './lib/mockupStudioApi';
 
 function browserPng(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not encode PNG.')), 'image/png'));
@@ -53,6 +54,11 @@ export default function ArtworkPreflight() {
   const [output,setOutput] = useState(null);
   const [preview,setPreview] = useState('');
   const [busy,setBusy] = useState(false);
+  const [projects,setProjects]=useState([]);
+  const [projectId,setProjectId]=useState('');
+  const [savedSource,setSavedSource]=useState('');
+  const [savedPrepared,setSavedPrepared]=useState('');
+  const [uploadBusy,setUploadBusy]=useState(false);
   const [message,setMessage] = useState('');
   useEffect(() => {
     if (!file) { setSource(null); return; }
@@ -64,6 +70,7 @@ export default function ArtworkPreflight() {
     return () => { active = false; };
   }, [file]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Artwork project list unavailable: '+e.message));},[]);
   const plan = (() => {
     if (!source) return null;
     try {
@@ -74,7 +81,7 @@ export default function ArtworkPreflight() {
 
   async function prepare() {
     if (!file) return;
-    setBusy(true); setMessage(''); setOutput(null); setPreview('');
+    setBusy(true); setMessage(''); setOutput(null); setPreview('');setSavedPrepared('');
     try {
       const result = await makePng(file,{width,height,white,threshold});
       setOutput(result);
@@ -82,6 +89,37 @@ export default function ArtworkPreflight() {
       setMessage('Prepared locally. Review the checkerboard preview before downloading or approving for production.');
     } catch (err) { setMessage(err.message || 'Unable to prepare the file.'); }
     finally { setBusy(false); }
+  }
+  async function saveToProject() {
+    if(!file||!output||!projectId)return;
+    setUploadBusy(true);setMessage('');
+    try {
+      let sourceId=savedSource;
+      if(!sourceId) {
+        const source=await addArtworkAsset({
+          projectId,file,
+          values:{artwork_name:safeBase(file.name)+' — original source',pixel_width:source?.width||null,
+            pixel_height:source?.height||null,has_transparency:file.type==='image/png',
+            preflight_status:'pending',exact_artwork_locked:true,
+            metadata:{artwork_prep:'DTF',file_role:'original',original_unchanged:true}},
+        });
+        sourceId=source.id;setSavedSource(sourceId);
+      }
+      const preparedName=safeBase(file.name)+'-dtf-'+width+'x'+height+'-300dpi.png';
+      const prepared=new File([output.blob],preparedName,{type:'image/png'});
+      const result=await addArtworkAsset({
+        projectId,file:prepared,
+        values:{artwork_name:preparedName,pixel_width:output.outputWidth,pixel_height:output.outputHeight,
+          has_transparency:true,background_removed:white,preflight_status:'needs_review',
+          exact_artwork_locked:true,metadata:{artwork_prep:'DTF',file_role:'derived',
+            source_artwork_asset_id:sourceId,dpi:300,white_cleanup_applied:white,
+            background_removed_pixels:output.removed,effective_source_dpi:output.source.effectiveDpi,
+            preparation_tool:'artwork-preflight-v1',requires_visual_approval:true}},
+      });
+      setSavedPrepared(result.id);
+      setMessage('Original and prepared artwork saved in Mockup Studio storage for this project. The prepared copy requires visual approval.');
+    }catch(e){setMessage('Storage could not finish: '+(e.message||'error')+'. If the original was saved it remains in the project; retry to save the derivative.');}
+    finally{setUploadBusy(false);}
   }
   function download() {
     if (!output) return;
@@ -101,7 +139,7 @@ export default function ArtworkPreflight() {
       <div className="sc-art-form">
         <h2>1. Load a source image</h2>
         <label>Source PNG, JPEG or WebP
-          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { setFile(e.target.files?.[0]||null);setOutput(null);setPreview('');setMessage(''); }} />
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { setFile(e.target.files?.[0]||null);setOutput(null);setPreview('');setMessage('');setSavedSource('');setSavedPrepared(''); }} />
         </label>
         <p className="helper-text">Processing happens in your browser. This tool does not upload the source image or prepared file. Maximum 24 megapixels.</p>
         {source && <p><strong>Source:</strong> {source.width} × {source.height} pixels ({source.type})</p>}
@@ -133,7 +171,18 @@ export default function ArtworkPreflight() {
           <p><strong>Actual exported canvas:</strong> {output.outputWidth} × {output.outputHeight} pixels; PNG with 300 DPI pHYs metadata.</p>
           <p><strong>Background cleanup:</strong> {output.removed.toLocaleString()} pixels made transparent.</p>
           <p className="sc-art-warning">Manual QA required: no automatic color separation, ICC profile, underbase, RIP settings or printable color accuracy is implied.</p>
-          <p>When approved, <Link to="/mockup-studio">upload the PNG to Mockup Studio</Link> and attach the final artwork to a project. It is not automatically saved to R2 yet.</p>
+          <div className="sc-art-persist">
+            <h3>Save original and prepared copy to Artwork / Mockup Studio</h3>
+            <label>Existing customer project<select value={projectId} onChange={e=>{setProjectId(e.target.value);setSavedSource('');setSavedPrepared('');}}>
+              <option value="">Choose a project</option>
+              {projects.map(p=><option key={p.id} value={p.id}>{p.project_name} · {p.customer_name||'Internal'}</option>)}
+            </select></label>
+            <button type="button" onClick={saveToProject} disabled={!projectId||uploadBusy||Boolean(savedPrepared)}>
+              {uploadBusy?'Saving to artwork storage…':savedPrepared?'Files saved':'Save original + prepared PNG'}
+            </button>
+            <p>Files use the established authenticated Mockup Studio storage pipeline (R2 when configured). The source is preserved; the prepared file starts as <strong>needs review</strong>, not approved for production.</p>
+            {savedPrepared&&<p>Prepared artwork ID: <code>{savedPrepared}</code> · <Link to="/mockup-studio">Open Mockup Studio →</Link></p>}
+          </div>
         </>}
         <h3>Other artwork methods</h3>
         <div className="sc-art-related">
