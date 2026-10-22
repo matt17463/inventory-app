@@ -86,3 +86,17 @@ test('app offers logo palette, WP draft, season cloning, production and public c
  assert.match(ops,/action:'clone'/);
  assert.match(app,/path="\/coordinator\/:token"/);
 });
+
+test('WordPress configuration accepts legacy secret name without requiring rotation',()=>{
+ const keys=['SC_WP_USERNAME','SC_WP_APP_PASSWORD','SC_WP_APP_PASSWPRD','WOO_SITE_URL'];
+ const before=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+ try {
+  process.env.SC_WP_USERNAME='fixture'; process.env.WOO_SITE_URL='https://example.com';
+  delete process.env.SC_WP_APP_PASSWORD; delete process.env.SC_WP_APP_PASSWPRD;
+  assert.equal(wpStoreConfigured(),false);
+  process.env.SC_WP_APP_PASSWPRD='fixture-password';
+  assert.equal(wpStoreConfigured(),true);
+  delete process.env.SC_WP_APP_PASSWPRD; process.env.SC_WP_APP_PASSWORD='fixture-password';
+  assert.equal(wpStoreConfigured(),true);
+ } finally { for(const k of keys) { if(before[k]===undefined)delete process.env[k]; else process.env[k]=before[k]; } }
+});

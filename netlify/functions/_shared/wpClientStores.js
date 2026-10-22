@@ -1,12 +1,14 @@
 import { wooBaseUrl, wooRequest } from './mockupUtils.js';
+// Support the legacy misspelled Netlify secret without exposing or rotating it.
+const wpPassword = () => process.env.SC_WP_APP_PASSWORD || process.env.SC_WP_APP_PASSWPRD;
 export function wpStoreConfigured() {
-  return Boolean(process.env.SC_WP_USERNAME && process.env.SC_WP_APP_PASSWORD && process.env.WOO_SITE_URL);
+  return Boolean(process.env.SC_WP_USERNAME && wpPassword() && process.env.WOO_SITE_URL);
 }
 function wpAuth() {
   if (!wpStoreConfigured()) {
     throw new Error('WordPress Application Password is not configured. Install/activate Skilled Crafting Client Storefronts and set SC_WP_USERNAME and SC_WP_APP_PASSWORD in Netlify production environment.');
   }
-  return 'Basic '+Buffer.from(process.env.SC_WP_USERNAME+':'+process.env.SC_WP_APP_PASSWORD).toString('base64');
+  return 'Basic '+Buffer.from(process.env.SC_WP_USERNAME+':'+wpPassword()).toString('base64');
 }
 export async function wpStoreRequest(route,{method='POST',body,bytes,mimeType,filename}={}) {
   const base=wooBaseUrl();
