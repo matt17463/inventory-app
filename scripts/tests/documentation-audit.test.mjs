@@ -73,7 +73,7 @@ test('PDF generator includes conditional dialog annex, plugin records and covera
  const pdf=read('../../scripts/build-application-guide-pdf.mjs');
  assert.match(pdf,/documentation-audit-report\.json/);
  assert.match(pdf,/Part VIII - WordPress Audit Evidence and Open Verification/);
- assert.match(pdf,/WORDPRESS AUDIT OPEN/);
+ assert.match(pdf,/AUDIT PARTIALLY COMPLETE/);
  assert.match(pdf,/liveVerifiedDialogs/);
  assert.match(pdf,/pluginScreens/);
 });
