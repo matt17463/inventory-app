@@ -380,6 +380,7 @@ export default function ProductionBoard() {
                       ) : null}
 
                       <div className="sc-card-actions">
+                        {row.job_id ? <Link className="sc-btn sc-btn-small" to={`/work-hub?job=${row.job_id}`}>Guided Job Workspace</Link> : null}
                         {row.job_id ? <Link className="sc-btn sc-btn-small" to={`/pullsheets/${row.job_id}`}>Open Pull Sheet</Link> : null}
                         {row.job_id ? <Link className="sc-btn sc-btn-small" to={`/uv-studio?job=${row.job_id}`}>UV Studio</Link> : null}
                         {row.woocommerce_order_id && !row.job_id ? <span className="sc-muted">Waiting for pull sheet/job creation</span> : null}

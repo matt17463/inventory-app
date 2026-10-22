@@ -44,7 +44,9 @@ test('recipe and traveler pages are connected to operation routes and Work Hub',
   const travel=read('../../src/ProductionTravelers.jsx');
   for(const path of ['/manufacturing-recipes','/production-travelers','/production-travelers/:travelerId'])assert(app.includes('path="'+path+'"'));
   assert(nav.includes('QR Job Travelers'));assert(nav.includes('Production Recipe Library'));
-  assert(hub.includes("Create / scan a job traveler"));
+  assert(hub.includes("deriveGuidedProgress"));
+  assert(hub.includes("Open the correct tool"));
+  assert(read('../../src/lib/guidedJobProgress.js').includes("/production-travelers"));
   assert(travel.includes('recipe_snapshot'));
   assert(travel.includes('signedAssetUrl'));
   assert(travel.includes('LocalQrCode'));
