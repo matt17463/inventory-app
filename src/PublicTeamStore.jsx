@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import './PublicTeamStore.css';
 
 const money=(n)=>Number(n).toLocaleString('en-US',{style:'currency',currency:'USD'});
@@ -55,10 +55,9 @@ export default function PublicTeamStore(){
         <p className="sc-public-team-notice">{payload.price_notice}</p>
       </section>
       <section className="sc-public-team-wrap sc-public-team-footer">
-        <h2>Need player names, numbers, or a consolidated group order?</h2>
-        <p>Use our team order request form for personalization or large coordinated orders. This is an inquiry, not a paid checkout.</p>
-        <Link to={'/team-order?campaign='+encodeURIComponent(slug)}>Request personalized/team ordering</Link>
-        <p><small>Prices, taxes, shipping and inventory are ultimately confirmed at WooCommerce checkout. Individual product links may include product-specific customization options.</small></p>
+        <h2>Questions about your team store?</h2>
+        <p>Choose your item above to continue directly to WooCommerce. Product personalization is available only where explicitly shown on that item's checkout page.</p>
+        <p><small>Prices, taxes, shipping and availability are confirmed during WooCommerce checkout. This online store is separate from the one-time group order and QuickBooks invoice process.</small></p>
       </section>
     </>}
   </main>;
