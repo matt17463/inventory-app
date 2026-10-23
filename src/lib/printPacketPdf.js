@@ -132,7 +132,11 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
     if(cfg.labelShowOrder)y=text(doc,'Order '+source.reference+' / Job '+job.id,18,y,250,11,{bold:true})+5;
     if(source.shipAddress)y=text(doc,source.shipAddress,18,y,249,10)+8;
     y=text(doc,'PACKAGE '+(i+1)+' OF '+cfg.packageCount,18,y+4,250,16,{bold:true})+8;
-    if(cfg.labelShowItems){
+    if(cfg.labelShowItems&&cfg.packageCount>1){
+      y=text(doc,'Multiple packages: contents must be verified',18,y,250,9,{bold:true})+4;
+      y=text(doc,'per package using the packing record.',18,y,250,9)+4;
+    }
+    if(cfg.labelShowItems&&cfg.packageCount===1){
       for(const line of source.lines.slice(0,10)){
         if(y>335)break;
         const info=line.quantity+' x '+line.name;
