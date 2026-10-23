@@ -118,6 +118,39 @@ export default function PrintCenter(){
   }catch(e){setError(e.message||'Could not generate document.');}
   finally{setBusy('');}
  }
+ async function printStandardPacket(){
+  if(!source||!job||busy||!canPrintCustomerCopy(source))return;
+  setBusy('standard');setError('');setMessage('');
+  const accepted=[];
+  try{
+   const capabilitiesResponse=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{
+    method:'POST',body:JSON.stringify({action:'capabilities'})
+   });
+   const cap=await capabilitiesResponse.json();
+   if(!cap?.enabled||!cap?.letter||!cap?.thermal)
+    throw Error('Standard packet needs both verified Epson and thermal print queues. Configure/test the print agent first, or use individual PDF downloads.');
+   if(prefs.productionPacket&&!travelers.length)throw Error('Attach approved QR travelers before including a production packet.');
+   const base={source,job,travelers,prefs,origin:window.location.origin};
+   const docs=[['invoice_pair',createInvoicePairPdf(base)],['packing_labels',createDistributionLabelsPdf(base)]];
+   if(prefs.productionPacket){
+    const artworkImages=await readArtwork(travelers);
+    docs.push(['production_packet',createProductionPacketPdf({...base,artworkImages})]);
+   }
+   for(const [documentKind,doc] of docs){
+    const response=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{
+      method:'POST',body:JSON.stringify({action:'enqueue',jobId:job.id,documentKind,
+       idempotencyKey:crypto.randomUUID(),pdfBase64:doc.output('datauristring').split(',')[1]})
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||!result.success)throw Error(result.error||'Queue submission failed.');
+    accepted.push(documentKind);
+   }
+   setMessage(accepted.length+' document job(s) queued for the Pi. Verify their CUPS status; they are not confirmed physically printed.');
+  }catch(e){
+   setError((accepted.length?accepted.length+' document(s) were queued before an error. Check print history before retrying. ':'')+
+     (e.message||'Could not queue standard packet.'));
+  }finally{setBusy('');}
+ }
  if(!authorized)return <main className="page sc-print-center"><h1>Print Center</h1>
   <p>Manager or admin access is required to print invoices containing customer financial details.</p>
   <Link to="/work-hub">Return to Work Hub</Link></main>;
@@ -143,6 +176,9 @@ export default function PrintCenter(){
    </section>
    <section className="card elevated-card">
     <h2>Documents</h2>
+    <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={printStandardPacket}>
+      Queue Standard Packet (Epson invoice pair + Munbyn labels{prefs.productionPacket?' + production packet':''})
+    </button>
     <p>Print invoice pair on Epson letter paper; print distribution labels on Munbyn 4 × 6 stock. Direct queueing stays disabled until the Pi agent and physical printers are validated and enabled.</p>
     <div className="sc-print-cards">
      <div><h3>Customer + Shop Invoices</h3>
@@ -174,7 +210,7 @@ export default function PrintCenter(){
      {[
       ['showSku','Invoice: Show SKUs'],['showPersonalization','Invoice: Show customer personalization'],
       ['showCustomerPhone','Invoice: Show customer phone'],['labelShowOrder','Label: Show order and job #'],
-      ['labelShowItems','Label: Show items'],['labelShowQR','Label: Include staff-only QR (internal bags only)']
+      ['labelShowItems','Label: Show items'],['productionPacket','Include optional production packet in Standard Packet'],['labelShowQR','Label: Include staff-only QR (internal bags only)']
      ].map(([key,label])=><label key={key} className="sc-print-check">
        <input type="checkbox" checked={prefs[key]}
          onChange={e=>setPref(key,e.target.checked)}/>{label}</label>)}
