@@ -75,7 +75,7 @@ function escapeQboQuery(value){
  if(!s||s.length>60)throw Error('A valid QuickBooks invoice number is needed.');
  return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
-function qboSource(manual,invoice){
+export function reconcileQboInvoice(manual,invoice){
  const doc=clean(invoice.DocNumber);
  const invoiceLines=(Array.isArray(invoice.Line)?invoice.Line:[]).filter(l=>l.DetailType==='SalesItemLineDetail'||l.DetailType==='DiscountLineDetail');
  const lines=invoiceLines.map((l,index)=>({
@@ -116,5 +116,5 @@ export async function verifiedQuickBooksInvoice(supabase,manual){
  const matches=body.QueryResponse?.Invoice||[];
  if(matches.length!==1||clean(matches[0].DocNumber)!==manual.reference)
   throw Error(matches.length?'QuickBooks invoice number is ambiguous.':'This invoice number was not found in QuickBooks.');
- return qboSource(manual,matches[0]);
+ return reconcileQboInvoice(manual,matches[0]);
 }
