@@ -27,7 +27,9 @@ export default function ProductionTravelers() {
   const [travelerList,setTravelerList]=useState([]);
   const [recipeVersions,setRecipeVersions]=useState([]);
   const [recipes,setRecipes]=useState([]);
-  const [itemId,setItemId]=useState('');
+  const [selectedItemIds,setSelectedItemIds]=useState([]);
+  const [travelerLines,setTravelerLines]=useState([]);
+  const [claimedItemIds,setClaimedItemIds]=useState([]);
   const [versionId,setVersionId]=useState('');
   const [selected,setSelected]=useState(null);
   const [events,setEvents]=useState([]);
@@ -50,24 +52,29 @@ export default function ProductionTravelers() {
   },[]);
   const loadForJob=useCallback(async(id)=>{
     if(!id) {setItems([]);setTravelerList([]);return;}
-    const [a,b]=await Promise.all([
+    const [a,b,c]=await Promise.all([
       supabase.from('job_items').select('id,job_id,quantity,order_sku,sku,ordered_product_name,item_name,name,size,color,brand,product_type,placement,status').eq('job_id',id).order('id'),
       supabase.from('sc_job_travelers').select('id,job_item_id,job_id,created_at,recipe_version_id').eq('job_id',id).order('created_at',{ascending:false}),
+      supabase.from('sc_job_traveler_lines').select('traveler_id,job_item_id,quantity').order('job_item_id'),
     ]);
-    if(a.error)throw a.error;if(b.error)throw b.error;
-    setItems(a.data||[]);setTravelerList(b.data||[]);
-    setItemId(s=>a.data?.some(x=>String(x.id)===s)?s:String(a.data?.find(x=>!b.data?.some(t=>t.job_item_id===x.id))?.id||''));
+    if(a.error)throw a.error;if(b.error)throw b.error;if(c.error)throw c.error;
+    const groupIds=new Set((b.data||[]).map(t=>t.id));
+    const claimed=[...(c.data||[]).filter(x=>groupIds.has(x.traveler_id)).map(x=>Number(x.job_item_id)),...(b.data||[]).map(x=>Number(x.job_item_id))];
+    setItems(a.data||[]);setTravelerList(b.data||[]);setClaimedItemIds(claimed);
+    setSelectedItemIds([]);
   },[]);
   const loadTraveler=useCallback(async(id)=>{
     if(!id) {setSelected(null);setEvents([]);return;}
     const {data,error}=await supabase.from('sc_job_travelers')
       .select('id,job_id,job_item_id,recipe_version_id,recipe_snapshot,ordered_quantity,created_at').eq('id',id).single();
     if(error)throw error;
-    const [ev,job]=await Promise.all([
+    const [ev,job,lines]=await Promise.all([
       supabase.from('sc_job_traveler_events').select('id,kind,details,created_at').eq('traveler_id',id).order('created_at'),
       supabase.from('jobs').select('id,customer_name,job_name,due_date,status,woo_order_number').eq('id',data.job_id).single(),
+      supabase.from('sc_job_traveler_lines').select('job_item_id,quantity,item_snapshot').eq('traveler_id',id).order('job_item_id'),
     ]);
-    if(ev.error)throw ev.error;if(job.error)throw job.error;
+    if(ev.error)throw ev.error;if(job.error)throw job.error;if(lines.error)throw lines.error;
+    setTravelerLines(lines.data||[]);
     setSelected(data);setEvents(ev.data||[]);setSavedJob(job.data);setJobId(String(data.job_id));
     setArtwork(null);setArtworkUrl('');
     const sourceId=data.recipe_snapshot?.artwork_asset_id;
@@ -82,7 +89,8 @@ export default function ProductionTravelers() {
   useEffect(()=>{loadIndex().catch(e=>setMessage(safeError(e)));},[loadIndex]);
   useEffect(()=>{if(!jobId||travelerId)return;loadForJob(jobId).catch(e=>setMessage(safeError(e)));},[jobId,travelerId,loadForJob]);
   useEffect(()=>{if(travelerId)loadTraveler(travelerId).catch(e=>setMessage(safeError(e)));else {setSelected(null);setEvents([]);}},[travelerId,loadTraveler]);
-  const currentItem=items.find(x=>String(x.id)===itemId);
+  const chosenItems=items.filter(x=>selectedItemIds.includes(Number(x.id)));
+  const selectedQuantity=chosenItems.reduce((sum,x)=>sum+Number(x.quantity||0),0);
   const selectableVersions=useMemo(()=>recipeVersions.map(v=>({
     ...v,recipe:recipes.find(r=>r.id===v.recipe_id),
   })),[recipeVersions,recipes]);
@@ -92,14 +100,14 @@ export default function ProductionTravelers() {
   async function createTraveler(){
     setBusy(true);setMessage('');
     try{
-      if(!jobId||!itemId||!versionId)throw Error('Choose the job line and approved recipe version.');
+      if(!jobId||!selectedItemIds.length||!versionId)throw Error('Choose at least one job line and an approved recipe version.');
       const {data:auth,error:e}=await supabase.auth.getUser();
       if(e||!auth.user)throw Error('Sign in to create a traveler.');
-      const {data,error}=await supabase.from('sc_job_travelers').insert({
-        job_id:Number(jobId),job_item_id:Number(itemId),recipe_version_id:versionId,created_by:auth.user.id,
-      }).select('id').single();
+      const {data,error}=await supabase.rpc('sc_create_grouped_traveler',{
+        p_job_id:Number(jobId),p_job_item_ids:selectedItemIds,p_recipe_version_id:versionId,
+      });
       if(error)throw error;
-      navigate('/production-travelers/'+data.id);
+      navigate('/production-travelers/'+data);
     }catch(e){setMessage(safeError(e));}finally{setBusy(false);}
   }
   async function addEvent(){
@@ -120,42 +128,42 @@ export default function ProductionTravelers() {
   return <main className="page sc-travelers">
     <div className="page-header sc-traveler-no-print"><div><p className="eyebrow">Manufacturing · Scannable production forms</p>
       <h1>Digital Job Travelers</h1>
-      <p>Attach a verified recipe revision to one existing job line. Scan the printed QR to reopen the permanent recipe snapshot.</p></div>
+      <p>Attach an approved recipe revision to one or more lines from the same job. Scan the printed QR to reopen the permanent recipe snapshot.</p></div>
       <div className="sc-traveler-top-actions"><Link to="/work-hub">Work Hub</Link><Link to="/manufacturing-recipes">Recipe Library</Link>{selected&&<button type="button" onClick={()=>window.print()}>Print / Save PDF</button>}</div>
     </div>
     {message&&<p role="status" className="message sc-traveler-no-print">{message}</p>}
     {!travelerId&&<div className="sc-traveler-columns">
       <section className="card elevated-card">
         <h2>Select the existing client job</h2>
-        <label>Production job<select value={jobId} onChange={e=>{setJobId(e.target.value);setItemId('');}}>
+        <label>Production job<select value={jobId} onChange={e=>{setJobId(e.target.value);setSelectedItemIds([]);}}>
           <option value="">Choose job</option>
           {jobs.map(j=><option key={j.id} value={j.id}>#{j.id} · {j.customer_name} · {j.job_name}</option>)}
         </select></label>
-        {jobId&&<div><h3>Order line</h3><div className="sc-traveler-items">
+        {jobId&&<div><h3>Select order lines for this traveler</h3><div className="sc-traveler-items">
           {items.map(item=><label key={item.id} className="sc-traveler-radio">
-            <input type="radio" value={item.id} checked={itemId===String(item.id)}
-              onChange={()=>setItemId(String(item.id))}
-              disabled={travelerList.some(t=>t.job_item_id===item.id)} />
+            <input type="checkbox" value={item.id} checked={selectedItemIds.includes(Number(item.id))}
+              onChange={e=>setSelectedItemIds(old=>e.target.checked?[...old,Number(item.id)]:old.filter(x=>x!==Number(item.id)))}
+              disabled={claimedItemIds.includes(Number(item.id))} />
             <span>{itemLabel(item)} · {item.color||''} {item.size||''} · Qty {item.quantity}
-              {travelerList.some(t=>t.job_item_id===item.id)?' — traveler exists':''}</span>
+              {claimedItemIds.includes(Number(item.id))?' — traveler exists':''}</span>
           </label>)}
           {!items.length&&<p>There are no linked production line items for this job.</p>}
         </div></div>}
         {jobId&&<div><h3>Existing travelers</h3>
-          {travelerList.map(t=><p key={t.id}><Link to={'/production-travelers/'+t.id}>Open traveler for line #{t.job_item_id} →</Link></p>)}
+          {travelerList.map(t=><p key={t.id}><Link to={'/production-travelers/'+t.id}>Open traveler (primary line #{t.job_item_id}) →</Link></p>)}
           {!travelerList.length&&<p>No traveler has been created yet.</p>}
         </div>}
       </section>
       <section className="card elevated-card">
         <h2>Create a QR production form</h2>
-        {currentItem?<p><strong>{itemLabel(currentItem)}</strong> · Qty {currentItem.quantity} · {currentItem.color||''} {currentItem.size||''}</p>:<p>Start by choosing a job and an unassigned item.</p>}
+        {chosenItems.length?<p><strong>{chosenItems.length} order lines</strong> · {selectedQuantity} total garments selected</p>:<p>Select all compatible job lines that share this exact approved recipe and artwork.</p>}
         <label>Physically approved recipe revision<select value={versionId} onChange={e=>setVersionId(e.target.value)}>
           <option value="">Choose an approved version</option>
           {selectableVersions.map(v=><option key={v.id} value={v.id}>{v.recipe?.name||'Recipe'} — Rev {v.revision}, {v.recipe?.garment_type||''}</option>)}
         </select></label>
         {versionId&&<p>Approval-backed recipe selections are preserved on the traveler, including saved decoration placements, process steps and packaging instructions.</p>}
-        {editable?<button type="button" disabled={busy||!jobId||!currentItem||!versionId}
-          onClick={createTraveler}>{busy?'Saving…':'Create job traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
+        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId}
+          onClick={createTraveler}>{busy?'Saving…':'Create grouped traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
         <p><small>Creating a traveler records manufacturing instructions only; it does not move inventory, complete a pull sheet, charge a customer or change WooCommerce status.</small></p>
         <Link to="/manufacturing-recipes">Need a recipe? Create or approve one →</Link>
       </section>
@@ -164,14 +172,14 @@ export default function ProductionTravelers() {
       <header className="sc-traveler-paper-header">
         <div><p className="sc-traveler-brand">SKILLED CRAFTING · PRODUCTION TRAVELER</p>
           <h2>{savedJob?.customer_name||'Customer job'}</h2>
-          <p>Job #{selected.job_id} · Item #{selected.job_item_id} · {snap.item_name||'Production line'}</p>
-          <p><strong>Quantity:</strong> {selected.ordered_quantity} · <strong>Deadline:</strong> {savedJob?.due_date||'Not specified'}</p>
+          <p>Job #{selected.job_id} · {travelerLines.length||1} production line(s) · {snap.item_name||'Production'}</p>
+          <p><strong>Quantity:</strong> {travelerLines.length?travelerLines.reduce((n,x)=>n+Number(x.quantity||0),0):selected.ordered_quantity} · <strong>Deadline:</strong> {savedJob?.due_date||'Not specified'}</p>
           <p><strong>Saved recipe revision:</strong> #{snap.revision} · <strong>Source approved:</strong> {snap.approved_at?new Date(snap.approved_at).toLocaleString():'Not recorded'}</p></div>
         <div className="sc-traveler-qr"><LocalQrCode size={176} value={qr} label="Scannable authenticated job traveler" /><small>Scan to reopen recipe</small></div>
       </header>
       <section>
         <h3>Garment and decoration</h3>
-        <p>{snap.blank?.brand||''} · {snap.blank?.style||''} · {snap.blank?.color||''} · {snap.blank?.size||''} · {snap.blank?.sku||''}</p>
+        <table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr><th>Order line</th><th>Item / SKU</th><th>Color</th><th>Size</th><th>Qty</th></tr></thead><tbody>{(travelerLines.length?travelerLines:[{job_item_id:selected.job_item_id,quantity:selected.ordered_quantity,item_snapshot:{name:snap.item_name,sku:snap.blank?.sku,color:snap.blank?.color,size:snap.blank?.size}}]).map(line=><tr key={line.job_item_id}><td>#{line.job_item_id}</td><td>{line.item_snapshot?.name||'Item'} · {line.item_snapshot?.sku||''}</td><td>{line.item_snapshot?.color||''}</td><td>{line.item_snapshot?.size||''}</td><td>{line.quantity}</td></tr>)}</tbody></table>
         {snap.placement&&<p>Order placement instruction: {snap.placement}</p>}
         <p><strong>Decoration method:</strong> {snap.decoration_method||'Confirm approved method'} · <strong>Recipe:</strong> {snap.recipe_name||'Saved revision'}</p>
         <p><strong>Artwork:</strong> {artwork?.artwork_name||snap.artwork_asset_id||'Not attached — verify before production'}</p>
