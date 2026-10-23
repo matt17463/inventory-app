@@ -136,7 +136,9 @@ export default function PrintCenter(){
     <h2>Order {source.reference} — {source.customerName}</h2>
     <p>Job #{job.id} · Source: {source.source==='woocommerce'?'WooCommerce':'QuickBooks / Manual Invoiced Order'}
     · {source.lines.length} order lines · {travelers.length} QR production travelers</p>
-    <p><strong>Financial verification:</strong> {source.financialVerified?'Original WooCommerce order fetched':'QuickBooks reconciliation NOT confirmed'}</p>
+    <p><strong>Financial verification:</strong> {source.financialVerified
+     ? (source.source==='woocommerce'?'Original WooCommerce order fetched':'QuickBooks invoice number and total matched')
+     : 'QuickBooks reconciliation NOT confirmed'}</p>
     {!!warnings.length&&<div className="sc-print-alert"><strong>Review before printing</strong><ul>{warnings.map(x=><li key={x}>{x}</li>)}</ul></div>}
    </section>
    <section className="card elevated-card">
