@@ -12,7 +12,7 @@ const freshPlacement = () => ({
   size_group:'Adult',instructions:'Measure placement on the actual garment before pressing.',
 });
 const newForm = () => ({
-  id:'',name:'',garment_type:'tee',decoration_method:'DTF',notes:'',
+  id:'',name:'',garment_type:'tee',decoration_method:'DTF',notes:'',scope:'master',folder_id:'',customer_label:'',order_reference:'',tags:[],is_archived:false,is_favorite:false,sort_order:0,
   placements:[freshPlacement()],process_steps:[
     {label:'Verify blank size and color',instruction:'Compare garment with approved client order.'},
     {label:'Prepare artwork / transfer',instruction:'Check size, orientation and artwork version.'},
@@ -33,6 +33,13 @@ export default function ManufacturingRecipes() {
   const editor = ['admin','manager','operator'].includes(access?.role);
   const approver = ['admin','manager'].includes(access?.role);
   const [recipes,setRecipes] = useState([]);
+  const [folders,setFolders] = useState([]);
+  const [recipeSearch,setRecipeSearch] = useState('');
+  const [scopeFilter,setScopeFilter] = useState('master');
+  const [folderFilter,setFolderFilter] = useState('all');
+  const [includeArchived,setIncludeArchived] = useState(false);
+  const [sortMode,setSortMode] = useState('name');
+  const [newFolderName,setNewFolderName] = useState('');
   const [versions,setVersions] = useState([]);
   const [materials,setMaterials] = useState([]);
   const [artworks,setArtworks] = useState([]);
@@ -41,14 +48,17 @@ export default function ManufacturingRecipes() {
   const [busy,setBusy] = useState(false);
   const [selectedVersion,setSelectedVersion] = useState('');
   const load = useCallback(async () => {
-    const [a,b,c,d] = await Promise.all([
-      supabase.from('sc_manufacturing_recipes').select('id,name,garment_type,decoration_method,notes,created_at').order('created_at',{ascending:false}).limit(250),
+    const [a,b,c,d,e] = await Promise.all([
+      supabase.from('sc_manufacturing_recipes').select('id,name,garment_type,decoration_method,notes,created_at,scope,folder_id,customer_label,order_reference,tags,is_archived,is_favorite,sort_order').order('created_at',{ascending:false}).limit(1000),
       supabase.from('sc_manufacturing_recipe_versions').select('*').order('created_at',{ascending:false}).limit(700),
       supabase.from('sc_material_recipes').select('id,machine_model,material_name,operation').eq('status','approved').limit(150),
       supabase.from('mockup_artwork_assets').select('id,artwork_name,preflight_status').order('created_at',{ascending:false}).limit(150),
+      supabase.from('sc_recipe_folders').select('id,name,parent_id,position').order('position').order('name'),
     ]);
     if(a.error) throw a.error;
     if(b.error) throw b.error;
+    if(e.error) throw e.error;
+    setFolders(e.data||[]);
     setRecipes(a.data||[]);setVersions(b.data||[]);
     if(!c.error) setMaterials(c.data||[]);
     if(!d.error) setArtworks(d.data||[]);
@@ -83,6 +93,7 @@ export default function ManufacturingRecipes() {
       process_steps:old.process_steps.map(step=>({...step})),
       packaging:{...old.packaging},
       artwork_asset_id:'',verified_sample:false,
+      scope:'order',folder_id:'',customer_label:'',order_reference:'',is_archived:false,is_favorite:false,sort_order:0,
     }));
     setSelectedVersion('');
     setMessage('Copied into a new unsaved recipe. Rename it, customize, then save. The original remains unchanged.');
@@ -112,7 +123,9 @@ export default function ManufacturingRecipes() {
       if(!recipeId) {
         const {data,error}=await supabase.from('sc_manufacturing_recipes')
           .insert({name:form.name.trim(),garment_type:form.garment_type,
-            decoration_method:form.decoration_method,notes:form.notes,created_by:auth.user.id})
+            decoration_method:form.decoration_method,notes:form.notes,created_by:auth.user.id,
+            scope:form.scope,folder_id:form.folder_id||null,customer_label:form.customer_label,
+            order_reference:form.order_reference,tags:form.tags,is_favorite:form.is_favorite})
           .select('id').single();
         if(error)throw error;recipeId=data.id;
       }
@@ -152,6 +165,33 @@ export default function ManufacturingRecipes() {
     }catch(e){setMessage(explainError(e));}finally{setBusy(false);}
   }
   const selectedRecipe=recipes.find(r=>r.id===form.id);
+  const visibleRecipes=useMemo(()=>recipes.filter(r=>{
+    const terms=[r.name,r.decoration_method,r.customer_label,r.order_reference,...(r.tags||[])].join(' ').toLowerCase();
+    return (scopeFilter==='all'||r.scope===scopeFilter)&&
+      (folderFilter==='all'||(folderFilter==='favorites'?r.is_favorite:r.folder_id===folderFilter))&&
+      (includeArchived||!r.is_archived)&&terms.includes(recipeSearch.toLowerCase());
+  }).sort((a,b)=>sortMode==='recent'?new Date(b.created_at)-new Date(a.created_at):
+    sortMode==='manual'?(a.sort_order||0)-(b.sort_order||0):a.name.localeCompare(b.name)),[recipes,scopeFilter,folderFilter,includeArchived,recipeSearch,sortMode]);
+  async function updateMetadata(updates) {
+    if(!form.id||!approver)return;
+    setBusy(true);setMessage('');
+    try{
+      const {error}=await supabase.from('sc_manufacturing_recipes').update(updates).eq('id',form.id);
+      if(error)throw error;
+      setForm(old=>({...old,...updates,folder_id:updates.folder_id===null?'':(updates.folder_id??old.folder_id)}));
+      await load();setMessage('Recipe organization updated; manufacturing revisions unchanged.');
+    }catch(e){setMessage(explainError(e));}finally{setBusy(false);}
+  }
+  async function createFolder(){
+    if(!approver||!newFolderName.trim())return;
+    setBusy(true);try{
+      const {data:auth,error:authError}=await supabase.auth.getUser();
+      if(authError||!auth.user)throw Error('Sign in to create a folder.');
+      const {error}=await supabase.from('sc_recipe_folders').insert({name:newFolderName.trim(),created_by:auth.user.id});
+      if(error)throw error;
+      setNewFolderName('');await load();setMessage('Folder created.');
+    }catch(e){setMessage(explainError(e));}finally{setBusy(false);}
+  }
   return <main className="page sc-recipe-editor">
     <div className="page-header"><div><p className="eyebrow">Production · Manufacturing recipes</p>
       <h1>Production Recipe Library</h1>
@@ -162,13 +202,45 @@ export default function ManufacturingRecipes() {
     <div className="sc-recipe-columns">
       <section className="card elevated-card">
         <h2>Recipe library</h2>
-        <label>Load an existing template<select value={form.id} onChange={e=>chooseRecipe(e.target.value)}>
+        <h3>Library organization</h3>
+        <label>Find recipe<input value={recipeSearch} onChange={e=>setRecipeSearch(e.target.value)} placeholder="Search name, process, customer or order" /></label>
+        <div className="sc-recipe-twocol">
+          <label>Scope<select value={scopeFilter} onChange={e=>setScopeFilter(e.target.value)}>
+            <option value="master">Master</option><option value="client">Client</option><option value="order">Order-specific</option><option value="all">All recipes</option>
+          </select></label>
+          <label>Folder<select value={folderFilter} onChange={e=>setFolderFilter(e.target.value)}>
+            <option value="all">All folders</option><option value="favorites">Favorites</option>
+            {folders.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+          </select></label>
+          <label>Sort<select value={sortMode} onChange={e=>setSortMode(e.target.value)}>
+            <option value="name">Name A–Z</option><option value="recent">Newest first</option><option value="manual">Custom order</option>
+          </select></label>
+          <label><input type="checkbox" checked={includeArchived} onChange={e=>setIncludeArchived(e.target.checked)}/> Show archived</label>
+        </div>
+        {approver&&<div className="sc-recipe-twocol"><label>New folder<input value={newFolderName} onChange={e=>setNewFolderName(e.target.value)} placeholder="e.g. DTF Apparel"/></label><button type="button" disabled={busy||!newFolderName.trim()} onClick={createFolder}>Add folder</button></div>}
+        <label>Load an existing template ({visibleRecipes.length})<select value={form.id} onChange={e=>chooseRecipe(e.target.value)}>
           <option value="">New recipe</option>
-          {recipes.map(r=><option key={r.id} value={r.id}>{r.name} ({r.garment_type})</option>)}
+          {visibleRecipes.map(r=><option key={r.id} value={r.id}>{r.is_favorite?'★ ':''}{r.name} ({r.garment_type})</option>)}
         </select></label>
         {editor&&form.id&&<div className="sc-recipe-copy-action">
           <button type="button" disabled={busy} onClick={duplicateAsNewRecipe}>Duplicate as new recipe</button>
           <p><small>Copies placements and production steps. Original revisions stay unchanged; choose customer artwork for the new recipe.</small></p>
+        </div>}
+        <h3>Recipe classification</h3>
+        <div className="sc-recipe-twocol">
+          <label>Recipe type<select value={form.scope} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('scope',e.target.value)}>
+            <option value="master">Master / reusable</option><option value="client">Client-specific</option><option value="order">Order-specific</option>
+          </select></label>
+          <label>Folder<select value={form.folder_id||''} disabled={!editor} onChange={e=>selectedRecipe?updateMetadata({folder_id:e.target.value||null}):change('folder_id',e.target.value)}>
+            <option value="">Unfiled</option>{folders.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+          </select></label>
+          <label>Customer / client<input value={form.customer_label||''} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('customer_label',e.target.value)}/></label>
+          <label>Order reference<input value={form.order_reference||''} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('order_reference',e.target.value)}/></label>
+        </div>
+        {selectedRecipe&&approver&&<div className="sc-recipe-twocol">
+          <button type="button" disabled={busy} onClick={()=>updateMetadata({is_favorite:!form.is_favorite})}>{form.is_favorite?'Unfavorite':'★ Favorite'}</button>
+          <button type="button" disabled={busy} onClick={()=>updateMetadata({is_archived:!form.is_archived})}>{form.is_archived?'Restore recipe':'Archive recipe'}</button>
+          {form.scope!=='master'&&<button type="button" disabled={busy} onClick={()=>updateMetadata({scope:'master'})}>Promote to master</button>}
         </div>}
         <label>Recipe name<input value={form.name} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('name',e.target.value)} placeholder="Team hoodie — DTF full front" /></label>
         <div className="sc-recipe-twocol">
