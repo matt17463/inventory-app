@@ -2,7 +2,7 @@ import {useCallback,useContext,useEffect,useMemo,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
-import {PLACEMENT_SOURCES,readinessStatus} from './lib/catalogProductionPresets';
+import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
 import './CatalogProductionReadiness.css';
 
 async function action(payload){
@@ -48,7 +48,6 @@ export default function CatalogProductionReadiness(){
   return hit&&(status==='all'||f.readiness===status);
  }),[families,search,status]);
  const selected=families.find(x=>Number(x.woocommerce_product_id)===Number(familyId));
- const assign=selected?assignments.get(Number(selected.woocommerce_product_id)):null;
  const ready=(state?.versions||[]).filter(v=>v.status==='approved');
  const approvedRecipeIds=new Set(ready.map(v=>v.recipe_id));
  async function run(input,done){
