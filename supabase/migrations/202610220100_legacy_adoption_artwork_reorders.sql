@@ -73,7 +73,7 @@ grant usage,select on sequence public.sc_legacy_client_migration_events_id_seq t
 -- Revision notice is automatic for *any* direct change to the linked source artwork.
 -- A new replacement asset must also be explicitly linked through the Review workflow.
 create or replace function public.sc_flag_linked_artwork_changes()
-returns trigger language plpgsql security invoker set search_path='' as $$
+returns trigger language plpgsql security definer set search_path='' as $$
 begin
  if (new.storage_path is distinct from old.storage_path or
      new.prepared_storage_path is distinct from old.prepared_storage_path or
@@ -89,6 +89,7 @@ begin
  end if;
  return new;
 end $$;
+revoke all on function public.sc_flag_linked_artwork_changes() from public,anon,authenticated;
 drop trigger if exists sc_flag_linked_artwork_changes on public.mockup_artwork_assets;
 create trigger sc_flag_linked_artwork_changes after update on public.mockup_artwork_assets
  for each row execute function public.sc_flag_linked_artwork_changes();
