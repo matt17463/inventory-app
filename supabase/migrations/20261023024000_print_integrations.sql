@@ -66,3 +66,19 @@ end $$;
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
 values ('sc-private-print-pdfs','sc-private-print-pdfs',false,10485760,array['application/pdf'])
 on conflict(id) do nothing;
+
+-- Defense in depth against legacy storage policies permitting generic uploads.
+-- Service role bypasses RLS; browser roles are explicitly excluded from this bucket.
+create policy sc_private_print_browser_select_guard on storage.objects
+  as restrictive for select to anon,authenticated
+  using (bucket_id <> 'sc-private-print-pdfs');
+create policy sc_private_print_browser_insert_guard on storage.objects
+  as restrictive for insert to anon,authenticated
+  with check (bucket_id <> 'sc-private-print-pdfs');
+create policy sc_private_print_browser_update_guard on storage.objects
+  as restrictive for update to anon,authenticated
+  using (bucket_id <> 'sc-private-print-pdfs')
+  with check (bucket_id <> 'sc-private-print-pdfs');
+create policy sc_private_print_browser_delete_guard on storage.objects
+  as restrictive for delete to anon,authenticated
+  using (bucket_id <> 'sc-private-print-pdfs');
