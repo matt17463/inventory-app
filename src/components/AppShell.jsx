@@ -190,6 +190,11 @@ export default function AppShell({ children }) {
           </div>
         </header>
         <main className="sc-page-shell">{children}</main>
+        <footer aria-label="Legal information" style={{ marginTop: 'auto', padding: '16px 24px 24px', display: 'flex', gap: 18, justifyContent: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--sc-muted)' }}>
+          <a href="/privacy-policy.html" style={{ textDecoration: 'underline' }}>Privacy Policy</a>
+          <a href="/eula.html" style={{ textDecoration: 'underline' }}>End User License Agreement</a>
+          <a href="https://skilledcrafting.com/policies/" style={{ textDecoration: 'underline' }}>Order Policies</a>
+        </footer>
       </div>
     </div>
     </NavigationContext.Provider>
