@@ -19,7 +19,7 @@ function qrCode(doc,url,x,y,size){
   }catch{/* Human-readable document reference remains visible. */}
 }
 const moneyOrBlank=(v,c)=>money(v,c);
-function layoutHeader(doc,source,job,kind,prefs,origin,travelers){
+function layoutHeader(doc,source,job,kind,prefs,origin){
   doc.setFillColor(kind==='shop'?26:29,kind==='shop'?55:67,kind==='shop'?69:76);
   doc.rect(0,0,612,94,'F');
   text(doc,'SKILLED CRAFTING',39,38,420,prefs.invoiceHeading,{bold:true,color:[255,255,255]});
@@ -43,11 +43,12 @@ function pageForRows(doc,source,kind,page){
 function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer',origin=''}){
   const config=normalizePrintPrefs(prefs);
   if(kind==='customer'&&!canPrintCustomerCopy(source))throw Error('Customer invoice blocked until the source invoice totals are verified.');
-  layoutHeader(doc,source,job,kind,config,origin,travelers);
+  layoutHeader(doc,source,job,kind,config,origin);
   let page=1;
   footer(doc,source,kind,page);
   let y=122;
   y=text(doc,'CUSTOMER: '+source.customerName,39,y,420,12,{bold:true})+4;
+  if(config.showCustomerPhone&&source.customerPhone)y=text(doc,'PHONE: '+source.customerPhone,39,y,420,9)+3;
   if(source.shipName)y=text(doc,'DELIVER TO: '+source.shipName,39,y,465,10)+2;
   if(source.shipAddress)y=text(doc,source.shipAddress,39,y,465,9)+4;
   y=text(doc,'ORDER SOURCE: '+(source.source==='woocommerce'?'WooCommerce':'QuickBooks / Manual')+
