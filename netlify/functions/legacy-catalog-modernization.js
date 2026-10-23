@@ -89,6 +89,9 @@ async function linkCustomer(db,input,userId,create){
  if(create){
   const company=clean(customer.billing_company||customer.name);
   ensure(company.length>=2,'Legacy customer needs a recognizable organization name before creation.');
+  const suggestions=await candidates(db);
+  const candidate=suggestions.rows.find(row=>Number(row.customer_id)===customerId);
+  ensure(!candidate?.candidates?.length,'Possible matching CRM accounts exist (name/contact email); review them and link instead of creating a duplicate.');
   const similar=await read(db.from('sc_growth_accounts').select('id,organization').ilike('organization',company)
    .is('archived_at',null).limit(5),'Existing organizations');
   ensure(!similar.length,'A CRM account already has that name. Review duplicate candidates and link the existing account instead.');
