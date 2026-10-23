@@ -13,7 +13,7 @@ async function rows(query,label) {
 }
 function intId(value){const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:null;}
 function assertId(value){const id=intId(value);if(!id)throw new Error('Invalid WooCommerce parent product ID.');return id;}
-function statusFor(r,assignment,versions) {
+function statusFor(assignment,versions) {
  if(assignment?.disposition==='fulfillment_only')return 'fulfillment_only';
  if(!assignment||assignment.disposition!=='assigned'||!assignment.recipe_id)return 'review';
  return versions.some(v=>v.recipe_id===assignment.recipe_id&&v.status==='approved')?'approved':'awaiting_approval';
@@ -32,7 +32,7 @@ async function getOverview(db){
  ]);
  const byId=new Map(assignments.map(x=>[Number(x.woocommerce_product_id),x]));
  const display=families.map(f=>({...f,classification:classifyCatalogFamily(f.product_name),
-  readiness:statusFor(f,byId.get(Number(f.woocommerce_product_id)),versions)}));
+  readiness:statusFor(byId.get(Number(f.woocommerce_product_id)),versions)}));
  return {families:display,assignments,recipes,versions,
   clients:clients.filter(c=>c.source_orders||c.last_order_at),
   totals:{
