@@ -204,9 +204,17 @@ export default function CatalogModernization(){
       <label className="sc-mo-check"><input type="checkbox" checked={reorderConfirm} onChange={e=>setReorderConfirm(e.target.checked)}/> I compared customer specifications, artwork, garment and machine requirements and will resolve exceptions before production.</label>
       <div className="sc-mo-actions">{[['confirmed','Confirm reviewed specification'],['rejected','Reject reuse / new specification required']].map(([k,t])=>
        <button key={k} disabled={busy||!reorderConfirm||reorderNotes.trim().length<12}
-        onClick={()=>execute('save_reorder',{job_item_id:activeReorder.job_item_id,source_traveler_id:activeReorder.source_traveler_id,
-         decision:k,review_notes:reorderNotes,confirm:true},r=>'Review recorded for line '+r.job_item_id+'.')}>
+        onClick={async()=>{const ok=await execute('save_reorder',{job_item_id:activeReorder.job_item_id,source_traveler_id:activeReorder.source_traveler_id,
+         decision:k,review_notes:reorderNotes,confirm:true},r=>'Review recorded for line '+r.job_item_id+'.');
+         if(ok)setReorders(await request('reorder_preview'));}}>
         {t}</button>)}</div>
+      {activeReorder.decision==='confirmed'&&activeReorder.differences.length===0&&
+       <button disabled={busy} onClick={async()=>{
+        if(!window.confirm('Generate a new immutable traveler using the approved recipe, only after verifying the current job artwork handoff?'))return;
+        const ok=await execute('create_reorder_traveler',{job_item_id:activeReorder.job_item_id,confirm:true},
+         r=>'Reorder traveler created: '+r.traveler_id+'. No inventory or billing changed.');
+        if(ok)setReorders(await request('reorder_preview'));
+       }}>Create traveler from reviewed approved recipe</button>}
      </>}
     </>:<p>Choose a job line to inspect the exact historical manufacturing evidence.</p>}
    </div></div><p><Link to="/customer-reorders">Historical reorder signals →</Link> · <Link to="/production-travelers">Travelers →</Link></p>
