@@ -178,7 +178,7 @@ export default function WorkHub(){
       <div className="sc-hub-selected-head"><div>
        <p className="eyebrow">Job workspace</p><h3>{chosen.customer_name||chosen.job_name||labelJob(chosen)}</h3>
        <p>{labelJob(chosen)} · Due {formatDate(chosen.due_date||chosen.order_due_date)} · {printText(stage)}</p>
-      </div><button type="button" disabled={detailLoading} onClick={refreshSelected}>{detailLoading?'Loading…':'Refresh evidence'}</button></div>
+      </div><button type="button" disabled={detailLoading} onClick={refreshSelected}>{detailLoading?'Loading…':'Refresh evidence'}</button>{['admin','manager'].includes(access?.role)&&<Link to={'/print-center?job='+currentId}>Print invoices + labels →</Link>}</div>
       {issues.length>0&&<div className="sc-hub-blockers"><strong>Production Board blockers</strong>
        <ul>{issues.map((v,i)=><li key={i}>{typeof v==='string'?v:v?.message||v?.reason||'Review Production Board blocker'}</li>)}</ul>
        <Link to="/exception-center">Open Exception Center →</Link></div>}
