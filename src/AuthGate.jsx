@@ -222,6 +222,11 @@ export default function AuthGate({ children }) {
           </form>
 
           {message && <p className="message error-message">{message}</p>}
+          <p style={{ fontSize: 12, marginTop: 20 }}>
+            <a href="/privacy-policy.html" style={{ textDecoration: 'underline' }}>Privacy Policy</a>
+            {' · '}
+            <a href="/eula.html" style={{ textDecoration: 'underline' }}>End User License Agreement</a>
+          </p>
         </section>
       </main>
     );

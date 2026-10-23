@@ -109,6 +109,20 @@ const WaitingOn = lazy(() => import('./WaitingOn'));
 const WarehouseAuditReport = lazy(() => import('./WarehouseAuditReport'));
 const WooSync = lazy(() => import('./WooSync'));
 
+function PublicLegalFooter() {
+  return (
+    <footer aria-label="Skilled Crafting legal information" style={{ textAlign: 'center', padding: '18px 24px 26px', fontSize: 13, color: '#526276', background: '#f8fafc' }}>
+      <a href="/privacy-policy.html" style={{ marginRight: 18, textDecoration: 'underline' }}>Privacy Policy</a>
+      <a href="/eula.html" style={{ marginRight: 18, textDecoration: 'underline' }}>End User License Agreement</a>
+      <a href="https://skilledcrafting.com/policies/" style={{ textDecoration: 'underline' }}>Order Policies</a>
+    </footer>
+  );
+}
+
+function publicPage(element) {
+  return <>{element}<PublicLegalFooter /></>;
+}
+
 function RouteLoading() {
   return <div className="sc-route-loading" role="status" aria-live="polite">Loading page…</div>;
 }
@@ -239,12 +253,12 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<RouteLoading />}>
         <Routes>
-          <Route path="/customer-portal" element={<CustomerPortal />} />
-          <Route path="/team-order" element={<PublicClientOrderForm />} />
-          <Route path="/stores/:slug" element={<PublicTeamStore />} />
-          <Route path="/coordinator/:token" element={<CoordinatorDashboard />} />
-          <Route path="/mockup-review" element={<MockupCustomerReview />} />
-          <Route path="/marketing-review" element={<MarketingClientReview />} />
+          <Route path="/customer-portal" element={publicPage(<CustomerPortal />)} />
+          <Route path="/team-order" element={publicPage(<PublicClientOrderForm />)} />
+          <Route path="/stores/:slug" element={publicPage(<PublicTeamStore />)} />
+          <Route path="/coordinator/:token" element={publicPage(<CoordinatorDashboard />)} />
+          <Route path="/mockup-review" element={publicPage(<MockupCustomerReview />)} />
+          <Route path="/marketing-review" element={publicPage(<MarketingClientReview />)} />
           <Route
             path="*"
             element={(
