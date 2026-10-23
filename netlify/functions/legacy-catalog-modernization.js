@@ -195,10 +195,11 @@ async function reorderPreview(db){
  const open=await read(db.from('jobs').select('id,customer_name,customer_id,status')
   .not('status','in','(completed,voided,cancelled,canceled)').limit(200),'Open jobs');
  if(!open.length)return [];
- const items=await read(db.from('job_items').select('id,job_id,order_sku,sku,placement,color,size,quantity,woocommerce_product_id,blank_product_id,finished_product_id')
+ const items=await read(db.from('job_items').select('id,job_id,order_sku,sku,placement,color,size,quantity,woocommerce_product_id,blank_product_id,finished_product_id,notes,production_notes,artwork_note,selected_attributes')
   .in('job_id',open.map(j=>j.id)).limit(1500),'Open lines');
  const past=await read(db.from('sc_job_travelers').select('id,job_id,job_item_id,recipe_version_id,recipe_snapshot,created_at').order('created_at',{ascending:false}).limit(1000),'Prior approved travelers');
- const jobs=await read(db.from('jobs').select('id,customer_name,customer_id').in('id',[...new Set(past.map(t=>t.job_id))].slice(0,1000)).limit(1000),'Historical traveler customers').catch(()=>[]);
+ const olderIds=[...new Set(past.map(t=>t.job_id))].slice(0,1000);
+ const jobs=olderIds.length?await read(db.from('jobs').select('id,customer_name,customer_id').in('id',olderIds).limit(1000),'Historical traveler customers'):[];
  const jobById=new Map([...open,...jobs].map(j=>[Number(j.id),j]));
  const parentIds=[...new Set(items.map(i=>i.woocommerce_product_id).filter(Boolean))];
  const artwork=parentIds.length?await read(db.from('sc_catalog_artwork_links').select('woocommerce_product_id,artwork_asset_id,review_required').in('woocommerce_product_id',parentIds).limit(1000),'Linked artwork'):[];
@@ -225,6 +226,11 @@ async function reorderPreview(db){
    if(artByParent.has(key)&&artByParent.get(key).artwork_asset_id!==snap.artwork_asset_id)warnings.push('Linked artwork differs from historic traveler');
    if(!snap.artwork_asset_id)warnings.push('Historic traveler lacks approved source artwork');
    if(!snap.machine_settings_id)warnings.push('Historic traveler lacks approved material settings');
+   if(!currentJob?.customer_id||!jobById.get(Number(candidate.job_id))?.customer_id)
+     warnings.push('Customer identity matched by name only; verify legal customer before reuse');
+   if(clean(item.notes)||clean(item.production_notes)||clean(item.artwork_note)||
+     (item.selected_attributes&&Object.keys(item.selected_attributes).length))
+     warnings.push('Customer-specific notes or personalization exist: compare exact proof and requirements');
    if(item.finished_product_id)warnings.push('Finished inventory candidate: check stock before production');
   }
   return {job_item_id:item.id,job_id:item.job_id,product_id:key,customer_name:currentJob?.customer_name||'',
@@ -253,6 +259,41 @@ async function saveReorder(db,input,userId){
  },{onConflict:'job_item_id'}).select('job_item_id'),'Save reorder review');
  return {job_item_id:itemId,decision:input.decision,notice:'No traveler, invoice or inventory records were changed.'};
 }
+
+async function createReorderTraveler(db,input,userId){
+ const lineId=ensure(id(input.job_item_id),'Select a valid current job line.');
+ ensure(input.confirm===true,'Manager must explicitly confirm the reviewed reorder traveler.');
+ const reviewed=await one(db.from('sc_catalog_reorder_reviews')
+  .select('decision,source_traveler_id').eq('job_item_id',lineId).maybeSingle(),'Reorder review');
+ ensure(reviewed?.decision==='confirmed','This reorder must be reviewed and confirmed before traveler creation.');
+ const candidates=await reorderPreview(db);
+ const row=ensure(candidates.find(x=>Number(x.job_item_id)===lineId),'Current job line no longer in open production.');
+ ensure(row.source_traveler_id===reviewed.source_traveler_id,'Source specification changed since review.');
+ ensure(row.differences.length===0,'Reorder contains changed or unknown requirements. Resolve them manually in Production Travelers.');
+ const prior=await one(db.from('sc_job_travelers').select('id,recipe_version_id,recipe_snapshot')
+  .eq('id',row.source_traveler_id).single(),'Source traveler');
+ const version=await one(db.from('sc_manufacturing_recipe_versions').select('id,status,verified_sample')
+  .eq('id',prior.recipe_version_id).single(),'Approved recipe');
+ ensure(version.status==='approved'&&version.verified_sample===true,'Recipe is no longer approved for reuse.');
+ const assetId=prior.recipe_snapshot?.artwork_asset_id;
+ ensure(assetId,'Historic job has no exact approved artwork.');
+ const link=await one(db.from('sc_catalog_artwork_links')
+  .select('artwork_asset_id,review_required').eq('woocommerce_product_id',row.product_id)
+  .maybeSingle(),'Artwork inheritance');
+ ensure(link&&!link.review_required&&link.artwork_asset_id===assetId,
+  'Shared customer artwork is changed/unapproved. Reconfirm before creating a traveler.');
+ const proof=await read(db.from('sc_job_artwork_links').select('id').eq('job_id',row.job_id).limit(1),'Job artwork proof');
+ ensure(proof.length,'The new job lacks its own approved artwork handoff. Complete proof approval first.');
+ const {data,error}=await db.from('sc_job_travelers').insert({
+  job_id:row.job_id,job_item_id:lineId,
+  recipe_version_id:prior.recipe_version_id,created_by:userId
+ }).select('id').single();
+ if(error?.code==='23505')throw Error('Traveler already exists; open the original instead.');
+ if(error)throw error;
+ return {job_item_id:lineId,traveler_id:data.id,
+  notice:'New immutable traveler uses current order details and the validated approved recipe. No inventory or financial changes.'};
+}
+
 export async function handler(event){
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);
  if(event.httpMethod!=='POST')return reject(event,405,'Method not allowed.');
@@ -276,6 +317,7 @@ export async function handler(event){
    case 'seed_expanded_recipes':data=await seedExpanded(db,userId);break;
    case 'reorder_preview':data=await reorderPreview(db);break;
    case 'save_reorder':data=await saveReorder(db,input,userId);break;
+   case 'create_reorder_traveler':data=await createReorderTraveler(db,input,userId);break;
    default:return reject(event,400,'Unsupported modernization action.');
   }
   return result(event,data);
