@@ -53,6 +53,7 @@ export const navSections = [
     items: [
       { label: 'Pull Sheets', path: '/pullsheets', keywords: 'jobs orders pull sheets production work' },
       { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates schedule production deadline pull sheets' },
+      { label: 'Catalog Production Readiness', path: '/catalog-production-readiness', keywords: 'bulk recipe templates product catalog backfill legacy clients customer adoption DTF garment placements approval traveler readiness' },
       { label: 'Production Recipe Library', path: '/manufacturing-recipes', keywords: 'manufacturing recipe placement guide tee hoodie polo DTF vinyl print measurements' },
       { label: 'QR Job Travelers', path: '/production-travelers', keywords: 'scannable recipe QR job traveler production form packaging instructions' },
       { label: 'Print Center', path: '/print-center', keywords: 'customer invoice shop invoice QR packing label 4x6 thermal Munbyn Epson print packet' },

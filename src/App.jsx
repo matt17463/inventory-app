@@ -43,6 +43,7 @@ const PublicTeamStore = lazy(() => import('./PublicTeamStore'));
 const CoordinatorDashboard = lazy(() => import('./CoordinatorDashboard'));
 const ManufacturingRecipes = lazy(() => import('./ManufacturingRecipes'));
 const ProductionTravelers = lazy(() => import('./ProductionTravelers'));
+const CatalogProductionReadiness = lazy(() => import('./CatalogProductionReadiness'));
 
 const ArtworkPreflight = lazy(() => import('./ArtworkPreflight'));
 const InventoryAudit = lazy(() => import('./InventoryAudit'));
@@ -133,6 +134,7 @@ function EmployeeRoutes() {
   const access=useContext(EmployeeAccessContext);
   if(access?.role==='marketing') return <Routes>
     <Route path="/marketing" element={<MarketingWorkspace />} />
+    <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
     <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
     <Route path="/application-guide" element={<ApplicationGuide />} />
     <Route path="/testing-mode" element={<TestingMode />} />
@@ -204,6 +206,7 @@ function EmployeeRoutes() {
       <Route path="/print-center" element={<PrintCenter />} />
       <Route path="/quickbooks" element={<QuickBooksConnection />} />
       <Route path="/manufacturing-recipes" element={<ManufacturingRecipes />} />
+      <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/production-travelers" element={<ProductionTravelers />} />
       <Route path="/production-travelers/:travelerId" element={<ProductionTravelers />} />
       <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
