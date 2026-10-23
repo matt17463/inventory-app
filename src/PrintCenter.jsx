@@ -6,6 +6,7 @@ import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {signedAssetUrl} from './lib/mockupStudioApi';
 import {DEFAULT_PRINT_PREFS,normalizePrintPrefs,printWarnings,canPrintCustomerCopy} from './lib/printModel';
 import {createInvoicePdf,createInvoicePairPdf,createDistributionLabelsPdf,createProductionPacketPdf} from './lib/printPacketPdf';
+import PrintIntegrations from './PrintIntegrations';
 import './PrintCenter.css';
 
 const CONFIG_KEY='sc-print-center-prefs-v1';
@@ -78,7 +79,7 @@ export default function PrintCenter(){
    try{localStorage.setItem(CONFIG_KEY,JSON.stringify(prefs));setMessage('Layout defaults saved on this browser. They do not alter WooCommerce plugin settings.');}
    catch{setError('This browser cannot save local printing preferences.');}
  }
- async function download(which){
+ async function documentAction(which,sendToPrinter=false){
   if(!source||!job||busy)return;
   setBusy(which);setError('');setMessage('');
   try{
@@ -98,8 +99,22 @@ export default function PrintCenter(){
      name='SC-'+source.reference+'-Production-Packet.pdf';
    }
    if(!pdf)throw Error('Choose a printable document.');
-   pdf.save(name.replace(/[^a-zA-Z0-9._-]/g,'-'));
-   setMessage('PDF generated. Select the correct printer and paper in the print dialog. This is not confirmation of physical printing.');
+   if(sendToPrinter){
+    const idempotencyKey=crypto.randomUUID();
+    const documentKind={invoices:'invoice_pair',customer:'customer_invoice',shop:'shop_invoice',
+      labels:'packing_labels',production:'production_packet'}[which];
+    const bytes=pdf.output('datauristring').split(',')[1];
+    const result=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{
+      method:'POST',body:JSON.stringify({action:'enqueue',jobId:job.id,documentKind,
+        idempotencyKey,pdfBase64:bytes})
+    });
+    const response=await result.json().catch(()=>({}));
+    if(!result.ok||!response.success)throw Error(response.error||'Could not submit to printer.');
+    setMessage('Document queued for the shop print agent: '+response.id+'. Await CUPS spool acknowledgment; this does NOT confirm physical printing.');
+   }else{
+    pdf.save(name.replace(/[^a-zA-Z0-9._-]/g,'-'));
+    setMessage('PDF saved. Select the correct paper and printer when opening it. This is not confirmation of physical printing.');
+   }
   }catch(e){setError(e.message||'Could not generate document.');}
   finally{setBusy('');}
  }
@@ -126,20 +141,23 @@ export default function PrintCenter(){
    </section>
    <section className="card elevated-card">
     <h2>Documents</h2>
-    <p>Print invoice pair on Epson letter paper; print distribution labels on Munbyn 4 × 6 stock. Physical one-click routing requires a separately configured local print bridge.</p>
+    <p>Print invoice pair on Epson letter paper; print distribution labels on Munbyn 4 × 6 stock. Direct queueing stays disabled until the Pi agent and physical printers are validated and enabled.</p>
     <div className="sc-print-cards">
      <div><h3>Customer + Shop Invoices</h3>
       <p>One letter-size PDF contains both copies. Shop copy includes an authenticated job QR and item traveler references.</p>
-      <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={()=>download('invoices')}>Download invoice pair</button>
+      <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={()=>documentAction('invoices')}>Download invoice pair</button>
+      <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={()=>documentAction('invoices',true)}>Queue invoice pair to Epson</button>
       {!canPrintCustomerCopy(source)&&<small>Customer invoice blocked: verify QuickBooks financial source first.</small>}
-      <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={()=>download('customer')}>Customer copy only</button>
-      <button type="button" disabled={Boolean(busy)} onClick={()=>download('shop')}>Shop copy only{!source.financialVerified?' (DRAFT)':''}</button>
+      <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={()=>documentAction('customer')}>Customer copy only</button>
+      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('shop')}>Shop copy only{!source.financialVerified?' (DRAFT)':''}</button>
      </div>
      <div><h3>4 × 6 Distribution Labels</h3><p>{prefs.packageCount} label(s), black-and-white thermal layout. No postage is purchased.</p>
-      <button type="button" disabled={Boolean(busy)} onClick={()=>download('labels')}>Download Munbyn label PDF</button>
+      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('labels')}>Download Munbyn label PDF</button>
+      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('labels',true)}>Queue thermal label (after printer setup)</button>
      </div>
      <div><h3>Production Packet</h3><p>One or more letter-size pages per approved traveler, including graphic previews when accessible, measured placement and saved settings.</p>
-      <button type="button" disabled={Boolean(busy)||!travelers.length} onClick={()=>download('production')}>Download production PDF</button>
+      <button type="button" disabled={Boolean(busy)||!travelers.length} onClick={()=>documentAction('production')}>Download production PDF</button>
+      <button type="button" disabled={Boolean(busy)||!travelers.length} onClick={()=>documentAction('production',true)}>Queue production packet to Epson</button>
       {!travelers.length&&<Link to={'/production-travelers?job='+job.id}>Add approved traveler →</Link>}
      </div>
     </div>
@@ -163,6 +181,7 @@ export default function PrintCenter(){
      <small>These layout settings are local to this browser for the first release; shared template management and silent print routing are later phases.</small>
     </div>}
    </section>
+   <PrintIntegrations source={source} job={job} prefs={prefs} setPrefs={setPrefs} onRefresh={reload}/>
   </>}
  </main>;
 }
