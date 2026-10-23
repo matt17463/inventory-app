@@ -2,10 +2,14 @@
 // Sources: https://uploaddtf.com/pages/dtf-transfer-placement-guide
 // https://gpisupplies.com/blogs/support-articles/dtf-transfer-size-chart-placement-guide
 // https://dtfpapercompany.com/dtf-design-placement-size/
+// https://assets.stahls.com/stahls/content/pdf/education/Heat_Printing_Placement_Tips.pdf
+// https://blog.transferexpress.com/heat-transfer-placement-and-position-guide/
 export const PLACEMENT_SOURCES = [
   {name:'UploadDTF transfer placement guide',url:'https://uploaddtf.com/pages/dtf-transfer-placement-guide'},
   {name:'GPI Supplies DTF placement guide',url:'https://gpisupplies.com/blogs/support-articles/dtf-transfer-size-chart-placement-guide'},
   {name:'DTF Paper Company design placement guide',url:'https://dtfpapercompany.com/dtf-design-placement-size/'},
+  {name:'Stahls / Hotronix garment placement reference',url:'https://assets.stahls.com/stahls/content/pdf/education/Heat_Printing_Placement_Tips.pdf'},
+  {name:'Transfer Express hoodie and left chest placement',url:'https://blog.transferexpress.com/heat-transfer-placement-and-position-guide/'},
 ];
 const garmentTypes=['tee','hoodie','sweatshirt','polo'];
 const groups=['Adult','Youth'];
@@ -18,9 +22,9 @@ function suggestion(garment,sizeGroup,zone){
     instructions:"Wearer's LEFT chest. Locate horizontally over the left pectoral area; measure from center fold on the actual blank. Do not infer a left/right numeric sign from the diagram.",
   };
   if(zone==='full_back') return {
-    width:youth?8:11, height:youth?8:12, top:youth?2.5:3.5,
+    width:youth?8:11, height:youth?8:12, top:garment==='hoodie'?(youth?4.5:5.5):(youth?2.5:3.5),
     landmark:'Bottom of back collar seam',
-    instructions:'Center between side seams; confirm hood obstruction, large names/numbers, and logo aspect ratio before printing.',
+    instructions:'Center between side seams; hoodie backs start lower to clear the lowered hood (Transfer Express suggests roughly 5–6 inches for adult hoodies). Verify actual hood coverage, names/numbers, and logo aspect ratio.',
   };
   return {
     width:youth?8:(garment==='hoodie'?10:11),
