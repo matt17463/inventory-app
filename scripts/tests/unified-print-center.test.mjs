@@ -51,4 +51,6 @@ test('Application print interface only reads billing sources and does not write 
  assert.match(pdf,/SHOP COPY \/ INTERNAL - NOT FOR CUSTOMER/);
  assert.match(pdf,/qrCode\(doc,origin\+'\/work-hub\?job='/);
  assert.match(pdf,/createProductionPacketPdf/);
+ assert.match(pdf,/cfg\.labelShowItems&&cfg\.packageCount>1/);
+ assert.match(pdf,/contents must be verified/);
 });
