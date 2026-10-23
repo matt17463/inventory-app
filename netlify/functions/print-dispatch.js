@@ -22,6 +22,8 @@ function agentAllowed(event){
 }
 const goodId=x=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(clean(x));
 async function enqueue(event,db,actor,body){
+ if(process.env.SC_PRINT_DISPATCH_ENABLED!=='true'||clean(process.env.SC_PRINT_AGENT_TOKEN).length<32)
+  return jsonResponse(503,{success:false,error:'Direct printing is disabled until the Epson CUPS queue and Pi print agent are verified.'},event);
  const jobId=Number(body.jobId),kind=clean(body.documentKind),key=clean(body.idempotencyKey);
  if(!Number.isSafeInteger(jobId)||jobId<1||!kinds[kind]||!goodId(key))
   return jsonResponse(400,{success:false,error:'Invalid job/document/idempotency key.'},event);
