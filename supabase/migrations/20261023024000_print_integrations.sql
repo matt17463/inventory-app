@@ -29,7 +29,8 @@ create table if not exists public.sc_print_dispatch_jobs(
   cups_job_reference text,
   error_text text,
   created_at timestamptz not null default now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  pdf_purged_at timestamptz
 );
 create index if not exists sc_print_dispatch_status_idx
   on public.sc_print_dispatch_jobs(status,created_at);
