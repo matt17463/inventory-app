@@ -25,6 +25,8 @@ async function enqueue(event,db,actor,body){
  if(process.env.SC_PRINT_DISPATCH_ENABLED!=='true'||clean(process.env.SC_PRINT_AGENT_TOKEN).length<32)
   return jsonResponse(503,{success:false,error:'Direct printing is disabled until the Epson CUPS queue and Pi print agent are verified.'},event);
  const jobId=Number(body.jobId),kind=clean(body.documentKind),key=clean(body.idempotencyKey);
+ if(kinds[kind]==='thermal'&&process.env.SC_PRINT_THERMAL_ENABLED!=='true')
+  return jsonResponse(503,{success:false,error:'Thermal print dispatch is disabled until the Munbyn queue is validated.'},event);
  if(!Number.isSafeInteger(jobId)||jobId<1||!kinds[kind]||!goodId(key))
   return jsonResponse(400,{success:false,error:'Invalid job/document/idempotency key.'},event);
  const {data:job,error:jobError}=await db.from('jobs').select('id').eq('id',jobId).maybeSingle();
@@ -107,6 +109,11 @@ export const handler=async event=>{
   }
   const auth=await authorizeEmployee(event,{functionName:'print-dispatch',allowedRoles:['admin','manager']});
   if(!auth.ok)return jsonResponse(auth.statusCode,{success:false,error:auth.message},event);
+  if(action==='capabilities')return jsonResponse(200,{success:true,
+   enabled:process.env.SC_PRINT_DISPATCH_ENABLED==='true'&&clean(process.env.SC_PRINT_AGENT_TOKEN).length>=32,
+   letter:process.env.SC_PRINT_DISPATCH_ENABLED==='true'&&clean(process.env.SC_PRINT_AGENT_TOKEN).length>=32,
+   thermal:process.env.SC_PRINT_DISPATCH_ENABLED==='true'&&process.env.SC_PRINT_THERMAL_ENABLED==='true'&&clean(process.env.SC_PRINT_AGENT_TOKEN).length>=32
+  },event);
   if(action==='enqueue')return await enqueue(event,auth.supabase,auth.user,body);
   if(action==='status'){
    const jobId=Number(body.jobId);
