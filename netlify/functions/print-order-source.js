@@ -2,6 +2,7 @@
 // Never creates, modifies, sends, or settles a WooCommerce/QuickBooks invoice.
 import {authorizeEmployee,jsonResponse} from './_shared/security.js';
 import {normalizeWooPrintSource,normalizeManualPrintSource} from '../../src/lib/printModel.js';
+import {verifiedQuickBooksInvoice} from './_shared/qboPrint.js';
 
 const clean=value=>String(value??'').trim();
 const wooBase=()=>clean(process.env.WOO_SITE_URL||process.env.WOOCOMMERCE_SITE_URL||
@@ -63,7 +64,14 @@ export const handler=async event=>{
       return jsonResponse(409,{success:false,error:'Job has ambiguous Woo and manual billing links. Resolve before printing.'},event);
     let source;
     if(Number.isSafeInteger(wooId)&&wooId>0)source=await loadWooSource(wooId);
-    else if(Number.isSafeInteger(manualId)&&manualId>0)source=await loadManualSource(auth.supabase,manualId);
+    else if(Number.isSafeInteger(manualId)&&manualId>0){
+      const manual=await loadManualSource(auth.supabase,manualId);
+      try{source=await verifiedQuickBooksInvoice(auth.supabase,manual);}
+      catch(qboError){
+        // No live verification => keep the manual financial source DRAFT.
+        source={...manual,warnings:[...manual.warnings,'QuickBooks verification unavailable: '+qboError.message]};
+      }
+    }
     else return jsonResponse(409,{success:false,error:'Link an authoritative WooCommerce or manual invoice record to this job first.'},event);
     return jsonResponse(200,{success:true,job,source},event);
   }catch(error){
