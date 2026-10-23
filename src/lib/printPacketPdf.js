@@ -40,10 +40,9 @@ function pageForRows(doc,source,kind,page){
   text(doc,'Order '+source.reference+' - '+(kind==='shop'?'SHOP COPY':'INVOICE CONTINUED'),39,49,520,12,{bold:true});
   return 78;
 }
-export function createInvoicePdf({source,job,travelers=[],prefs={},kind='customer',origin=''}){
+function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer',origin=''}){
   const config=normalizePrintPrefs(prefs);
   if(kind==='customer'&&!canPrintCustomerCopy(source))throw Error('Customer invoice blocked until the source invoice totals are verified.');
-  const doc=new jsPDF({unit:'pt',format:'letter',compress:true});
   layoutHeader(doc,source,job,kind,config,origin,travelers);
   let page=1;
   footer(doc,source,kind,page);
@@ -106,6 +105,17 @@ export function createInvoicePdf({source,job,travelers=[],prefs={},kind='custome
     if(y>690){y=pageForRows(doc,source,kind,++page);}
     text(doc,'Customer order note: '+source.customerNote,39,y+5,510,8);
   }
+  return doc;
+}
+export function createInvoicePdf(args){
+  return appendInvoicePages(new jsPDF({unit:'pt',format:'letter',compress:true}),args);
+}
+export function createInvoicePairPdf(args){
+  if(!canPrintCustomerCopy(args.source))throw Error('Cannot print a customer invoice until financial source totals are verified.');
+  const doc=new jsPDF({unit:'pt',format:'letter',compress:true});
+  appendInvoicePages(doc,{...args,kind:'customer'});
+  doc.addPage('letter');
+  appendInvoicePages(doc,{...args,kind:'shop'});
   return doc;
 }
 export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount}){
