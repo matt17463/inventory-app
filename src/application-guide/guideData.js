@@ -1,5 +1,6 @@
 import {wordPressAuditChapters} from './wordpressAuditLearning.js';
-export const GUIDE_VERSION = '1.6.0';
+import {recentModernizationGuideChapters} from './recentModernizationGuide.js';
+export const GUIDE_VERSION = '1.7.0';
 
 const section = (id, title, summary, options = {}) => ({
   id,
@@ -1628,6 +1629,8 @@ guideChapters.push({
     ],warnings:['Work estimated 12–24 engineering hours to create/verify isolation and selected staging acceptance tests before remediation, not a quote or a completed setup.']}),
  ]
 });
+
+guideChapters.push(...recentModernizationGuideChapters);
 
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [

@@ -1,5 +1,6 @@
 import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
-export const TRAINING_VERSION = '1.6.0';
+import {recentModernizationTutorials} from './recentModernizationTraining.js';
+export const TRAINING_VERSION = '1.7.0';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
@@ -416,6 +417,8 @@ trainingTutorials.push({
    verify:'You can identify the exact owner approval and rollback required for each change.'}),
  ]
 });
+
+trainingTutorials.push(...recentModernizationTutorials);
 
 export function tutorialsForRole(roleId) {
   return trainingTutorials.filter((tutorial) => tutorial.roles.includes(roleId));
