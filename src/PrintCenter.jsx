@@ -150,13 +150,13 @@ export default function PrintCenter(){
      <label>Invoice font size (pt)<input type="number" min="7" max="15" step="1" value={prefs.invoiceFont} onChange={e=>setPref('invoiceFont',e.target.value)}/></label>
      <label>Invoice heading size (pt)<input type="number" min="13" max="28" step="1" value={prefs.invoiceHeading} onChange={e=>setPref('invoiceHeading',e.target.value)}/></label>
      <label>Thermal label recipient font (pt)<input type="number" min="9" max="22" step="1" value={prefs.labelFont} onChange={e=>setPref('labelFont',e.target.value)}/></label>
-     <label>Number of packages<label className="sc-print-inline">1–100<input type="number" min="1" max="100" step="1" value={prefs.packageCount} onChange={e=>setPref('packageCount',e.target.value)}/></label></label>
+     <label>Number of packages (1–100)<input type="number" min="1" max="100" step="1" value={prefs.packageCount} onChange={e=>setPref('packageCount',e.target.value)}/></label>
      {[
       ['showSku','Invoice: Show SKUs'],['showPersonalization','Invoice: Show customer personalization'],
-      ['showCustomerPhone','Show phone on invoice (planned)'],['labelShowOrder','Label: Show order and job #'],
+      ['showCustomerPhone','Invoice: Show customer phone'],['labelShowOrder','Label: Show order and job #'],
       ['labelShowItems','Label: Show items'],['labelShowQR','Label: Include staff-only QR (internal bags only)']
      ].map(([key,label])=><label key={key} className="sc-print-check">
-       <input type="checkbox" checked={prefs[key]} disabled={key==='showCustomerPhone'}
+       <input type="checkbox" checked={prefs[key]}
          onChange={e=>setPref(key,e.target.checked)}/>{label}</label>)}
      {prefs.labelShowQR&&<p className="sc-print-alert">Staff QR requires authentication. Do not expose internal production links on customer-facing external labels.</p>}
      <button type="button" onClick={savePrefs}>Save my workstation defaults</button>
