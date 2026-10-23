@@ -7,6 +7,7 @@ import {signedAssetUrl} from './lib/mockupStudioApi';
 import {DEFAULT_PRINT_PREFS,normalizePrintPrefs,printWarnings,canPrintCustomerCopy} from './lib/printModel';
 import {createInvoicePdf,createInvoicePairPdf,createDistributionLabelsPdf,createProductionPacketPdf} from './lib/printPacketPdf';
 import PrintIntegrations from './PrintIntegrations';
+import QuickBooksConnection from './QuickBooksConnection';
 import './PrintCenter.css';
 
 const CONFIG_KEY='sc-print-center-prefs-v1';
@@ -154,9 +155,8 @@ export default function PrintCenter(){
  if(!authorized)return <main className="page sc-print-center"><h1>Print Center</h1>
   <p>Manager or admin access is required to print invoices containing customer financial details.</p>
   <Link to="/work-hub">Return to Work Hub</Link></main>;
- if(!jobId)return <main className="page sc-print-center"><h1>Print Center</h1>
-  <p>Select an existing job in Work Hub to generate its customer and shop print documents.</p>
-  <Link to="/work-hub">Choose a job →</Link></main>;
+ if(!jobId)return <QuickBooksConnection />;
+
  return <main className="page sc-print-center">
   <header className="page-header"><div><p className="eyebrow">Fulfillment · Source-controlled documents</p>
    <h1>Unified Print Center</h1><p>Invoice copies, thermal distribution labels and optional manufacturing instructions for WooCommerce or QuickBooks-linked work.</p></div>

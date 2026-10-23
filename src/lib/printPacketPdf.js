@@ -91,6 +91,13 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
     text(doc,moneyOrBlank(value,source.currency),470,y,97,isTotal?12:9,{bold:isTotal});
     y+=isTotal?24:17;
   }
+  if(source.source==='quickbooks_manual'){
+    if(y>650){y=pageForRows(doc,source,kind,++page);}
+    for(const [label,value] of [['Payment recorded',source.amountPaid],['BALANCE DUE',source.balance]]){
+      text(doc,label,347,y,115,9,{bold:true});
+      text(doc,moneyOrBlank(value,source.currency),470,y,97,10,{bold:true});y+=19;
+    }
+  }
   if(kind==='shop'){
     if(y>693){y=pageForRows(doc,source,kind,++page);}
     text(doc,'PRODUCTION REFERENCE - use item-specific approved QR traveler for actual machine settings.',39,y+3,520,9,{bold:true});y+=18;

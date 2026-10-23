@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {Link} from 'react-router-dom';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {normalizePrintPrefs} from './lib/printModel';
 
@@ -72,6 +73,7 @@ export default function PrintIntegrations({source,job,prefs,setPrefs,onRefresh})
     <p>QuickBooks order printing is only finalized after the original invoice number and totals are checked.</p>
     <button type="button" disabled={Boolean(busy)||!config?.configured} onClick={connectQuickBooks}>
      {config?.connected?'Reconnect QuickBooks':'Connect QuickBooks'}</button>
+    <p><Link to="/quickbooks">Manage or disconnect QuickBooks</Link></p>
     {isManual&&<button type="button" disabled={Boolean(busy)} onClick={onRefresh}>Recheck original invoice</button>}
    </div>
    <div>

@@ -1,3 +1,4 @@
+import QuickBooksConnection from './QuickBooksConnection';
 import { lazy, Suspense, useContext } from 'react';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -187,6 +188,7 @@ function EmployeeRoutes() {
       <Route path="/command-center" element={<DailyCommandCenter />} />
       <Route path="/work-hub" element={<WorkHub />} />
       <Route path="/print-center" element={<PrintCenter />} />
+      <Route path="/quickbooks" element={<QuickBooksConnection />} />
       <Route path="/manufacturing-recipes" element={<ManufacturingRecipes />} />
       <Route path="/production-travelers" element={<ProductionTravelers />} />
       <Route path="/production-travelers/:travelerId" element={<ProductionTravelers />} />

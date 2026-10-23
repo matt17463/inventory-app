@@ -10,7 +10,7 @@ test('QBO paid invoice is verified only when original number and totals align',(
   {item_name:'School tee',quantity:2,price_per_item:50}
  ]);
  const result=reconcileQboInvoice(manual,{
-  Id:'456',DocNumber:'QBO-204',TotalAmt:110,Balance:0,
+  Id:'456',DocNumber:'QBO-204',TotalAmt:110,Balance:0,CustomerRef:{value:'42',name:'School'},
   Line:[{Id:'1',DetailType:'SalesItemLineDetail',Description:'Tee',Amount:100,SalesItemLineDetail:{Qty:2,UnitPrice:50}},
    {Id:'2',DetailType:'SalesItemLineDetail',Description:'Sales Tax',Amount:10,SalesItemLineDetail:{Qty:1,UnitPrice:10}}],
   TxnTaxDetail:{TotalTax:0},
