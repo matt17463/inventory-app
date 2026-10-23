@@ -95,6 +95,22 @@ async function ack(event,db,body){
  if(error||!data)return jsonResponse(409,{success:false,error:'Print lease no longer active.'},event);
  return jsonResponse(200,{success:true,status:ok?'spooled':'failed'},event);
 }
+async function purgeExpired(db){
+ const cutoff=new Date(Date.now()-7*24*60*60*1000).toISOString();
+ const {data,error}=await db.from('sc_print_dispatch_jobs')
+  .select('id,storage_path').in('status',['spooled','failed'])
+  .lt('created_at',cutoff).is('pdf_purged_at',null).limit(50);
+ if(error)throw Error('Print retention cleanup query failed.');
+ let cleaned=0;
+ for(const row of data||[]){
+  const {error:removeError}=await db.storage.from(BUCKET).remove([row.storage_path]);
+  if(removeError)continue;
+  const {error:markError}=await db.from('sc_print_dispatch_jobs')
+   .update({pdf_purged_at:new Date().toISOString()}).eq('id',row.id);
+  if(!markError)cleaned++;
+ }
+ return cleaned;
+}
 export const handler=async event=>{
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);
  if(event.httpMethod!=='POST')return jsonResponse(405,{success:false,error:'POST required.'},event);
@@ -102,9 +118,10 @@ export const handler=async event=>{
  try{body=JSON.parse(event.body||'{}');}catch{return jsonResponse(400,{success:false,error:'Invalid request JSON.'},event);}
  const action=clean(body.action);
  try{
-  if(['lease','ack'].includes(action)){
+  if(['lease','ack','purge'].includes(action)){
    if(!agentAllowed(event))return jsonResponse(403,{success:false,error:'Print agent authentication failed.'},event);
    const db=service();
+   if(action==='purge')return jsonResponse(200,{success:true,purged:await purgeExpired(db)},event);
    return action==='lease'?await lease(event,db,body):await ack(event,db,body);
   }
   const auth=await authorizeEmployee(event,{functionName:'print-dispatch',allowedRoles:['admin','manager']});
