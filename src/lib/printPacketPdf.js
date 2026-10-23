@@ -2,7 +2,7 @@ import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
 import {money,normalizePrintPrefs,canPrintCustomerCopy} from './printModel';
 
-const plain=v=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/[^\x20-\x7E\u00A0-\u00FF]/g,'-').trim();
+const plain=v=>Array.from(String(v??'')).map(c=>{const n=c.codePointAt(0);return n<32||n===127?' ':n>255?'-':c;}).join('').trim();
 function text(doc,value,x,y,maxWidth,size=10,{bold=false,color=[35,48,59]}={}){
   doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);
   const lines=doc.splitTextToSize(plain(value)||' ',maxWidth);
