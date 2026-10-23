@@ -73,6 +73,20 @@ export default function ManufacturingRecipes() {
     });
     setSelectedVersion(latest?.id||'');
   }
+  function duplicateAsNewRecipe() {
+    if(!form.id)return;
+    const source=form.name;
+    setForm(old=>({
+      ...old,id:'',
+      name:source.replace(/^Starter\\s*·\\s*/i,'')+' — Custom',
+      placements:old.placements.map(p=>({...p})),
+      process_steps:old.process_steps.map(step=>({...step})),
+      packaging:{...old.packaging},
+      artwork_asset_id:'',verified_sample:false,
+    }));
+    setSelectedVersion('');
+    setMessage('Copied into a new unsaved recipe. Rename it, customize, then save. The original remains unchanged.');
+  }
   function updatePlacement(i,key,value) {setForm(s=>({...s,placements:s.placements.map((x,n)=>n===i?{...x,[key]:value}:x)}));}
   function updateStep(i,key,value) {setForm(s=>({...s,process_steps:s.process_steps.map((x,n)=>n===i?{...x,[key]:value}:x)}));}
   function validate() {
@@ -152,6 +166,10 @@ export default function ManufacturingRecipes() {
           <option value="">New recipe</option>
           {recipes.map(r=><option key={r.id} value={r.id}>{r.name} ({r.garment_type})</option>)}
         </select></label>
+        {editor&&form.id&&<div className="sc-recipe-copy-action">
+          <button type="button" disabled={busy} onClick={duplicateAsNewRecipe}>Duplicate as new recipe</button>
+          <p><small>Copies placements and production steps. Original revisions stay unchanged; choose customer artwork for the new recipe.</small></p>
+        </div>}
         <label>Recipe name<input value={form.name} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('name',e.target.value)} placeholder="Team hoodie — DTF full front" /></label>
         <div className="sc-recipe-twocol">
           <label>Garment<select value={form.garment_type} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('garment_type',e.target.value)}>
@@ -205,10 +223,10 @@ export default function ManufacturingRecipes() {
           {editor&&<button type="button" onClick={()=>change('placements',form.placements.filter((_,idx)=>idx!==i))}>Remove placement</button>}
         </div>)}
         {editor&&<button type="button" onClick={()=>change('placements',[...form.placements,freshPlacement()])}>+ Add graphic location</button>}
-        <h3>Save a new revision</h3>
+        <h3>{form.id?'Save a new revision':'Create a new recipe'}</h3>
         {editor&&<label className="sc-recipe-check"><input type="checkbox" checked={form.verified_sample} onChange={e=>change('verified_sample',e.target.checked)}/>I physically measured and verified the sample for this revision</label>}
         <p>Saved revisions do not change when you edit this form. Create a new revision for all adjustments; previous travelers retain the original approved details.</p>
-        {editor&&<button type="button" disabled={busy} onClick={saveVersion}>{busy?'Saving…':'Save new draft revision'}</button>}
+        {editor&&<button type="button" disabled={busy} onClick={saveVersion}>{busy?'Saving…':form.id?'Save new draft revision':'Create recipe and draft'}</button>}
         <h3>Version history</h3>
         <select aria-label="Review saved revision" value={selectedVersion} onChange={e=>setSelectedVersion(e.target.value)}>
           <option value="">Choose revision</option>
