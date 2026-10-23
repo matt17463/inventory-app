@@ -57,7 +57,14 @@ async function tick(){
  }
 }
 console.log('Skilled Crafting print agent started: configured queues',Object.keys(queueMap).join(', '));
+let lastPurge=0;
 while(true){
- try{await tick();}catch(e){console.error(new Date().toISOString(),'poll unavailable:',e.message);}
+ try{
+   if(Date.now()-lastPurge>24*60*60*1000){
+    await request({action:'purge'});
+    lastPurge=Date.now();
+   }
+   await tick();
+  }catch(e){console.error(new Date().toISOString(),'poll unavailable:',e.message);}
  await new Promise(resolve=>setTimeout(resolve,interval));
 }
