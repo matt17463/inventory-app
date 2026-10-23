@@ -59,6 +59,27 @@ export default function CatalogProductionReadiness(){
   }catch(e){setMessage(errorMessage(e));}
   finally{setBusy(false);}
  }
+ async function installStarterLibrary(){
+  if(!canManage||busy)return;
+  setBusy(true);setMessage('');
+  const result=[];
+  try{
+   const dtf=await action({action:'seed_drafts'});
+   result.push('DTF: '+dtf.created+' created, '+dtf.reused+' already present');
+   const response=await authenticatedFunctionFetch('/.netlify/functions/legacy-catalog-modernization',{
+    method:'POST',body:JSON.stringify({action:'seed_expanded_recipes'})
+   });
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok||!body.success)throw Error(body.message||'Expanded recipe initialization failed.');
+   const expanded=body.data;
+   result.push('Other methods: '+expanded.created+' created, '+expanded.reused+' already present');
+   setState(await action({action:'overview'}));
+   setMessage('Starter library initialized. '+result.join('; ')+'. All recipes are drafts pending physical testing.');
+  }catch(e){
+   try{setState(await action({action:'overview'}));}catch{}
+   setMessage('Library setup incomplete. '+result.join('; ')+'. '+errorMessage(e)+' — retry to add only missing recipes.');
+  }finally{setBusy(false);}
+ }
  function choose(f){
   const row=assignments.get(Number(f.woocommerce_product_id));
   setFamilyId(f.woocommerce_product_id);
@@ -153,7 +174,8 @@ export default function CatalogProductionReadiness(){
     <p>Generate 24 draft recipes across tees, hoodies, sweatshirts and polos, with Adult and Youth sizing and full front, left chest and full back placement. Dimensions are from published DTF examples; no heat-press temperatures or materials are automatically approved.</p>
     <ul>{PLACEMENT_SOURCES.map(s=><li key={s.url}><a href={s.url} rel="noreferrer" target="_blank">{s.name} ↗</a></li>)}</ul>
     <p>Typical starting points: adult full front 10–12 inches wide, top 3–4 inches below the collar seam; youth front 7–9 inches wide, top roughly 2–3 inches below; adult left chest 3–4 inches wide. Actual location changes with garment cut, pockets, seams and artwork proportion.</p>
-    {canManage&&<button type="button" disabled={busy} onClick={()=>run({action:'seed_drafts'},r=>`Created ${r.created} unapproved starter templates; reused ${r.reused}. Verify a physical sample in Recipe Library before approving.`)}>Generate missing DTF draft recipes</button>}
+    {canManage&&<button type="button" disabled={busy} onClick={installStarterLibrary}>{busy?'Initializing starter library…':'Install missing starter library (41 draft recipes)'}</button>}
+    <p><small>This installs the 24 DTF placement starters and 17 expanded production starters. Existing names are reused; no recipe is approved, no equipment settings are validated, and existing manufacturing records are left unchanged.</small></p>
     <p><Link to="/manufacturing-recipes">Open Production Recipe Library →</Link></p>
     <h3>Existing recipes ({fmt(state.recipes?.length)})</h3>
     <div className="sc-cr-scroll sc-cr-short">{(state.recipes||[]).map(r=><div className="sc-cr-listline" key={r.id}>
