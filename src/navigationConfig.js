@@ -159,6 +159,7 @@ export const navSections = [
       { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
       { label: 'Asset Storage Health', path: '/asset-storage-health', keywords: 'r2 cloudflare supabase storage egress images migration files' },
       { label: 'Google Calendar', path: '/google-calendar', keywords: 'google calendar due dates purchase orders owner tasks reminders schedule sync' },
+      { label: 'User Management', path: '/user-management', keywords: 'admin users invite employee accounts roles deactivate access permissions' },
       { label: 'Menu Manager', path: '/menu-manager', keywords: 'navigation customize menu reorder grouping hide sidebar' },
       { label: 'Visual Themes & Layout', path: '/theme-settings', keywords: 'theme appearance colors dark light display density layout accessibility' },
       { label: 'Test Tag', path: '/test-tag', keywords: 'test nfc tag debug' },
