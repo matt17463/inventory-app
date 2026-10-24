@@ -1,7 +1,7 @@
 import {authorizeEmployee,jsonResponse,createServiceClient} from './_shared/security.js';
-const roles=new Set(['admin','manager','operator','viewer','marketing']);
+const roles=new Set(['admin','manager','operator','viewer']);
 const clean=v=>String(v??'').trim();
-const emailOk=e=>/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(e)&&e.length<=254;
+const emailOk=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)&&e.length<=254;
 const fail=(event,status,error)=>jsonResponse(status,{success:false,error},event);
 async function listUsers(db){
  const {data:authUsers,error}=await db.auth.admin.listUsers({page:1,perPage:1000});
@@ -28,7 +28,7 @@ export const handler=async event=>{
   if(data.action==='invite'){
    const email=clean(data.email).toLowerCase(),role=clean(data.role);
    if(!emailOk(email)||!roles.has(role))return fail(event,400,'Valid email and employee role required.');
-   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\\/+$/,'');
+   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\/+$/,'');
    const {data:invited,error}=await db.auth.admin.inviteUserByEmail(email,{redirectTo:redirect});
    if(error)throw error;
    const {error:roleError}=await db.from('sc_app_user_roles').upsert({
