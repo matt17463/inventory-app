@@ -1,5 +1,7 @@
 # Private remote-access shortcuts — October 24, 2026
 
+**Updated:** Direct business NAS routing is now configured and approved for `192.168.1.100/32`, and the business card opens `smb://192.168.1.100`. The discovery notes below describe the initial state before that follow-up. See [current business routing and SMB compatibility](business-nas-direct-routing.md).
+
 The signed-in Equipment & Remote Access page reuses its existing Midnight Industrial palette, buttons and location navigation. Three cards remain visible in either location. Existing Mac/Pi launchers and account-scoped navigation preferences are retained. Search keywords include Diana, Windows, NAS, Synology and Thecus.
 
 | Target | Verified endpoint | Access and limits |

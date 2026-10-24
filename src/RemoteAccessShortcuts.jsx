@@ -1,5 +1,3 @@
-import { PI_DESKTOP } from './lib/equipment';
-
 export default function RemoteAccessShortcuts() {
   return <section className="eq-access" aria-labelledby="remote-access-heading">
     <h2 id="remote-access-heading">Remote-access shortcuts</h2>
@@ -14,10 +12,10 @@ export default function RemoteAccessShortcuts() {
       </article>
       <article className="eq-access-card">
         <h3>Business-network NAS</h3>
-        <p>Thecus N5500 · business network</p>
+        <p>Thecus N5500 · SMB over Tailscale</p>
         <code>192.168.1.100</code>
-        <a className="eq-button" href={PI_DESKTOP} target="_blank" rel="noopener noreferrer">Open business Pi desktop</a>
-        <details><summary>Business NAS connection instructions</summary><p>Sign in to Raspberry Pi Connect, then use the Pi’s file manager to connect to <code>smb://192.168.1.100</code>. On a computer at the business, use Finder → Go → Connect to Server with the same address, or Windows File Explorer with <code>{'\\\\192.168.1.100'}</code>. Choose an existing share and sign in with your NAS account.</p><p>A direct NAS connection from another network requires a verified business subnet route. The business Pi currently advertises no business subnet route. Use its desktop when away; a local address alone cannot identify the correct site.</p></details>
+        <a className="eq-button" href="smb://192.168.1.100">Open business NAS files</a>
+        <details><summary>Business NAS connection instructions</summary><p>On a Mac, choose Finder → Go → Connect to Server and enter <code>smb://192.168.1.100</code>. On Windows, enter <code>{'\\\\192.168.1.100'}</code> in File Explorer. On a phone, use an SMB-capable file app. Choose an existing share and sign in with your NAS account. If the browser does not open your file app, enter the address manually.</p><p>Private routing through SCShopPi was verified on October 24, 2026. Keep the Pi and Tailscale running. Only the NAS address is routed. This older Thecus negotiates SMB1; clients that require SMB2 or newer may refuse it. Do not disable client security protections to connect. NAS sign-in remains untested.</p></details>
       </article>
       <article className="eq-access-card">
         <h3>Home-network NAS</h3>
