@@ -20,7 +20,7 @@ export const navSections = [
       { label: 'Work Hub — Start Here', path: '/work-hub', keywords: 'guided workflow client project next steps simple order production overview family' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
       { label: 'Equipment TV / Touch', path: '/shop-equipment', keywords: 'equipment monitoring controls remote access television kiosk' },
-      { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop' },
+      { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop diana windows laptop nas synology thecus files' },
       { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },
       { label: 'Shop TV / Touch Mode', path: '/shop-tv', keywords: 'production display wall tv touch floor kiosk station dashboard due date blockers' },
     ],

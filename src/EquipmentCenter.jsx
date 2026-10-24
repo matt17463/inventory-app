@@ -5,6 +5,7 @@ import { callService, createConnection, getAuth, subscribeEntities } from 'home-
 import { supabase } from './supabaseClient';
 import { BUSINESS_HA, PRIVATE_HA, PI_DESKTOP, MAC_DESKTOP, controlFor, entityPresentation, equipment, validHaUrl } from './lib/equipment';
 import './EquipmentCenter.css';
+import RemoteAccessShortcuts from './RemoteAccessShortcuts';
 
 const defaultSettings = { haUrl: PRIVATE_HA, photos: {}, mappings: {} };
 function cameraImageUrl(entity, baseUrl, refresh) {
@@ -181,7 +182,8 @@ export default function EquipmentCenter() {
     </section>
     {message && <p className="eq-notice" role="status">{message}</p>}
     {editing && <form className="eq-settings" onSubmit={saveSettings}><h2>Private connection</h2><p>Use the Pi’s private HTTPS address for live data inside this app. Tailscale must be connected. Home Assistant handles sign-in; passwords and access tokens are not saved by this page.</p><label>Home Assistant HTTPS address<input type="url" required value={settings.haUrl} onChange={(e) => setSettings({ ...settings, haUrl: e.target.value })} /></label><p className="eq-muted">Private HTTPS uses your Tailscale network. Sign in to Home Assistant to authorize this app’s live connection.</p><button className="eq-button primary" type="submit">Save preferences</button></form>}
-    <nav className="eq-remote" aria-label="Remote access">
+    <RemoteAccessShortcuts />
+    <nav className="eq-remote" aria-label="Other remote access">
       <External href={MAC_DESKTOP}><span className="eq-icon">▣</span><div><strong>Business MacBook</strong><small>Pi-assisted Screen Sharing · Tailscale required</small></div></External>
       <External href={PI_DESKTOP}><span className="eq-icon">⌘</span><div><strong>Pi visual desktop</strong><small>Raspberry Pi Connect · visual desktop verified</small></div></External>
       <External href="ssh://mcdanielm@100.117.18.123"><span className="eq-icon">›_</span><div><strong>Pi terminal</strong><small>Open SSH · Tailscale required</small></div></External>

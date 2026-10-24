@@ -22,3 +22,18 @@
 .equipment-center .eq-camera-item a span{padding:8px;color:var(--eq-muted);font-size:11px}
 .equipment-center .eq-camera-unavailable{margin:0;padding:20px 12px!important;min-height:100px!important;color:var(--eq-muted)}
 @media(max-width:570px){.equipment-center .eq-camera-item img{height:clamp(165px,55vw,260px)}}
+
+/* Private access cards reuse the equipment palette and existing button styles. */
+.equipment-center .eq-access{margin:24px 0}
+.equipment-center .eq-access h2{font-size:22px;color:var(--eq-text)}
+.equipment-center .eq-access-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.equipment-center .eq-access-card{min-width:0;padding:20px;border:1px solid var(--eq-line);border-radius:10px;background:var(--eq-panel)}
+.equipment-center .eq-access-card h3{margin:0 0 10px;color:var(--eq-text);font-size:17px}
+.equipment-center .eq-access-card p{font-size:13px;line-height:1.65;color:var(--eq-muted)}
+.equipment-center .eq-access-card>code{display:block;margin:12px 0 18px;color:var(--eq-cyan)}
+.equipment-center .eq-access-card code{overflow-wrap:anywhere;white-space:normal}
+.equipment-center .eq-access-card .eq-button{min-height:44px;width:100%;text-align:center}
+.equipment-center .eq-access-card summary{padding:14px 0;cursor:pointer;font-size:13px;line-height:1.5;color:var(--eq-text)}
+.equipment-center .eq-access-card details{margin-top:10px}
+@media(max-width:1150px){.equipment-center .eq-access-grid{grid-template-columns:1fr}}
+.equipment-center{box-sizing:border-box}
