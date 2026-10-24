@@ -157,7 +157,7 @@ export const navSections = [
       { label: 'Application Guide', path: '/application-guide', keywords: 'help training guide workflow admin instructions how to use' },
       { label: 'Testing & Guided Training', path: '/testing-mode', keywords: 'testing mode employee training tutorial onboarding simulated writes practice' },
       { label: 'Deployment Health', path: '/deployment-health', keywords: 'deployment environment health database functions storage woo connectivity' },
-      { label: 'Asset Storage Health', path: '/asset-storage-health', keywords: 'r2 cloudflare supabase storage egress images migration files' },
+      { label: 'Storage Administration', path: '/asset-storage-health', keywords: 'r2 cloudflare supabase NAS backup recovery storage egress images files archive' },
       { label: 'Google Calendar', path: '/google-calendar', keywords: 'google calendar due dates purchase orders owner tasks reminders schedule sync' },
       { label: 'User Management', path: '/user-management', keywords: 'admin users invite employee accounts roles deactivate access permissions' },
       { label: 'Menu Manager', path: '/menu-manager', keywords: 'navigation customize menu reorder grouping hide sidebar' },
