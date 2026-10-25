@@ -1,0 +1,22 @@
+[Unit]
+Description=Skilled Crafting independent %i NAS copy from read-only R2
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/mnt/skilledcrafting-%i
+
+[Service]
+Type=oneshot
+User=sc-backup
+Group=sc-backup
+EnvironmentFile=/etc/skilledcrafting/nas-backup/%i.env
+ExecStart=/opt/skilledcrafting/nas-backup/nas-r2-backup.sh
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/sc-nas-backup /mnt/skilledcrafting-%i
+TimeoutStartSec=20h
+# Install matching mount dependencies/ReadWritePaths for the actual local NAS only.

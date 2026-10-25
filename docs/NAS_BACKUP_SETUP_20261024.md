@@ -36,3 +36,26 @@ Cloudflare R2 remains the authoritative live asset store. Neither NAS serves app
 
 ## Before declaring production backup ready
 Two actual NAS backup runs, on different hardware/locations, and at least one verified restore test from each are mandatory.
+
+## Hardened agent deployment
+
+The current agent also requires `SC_NAS_MOUNT`, `SC_NAS_EXPECTED_SOURCE`, and `SC_RCLONE_CONFIG`. Use `deployment/nas-backup/agent.env.example`; keep the completed environment file private. Match the exact NAS mount and source in `/proc/self/mountinfo`. A missing or unexpected mount fails before creating any destination directory. Keep local state and locks on the backup host rather than an unavailable network share.
+
+The systemd templates are installation templates, not proof of an active schedule. Adapt their mount dependencies and writable paths to the actual host. Proposed daily business/home times are 01:00/04:00 America/Los_Angeles. DSM may use its native Task Scheduler with the dedicated local user instead. First run manually, compare content, and restore samples before enabling either schedule.
+
+The agent retains replaced destination files in `Versions/<UTC-run-id>/`, preserves the original bucket-relative keys under `r2/`, and keeps deleted-at-source objects locally. No automatic history pruning is installed. History writable by the backup user is not immutable ransomware protection; protect historical snapshots separately with administrator-controlled NAS snapshots or offline media. Do not enable unsupported snapshot features or reformat existing volumes.
+
+Running and failed reports preserve the last successful date and totals. Reporting failure makes the job fail and retains a pending report in its private state directory. Report freshness and backup age beyond 36 hours are visible on the dashboard; this does not itself deliver an external notification. Schedule failures must also be monitored through the host's supported notification facilities. Agent requests cannot supply or clear `last_restore_test_at`.
+
+## Recovery procedure
+
+1. Confirm the affected bucket and exact original object key from the application reference or retained manifest. Pause that site's backup schedule if investigating a destructive change.
+2. Choose the current `r2/<original-key>` copy, an earlier `Versions/<run-id>/<original-key>` copy, or an administrator-protected snapshot predating the incident. Preserve the source backup.
+3. Copy the selected files to a new, separate `Recovery/<incident-id>/` location. Never test by overwriting a live application file or R2 object.
+4. Compute SHA-256 on the selected backup and recovered copy and compare them. When the current R2 original is valid, independently download it using the read-only account to another test location and compare its bytes as well. Matching names/counts alone is insufficient.
+5. Open representative artwork, mockups, documents, and production files in suitable applications. Include the largest available file and actual layered graphics when present. Record file keys, lengths, hashes, timestamps, source snapshot/version, and reviewer. Keep private object names out of public reports.
+6. An administrator records `last_restore_test_at` only after this independent test, through the protected database administration process. The reporting agent cannot certify its own restore.
+7. Restoring into R2 is a separate, explicitly approved recovery operation requiring a suitably scoped write credential. The backup accounts are read-only and cannot perform it. Review application references and the intended overwrite before a live restore.
+8. Resume the schedule and verify the next report. Retain recovery evidence and incident notes. Never delete the sole good backup during cleanup.
+
+A rerun resumes at file level: completed unchanged objects are skipped, incomplete files are retried. Do not claim byte-level continuation for the installed rclone version. Use an isolated fixture to simulate interruption, source deletion, and replacement; do not alter live R2 objects for testing.
