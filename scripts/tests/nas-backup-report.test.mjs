@@ -24,7 +24,8 @@ test('seed rows are not reports and stale or overdue backups need attention',()=
  assert.equal(nasBackupStatus({status:'unconfigured',reported_at:now.toISOString()},now.getTime()),'Unconfigured');
  const site={agent_version:'v2',status:'success',reported_at:'2026-10-24T21:00:00Z',last_backup_at:'2026-10-24T20:00:00Z'};
  assert.equal(nasBackupStatus(site,now.getTime()),'success');
- assert.match(nasBackupStatus({...site,reported_at:'2026-10-20T20:00:00Z'},now.getTime()),/Stale/);
- assert.match(nasBackupStatus({...site,status:'running',last_backup_at:'2026-10-20T20:00:00Z'},now.getTime()),/overdue/);
+ assert.equal(nasBackupStatus({...site,reported_at:'2026-10-17T22:00:00Z',last_backup_at:'2026-10-17T22:00:00Z'},now.getTime()),'success');
+ assert.match(nasBackupStatus({...site,reported_at:'2026-10-15T20:00:00Z'},now.getTime()),/Stale/);
+ assert.match(nasBackupStatus({...site,status:'running',last_backup_at:'2026-10-15T20:00:00Z'},now.getTime()),/overdue/);
  assert.match(nasBackupStatus({...site,last_backup_at:null},now.getTime()),/no successful/);
 });
