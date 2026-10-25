@@ -24,7 +24,7 @@ Cloudflare R2 remains the authoritative live asset store. Neither NAS serves app
    bash /opt/skilledcrafting/nas-r2-backup.sh
    ```
 7. Check Storage Administration for reporting and confirm source object count/size using `rclone size`. Check files individually and restore a sample into a distinct temporary directory; record the restoration evidence. The dashboard does not allow arbitrary agent-supplied claims of verified restore tests.
-8. Set a daily overnight timer separately at each site after initial transfer and successful restores. Alert when no successful report in 36 hours, NAS volume exceeds 80%, or object counts diverge. Implement alerting separately; the initial page shows timestamps and errors.
+8. Set a daily overnight timer separately at each site after initial transfer and successful restores. Alert when no successful report in 8 days, NAS volume exceeds 80%, or object counts diverge. Implement alerting separately; the initial page shows timestamps and errors.
 9. Back up database schema/data and WooCommerce/WordPress separately. An R2 asset copy is not a full system backup.
 
 ## Security
@@ -45,7 +45,7 @@ The systemd templates are installation templates, not proof of an active schedul
 
 The agent retains replaced destination files in `Versions/<UTC-run-id>/`, preserves the original bucket-relative keys under `r2/`, and keeps deleted-at-source objects locally. No automatic history pruning is installed. History writable by the backup user is not immutable ransomware protection; protect historical snapshots separately with administrator-controlled NAS snapshots or offline media. Do not enable unsupported snapshot features or reformat existing volumes.
 
-Running and failed reports preserve the last successful date and totals. Reporting failure makes the job fail and retains a pending report in its private state directory. Report freshness and backup age beyond 36 hours are visible on the dashboard; this does not itself deliver an external notification. Schedule failures must also be monitored through the host's supported notification facilities. Agent requests cannot supply or clear `last_restore_test_at`.
+Running and failed reports preserve the last successful date and totals. Reporting failure makes the job fail and retains a pending report in its private state directory. Report freshness and backup age beyond 8 days are visible on the dashboard; this does not itself deliver an external notification. Schedule failures must also be monitored through the host's supported notification facilities. Agent requests cannot supply or clear `last_restore_test_at`.
 
 ## Recovery procedure
 
@@ -59,3 +59,12 @@ Running and failed reports preserve the last successful date and totals. Reporti
 8. Resume the schedule and verify the next report. Retain recovery evidence and incident notes. Never delete the sole good backup during cleanup.
 
 A rerun resumes at file level: completed unchanged objects are skipped, incomplete files are retried. Do not claim byte-level continuation for the installed rclone version. Use an isolated fixture to simulate interruption, source deletion, and replacement; do not alter live R2 objects for testing.
+
+
+## Weekly schedule and recovery verification
+
+R2 backups run weekly on Sunday: business 01:00 and home 04:00, America/Los_Angeles. The systemd examples allow up to ten minutes of random delay; DSM runs at its selected time. Health becomes stale or overdue after eight days, allowing one day of grace after the weekly interval. Both live jobs completed successfully on 25 October 2026.
+
+Both destinations passed a complete 453-object content comparison and a separate six-file restore, independently compared with R2 downloads. The representative files included PNG, JPG, WEBP, PDF and XLS. The largest current object is approximately 5.5 MB; larger future artwork and layered PSD/AI files were not tested. Recovery evidence is recorded separately from agent reports and survives subsequent scheduled runs.
+
+Expanded application/database/Home Assistant backup work is tracked separately; an R2 success report does not certify those additional components or WordPress recovery.
