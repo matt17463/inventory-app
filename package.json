@@ -59,7 +59,7 @@
     "test:contractor-navigation-theme": "node --test scripts/tests/navigation-contractors-theme.test.mjs",
     "test:equipment": "node --test scripts/tests/equipment-controls.test.mjs",
     "test:sync-reliability": "node --test scripts/tests/sync-reliability.test.mjs",
-    "test:marketing": "node --test scripts/tests/marketing-growth.test.mjs scripts/tests/marketing-catalog-policy.test.mjs scripts/tests/marketing-documents.test.mjs scripts/tests/marketing-ai.test.mjs scripts/tests/marketing-next-features.test.mjs scripts/tests/marketing-approval.test.mjs scripts/tests/marketing-sample-handoff.test.mjs scripts/tests/marketing-public-reviews.test.mjs scripts/tests/marketing-completion.test.mjs",
+    "test:marketing": "node --test scripts/tests/marketing-growth.test.mjs scripts/tests/marketing-catalog-policy.test.mjs scripts/tests/marketing-documents.test.mjs scripts/tests/marketing-ai.test.mjs scripts/tests/marketing-next-features.test.mjs scripts/tests/marketing-approval.test.mjs scripts/tests/marketing-sample-handoff.test.mjs scripts/tests/marketing-public-reviews.test.mjs scripts/tests/marketing-completion.test.mjs scripts/tests/marketing-prospect-response.test.mjs",
     "test:material-studio": "node --test scripts/tests/material-settings-uv-studio.test.mjs",
     "test:graphical-themes": "node --test scripts/tests/graphical-theme-gallery.test.mjs",
     "test:print-center": "node --test scripts/tests/unified-print-center.test.mjs scripts/tests/print-integrations.test.mjs scripts/tests/qbo-oauth-behavior.test.mjs"
