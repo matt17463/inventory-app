@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skilled Crafting Graphic Choices
  * Description: Optional product-level graphic selection bridge. Disabled until store-by-store verification.
- * Version: 0.2.0
+ * Version: 0.2.1
  */
 defined('ABSPATH') || exit;
 const SC_GRAPHICS_OPTION = 'sc_graphics_selector_enabled';
