@@ -32,6 +32,16 @@ export async function handler(event){
   if(!values||typeof values!=='object'||Array.isArray(values))return reply(400,{message:'Missing data'},event);
   const record=Object.fromEntries(FIELDS[entity].filter(k=>Object.prototype.hasOwnProperty.call(values,k)).map(k=>[k,values[k]]));
   if(!Object.keys(record).length)return reply(400,{message:'No valid fields'},event);
+  // Approved artwork definitions are immutable: create a new revision rather than silently replacing a live file.
+  if(entity==='variants' && input.id){
+   const {data:existing,error:existingError}=await auth.supabase.from(TABLES.variants).select('state,artwork_asset_id,width_inches,height_inches,process,version').eq('id',input.id).single();
+   if(existingError||!existing)return reply(404,{message:'Variant not found'},event);
+   if(existing.state==='approved'){
+    const protectedFields=['artwork_asset_id','width_inches','height_inches','process','version'];
+    if(protectedFields.some(key=>Object.prototype.hasOwnProperty.call(record,key)&&String(record[key])!==String(existing[key])))
+     return reply(409,{message:'Approved artwork cannot be modified in place; create a new revision'},event);
+   }
+  }
   if(entity==='variants' && record.state==='approved'){
    const sourceId=record.artwork_asset_id || (input.id?(await auth.supabase.from(TABLES.variants).select('artwork_asset_id').eq('id',input.id).single()).data?.artwork_asset_id:null);
    if(!uuid(sourceId))return reply(409,{message:'Approved variants require a linked source artwork file'},event);
