@@ -162,18 +162,18 @@ export default function ProductionTravelers() {
       setMessage('Approved placement artwork saved');
     }catch(e){setMessage(safeError(e));}finally{setBusy(false);}
   }
-  const readiness=validateTravelerGraphicReadiness({items:chosenItems,recipeVersion:chosenRecipe,artworkAssets:readinessAssets,selections:orderGraphicCheck.selections});
+  const readiness=validateTravelerGraphicReadiness({items:chosenItems,recipeVersion:chosenRecipe,artworkAssets:readinessAssets,selections:orderGraphicCheck.selections,lineArtworkByItem:lineAssignments});
   const graphicMode=graphicCompatibilityState(orderGraphicCheck);
   const graphicsBlocked=graphicMode.blocked || (graphicMode.legacy && !legacyArtVerified);
   useEffect(()=>{
-    const ids=[...new Set([chosenRecipe?.artwork_asset_id,...(chosenRecipe?.placements||[]).map(p=>p.artwork_asset_id)].filter(Boolean))];
+    const ids=[...new Set([chosenRecipe?.artwork_asset_id,...(chosenRecipe?.placements||[]).map(p=>p.artwork_asset_id),...Object.values(lineAssignments).flat().map(a=>a.artwork_asset_id)].filter(Boolean))];
     if(!ids.length){setReadinessAssets([]);return;}
     let cancelled=false;
     supabase.from('mockup_artwork_assets').select('id,preflight_status').in('id',ids).then(({data,error})=>{
       if(!cancelled)setReadinessAssets(error?[]:(data||[]));
     });
     return ()=>{cancelled=true;};
-  },[chosenRecipe]);
+  },[chosenRecipe,lineAssignments]);
   useEffect(()=>{
     setLegacyArtVerified(false);
     if(!jobId||!selectedItemIds.length){setOrderGraphicCheck({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:''});return;}
