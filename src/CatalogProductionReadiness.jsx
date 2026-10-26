@@ -177,6 +177,15 @@ export default function CatalogProductionReadiness(){
        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
         {SETUP_STEPS.map((s,i)=><button key={s.title} type="button" aria-current={setupStep===i?'step':undefined} onClick={()=>setSetupStep(i)} style={{fontWeight:setupStep===i?700:400}}>{i+1}{setupStep===i?' · Current':''}</button>)}
        </div>
+       <div role="status">
+        <strong>What the system can verify now: </strong>
+        {setupStep===0?(selected.woocommerce_product_id&&selected.row_count?'WooCommerce family found; variation identity still requires a human check.':'Product identity needs investigation.')
+        :setupStep===1?(Number(selected.missing_blank_rows)>0?'Missing blank mappings detected.':'No blank mapping gaps detected in the current catalog summary; verify actual variations.')
+        :setupStep===2?'Artwork approval cannot be inferred from this catalog summary. Open Client Graphics to verify exact assets.'
+        :setupStep===3?(selected.readiness==='approved'?'An approved recipe is linked; artwork and variation approval are separate checks.':'An approved recipe is not yet linked.')
+        :setupStep===4?'Customer sign-off and mockup evidence must be reviewed in the source artwork workflow.'
+        :'Travelers must be checked at the individual job-line level; a family-wide assignment is not sufficient.'}
+       </div>
        <h4>{SETUP_STEPS[setupStep].title}</h4>
        <p>{SETUP_STEPS[setupStep].description}</p>
        {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
