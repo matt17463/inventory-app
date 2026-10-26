@@ -50,13 +50,13 @@ begin
    ) p
    where coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id')=v_art::text
    and (coalesce(v_selection.selected_payload->>'placement_name','')=''
-        or lower(coalesce(p->>'placement_name',''))=lower(v_selection.resolution_snapshot->>'placement_name'))
+        or lower(coalesce(p->>'placement_name',''))=lower(v_selection.selected_payload->>'placement_name'))
   ) into v_asset_found;
   if not v_asset_found
      and not (
       (v_placements='[]'::jsonb or v_placements is null)
       and v_recipe->>'artwork_asset_id'=v_art::text
-      and coalesce(v_selection.resolution_snapshot->>'placement_name','')=''
+      and coalesce(v_selection.selected_payload->>'placement_name','')=''
      ) then
    raise exception 'Selected artwork does not match the approved recipe placement';
   end if;
