@@ -92,3 +92,21 @@ alter table public.sc_client_graphic_transfer_reviews enable row level security;
 alter table public.sc_order_graphic_selections enable row level security;
 -- Deliberately no browser RLS policies or public grants until role-scoped API is connected.
 -- Service-role server functions only, subject to employee authorization.
+-- Do not depend on installation-specific default privileges. Browser roles have
+-- no direct access; the employee-authorized server functions use service_role.
+revoke all on table
+ public.sc_client_graphic_families,
+ public.sc_client_graphic_variants,
+ public.sc_client_graphic_rules,
+ public.sc_client_graphic_product_bindings,
+ public.sc_client_graphic_transfer_reviews,
+ public.sc_order_graphic_selections
+ from public,anon,authenticated;
+grant select,insert,update,delete on table
+ public.sc_client_graphic_families,
+ public.sc_client_graphic_variants,
+ public.sc_client_graphic_rules,
+ public.sc_client_graphic_product_bindings,
+ public.sc_client_graphic_transfer_reviews,
+ public.sc_order_graphic_selections
+ to service_role;

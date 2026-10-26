@@ -9,7 +9,7 @@ export async function persistWooGraphicSelections(db,order,{strict=false}={}){
   if(!Number.isSafeInteger(productId)||productId<=0){failures.push({lineId:line.id,reason:'Missing product ID'});continue}
   const {data:binding,error:be}=await db.from('sc_client_graphic_product_bindings').select('graphic_family_id,allowed,verified_at,mode').eq('woo_product_id',productId).eq('graphic_family_id',raw.familyId).maybeSingle();
   if(be){failures.push({lineId:line.id,reason:'Binding lookup failed'});continue}
-  if(!binding?.allowed||!binding.verified_at){failures.push({lineId:line.id,reason:'Graphic selection has no verified product binding'});continue}
+  if(!binding?.allowed||!binding.verified_at||!['fixed','selectable'].includes(binding.mode)){failures.push({lineId:line.id,reason:'Graphic selection has no verified product binding'});continue}
   const {data:family,error:fe}=await db.from('sc_client_graphic_families').select('id,state').eq('id',raw.familyId).maybeSingle();
   if(fe||family?.state!=='approved'){failures.push({lineId:line.id,reason:'Graphic family not approved'});continue}
   const [v,r]=await Promise.all([

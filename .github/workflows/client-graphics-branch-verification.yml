@@ -22,8 +22,8 @@ jobs:
         run: npm ci
       - name: Client graphics unit tests
         run: npm run test:client-graphics
-      - name: Lint changed graphics modules
-        run: npx eslint src/ClientGraphics.jsx src/OrderGraphicAssignment.jsx src/ProductionTravelers.jsx src/ManufacturingRecipes.jsx src/lib/clientGraphicsRules.js src/lib/graphicCompatibility.js src/lib/travelerGraphicReadiness.js src/lib/wooGraphicSelection.js src/lib/orderGraphicSelection.js netlify/functions/client-graphics.js netlify/functions/order-graphic-selection.js netlify/functions/traveler-graphic-selections.js netlify/functions/_shared/wooGraphicReconciliation.js
+      - name: Lint complete application
+        run: npm run lint
       - name: Compile Vite application
         run: npm run build:vite
       - name: Validate PHP syntax
