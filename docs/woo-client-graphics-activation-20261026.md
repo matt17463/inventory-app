@@ -28,3 +28,9 @@
 
 ## Rollback
 Turn the Woo WordPress option `sc_graphics_selector_enabled` to `no` first, then turn off `SC_GRAPHIC_ORDER_CAPTURE_ENABLED`, without deleting persisted managed capture states, order metadata, or existing traveler snapshots. Do not roll back permanent receipt validation independently of the matching application.
+
+## Store API / WooCommerce Blocks implementation status
+
+WooCommerce publishes an explicit `woocommerce_store_api_validate_add_to_cart` action before cart insertion. The plugin now blocks Store API add-to-cart requests for an enabled multi-choice product unless a compatible Blocks selection workflow is built; it currently directs the shopper to the standard product form. Fixed-design products and globally disabled graphic selectors remain unaffected. This is a **safety compatibility guard**, not a completed Blocks selector UI or verified Store API add-to-cart extension. Do not activate the customer-facing graphics feature for a Blocks-only product flow until a supported Blocks selection mechanism has been implemented and tested. See WooCommerce's current Cart API and Blocks validation hook documentation.
+
+PHP fixture regression now includes variation lookup and Store API rejection of unverified multi-choice graphics. Execution of latest CI and live checkout topology verification is still required.
