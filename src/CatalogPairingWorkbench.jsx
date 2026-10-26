@@ -1,5 +1,5 @@
 import {useCallback,useContext,useEffect,useMemo,useState} from 'react';
-import {Link} from 'react-router-dom';
+import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from './supabaseClient';
 import {addArtworkAsset,createMockupProject} from './lib/mockupStudioApi';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
@@ -10,6 +10,8 @@ const words=s=>new Set(String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').sp
 export function overlap(a,b){const aa=words(a),bb=words(b);return [...aa].filter(x=>bb.has(x)).length;}
 export function suggestions(product,assets,recipes){const text=[product.product_name,product.example_sku].join(' ');const candidates=entries=>entries.map(x=>({...x,matchCount:overlap(text,x.artwork_name||x.name)})).filter(x=>x.matchCount>0).sort((a,b)=>b.matchCount-a.matchCount);return {assets:candidates(assets).slice(0,5),recipes:candidates(recipes).slice(0,5)};}
 export default function CatalogPairingWorkbench(){
+ const [queryParams]=useSearchParams();
+ const requestedProduct=queryParams.get('product')||'';
  const access=useContext(EmployeeAccessContext),canManage=['admin','manager'].includes(access?.role);
  const [catalog,setCatalog]=useState(null),[readiness,setReadiness]=useState(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const [search,setSearch]=useState(''),[selected,setSelected]=useState(''),[assetId,setAssetId]=useState(''),[recipeId,setRecipeId]=useState(''),[evidence,setEvidence]=useState(''),[confirm,setConfirm]=useState(false);
@@ -17,6 +19,7 @@ export default function CatalogPairingWorkbench(){
  const load=useCallback(async()=>{setBusy(true);try{const [a,b]=await Promise.all([api('legacy-catalog-modernization',{action:'dashboard'}),api('catalog-production-readiness',{action:'overview'})]);setCatalog(a);setReadiness(b);setMessage('Catalog refreshed. Suggestions are unverified and require review.');}catch(e){setMessage(e.message)}finally{setBusy(false)}},[]);
  useEffect(()=>{load()},[load]);
  const list=useMemo(()=>(catalog?.scores||[]).filter(x=>[x.product_name,x.example_sku,x.woocommerce_product_id].join(' ').toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.score-b.score),[catalog,search]);
+ useEffect(()=>{if(!requestedProduct||!catalog)return;const match=(catalog.scores||[]).find(p=>String(p.woocommerce_product_id)===requestedProduct);if(match){setSelected(String(match.woocommerce_product_id));setSearch(String(match.woocommerce_product_id));setAssetId(match.artwork?.artwork_asset_id||'');setRecipeId(match.recipe_id||'');setUploadName(match.product_name||'');setRecipeName((match.product_name||'Product')+' · DTF · Draft');}},[requestedProduct,catalog]);
  const product=list.find(x=>String(x.woocommerce_product_id)===selected);
  const recipes=readiness?.recipes||[];
  const matches=product?suggestions(product,catalog?.assets||[],recipes):{assets:[],recipes:[]};
@@ -55,6 +58,7 @@ export default function CatalogPairingWorkbench(){
  function downloadAudit(){const records=list.map(x=>[x.woocommerce_product_id,x.product_name,x.flags?.artwork?'verified':'review',x.flags?.recipe?'approved':'review',x.score]);const csv=[['woo_product_id','product_name','artwork_status','recipe_status','readiness_score'],...records].map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='skilled-crafting-catalog-pairing-audit.csv';a.click();URL.revokeObjectURL(url)}
  return <main className="page sc-pairing"><header className="page-header"><div><p className="eyebrow">Production · Existing products</p><h1>Catalog Artwork & Recipe Pairing</h1><p>Review every synced WooCommerce family, find likely artwork and recipe matches, and save only evidence-backed associations. No bulk guessed approvals or customer-facing activation.</p></div><button type="button" disabled={busy} onClick={load}>Refresh catalog</button></header>
  {message&&<p role="status" className="message">{message}</p>}
+ <p><Link to="/catalog-production-readiness">Return to guided Product Setup &amp; Readiness →</Link></p>
  <div className="sc-pairing-stats"><div><strong>{stats.total}</strong> families indexed</div><div><strong>{stats.withArtwork}</strong> artwork reviewed</div><div><strong>{stats.withRecipe}</strong> approved recipe</div><div><strong>{stats.review}</strong> require review</div></div>
  <section className="card"><h2>Per-product rollout — explicit legacy fallback</h2><p><strong>Legacy / Unpaired:</strong> WooCommerce checkout and existing order/pull-sheet handling remain unchanged; no automated graphics traveler is created.</p><p><strong>Setup in progress:</strong> Artwork uploads, recipes and pairing suggestions are drafts; the product still uses legacy handling.</p><p><strong>Managed / Approved:</strong> Only a separately manager-verified product binding with approved artwork and routing can enter the managed graphics-to-traveler workflow when its integration gates are enabled. Missing or invalid required selections fail closed for that managed order line.</p><p>Mixed carts are evaluated per order line; legacy products must not inherit graphic selections from managed lines. This workbench does not switch on the global WordPress selector or webhook capture.</p></section>
  <div className="sc-pairing-toolbar"><label>Search Woo product, name or SKU<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Marcus Whitman, team or SKU"/></label><button type="button" disabled={!canManage||busy||!catalog} onClick={initializeQueue}>Create missing product review records</button><button type="button" disabled={!catalog} onClick={downloadAudit}>Export full review CSV</button></div>
