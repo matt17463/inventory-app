@@ -29,6 +29,7 @@ export default function ProductionTravelers() {
   const [travelerList,setTravelerList]=useState([]);
   const [recipeVersions,setRecipeVersions]=useState([]);
   const [readinessAssets,setReadinessAssets]=useState([]);
+  const [legacyArtVerified,setLegacyArtVerified]=useState(false);
   const [orderGraphicCheck,setOrderGraphicCheck]=useState({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:''});
   const [recipes,setRecipes]=useState([]);
   const [selectedItemIds,setSelectedItemIds]=useState([]);
@@ -115,7 +116,7 @@ export default function ProductionTravelers() {
   const chosenRecipe=recipeVersions.find(x=>x.id===versionId);
   const readiness=validateTravelerGraphicReadiness({items:chosenItems,recipeVersion:chosenRecipe,artworkAssets:readinessAssets,selections:orderGraphicCheck.selections});
   const graphicMode=graphicCompatibilityState(orderGraphicCheck);
-  const graphicsBlocked=graphicMode.blocked;
+  const graphicsBlocked=graphicMode.blocked || (graphicMode.legacy && !legacyArtVerified);
   useEffect(()=>{
     const ids=[...new Set([chosenRecipe?.artwork_asset_id,...(chosenRecipe?.placements||[]).map(p=>p.artwork_asset_id)].filter(Boolean))];
     if(!ids.length){setReadinessAssets([]);return;}
@@ -126,6 +127,7 @@ export default function ProductionTravelers() {
     return ()=>{cancelled=true;};
   },[chosenRecipe]);
   useEffect(()=>{
+    setLegacyArtVerified(false);
     if(!jobId||!selectedItemIds.length){setOrderGraphicCheck({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:''});return;}
     let cancelled=false;
     setOrderGraphicCheck({channel:'manual',loading:true,selections:[],unmapped_line_ids:[],error:''});
@@ -142,7 +144,7 @@ export default function ProductionTravelers() {
     setBusy(true);setMessage('');
     try{
       if(!jobId||!selectedItemIds.length||!versionId)throw Error('Choose at least one job line and an approved recipe version.');
-      if(graphicsBlocked)throw Error(graphicMode.message);
+      if(graphicsBlocked)throw Error(graphicMode.legacy?'Confirm the legacy order artwork before creating the traveler.':graphicMode.message);
       if(!readiness.ready)throw Error(readiness.blockers.join('; '));
       const {data:auth,error:e}=await supabase.auth.getUser();
       if(e||!auth.user)throw Error('Sign in to create a traveler.');
@@ -208,6 +210,7 @@ export default function ProductionTravelers() {
         {versionId&&readiness.blockers.length>0&&<div role="alert"><strong>Production artwork checks:</strong><ul>{readiness.blockers.map(reason=><li key={reason}>{reason}</li>)}</ul></div>}
         {selectedItemIds.length>0&&orderGraphicCheck.loading&&<p>Checking saved customer graphic selections…</p>}
         {selectedItemIds.length>0&&!orderGraphicCheck.loading&&<p role={graphicsBlocked?'alert':'status'}>{graphicMode.message}</p>}
+        {selectedItemIds.length>0&&!orderGraphicCheck.loading&&!orderGraphicCheck.error&&graphicMode.legacy&&<label><input type="checkbox" checked={legacyArtVerified} onChange={e=>setLegacyArtVerified(e.target.checked)}/> I verified the legacy customer artwork and approved recipe against the original order. This is not an automatic graphic mapping.</label>}
         {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready||graphicsBlocked}
           onClick={createTraveler}>{busy?'Saving…':'Create grouped traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
         <p><small>Creating a traveler records manufacturing instructions only; it does not move inventory, complete a pull sheet, charge a customer or change WooCommerce status.</small></p>
