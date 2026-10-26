@@ -30,6 +30,8 @@ $_POST=['sc_graphic_family_id'=>cg_id(21)];
 cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801)===true,'variation uses parent configured graphic options');
 $variationData=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700,801);
 cg_check($variationData['sc_graphic_family_id']===cg_id(21),'variation retains selected parent design');
+$directVariation=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],801,0);
+cg_check($directVariation['sc_graphic_family_id']===cg_id(21),'Store API direct variation ID uses verified parent options');
 $_POST=['sc_graphic_family_id'=>cg_id(22)];
 cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801)===false,'variation rejects unavailable parent design');
 $invalidVariation=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700,801);
