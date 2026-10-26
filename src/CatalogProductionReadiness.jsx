@@ -193,6 +193,33 @@ export default function CatalogProductionReadiness(){
        {setupStep===2&&<p>{fmt(selected.legacy_logo_count)} different legacy logo references detected. These are clues, not proof of authorized production artwork.</p>}
        {setupStep===3&&<p>Recipe routing: <strong>{labels[selected.readiness]}</strong>. Only managers may save the linked recipe below. Approved versions still require artwork and variation checks.</p>}
        {setupStep===5&&<p>{fmt(demand.get(Number(selected.woocommerce_product_id))||0)} units appear in currently open production jobs. Use the traveler preview tab to check each eligible line.</p>}
+
+       {setupStep===3&&<div>
+        <h4>Assign production instructions here</h4>
+        {canManage?<form onSubmit={e=>{e.preventDefault();run({action:'assign',woocommerce_product_id:selected.woocommerce_product_id,disposition,recipe_id:selectedRecipe,notes},()=>`Saved routing for Woo parent #${selected.woocommerce_product_id}.`);}}>
+       <label>Handling<select value={disposition} onChange={e=>setDisposition(e.target.value)}>
+        <option value="assigned">Needs production recipe</option><option value="fulfillment_only">Fulfillment only — no new manufacturing</option><option value="review">Hold for review</option>
+       </select></label>
+       {disposition==='assigned'&&<label>Reusable production recipe<select required value={selectedRecipe} onChange={e=>setSelectedRecipe(e.target.value)}>
+        <option value="">Select recipe</option>
+        {(state.recipes||[]).map(r=><option key={r.id} value={r.id}>{r.name}{approvedRecipeIds.has(r.id)?' ✓ approved':' · pending approval'}</option>)}
+       </select></label>}
+       <label>Review notes<textarea rows="3" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Customer-specific process, exceptions, packaging or missing data" /></label>
+       <button disabled={busy} type="submit">Save reviewed assignment</button>
+      </form>:<p>Manager role is required to edit routing.</p>}
+       </div>}
+       {setupStep===5&&<div>
+        <h4>Open production lines for this product</h4>
+        <button type="button" disabled={busy} onClick={previewJobs}>Refresh job-line readiness</button>
+        {!previewLoaded?<p>Load the actual open-job lines to see exactly which travelers can be created.</p>:
+         <div>{preview.filter(x=>Number(x.woocommerce_product_id)===Number(selected.woocommerce_product_id)).length===0?<p>No open job lines were returned for this product in the current preview.</p>:
+          preview.filter(x=>Number(x.woocommerce_product_id)===Number(selected.woocommerce_product_id)).map(x=><div key={x.job_item_id} className="sc-cr-listline">
+           <span><strong>{x.name}</strong> · Job #{x.job_id} · Qty {fmt(x.quantity)}</span>
+           <small>{x.status}</small>
+           <Link to={'/work-hub?job='+encodeURIComponent(x.job_id)}>Open this job</Link>
+          </div>)}</div>}
+        <p>Creating travelers remains a separately confirmed action in the Open Job Travelers tab; no production changes are made by this preview.</p>
+       </div>}
        <p><Link to={SETUP_STEPS[setupStep].path}>{SETUP_STEPS[setupStep].link} →</Link></p>
        <div style={{display:'flex',gap:10}}>
         <button type="button" disabled={setupStep===0} onClick={()=>setSetupStep(v=>Math.max(0,v-1))}>Previous</button>
@@ -204,17 +231,6 @@ export default function CatalogProductionReadiness(){
       <p>Observed Woo-linked production activity: {fmt(activity[selected.woocommerce_product_id]?.units_30d||0)} units / 30 days; {fmt(activity[selected.woocommerce_product_id]?.units_90d||0)} units / 90 days; {fmt(activity[selected.woocommerce_product_id]?.units_180d||0)} units / 180 days. These figures are not authoritative WooCommerce sales totals.</p>
       <p>In catalog: {fmt(selected.row_count)} rows; {fmt(selected.finished_rows)} marked finished; {fmt(selected.missing_blank_rows)} blank mappings missing.</p>
       <p>Suggested garment: <strong>{selected.classification?.garment}</strong>. Decoration method: <strong>{selected.classification?.method}</strong> (unverified).</p>
-      {canManage?<form onSubmit={e=>{e.preventDefault();run({action:'assign',woocommerce_product_id:selected.woocommerce_product_id,disposition,recipe_id:selectedRecipe,notes},()=>`Saved routing for Woo parent #${selected.woocommerce_product_id}.`);}}>
-       <label>Handling<select value={disposition} onChange={e=>setDisposition(e.target.value)}>
-        <option value="assigned">Needs production recipe</option><option value="fulfillment_only">Fulfillment only — no new manufacturing</option><option value="review">Hold for review</option>
-       </select></label>
-       {disposition==='assigned'&&<label>Reusable production recipe<select required value={selectedRecipe} onChange={e=>setSelectedRecipe(e.target.value)}>
-        <option value="">Select recipe</option>
-        {(state.recipes||[]).map(r=><option key={r.id} value={r.id}>{r.name}{approvedRecipeIds.has(r.id)?' ✓ approved':' · pending approval'}</option>)}
-       </select></label>}
-       <label>Review notes<textarea rows="3" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Customer-specific process, exceptions, packaging or missing data" /></label>
-       <button disabled={busy} type="submit">Save reviewed assignment</button>
-      </form>:<p>Manager role is required to edit routing.</p>}
       <p><Link to="/manufacturing-recipes">Open recipe editor and approve measured sample →</Link></p>
       <p><Link to="/product-blank-mappings">Review product-to-blank mappings →</Link></p>
      </>}
