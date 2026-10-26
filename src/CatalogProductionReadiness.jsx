@@ -13,6 +13,14 @@ async function action(payload){
  if(!response.ok||!data.success)throw Error(data.message||'Catalog readiness request failed.');
  return data.data;
 }
+const SETUP_STEPS=[
+ {title:'1. Identify the product',description:'Confirm the correct WooCommerce family, colors, sizes and SKUs.',path:'/catalog-workbench',link:'Review catalog'},
+ {title:'2. Match physical blanks',description:'Verify that every manufactured variation points to the right blank. Missing mappings must be resolved before production.',path:'/product-blank-mappings',link:'Review blank mappings'},
+ {title:'3. Verify production artwork',description:'Choose the approved customer graphic, applicable versions and artwork permissions. Never infer approval from a legacy logo ID.',path:'/client-graphics',link:'Open Client Graphics'},
+ {title:'4. Approve a production recipe',description:'Select measured, tested instructions for garment, decoration method, placement and finishing.',path:'/manufacturing-recipes',link:'Edit and approve recipes'},
+ {title:'5. Check mockup and approval',description:'Review the product mockup and the explicit customer approval for this artwork and placement.',path:'/mockup-studio',link:'Open Mockup Studio'},
+ {title:'6. Check production work orders',description:'Confirm that each affected open job uses the right exact artwork, approved recipe revision and inventory pairing.',path:'/production-travelers',link:'Inspect travelers'}
+];
 const fmt=x=>Number(x||0).toLocaleString();
 const titleFor=f=>(f.product_name||'Unnamed WooCommerce family')+' · #'+f.woocommerce_product_id;
 const labels={review:'Needs assignment',awaiting_approval:'Awaiting physical approval',approved:'Approved recipe linked',fulfillment_only:'Fulfillment only'};
@@ -30,6 +38,7 @@ export default function CatalogProductionReadiness(){
  const [sortMode,setSortMode]=useState('attention');
  const [activeOrderDemand,setActiveOrderDemand]=useState([]);
  const [familyId,setFamilyId]=useState(null);
+ const [setupStep,setSetupStep]=useState(0);
  const [selectedRecipe,setSelectedRecipe]=useState('');
  const [disposition,setDisposition]=useState('assigned');
  const [notes,setNotes]=useState('');
@@ -88,7 +97,7 @@ export default function CatalogProductionReadiness(){
  }
  function choose(f){
   const row=assignments.get(Number(f.woocommerce_product_id));
-  setFamilyId(f.woocommerce_product_id);
+  setFamilyId(f.woocommerce_product_id);setSetupStep(0);
   setDisposition(row?.disposition==='fulfillment_only'?'fulfillment_only':'assigned');
   setSelectedRecipe(row?.recipe_id||'');setNotes(row?.notes||'');
  }
@@ -112,7 +121,7 @@ export default function CatalogProductionReadiness(){
  return <main className="page sc-catalog-readiness">
   <header className="page-header"><div>
    <p className="eyebrow">Catalog · Legacy adoption · Production</p>
-   <h1>Catalog Production Readiness</h1>
+   <h1>Product Setup & Readiness</h1>
    <p>Bring existing WooCommerce products and customers into newer shop workflows without re-creating orders or changing stock. Review all measured and artistic instructions before production.</p>
   </div><button type="button" onClick={load} disabled={busy}>{busy?'Working…':'Refresh live audit'}</button></header>
   {message&&<p className="sc-cr-message" role="status">{message}</p>}
@@ -162,6 +171,35 @@ export default function CatalogProductionReadiness(){
     <section className="card elevated-card sc-cr-detail">
      {!selected?<p>Choose a product family on the left to review its production routing.</p>:<>
       <h2>{titleFor(selected)}</h2>
+      <section className="card elevated-card" aria-label="Guided product modernization wizard">
+       <h3>Guided product setup</h3>
+       <p>Complete these six reviews in order. The wizard remembers the selected product while you move through the steps. A linked recipe alone is not proof that a product is fully ready.</p>
+       <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
+        {SETUP_STEPS.map((s,i)=><button key={s.title} type="button" aria-current={setupStep===i?'step':undefined} onClick={()=>setSetupStep(i)} style={{fontWeight:setupStep===i?700:400}}>{i+1}{setupStep===i?' · Current':''}</button>)}
+       </div>
+       <div role="status">
+        <strong>What the system can verify now: </strong>
+        {setupStep===0?(selected.woocommerce_product_id&&selected.row_count?'WooCommerce family found; variation identity still requires a human check.':'Product identity needs investigation.')
+        :setupStep===1?(Number(selected.missing_blank_rows)>0?'Missing blank mappings detected.':'No blank mapping gaps detected in the current catalog summary; verify actual variations.')
+        :setupStep===2?'Artwork approval cannot be inferred from this catalog summary. Open Client Graphics to verify exact assets.'
+        :setupStep===3?(selected.readiness==='approved'?'An approved recipe is linked; artwork and variation approval are separate checks.':'An approved recipe is not yet linked.')
+        :setupStep===4?'Customer sign-off and mockup evidence must be reviewed in the source artwork workflow.'
+        :'Travelers must be checked at the individual job-line level; a family-wide assignment is not sufficient.'}
+       </div>
+       <h4>{SETUP_STEPS[setupStep].title}</h4>
+       <p>{SETUP_STEPS[setupStep].description}</p>
+       {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
+       {setupStep===1&&<p>{fmt(selected.missing_blank_rows)} catalog rows are flagged as missing blank mappings. Some finished or non-inventory products can legitimately have none; review classifications before editing.</p>}
+       {setupStep===2&&<p>{fmt(selected.legacy_logo_count)} different legacy logo references detected. These are clues, not proof of authorized production artwork.</p>}
+       {setupStep===3&&<p>Recipe routing: <strong>{labels[selected.readiness]}</strong>. Only managers may save the linked recipe below. Approved versions still require artwork and variation checks.</p>}
+       {setupStep===5&&<p>{fmt(demand.get(Number(selected.woocommerce_product_id))||0)} units appear in currently open production jobs. Use the traveler preview tab to check each eligible line.</p>}
+       <p><Link to={SETUP_STEPS[setupStep].path}>{SETUP_STEPS[setupStep].link} →</Link></p>
+       <div style={{display:'flex',gap:10}}>
+        <button type="button" disabled={setupStep===0} onClick={()=>setSetupStep(v=>Math.max(0,v-1))}>Previous</button>
+        <button type="button" disabled={setupStep===SETUP_STEPS.length-1} onClick={()=>setSetupStep(v=>Math.min(SETUP_STEPS.length-1,v+1))}>Next step</button>
+       </div>
+       <small>Review guidance only. Step navigation never approves artwork, changes stock, or marks a product as certified.</small>
+      </section>
       <p><strong>Next steps:</strong> Check mappings → verify exact customer artwork → choose approved production instructions → inspect an open-order traveler. This page only links a recipe, it does not certify all artwork and variations.</p>
       <p>Observed Woo-linked production activity: {fmt(activity[selected.woocommerce_product_id]?.units_30d||0)} units / 30 days; {fmt(activity[selected.woocommerce_product_id]?.units_90d||0)} units / 90 days; {fmt(activity[selected.woocommerce_product_id]?.units_180d||0)} units / 180 days. These figures are not authoritative WooCommerce sales totals.</p>
       <p>In catalog: {fmt(selected.row_count)} rows; {fmt(selected.finished_rows)} marked finished; {fmt(selected.missing_blank_rows)} blank mappings missing.</p>
