@@ -9,7 +9,7 @@ export async function handler(event){
   const jobId=Number(body.job_id), ids=body.job_item_ids;
   if(!Number.isSafeInteger(jobId)||jobId<=0||!Array.isArray(ids)||ids.length<1||ids.length>100||ids.some(id=>!Number.isSafeInteger(id)||id<=0))
     return jsonResponse(400,{message:'Valid job and line IDs required'},event);
-  const {data:job,error:je}=await auth.supabase.from('jobs').select('id,woocommerce_order_id').eq('id',jobId).single();
+  const {data:job,error:je}=await auth.supabase.from('jobs').select('id,woocommerce_order_id,woo_payload').eq('id',jobId).single();
   if(je||!job)return jsonResponse(404,{message:'Job not found'},event);
   const {data:items,error:ie}=await auth.supabase.from('job_items').select('id,job_id,woocommerce_line_item_id').eq('job_id',jobId).in('id',ids);
   if(ie||items?.length!==new Set(ids).size)return jsonResponse(409,{message:'Order line mismatch'},event);
@@ -32,11 +32,18 @@ export async function handler(event){
   if(captureError)throw Error('Could not verify managed graphic capture states');
   const captureByLine=new Map((capture||[]).map(c=>[String(c.woo_line_item_id),c]));
   const byLine=new Map((rows||[]).map(x=>[x.external_line_id,x]));
-  const selections=items.map(item=>({
-   job_item_id:item.id,
-   ...(byLine.get(String(item.woocommerce_line_item_id))||{}),
-   capture_status:captureByLine.get(String(item.woocommerce_line_item_id))?.status||null
-  }));
+  const rawItems=Array.isArray(job.woo_payload?.line_items)?job.woo_payload.line_items:[];
+  const canonicalLines=new Set(rawItems.filter(line=>
+   (line.meta_data||[]).some(meta=>
+    ['_sc_graphic_family_id','sc_graphic_family_id'].includes(String(meta.key||'').toLowerCase())
+   )).map(line=>String(line.id)));
+  const selections=items.map(item=>{
+   const lineKey=String(item.woocommerce_line_item_id);
+   const existing=byLine.get(lineKey)||{};
+   const recorded=captureByLine.get(lineKey)?.status||null;
+   return {job_item_id:item.id,...existing,
+    capture_status:recorded||(canonicalLines.has(lineKey)?'managed_pending':null)};
+  });
   return jsonResponse(200,{channel:'woocommerce',selections,unmapped_line_ids:items.filter(x=>!byLine.has(String(x.woocommerce_line_item_id))).map(x=>x.id)},event);
  }catch(e){return jsonResponse(500,{message:'Order graphic verification is unavailable'},event)}
 }
