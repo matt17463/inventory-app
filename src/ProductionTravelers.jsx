@@ -307,6 +307,22 @@ export default function ProductionTravelers() {
       <section>
         <h3>Garment and decoration</h3>
         <table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr><th>Order line</th><th>Item / SKU</th><th>Color</th><th>Size</th><th>Qty</th></tr></thead><tbody>{(travelerLines.length?travelerLines:[{job_item_id:selected.job_item_id,quantity:selected.ordered_quantity,item_snapshot:{name:snap.item_name,sku:snap.blank?.sku,color:snap.blank?.color,size:snap.blank?.size}}]).map(line=><tr key={line.job_item_id}><td>#{line.job_item_id}</td><td>{line.item_snapshot?.name||'Item'} · {line.item_snapshot?.sku||''}</td><td>{line.item_snapshot?.color||''}</td><td>{line.item_snapshot?.size||''}</td><td>{line.quantity}</td></tr>)}</tbody></table>
+        {travelerLines.some(line=>(line.item_snapshot?.approved_placement_artwork||[]).length>0)&&<div className="sc-traveler-machine">
+          <h4>Approved per-line artwork and saved placement measurements</h4>
+          {travelerLines.map(line=>(line.item_snapshot?.approved_placement_artwork||[]).length>0&&<div key={line.job_item_id}>
+            <strong>Order line #{line.job_item_id}</strong>
+            <ul>{line.item_snapshot.approved_placement_artwork.map(approval=>{
+              const placement=(snap.placements||[]).find(p=>p.placement_name===approval.placement_name)||{};
+              return <li key={approval.placement_name}>
+                {display(approval.placement_name)} — artwork {approval.artwork_asset_id}
+                {placement.print_width_inches&&placement.print_height_inches?(' · '+placement.print_width_inches+' × '+placement.print_height_inches+' in'):''}
+                {placement.top_offset_inches!==undefined?(' · top offset '+placement.top_offset_inches+' in'):''}
+                {placement.reference_landmark?(' · '+placement.reference_landmark):''}
+              </li>;
+            })}</ul>
+          </div>)}
+          <p>These approved artwork references and recipe dimensions are saved with the traveler; later assignment changes do not replace them.</p>
+        </div>}
         {snap.placement&&<p>Order placement instruction: {snap.placement}</p>}
         <p><strong>Decoration method:</strong> {snap.decoration_method||'Confirm approved method'} · <strong>Recipe:</strong> {snap.recipe_name||'Saved revision'}</p>
         <p><strong>Artwork:</strong> {artwork?.artwork_name||snap.artwork_asset_id||'Not attached — verify before production'}</p>
