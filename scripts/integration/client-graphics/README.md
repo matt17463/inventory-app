@@ -55,3 +55,21 @@ uses the actual role tables/functions and authenticated/anonymous database roles
 Node module mocks require the experimental flag. Native PHP can run the PHP tests
 instead of PHP.wasm. PHP.wasm 3.1.60 declares a newer Node 24 engine than the local
 24.16 runtime; execution succeeded locally and CI uses the latest Node 24.
+
+## Storage receipts (migration 005)
+
+The fixture includes the actual artwork ALTER TABLE block from the earlier R2
+storage migration. Receipt tests apply 005 separately, leaving the existing 54-case
+behavioral suite independent of storage attestations. Run:
+
+```sh
+node scripts/integration/client-graphics/verify-storage-receipts.mjs
+node --experimental-test-module-mocks scripts/integration/client-graphics/verify-storage-endpoint.mjs
+```
+
+The second command exercises the real preflight handler and SQL trigger together.
+Its R2 HEAD and Supabase download responses and handler authentication are simulated;
+no object-store credentials or network calls are used. PostgreSQL roles, constraints,
+receipts and traveler RPC are real isolated database operations. A zero-byte R2
+object currently exposes a production defect: a receipt and traveler are accepted.
+The failing assertion is retained for browser-side remediation.

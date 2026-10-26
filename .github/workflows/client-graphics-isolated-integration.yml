@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm ci
       - run: npm ci --prefix scripts/integration/client-graphics
       - name: Exercise actual traveler RPC and simulated integration handlers
         shell: bash
@@ -35,6 +36,12 @@ jobs:
       - name: Verify enforced storage receipts with actual PostgreSQL triggers
         shell: bash
         run: node scripts/integration/client-graphics/verify-storage-receipts.mjs 2>&1 | tee storage-receipt-integration.log
+      - name: Verify actual preflight endpoint against SQL receipt enforcement
+        if: always()
+        shell: bash
+        env:
+          CG_STORAGE_RESULTS: ${{ github.workspace }}/storage-endpoint-results.json
+        run: node --experimental-test-module-mocks scripts/integration/client-graphics/verify-storage-endpoint.mjs 2>&1 | tee storage-endpoint-integration.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -43,6 +50,8 @@ jobs:
             integration-results.json
             integration.log
             storage-receipt-integration.log
+            storage-endpoint-integration.log
+            storage-endpoint-results.json
   wordpress-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 5

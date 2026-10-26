@@ -1,3 +1,4 @@
+# Revalidate this existing path-filtered workflow on the release-verification branch.
 name: WordPress Client Stores Plugin
 on:
   push:

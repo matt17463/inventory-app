@@ -1,5 +1,7 @@
 name: Graphical theme gallery
 on:
+  push:
+    branches: [feature/client-graphics-production-rules-20261025]
   pull_request:
     paths:
       - 'src/themePresets.js'

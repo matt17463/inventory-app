@@ -1,7 +1,7 @@
 name: Read-Only Production Smoke
 on:
   push:
-    branches: [main]
+    branches: [main, feature/client-graphics-production-rules-20261025]
     paths:
       - 'src/**'
       - 'netlify/**'
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-readonly-smoke
+  group: production-readonly-smoke-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

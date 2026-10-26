@@ -15,6 +15,7 @@ export async function fixture(){
  await db.exec('revoke all on function public.sc_internal_access_allowed(text[]) from public,anon;grant execute on function public.sc_internal_access_allowed(text[]) to authenticated,service_role');
  const mockups=await read('supabase/migrations/202608180100_mockup_studio_all_phases.sql');
  await db.exec(table(mockups,'mockup_projects'));await db.exec(table(mockups,'mockup_artwork_assets'));
+ const r2=await read('supabase/migrations/202608210200_mockup_r2_storage.sql');const artworkAlter=r2.indexOf('alter table public.mockup_artwork_assets');await db.exec(r2.slice(artworkAlter,r2.indexOf(';',artworkAlter)+1));
  await db.exec(table(await read('supabase/migrations/202610200001_uv_studio_material_recipes.sql'),'sc_material_recipes'));
  // gen_random_uuid is built into PostgreSQL; PGlite does not ship pgcrypto.
  for(const p of ['202610220001_manufacturing_recipes_travelers.sql','202610230001_grouped_production_travelers.sql','202610230002_recipe_manager.sql']){
@@ -36,6 +37,7 @@ export async function fixture(){
  insert into sc_client_graphic_variants(id,family_id,artwork_asset_id,label,state,width_inches,height_inches) values('${uid(40)}','${uid(20)}','${uid(11)}','Adult','approved',10,10),('${uid(41)}','${uid(20)}','${uid(12)}','Youth','approved',8,8);
  insert into sc_client_graphic_rules(id,family_id,variant_id,priority,size_group,placement_name,enabled) values('${uid(50)}','${uid(20)}','${uid(40)}',100,'adult','full_front',true),('${uid(51)}','${uid(20)}','${uid(41)}',100,'youth','full_front',true);
  insert into sc_client_graphic_product_bindings(woo_product_id,graphic_family_id,mode,allowed,verified_at) values(700,'${uid(20)}','selectable',true,now());`);
+ await db.exec("update mockup_artwork_assets set storage_provider='r2',storage_bucket='fictional-r2-test'");
  return db;
 }
 export async function asRole(db,role,run){await db.exec('begin');try{await db.query("select set_config('request.jwt.claim.sub',$1,true)",[role==='anon'?'':uid({admin:1,manager:2,operator:3,viewer:4}[role])]);await db.exec('set local role '+(role==='anon'?'anon':'authenticated'));const r=await run();await db.exec('commit');return r}catch(e){await db.exec('rollback');throw e}}
