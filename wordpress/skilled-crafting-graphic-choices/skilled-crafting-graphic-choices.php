@@ -10,8 +10,9 @@ function sc_graphics_enabled() { return get_option(SC_GRAPHICS_OPTION, 'no') ===
 function sc_graphics_options_for_product($product_id, $variation_id = 0) {
   // Options are configured on the parent variable product, not each SKU variation.
   $parent_id = (int)$product_id;
-  if ($variation_id && function_exists('wp_get_post_parent_id')) {
-    $resolved_parent = (int)wp_get_post_parent_id((int)$variation_id);
+  if (function_exists('wp_get_post_parent_id')) {
+    // Store API/cart clients sometimes provide the variation as the sole product ID.
+    $resolved_parent = (int)wp_get_post_parent_id((int)($variation_id ?: $product_id));
     if ($resolved_parent > 0) $parent_id = $resolved_parent;
   }
   return sc_graphics_config($parent_id);
