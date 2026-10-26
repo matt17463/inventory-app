@@ -9,9 +9,13 @@ import {createInvoicePdf,createInvoicePairPdf,createDistributionLabelsPdf,create
 import PrintIntegrations from './PrintIntegrations';
 import QuickBooksConnection from './QuickBooksConnection';
 import './PrintCenter.css';
+import {LABEL_DESIGN_FIELDS,LABEL_PRESETS,normalizeLabelDesign,presetLabelDesign,moveLabelField} from './lib/labelDesigner';
 import businessLogo from './assets/logo.png';
 
 const CONFIG_KEY='sc-print-center-prefs-v1';
+const DESIGN_KEY='sc-label-designer-v1';
+const CUSTOM_DESIGN_KEY='sc-label-designer-presets-v1';
+function localJson(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}}
 function initialPrefs(){
  try{return normalizePrintPrefs(JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}'));}
  catch{return {...DEFAULT_PRINT_PREFS};}
@@ -69,8 +73,13 @@ export default function PrintCenter(){
  const [message,setMessage]=useState('');
  const [prefs,setPrefs]=useState(initialPrefs);
  const [labelFields,setLabelFields]=useState({});
+ const [labelDesign,setLabelDesign]=useState(()=>normalizeLabelDesign(localJson(DESIGN_KEY,presetLabelDesign('general'))));
+ const [customDesigns,setCustomDesigns]=useState(()=>localJson(CUSTOM_DESIGN_KEY,{}));
+ const [designName,setDesignName]=useState('');
+ const [labelPreview,setLabelPreview]=useState('');
  const [visibleSettings,setVisibleSettings]=useState(false);
  const warnings=useMemo(()=>source?printWarnings(source,job,travelers):[],[source,job,travelers]);
+ const setDesignValue=(key,value)=>setLabelDesign(v=>normalizeLabelDesign({...v,[key]:value}));
  const setLabelField=(key,value)=>setLabelFields(v=>({...v,[key]:value}));
  const setPref=(name,value)=>setPrefs(v=>normalizePrintPrefs({...v,[name]:value}));
  const reload=useCallback(async()=>{
@@ -92,6 +101,25 @@ export default function PrintCenter(){
    finally{setBusy('');}
  },[jobId,authorized]);
  useEffect(()=>{reload();},[reload]);
+ function saveLabelDesign(){
+  try{localStorage.setItem(DESIGN_KEY,JSON.stringify(labelDesign));setMessage('Label layout saved on this browser.');}
+  catch{setError('Unable to save label design on this browser.');}
+ }
+ function saveNamedDesign(){
+  const name=designName.trim().slice(0,50);
+  if(!name){setError('Enter a preset name first.');return;}
+  const next={...customDesigns,[name]:normalizeLabelDesign(labelDesign)};
+  try{localStorage.setItem(CUSTOM_DESIGN_KEY,JSON.stringify(next));setCustomDesigns(next);setMessage('Saved named label template on this browser: '+name);}
+  catch{setError('Unable to save named template.');}
+ }
+ async function previewLabel(){
+  if(!source||!job)return;
+  setError('');
+  try{
+   const pdf=createDistributionLabelsPdf({source,job,prefs:{...prefs,packageCount:1},origin:window.location.origin,labelFields,labelDesign,logoData:await readBrandLogo()});
+   setLabelPreview(pdf.output('datauristring'));
+  }catch(e){setError(e.message||'Label preview failed.');}
+ }
  function savePrefs(){
    try{localStorage.setItem(CONFIG_KEY,JSON.stringify(prefs));setMessage('Layout defaults saved on this browser. They do not alter WooCommerce plugin settings.');}
    catch{setError('This browser cannot save local printing preferences.');}
@@ -100,7 +128,7 @@ export default function PrintCenter(){
   if(!source||!job||busy)return;
   setBusy(which);setError('');setMessage('');
   try{
-   const base={source,job,travelers,prefs,origin:window.location.origin,labelFields,logoData:await readBrandLogo()};
+   const base={source,job,travelers,prefs,origin:window.location.origin,labelFields,labelDesign,logoData:await readBrandLogo()};
    let pdf,name;
    if(which==='invoices'){
      pdf=createInvoicePairPdf(base);name='SC-'+source.reference+'-Customer-and-Shop-Invoices.pdf';
@@ -226,6 +254,49 @@ export default function PrintCenter(){
       </label>)}
     </div>
     <small>These details are not saved as global workstation defaults. For different recipients in one order, print separately by recipient until per-bag allocation is verified.</small>
+   </section>
+   <section className="card elevated-card">
+    <h2>4×6 Label Designer</h2>
+    <p>Choose a template, select which recipient details appear, rename their captions, and arrange them in printing order. Changes apply to downloaded and queued label PDFs.</p>
+    <div className="sc-print-preferences">
+      <label>Quick template
+       <select defaultValue="" onChange={e=>{if(e.target.value)setLabelDesign(presetLabelDesign(e.target.value));}}>
+        <option value="">Select template…</option>
+        {Object.entries(LABEL_PRESETS).map(([key,item])=><option key={key} value={key}>{item.name}</option>)}
+       </select>
+      </label>
+      <label>Saved templates
+       <select defaultValue="" onChange={e=>{if(customDesigns[e.target.value])setLabelDesign(normalizeLabelDesign(customDesigns[e.target.value]));}}>
+        <option value="">Load saved design…</option>
+        {Object.keys(customDesigns).map(name=><option key={name} value={name}>{name}</option>)}
+       </select>
+      </label>
+      <label>New saved template name<input type="text" maxLength={50} value={designName} onChange={e=>setDesignName(e.target.value)} placeholder="e.g. SKSC Soccer"/></label>
+      <label>Field font size (pt)<input type="number" min="8" max="13" value={labelDesign.fontSize} onChange={e=>setDesignValue('fontSize',e.target.value)}/></label>
+      <label>Logo size (pt)<input type="number" min="24" max="60" value={labelDesign.logoSize} onChange={e=>setDesignValue('logoSize',e.target.value)}/></label>
+      <label className="sc-print-check"><input type="checkbox" checked={labelDesign.showLogo} onChange={e=>setDesignValue('showLogo',e.target.checked)}/>Show business logo</label>
+    </div>
+    <h3>Field order and display names</h3>
+    <div className="sc-label-designer-list">
+      {labelDesign.order.map((key,index)=>{
+       const defaultName=LABEL_DESIGN_FIELDS.find(([id])=>id===key)?.[1]||key;
+       return <div className="sc-label-designer-row" key={key}>
+        <label><input type="checkbox" aria-label={'Show '+defaultName} checked={labelDesign.visible.includes(key)}
+          onChange={e=>setDesignValue('visible',e.target.checked?[...labelDesign.visible,key]:labelDesign.visible.filter(v=>v!==key))}/> Display</label>
+        <label>{defaultName}<input type="text" maxLength={28} value={labelDesign.labels[key]}
+          onChange={e=>setDesignValue('labels',{...labelDesign.labels,[key]:e.target.value})}/></label>
+        <button type="button" disabled={index===0} onClick={()=>setLabelDesign(v=>moveLabelField(v,key,-1))} aria-label={'Move '+defaultName+' up'}>↑</button>
+        <button type="button" disabled={index===labelDesign.order.length-1} onClick={()=>setLabelDesign(v=>moveLabelField(v,key,1))} aria-label={'Move '+defaultName+' down'}>↓</button>
+       </div>;
+      })}
+    </div>
+    <div className="sc-label-designer-actions">
+     <button type="button" onClick={saveLabelDesign}>Save my label layout</button>
+     <button type="button" onClick={saveNamedDesign}>Save named template</button>
+     <button type="button" onClick={previewLabel} disabled={Boolean(busy)}>Preview actual 4×6 PDF</button>
+    </div>
+    {labelPreview&&<div><h3>PDF Preview</h3><iframe className="sc-label-pdf-preview" src={labelPreview} title="4 by 6 label preview" /></div>}
+    <small>Saved templates are currently stored in this browser, not shared across shop workstations. Use separate prints for different students until bag-level allocation is recorded.</small>
    </section>
    <section className="card elevated-card">
     <button type="button" onClick={()=>setVisibleSettings(v=>!v)}>{visibleSettings?'Hide':'Customize'} print layout</button>
