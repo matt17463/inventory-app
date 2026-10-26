@@ -51,7 +51,11 @@ begin
  select md5(coalesce(string_agg(
   a.id::text || ':' || coalesce(a.storage_provider,'') || ':' || coalesce(a.storage_bucket,'') || ':' ||
   coalesce(a.storage_path,'') || ':' || coalesce(a.preflight_status,''),
-  '|' order by a.id),''))
+  '|' order by a.id),'') ||
+  coalesce((select '|placements:' || string_agg(ja.placement_name || ':' || ja.artwork_asset_id::text,
+    '|' order by ja.placement_name,ja.artwork_asset_id)
+   from public.sc_job_line_placement_artwork ja
+   where ja.job_item_id=new.job_item_id and ja.recipe_version_id=v_recipe),''))
  into v_fingerprint from public.mockup_artwork_assets a where a.id=any(coalesce(v_assets,'{}'::uuid[]));
  if not exists (
   select 1 from public.sc_traveler_storage_preflight p
