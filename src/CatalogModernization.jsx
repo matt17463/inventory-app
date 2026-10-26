@@ -76,6 +76,11 @@ export default function CatalogModernization(){
    <h1>Product, Artwork & Client Modernization</h1>
    <p>Extend existing products and customers into the latest Skilled Crafting features. No historical orders, inventory, payment information, artwork files or approved recipe snapshots are overwritten.</p>
   </div><Link to="/catalog-pairing">Open bulk artwork & recipe pairing →</Link><button disabled={busy} onClick={load}>{busy?'Working…':'Refresh audit'}</button></header>
+  <section className="card elevated-card">
+   <h2>Start with one guided product setup</h2>
+   <p>This page contains the specialist customer matching, artwork inheritance, reorder and recipe analysis tools. For everyday product updates, use Product Setup &amp; Readiness first. It brings together the required checks in order so you do not have to find each tool yourself.</p>
+   <p><Link to="/catalog-production-readiness">Open Product Setup &amp; Readiness →</Link></p>
+  </section>
   {notice&&<p className="sc-mo-message" role="status">{notice}</p>}
   <section className="sc-mo-kpis">
    <div><small>Existing product families</small><strong>{fmt(state?.totals?.products)}</strong></div>
