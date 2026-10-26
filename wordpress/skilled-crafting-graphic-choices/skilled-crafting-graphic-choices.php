@@ -66,5 +66,16 @@ add_action('woocommerce_checkout_create_order_line_item',function($item,$cart_it
  $item->add_meta_data('_sc_graphic_family_id',sanitize_text_field($values['sc_graphic_family_id']),true);
  $item->add_meta_data('_sc_graphic_label',sanitize_text_field($values['sc_graphic_label']??''),true);
 },10,3);
+
+// Store API / Blocks requests do not submit the classic product-form selector.
+// Until a dedicated Blocks selection UI and signed cart-data path are verified,
+// reject managed multi-choice products rather than silently dropping customer art.
+add_action('woocommerce_store_api_validate_add_to_cart',function($product,$request){
+ if(!sc_graphics_enabled() || !is_object($product) || !method_exists($product,'get_id'))return;
+ $id=(int)$product->get_id();
+ $parent=method_exists($product,'get_parent_id')?(int)$product->get_parent_id():0;
+ $options=sc_graphics_config($parent>0?$parent:$id);
+ if(count($options)>1)throw new Exception(__('This product requires selecting a graphic from its product page. Please use the standard product form.','skilledcrafting'));
+},10,2);
 // Activation deliberately never flips SC_GRAPHICS_OPTION.
 // Product graphic options must be populated only after explicit reconciliation.
