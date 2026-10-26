@@ -6,7 +6,7 @@ export const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const read=p=>readFile(root+p,'utf8');
 function table(sql,name){const start=sql.indexOf('create table if not exists public.'+name+' (');if(start<0)throw Error(name);return sql.slice(start,sql.indexOf('\n);',start)+4)}
 function fn(sql,name){const start=sql.indexOf('create or replace function public.'+name+'(');const end=sql.indexOf('$$;',start);return sql.slice(start,end+3)}
-export const graphicsMigrations=['202610250001_client_graphics_foundation.sql','202610250002_order_graphics_job_line_link.sql','202610250003_traveler_graphics_guard.sql','202610250004_woo_graphic_capture_states.sql'];
+export const graphicsMigrations=['202610250001_client_graphics_foundation.sql','202610250002_order_graphics_job_line_link.sql','202610250003_traveler_graphics_guard.sql','202610250004_woo_graphic_capture_states.sql','202610260001_generic_recipe_line_artwork.sql'];
 export async function fixture(){
  const db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated,anon,service_role;grant execute on function auth.uid() to authenticated,anon,service_role;`);
  await db.exec(await read('scripts/integration/client-graphics/base-tables.sql'));
