@@ -40,6 +40,13 @@ $GLOBALS['cg_enabled']='yes';
 $storeBlocked=false;
 try{$GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);}catch(Exception $e){$storeBlocked=true;}
 cg_check($storeBlocked,'Store API blocks unverified multi-choice graphic product');
+$validRequest=['id'=>801,'sc_graphic_family_id'=>cg_id(21),'sc_graphic_label'=>'FORGED'];
+$GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,$validRequest);
+$stored=$GLOBALS['cg_hooks']['woocommerce_store_api_add_to_cart_data'](['cart_item_data'=>[]],$validRequest);
+cg_check($stored['cart_item_data']['sc_graphic_family_id']===cg_id(21),'Store API validates selected graphic for parent variation');
+cg_check($stored['cart_item_data']['sc_graphic_label']==='Away','Store API ignores forged customer graphic label');
+$bad=$GLOBALS['cg_hooks']['woocommerce_store_api_add_to_cart_data'](['cart_item_data'=>[]],['id'=>801,'sc_graphic_family_id'=>cg_id(99)]);
+cg_check(empty($bad['cart_item_data']['sc_graphic_family_id']),'Store API does not attach unknown artwork IDs');
 $GLOBALS['cg_options_by_id'][700]=[['id'=>cg_id(20),'label'=>'Fixed logo']];
 $GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);
 cg_check(true,'Store API permits fixed-design product');
