@@ -55,7 +55,11 @@ export async function handler(event) {
         if (a.storage_bucket !== r2BucketName())
           return jsonResponse(409,{message:'Production artwork R2 bucket mismatch',asset_id:id},event);
         try {
-          await r2Client().send(new HeadObjectCommand({ Bucket:a.storage_bucket,Key:safeObjectKey(a.storage_path) }));
+          const objectMetadata = await r2Client().send(new HeadObjectCommand({ Bucket:a.storage_bucket,Key:safeObjectKey(a.storage_path) }));
+          // R2 can return a successful HEAD for a zero-byte object, which cannot
+          // be used as production artwork. Never issue a trusted receipt for it.
+          if (!Number.isSafeInteger(objectMetadata?.ContentLength) || objectMetadata.ContentLength <= 0)
+            return jsonResponse(409,{message:'Production artwork file is empty or its size could not be verified in R2',asset_id:id},event);
         } catch (headError) {
           console.error('Traveler artwork R2 preflight failed', { asset_id:id, error:headError?.name });
           return jsonResponse(409,{message:'Production artwork file could not be verified in R2',asset_id:id},event);
