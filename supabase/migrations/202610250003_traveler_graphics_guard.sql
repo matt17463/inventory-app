@@ -24,6 +24,7 @@ begin
  select count(*) into v_link_count from public.sc_order_graphic_selections
  where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id));
  if v_link_count>1 then raise exception 'Conflicting graphic assignments for job line'; end if;
+ if v_link_count=0 and exists (select 1 from public.sc_woo_graphic_capture_states c join public.job_items i on i.id=new.job_item_id join public.jobs j on j.id=i.job_id where c.woo_order_id=j.woocommerce_order_id and c.woo_line_item_id=i.woocommerce_line_item_id) then raise exception 'Managed Woo selection is missing its approved artwork assignment'; end if;
  if exists (
   select 1 from public.sc_woo_graphic_capture_states c
   join public.job_items i on i.id=new.job_item_id
