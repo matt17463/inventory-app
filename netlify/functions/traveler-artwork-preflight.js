@@ -90,10 +90,13 @@ export async function handler(event) {
     // Match the SQL trigger's deterministic, per-line storage reference fingerprint.
     for (const item of items) {
       const lineIds=[...new Set([...recipeIds,...selectedArtwork(item),...lineArtworkIds(item)])].sort();
+      const placementEntries=assignedFor(item)
+        .map(row=>row.placement_name+':'+row.artwork_asset_id)
+        .sort();
       const fingerprintInput=lineIds.map(id=>{
         const a=byId.get(id);
         return [a.id,a.storage_provider||'',a.storage_bucket||'',a.storage_path||'',a.preflight_status||''].join(':');
-      }).join('|');
+      }).join('|')+(placementEntries.length?'|placements:'+placementEntries.join('|'):'');
       const fingerprint=createHash('md5').update(fingerprintInput).digest('hex');
       const checkedAt=new Date();
       const expiry=new Date(checkedAt.getTime()+2*60*1000);
