@@ -4,7 +4,7 @@ import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
 import InlineProductBlankMapping from './InlineProductBlankMapping';
-import {listMockupProjects,getMockupProjectBundle} from './lib/mockupStudioApi';
+import {listMockupProjects,getMockupProjectBundle,approveMockupOutput,createMockupReviewLink} from './lib/mockupStudioApi';
 import './CatalogProductionReadiness.css';
 
 async function action(payload){
@@ -46,6 +46,7 @@ export default function CatalogProductionReadiness(){
  const [mockupProjects,setMockupProjects]=useState([]);
  const [mockupDetails,setMockupDetails]=useState({});
  const [mockupError,setMockupError]=useState('');
+ const [mockupReviewLinks,setMockupReviewLinks]=useState({});
  const [selectedRecipe,setSelectedRecipe]=useState('');
  const [disposition,setDisposition]=useState('assigned');
  const [notes,setNotes]=useState('');
@@ -239,7 +240,19 @@ export default function CatalogProductionReadiness(){
          <span>{project.status||'Status unknown'}</span>
          <Link to={'/mockup-studio?project='+encodeURIComponent(project.id)}>Open project and approval history →</Link>
          <button type="button" disabled={busy} onClick={async()=>{setBusy(true);try{const details=await getMockupProjectBundle(project.id);setMockupDetails(old=>({...old,[project.id]:details}));setMessage('Mockup evidence refreshed.');}catch(e){setMessage('Could not read mockup evidence: '+e.message);}finally{setBusy(false);}}}>Review approval evidence</button>
-         {mockupDetails[project.id]&&<p>{(mockupDetails[project.id].outputs||[]).length} mockup outputs · {(mockupDetails[project.id].reviews||[]).length} customer review records. Internal output approval does not equal a customer sign-off; check exact review details in Mockup Studio.</p>}
+         {mockupDetails[project.id]&&<div>
+          <p>{(mockupDetails[project.id].outputs||[]).length} mockup outputs · {(mockupDetails[project.id].reviews||[]).length} customer review records. Internal approval is not customer sign-off.</p>
+          {(mockupDetails[project.id].outputs||[]).map(output=><div key={output.id} className="sc-cr-listline">
+           <span>{output.output_name||'Mockup'} · {output.approval_status||'unreviewed'} · {output.is_selected?'Selected':'Not selected'}</span>
+           {canManage&&<button type="button" disabled={busy} onClick={async()=>{
+            if(!window.confirm('Internally approve and select this specific mockup? This does NOT grant customer approval.'))return;
+            setBusy(true);try{await approveMockupOutput(output.id,'internal_approved',true);const details=await getMockupProjectBundle(project.id);setMockupDetails(old=>({...old,[project.id]:details}));setMessage('Internal mockup approved. Customer sign-off is still required where applicable.');}catch(e){setMessage(e.message);}finally{setBusy(false);}
+           }}>Internal approve &amp; select</button>}
+          </div>)}
+          {canManage&&<button type="button" disabled={busy} onClick={async()=>{setBusy(true);try{const url=await createMockupReviewLink(project.id,14);setMockupReviewLinks(old=>({...old,[project.id]:url}));setMessage('Customer review link created; no customer approval was recorded.');}catch(e){setMessage(e.message);}finally{setBusy(false);}}}>Create customer review link (14 days)</button>}
+          {mockupReviewLinks[project.id]&&<p><a href={mockupReviewLinks[project.id]} target="_blank" rel="noreferrer">Open customer review link</a></p>}
+          <p>Review customer responses and exact output revision in Mockup Studio. Never treat a link creation or an internal decision as customer approval.</p>
+         </div>}
         </div>)}
         {!mockupProjects.some(p=>new RegExp('\\bWoo\\s*#?'+String(selected.woocommerce_product_id)+'\\b','i').test(String(p.project_name||'')))&&!mockupError&&<p>No explicitly Woo-ID-linked mockup project was found. Open Mockup Studio to verify whether the product's mockup lives under a different project name.</p>}
        </section>}
