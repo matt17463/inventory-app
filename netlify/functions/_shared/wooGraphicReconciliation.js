@@ -1,5 +1,5 @@
 // Fail-closed reconciliation: canonical customer choice is accepted only if product binding was verified.
-import {resolveGraphicVariant} from '../../src/lib/clientGraphicsRules.js';
+import {resolveGraphicVariant} from '../../../src/lib/clientGraphicsRules.js';
 export async function persistWooGraphicSelections(db,order,{strict=false}={}){
  const failures=[],saved=[];
  for(const line of order.line_items||[]){
