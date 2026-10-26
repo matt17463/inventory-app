@@ -7,6 +7,10 @@ on:
       - 'supabase/migrations/20261025*.sql'
       - 'netlify/functions/*graphic*.js'
       - 'netlify/functions/_shared/wooGraphic*.js'
+      - 'netlify/functions/traveler-artwork-preflight.js'
+      - 'netlify/functions/_shared/mockupStorage.js'
+      - 'src/ProductionTravelers.jsx'
+      - 'scripts/tests/mockup-studio.test.mjs'
       - 'src/lib/*Graphic*.js'
       - '.github/workflows/client-graphics-isolated-integration.yml'
   workflow_dispatch:
