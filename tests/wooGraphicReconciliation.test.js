@@ -79,3 +79,27 @@ test('invalid binding retains pending capture status',async()=>{
  await persistWooGraphicSelections(db,{id:1,line_items:[line()]});
  assert.equal(captures.get('1:2').status,'managed_pending');
 });
+
+test('Woo variation uses verified parent product binding, never guessed variation binding',async()=>{
+ const {db,rows}=fixture();
+ const result=await persistWooGraphicSelections(db,{id:100,line_items:[line({product_id:7,variation_id:801})]});
+ assert.equal(result.failures.length,0);
+ const saved=[...rows.values()][0];
+ assert.equal(saved.selected_payload.product_id,7);
+ assert.equal(saved.selected_payload.variation_id,801);
+});
+test('Woo graphic capture with invalid product binding remains pending and not production-resolved',async()=>{
+ const {db,captures,rows}=fixture({allowed:false});
+ const result=await persistWooGraphicSelections(db,{id:101,line_items:[line({variation_id:801})]});
+ assert.equal(result.saved.length,0);
+ assert.equal(rows.size,0);
+ assert.equal(captures.get('101:2').status,'managed_pending');
+});
+test('mixed order with one managed line does not invent selections for legacy siblings',async()=>{
+ const {db,rows}=fixture();
+ const result=await persistWooGraphicSelections(db,{id:102,line_items:[line(),{id:3,product_id:7,graphic_selection:{status:'none'}}]});
+ assert.equal(result.saved.length,1);
+ assert.equal(rows.size,1);
+ assert.ok(rows.has('woocommerce:102:2'));
+ assert.equal(rows.has('woocommerce:102:3'),false);
+});
