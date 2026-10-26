@@ -16,6 +16,15 @@ on:
       - 'scripts/tests/mockup-studio.test.mjs'
       - 'src/lib/*Graphic*.js'
       - '.github/workflows/client-graphics-isolated-integration.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/integration/client-graphics/**'
+      - 'wordpress/skilled-crafting-graphic-choices/**'
+      - 'netlify/functions/_shared/wooGraphic*.js'
+      - 'netlify/functions/woocommerce-webhook.js'
+      - 'src/lib/wooGraphicSelection.js'
+      - '.github/workflows/client-graphics-isolated-integration.yml'
   workflow_dispatch:
 permissions:
   contents: read
