@@ -514,3 +514,15 @@ test('R2 production download signing verifies object presence before returning a
   assert.match(backend, /async function signDownload\(/);
   assert.match(backend, /await signedStoredAssetUrl\(/);
 });
+
+test('traveler UI requires authenticated server-side artwork existence check', async () => {
+  const ui = await read('src/ProductionTravelers.jsx');
+  const preflight = await read('netlify/functions/traveler-artwork-preflight.js');
+  assert.match(ui, /traveler-artwork-preflight/);
+  assert.match(ui, /preflight\.verified!==true/);
+  assert.ok(ui.indexOf("traveler-artwork-preflight") < ui.indexOf("supabase.rpc('sc_create_grouped_traveler'"), 'storage gate must precede traveler RPC');
+  assert.match(preflight, /authorizeEmployee/);
+  assert.match(preflight, /new HeadObjectCommand/);
+  assert.match(preflight, /\.download\(a\.storage_path\)/);
+  assert.match(preflight, /verified:true/);
+});
