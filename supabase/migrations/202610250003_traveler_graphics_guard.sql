@@ -112,7 +112,11 @@ begin
    select 1 from jsonb_array_elements(
     case when jsonb_typeof(v_placements)='array' then v_placements else '[]'::jsonb end
    ) p
-   where coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id')=v_art::text
+   where (coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id')=v_art::text
+     or exists(select 1 from public.sc_job_line_placement_artwork ja
+        join public.sc_job_travelers t on t.id=new.traveler_id
+        where ja.job_item_id=new.job_item_id and ja.recipe_version_id=t.recipe_version_id
+         and ja.placement_name=p->>'placement_name' and ja.artwork_asset_id=v_art))
    and (coalesce(v_selection.selected_payload->>'placement_name','')=''
         or lower(coalesce(p->>'placement_name',''))=lower(v_selection.selected_payload->>'placement_name'))
   ) into v_asset_found;
