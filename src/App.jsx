@@ -13,6 +13,7 @@ const AssetStorageHealth = lazy(() => import('./AssetStorageHealth'));
 const ArtworkPluginBridge = lazy(() => import('./ArtworkPluginBridge'));
 const ArtworkRequests = lazy(() => import('./ArtworkRequests'));
 const ClientGraphics = lazy(() => import('./ClientGraphics'));
+const OrderGraphicAssignment = lazy(() => import('./OrderGraphicAssignment'));
 const AuditMode = lazy(() => import('./AuditMode'));
 const AuditTrail = lazy(() => import('./AuditTrail'));
 const BarcodeLabelGenerator = lazy(() => import('./BarcodeLabelGenerator'));
