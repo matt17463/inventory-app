@@ -1,9 +1,10 @@
 name: Client Graphics Isolated Integration
 on:
   push:
-    branches: [feature/client-graphics-production-rules-20261025]
+    branches: [feature/client-graphics-production-rules-20261025, feature/woo-client-graphics-integration-20261026]
     paths:
       - 'scripts/integration/client-graphics/**'
+      - 'wordpress/skilled-crafting-graphic-choices/**'
       - 'supabase/migrations/20261025*.sql'
       - 'supabase/migrations/202610260001_generic_recipe_line_artwork.sql'
       - 'netlify/functions/job-line-placement-artwork.js'
@@ -65,5 +66,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate PHP syntax
         run: php -l wordpress/skilled-crafting-graphic-choices/skilled-crafting-graphic-choices.php
+      - name: Verify isolated Woo Blocks Store API selector script
+        run: node scripts/integration/client-graphics/verify-block-ui.mjs
       - name: Exercise actual graphic-choice checkout hooks using fictional fixtures
         run: php scripts/integration/client-graphics/wordpress-runtime.php
