@@ -10,16 +10,34 @@ async function request(entity,values,id,verified_sample=false){
  const response=await fetch(url,{method:input?'POST':'GET',headers:{Authorization:'Bearer '+session.access_token,...(input?{'Content-Type':'application/json'}:{})},...(input?{body:JSON.stringify(input)}:{})});
  const result=await response.json();if(!response.ok)throw Error(result.message||'Graphics request failed');return result;
 }
+async function reviewBinding(bindingId,decision,evidence){
+ const {data:{session}}=await supabase.auth.getSession();
+ if(!session?.access_token)throw Error('Employee session required');
+ const response=await fetch('/.netlify/functions/woo-graphic-binding-review',{method:'POST',
+ headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
+ body:JSON.stringify({binding_id:bindingId,decision,evidence})});
+ const result=await response.json();if(!response.ok)throw Error(result.detail||result.message||'Binding review failed');
+ return result;
+}
 export default function ClientGraphics(){
  const [families,setFamilies]=useState([]),[variants,setVariants]=useState([]),[rules,setRules]=useState([]),[bindings,setBindings]=useState([]);
  const [selected,setSelected]=useState(''),[name,setName]=useState(''),[label,setLabel]=useState(''),[visibility,setVisibility]=useState('internal');
  const [wooProductId,setWooProductId]=useState(''),[bindingMode,setBindingMode]=useState('fixed');
  const [asset,setAsset]=useState(''),[variantName,setVariantName]=useState(''),[width,setWidth]=useState(''),[height,setHeight]=useState('');
  const [ruleVariant,setRuleVariant]=useState(''),[ruleSize,setRuleSize]=useState(''),[ruleColor,setRuleColor]=useState(''),[rulePlacement,setRulePlacement]=useState('full_front'),[rulePriority,setRulePriority]=useState(100);
+ const [reviewChecks,setReviewChecks]=useState({woo_product_confirmed:false,existing_selector_reconciled:false,physical_sample_verified:false,artwork_storage_verified:false});
  const [art,setArt]=useState([]),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  async function load(){const [a,b,c,d]=await Promise.all([request('families'),request('variants'),request('rules'),request('bindings')]);setFamilies(a.records||[]);setVariants(b.records||[]);setRules(c.records||[]);setBindings(d.records||[]);}
  useEffect(()=>{load().catch(e=>setMessage(e.message));supabase.from('mockup_artwork_assets').select('id,artwork_name,preflight_status').limit(250).then(({data})=>setArt(data||[]));},[]);
  async function save(entity,values,id,verified_sample=false){setBusy(true);setMessage('');try{await request(entity,values,id,verified_sample);await load();setMessage('Saved as draft. No live storefront mapping was changed.');}catch(e){setMessage(e.message);}finally{setBusy(false)}}
+ async function bindingDecision(id,decision){
+ setBusy(true);setMessage('');
+ try{
+  const evidence=decision==='approve'?reviewChecks:{reason:'Manager disabled graphic binding'};
+  await reviewBinding(id,decision,evidence);await load();
+  setMessage(decision==='approve'?'Binding verified in application. WordPress customer choices remain disabled.':'Binding revoked; existing order snapshots remain unchanged.');
+ }catch(e){setMessage(e.message)}finally{setBusy(false)}
+ }
  const choice=families.find(x=>x.id===selected),own=variants.filter(v=>v.family_id===selected);
  return <main className="page"><header className="page-header"><div><p className="eyebrow">Artwork · Client graphics</p><h1>Client Graphics Library</h1><p>Manage customer-facing designs and separate production files. Existing WooCommerce selections remain unchanged until transfer verification.</p></div><Link to="/manufacturing-recipes">Production recipes →</Link></header>
  {message&&<p role="status" className="message">{message}</p>}
@@ -40,7 +58,18 @@ export default function ClientGraphics(){
 <div className="form-grid"><label>WooCommerce parent product ID<input inputMode="numeric" value={wooProductId} onChange={e=>setWooProductId(e.target.value)} placeholder="Numeric parent product ID"/></label>
 <label>Proposed storefront behavior<select value={bindingMode} onChange={e=>setBindingMode(e.target.value)}><option value="fixed">Fixed graphic</option><option value="selectable">Customer-selectable</option><option value="internal">Production only</option></select></label></div>
 <button type="button" disabled={busy||!/^\d+$/.test(wooProductId)||Number(wooProductId)<1} onClick={()=>save('bindings',{woo_product_id:Number(wooProductId),graphic_family_id:selected,mode:bindingMode,allowed:false})}>Stage disabled product mapping</button>
-<h4>Proposed product mappings</h4><ul>{bindings.filter(b=>b.graphic_family_id===selected).map(b=><li key={b.id}>Woo #{b.woo_product_id} · {b.mode} · {b.allowed?'Verified active':'Inactive — transfer pending'}</li>)}</ul>
+<h4>Product-to-graphic approval review</h4>
+<p>These checks document a manager review; they do not activate WordPress or webhook graphic capture.</p>
+<div className="form-grid">{[
+ ['woo_product_confirmed','Confirmed exact Woo parent product and available variations'],
+ ['existing_selector_reconciled','Reconciled current Mockup Variation Selector / Product Options / Add-Ons'],
+ ['physical_sample_verified','Verified physical sample and production recipe'],
+ ['artwork_storage_verified','Verified approved artwork exists in R2']
+].map(([key,label])=><label key={key}><input type="checkbox" checked={reviewChecks[key]} onChange={e=>setReviewChecks(c=>({...c,[key]:e.target.checked}))}/>{label}</label>)}</div>
+<h4>Proposed product mappings</h4><ul>{bindings.filter(b=>b.graphic_family_id===selected).map(b=><li key={b.id}>Woo #{b.woo_product_id} · {b.mode} · {b.allowed?'Manager-verified binding':'Inactive — transfer pending'}
+{!b.allowed&&b.mode!=='internal'&&<button type="button" disabled={busy||!Object.values(reviewChecks).every(Boolean)} onClick={()=>bindingDecision(b.id,'approve')}>Approve verified binding</button>}
+{b.allowed&&<button type="button" disabled={busy} onClick={()=>bindingDecision(b.id,'revoke')}>Revoke binding</button>}
+</li>)}</ul>
 <h3>Existing rules</h3><ul>{rules.filter(rule=>rule.family_id===selected).map(rule=><li key={rule.id}>{own.find(v=>v.id===rule.variant_id)?.label||'Unknown variant'} · {rule.size_group||'all sizes'} · {rule.garment_color||'all colors'} · {rule.placement_name||'all locations'} · {rule.enabled?'Active':'Draft'} {!rule.enabled&&own.some(v=>v.id===rule.variant_id&&v.state==='approved')&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm('Confirm the physical production sample has been checked and this routing rule should become active?'))save('rules',{enabled:true},rule.id,true)}}>Activate verified rule</button>}</li>)}</ul>
 <p><small>Production variants and rules remain unapproved until tested against verified physical samples. No changes are sent to WooCommerce.</small></p></>}</section></main>;
 }

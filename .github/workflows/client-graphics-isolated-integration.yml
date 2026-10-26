@@ -1,12 +1,14 @@
 name: Client Graphics Isolated Integration
 on:
   push:
-    branches: [feature/client-graphics-production-rules-20261025, feature/woo-client-graphics-integration-20261026]
+    branches: [feature/client-graphics-production-rules-20261025, feature/woo-client-graphics-integration-20261026, feature/woo-binding-approval-isolated-e2e-20261026]
     paths:
       - 'scripts/integration/client-graphics/**'
       - 'wordpress/skilled-crafting-graphic-choices/**'
       - 'supabase/migrations/20261025*.sql'
       - 'supabase/migrations/202610260001_generic_recipe_line_artwork.sql'
+      - 'supabase/migrations/202610260002_woo_binding_review.sql'
+      - 'netlify/functions/woo-graphic-binding-review.js'
       - 'netlify/functions/job-line-placement-artwork.js'
       - 'netlify/functions/*graphic*.js'
       - 'netlify/functions/_shared/wooGraphic*.js'
@@ -54,6 +56,8 @@ jobs:
         env:
           CG_STORAGE_RESULTS: ${{ github.workspace }}/storage-endpoint-results.json
         run: node --experimental-test-module-mocks scripts/integration/client-graphics/verify-storage-endpoint.mjs 2>&1 | tee storage-endpoint-integration.log
+      - name: Verify isolated Woo approval through checkout and production traveler
+        run: node scripts/integration/client-graphics/verify-woo-binding-e2e.mjs
       - name: Verify generic recipe artwork assignments against PostgreSQL
         shell: bash
         run: node scripts/integration/client-graphics/verify-generic-recipes.mjs 2>&1 | tee generic-recipe-integration.log
