@@ -8,7 +8,8 @@ $GLOBALS['cg_notices'] = [];
 function add_action($name, $callback, $priority=10, $args=1) { $GLOBALS['cg_hooks'][$name] = $callback; }
 function add_filter($name, $callback, $priority=10, $args=1) { add_action($name,$callback,$priority,$args); }
 function get_option($name, $default=null) { return $GLOBALS['cg_enabled']; }
-function get_post_meta($id, $name, $single=true) { return $GLOBALS['cg_options']; }
+function get_post_meta($id, $name, $single=true) { return $GLOBALS['cg_options_by_id'][$id] ?? $GLOBALS['cg_options']; }
+function wp_get_post_parent_id($id) { return $GLOBALS['cg_variation_parents'][$id] ?? 0; }
 function sanitize_text_field($v) { return trim(strip_tags((string)$v)); }
 function wp_unslash($v) { return stripslashes($v); }
 function is_product() { return true; }
