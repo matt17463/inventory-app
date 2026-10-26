@@ -36,4 +36,31 @@ await test('empty Supabase-storage file is rejected',async()=>{await setup(91);a
 await test('REQUIRED: empty R2 production file cannot mint trusted receipt',async()=>{await setup(92);objectSize=0;try{const response=await call(92);const receipts=await count(92);let travelerAccepted=false;if(response.statusCode===200){travelerAccepted=!!(await asRole(db,'operator',()=>rpc(db,92))).rows[0].id}console.log('EMPTY R2 OBSERVED',JSON.stringify({httpStatus:response.statusCode,receipts,travelerAccepted}));assert.equal(response.statusCode,409,'R2 HEAD with ContentLength 0 must be rejected like empty Supabase files');assert.equal(receipts,0)}finally{objectSize=256}});
 await test('REQUIRED: absent R2 content length cannot mint receipt',async()=>{await setup(93);objectSize=undefined;try{assert.equal((await call(93)).statusCode,409);assert.equal(await count(93),0);await assert.rejects(asRole(db,'operator',()=>rpc(db,93)),/Fresh trusted artwork storage verification/)}finally{objectSize=256}});
 await test('REQUIRED: negative R2 content length cannot mint receipt',async()=>{await setup(94);objectSize=-1;try{assert.equal((await call(94)).statusCode,409);assert.equal(await count(94),0)}finally{objectSize=256}});
+await test('generic recipe with two assigned artwork positions completes preflight and RPC',async()=>{
+ const v=uid(134);
+ await db.query(`insert into sc_manufacturing_recipe_versions
+ (id,recipe_id,revision,placements,artwork_asset_id,verified_sample,status,approved_by,approved_at,created_by)
+ values ($1,$2,4,$3,null,true,'approved',$4,now(),$4)`,[v,uid(30),[
+  {placement_name:'full_front',size_group:'Youth',print_width_inches:8},
+  {placement_name:'sleeve',size_group:'Youth',print_width_inches:3.5}
+ ],uid(2)]);
+ await setup(96);
+ for(const [place,asset] of [['full_front',uid(11)],['sleeve',uid(12)]]){
+  await db.query('select sc_approve_job_line_placement_artwork($1,$2,$3,$4,$5)',[960,v,place,asset,uid(2)]);
+ }
+ const response=await call(96,{recipe_version_id:v});
+ assert.equal(response.statusCode,200);
+ const created=await asRole(db,'operator',()=>db.query('select sc_create_grouped_traveler($1,$2,$3) as id',[96,[960],v]));
+ assert.ok(created.rows[0].id);
+ const saved=await db.query('select item_snapshot from sc_job_traveler_lines where job_item_id=960');
+ assert.equal(saved.rows[0].item_snapshot.approved_placement_artwork.length,2);
+});
+await test('generic recipe with missing artwork position rejects endpoint and mints no receipt',async()=>{
+ await setup(97);
+ const v=uid(134);
+ await db.query('select sc_approve_job_line_placement_artwork($1,$2,$3,$4,$5)',[970,v,'full_front',uid(11),uid(2)]);
+ const response=await call(97,{recipe_version_id:v});
+ assert.equal(response.statusCode,409);
+ assert.equal(await count(97),0);
+});
 console.log('ENDPOINT SQL RECEIPT INTEGRATION',results.filter(r=>r.status==='pass').length,'PASS',results.filter(r=>r.status==='FAIL').length,'FAIL');await writeFile(process.env.CG_STORAGE_RESULTS||'storage-endpoint-results.json',JSON.stringify({testedCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),storageMode:'SIMULATED; no R2 network calls or real credentials',results,heads},null,2));await db.close();process.exitCode=results.some(r=>r.status==='FAIL')?1:0;
