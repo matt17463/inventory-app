@@ -12,3 +12,5 @@
 .sc-print-center .sc-print-preferences .sc-print-check{display:flex;gap:.6rem;align-items:center}
 .sc-print-center .sc-print-preferences small{grid-column:1/-1}
 .sc-print-center .sc-print-preferences .sc-print-inline{font-size:.83rem;opacity:.85}
+
+.sc-print-center .sc-print-preferences input[type=text]{width:100%;min-width:0;padding:.55rem;border:1px solid var(--sc-border,#cbd5e1);border-radius:7px;background:var(--sc-panel,#fff);color:var(--sc-text,#101827)}

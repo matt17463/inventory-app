@@ -126,40 +126,104 @@ export function createInvoicePairPdf(args){
   appendInvoicePages(doc,{...args,kind:'shop'});
   return doc;
 }
-export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount}){
-  const cfg=normalizePrintPrefs({...prefs,packageCount:packageCount??prefs.packageCount});
-  const doc=new jsPDF({unit:'pt',format:[288,432],compress:true});
-  for(let i=0;i<cfg.packageCount;i++){
-    if(i)doc.addPage([288,432]);
-    doc.setFillColor(0);doc.rect(0,0,288,68,'F');
-    text(doc,'SKILLED CRAFTING',16,27,256,17,{bold:true,color:[255,255,255]});
-    text(doc,'DISTRIBUTION / PACKING',16,48,255,10,{bold:true,color:[255,255,255]});
-    let y=91;
-    y=text(doc,source.shipName||source.customerName,18,y,250,cfg.labelFont+3,{bold:true})+7;
-    if(cfg.labelShowOrder)y=text(doc,'Order '+source.reference+' / Job '+job.id,18,y,250,11,{bold:true})+5;
-    if(source.shipAddress)y=text(doc,source.shipAddress,18,y,249,10)+8;
-    y=text(doc,'PACKAGE '+(i+1)+' OF '+cfg.packageCount,18,y+4,250,16,{bold:true})+8;
-    if(cfg.labelShowItems&&cfg.packageCount>1){
-      y=text(doc,'Multiple packages: contents must be verified',18,y,250,9,{bold:true})+4;
-      y=text(doc,'per package using the packing record.',18,y,250,9)+4;
-    }
-    if(cfg.labelShowItems&&cfg.packageCount===1){
-      for(const line of source.lines.slice(0,10)){
-        if(y>335)break;
-        const info=line.quantity+' x '+line.name;
-        y=text(doc,info,18,y,248,9)+3;
-      }
-      if(source.lines.length>10)y=text(doc,'+'+(source.lines.length-10)+' more lines - see invoice in package',18,y+3,248,8);
-    }
-    if(cfg.labelShowQR){
-      qrCode(doc,origin+'/work-hub?job='+encodeURIComponent(job.id),194,338,75);
-      text(doc,'INTERNAL QR / STAFF LOGIN',18,415,250,8,{bold:true});
-    }else{
-      doc.setDrawColor(180);doc.line(18,401,270,401);
-      text(doc,'INTERNAL PACKING LABEL - NOT POSTAGE',18,416,251,9,{bold:true});
-    }
+
+const distributionAliases={
+ student:'student name|student|child name|recipient name|player name|athlete name',
+ teacher:'teacher name|teacher|homeroom teacher|homeroom',
+ coach:'coach name|coach|head coach',
+ playerNumber:'player number|jersey number|jersey #|number',
+ grade:'grade|grade level|year',
+ team:'team assignment|team name|team|class|classroom',
+ appliedName:'name applied|name on back|personalized name|custom name|player name on back|name text',
+ school:'school|school name',
+};
+const cleanLabel=v=>plain(v).slice(0,120);
+export function deriveDistributionFields(source,overrides={}){
+ const found={};
+ for(const [field,aliases] of Object.entries(distributionAliases)){
+  const keys=aliases.split('|');
+  const values=new Set();
+  for(const line of source?.lines||[])for(const meta of line.metadata||[]){
+   if(keys.includes(String(meta.label||'').trim().toLowerCase()))values.add(cleanLabel(meta.value));
   }
-  return doc;
+  const unique=[...values].filter(Boolean);
+  found[field]=cleanLabel(overrides[field]|| (unique.length===1?unique[0]:unique.length>1?'MULTIPLE - SEE PACKING LIST':''));
+ }
+ return found;
+}
+function cropLine(doc,value,x,y,width,size=10,bold=false){
+ const raw=plain(value);
+ if(!raw)return y;
+ doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);
+ let visible=raw;
+ while(visible.length>1&&doc.getTextWidth(visible)>width)visible=visible.slice(0,-2);
+ if(visible!==raw)visible=visible.trimEnd()+'...';
+ doc.text(visible,x,y);return y+size+6;
+}
+export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount,labelFields={},logoData=''}) {
+ const cfg=normalizePrintPrefs({...prefs,packageCount:packageCount??prefs.packageCount});
+ const doc=new jsPDF({unit:'pt',format:[288,432],compress:true});
+ const info=deriveDistributionFields(source,labelFields);
+ const fields=[
+  ['STUDENT / PLAYER',info.student],['TEACHER',info.teacher],['COACH',info.coach],
+  ['TEAM / CLASS',info.team],['GRADE',info.grade],['PLAYER #',info.playerNumber],
+  ['NAME APPLIED',info.appliedName],['SCHOOL',info.school],
+ ];
+ for(let i=0;i<cfg.packageCount;i++){
+  if(i)doc.addPage([288,432]);
+  doc.setFillColor(255);doc.rect(0,0,288,432,'F');
+  doc.setFillColor(21,34,42);doc.rect(0,0,288,76,'F');
+  if(logoData){
+   try{
+    const format=logoData.startsWith('data:image/jpeg')?'JPEG':'PNG';
+    const props=doc.getImageProperties(logoData);
+    const scale=Math.min(60/props.width,51/props.height);
+    doc.setFillColor(255);doc.roundedRect(10,9,65,56,5,5,'F');
+    doc.addImage(logoData,format,42.5-props.width*scale/2,37-props.height*scale/2,props.width*scale,props.height*scale,undefined,'FAST');
+   }catch{/* Wordmark remains as branding if the image cannot be rendered. */}
+  }
+  text(doc,'SKILLED',logoData?84:16,31,192,20,{bold:true,color:[255,255,255]});
+  text(doc,'CRAFTING',logoData?84:16,49,192,20,{bold:true,color:[255,255,255]});
+  doc.setFillColor(233,238,240);doc.rect(0,76,288,23,'F');
+  text(doc,'DISTRIBUTION / PACKING',12,91,183,9,{bold:true});
+  text(doc,'BAG '+(i+1)+' / '+cfg.packageCount,204,91,75,10,{bold:true});
+  let y=116;
+  y=cropLine(doc,source.shipName||source.customerName||'Recipient not specified',13,y,261,cfg.labelFont+2,true)+3;
+  if(info.school)y=cropLine(doc,info.school,13,y,262,9);
+  if(cfg.labelShowOrder)y=cropLine(doc,'ORDER '+source.reference+'  |  JOB '+job.id,13,y+1,261,9,true)+3;
+  doc.setDrawColor(185,196,200);doc.line(13,y,275,y);y+=15;
+  const active=fields.filter(([key,value])=>value&&(key!=='SCHOOL'));
+  const rows=active.slice(0,7);
+  for(const [label,value] of rows){
+   if(y>291)break;
+   text(doc,label,13,y,103,7,{bold:true,color:[70,78,83]});
+   cropLine(doc,value,111,y+1,163,label==='STUDENT / PLAYER'?11:10,true);
+   y+=23;
+  }
+  if(!rows.length){
+   y=cropLine(doc,'Recipient details: verify with packing record',13,y+7,262,9)+8;
+  }
+  const itemStart=Math.max(279,Math.min(310,y+5));
+  doc.setFillColor(245,247,248);doc.roundedRect(10,itemStart,268,82,4,4,'F');
+  text(doc,cfg.labelShowItems?'PACKAGE CONTENTS / VERIFICATION':'FULFILLMENT CHECK',18,itemStart+15,249,8,{bold:true});
+  let lineY=itemStart+31;
+  if(cfg.labelShowItems&&cfg.packageCount===1){
+   for(const line of (source.lines||[]).slice(0,2)){
+    cropLine(doc,String(line.quantity)+' x '+line.name,18,lineY,cfg.labelShowQR?182:252,9);
+    lineY+=16;
+   }
+   if((source.lines||[]).length>2)cropLine(doc,'+ '+(source.lines.length-2)+' more; see packing list',18,lineY,cfg.labelShowQR?180:252,8);
+  }else{
+   cropLine(doc,cfg.packageCount>1?'Contents not allocated. Verify bag.':'Verify against order before handoff.',18,lineY,cfg.labelShowQR?180:252,8);
+  }
+  if(cfg.labelShowQR){
+   qrCode(doc,origin+'/work-hub?job='+encodeURIComponent(job.id),218,itemStart+26,52);
+   text(doc,'STAFF QR',222,itemStart+79,49,6,{bold:true});
+  }
+  doc.setDrawColor(30,46,52);doc.line(11,406,cfg.labelShowQR?210:277,406);
+  text(doc,'INTERNAL DISTRIBUTION LABEL - NOT POSTAGE',12,421,cfg.labelShowQR?200:265,7,{bold:true});
+ }
+ return doc;
 }
 function sizeDetail(doc,snap,y){
   for(const p of Array.isArray(snap.placements)?snap.placements:[]){
