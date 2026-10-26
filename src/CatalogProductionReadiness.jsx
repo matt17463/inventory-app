@@ -27,6 +27,8 @@ export default function CatalogProductionReadiness(){
  const [busy,setBusy]=useState(false);
  const [search,setSearch]=useState('');
  const [status,setStatus]=useState('all');
+ const [sortMode,setSortMode]=useState('attention');
+ const [activeOrderDemand,setActiveOrderDemand]=useState([]);
  const [familyId,setFamilyId]=useState(null);
  const [selectedRecipe,setSelectedRecipe]=useState('');
  const [disposition,setDisposition]=useState('assigned');
@@ -37,16 +39,18 @@ export default function CatalogProductionReadiness(){
  const [confirmArtwork,setConfirmArtwork]=useState(false);
  const [previewLoaded,setPreviewLoaded]=useState(false);
  const load=useCallback(async()=>{
-  setBusy(true);try{setState(await action({action:'overview'}));setMessage('Catalog and legacy client audit refreshed.');}
+  setBusy(true);try{const [overview,open] = await Promise.all([action({action:'overview'}), action({action:'preview_open'}).catch(()=>[])]);setState(overview);setActiveOrderDemand(Array.isArray(open)?open:[]);setMessage('Catalog readiness and current open-order demand refreshed.');}
   catch(e){setMessage(errorMessage(e));}finally{setBusy(false);}
  },[]);
  useEffect(()=>{load();},[load]);
  const assignments=useMemo(()=>new Map((state?.assignments||[]).map(a=>[Number(a.woocommerce_product_id),a])),[state]);
  const families=state?.families||[];
+ const demand=useMemo(()=>{const m=new Map();for(const item of activeOrderDemand){const id=Number(item.woocommerce_product_id);if(id>0)m.set(id,(m.get(id)||0)+Number(item.quantity||0));}return m;},[activeOrderDemand]);
+ const blockers=useMemo(()=>new Set(activeOrderDemand.filter(x=>!x.eligible && x.status!=='Traveler already exists').map(x=>Number(x.woocommerce_product_id))),[activeOrderDemand]);
  const filtered=useMemo(()=>families.filter(f=>{
   const hit=[f.product_name,f.example_sku,f.woocommerce_product_id,f.classification?.garment].join(' ').toLowerCase().includes(search.toLowerCase());
   return hit&&(status==='all'||f.readiness===status);
- }),[families,search,status]);
+ }).sort((a,b)=>{if(sortMode==='name')return String(a.product_name||'').localeCompare(String(b.product_name||''));const demandDiff=(demand.get(Number(b.woocommerce_product_id))||0)-(demand.get(Number(a.woocommerce_product_id))||0);if(sortMode==='demand')return demandDiff;const urgent=(f)=>Number(blockers.has(Number(f.woocommerce_product_id))&&demand.has(Number(f.woocommerce_product_id)))*100000+(demand.get(Number(f.woocommerce_product_id))||0)*100+Number(f.missing_blank_rows||0);return urgent(b)-urgent(a);}),[families,search,status,sortMode,demand,blockers]);
  const selected=families.find(x=>Number(x.woocommerce_product_id)===Number(familyId));
  const ready=(state?.versions||[]).filter(v=>v.status==='approved');
  const approvedRecipeIds=new Set(ready.map(v=>v.recipe_id));
@@ -125,13 +129,17 @@ export default function CatalogProductionReadiness(){
    </nav>
    {tab==='products'&&<>
     <section className="card elevated-card sc-cr-info">
-     <h2>Build a review queue for every existing product family</h2>
+     <h2>Bring existing WooCommerce products into the new production process</h2>
+     <p><strong>How to use this screen:</strong> 1. Start with products used by open orders. 2. Verify blank-product mapping. 3. Link the right artwork and approved production instructions. 4. Check the result with a real product variation. 5. Review the production work order before releasing production.</p>
+     <p><strong>Important:</strong> Open-order counts below are current job demand, not historical WooCommerce sales rankings. Products with no linked jobs or incomplete sync may be missing from those counts. Do not interpret an approved recipe alone as fully production ready.</p>
+     <p><Link to="/client-graphics">Review client graphics</Link> · <Link to="/manufacturing-recipes">Production instructions</Link> · <Link to="/work-hub">Work Hub</Link></p>
      <p>Parent-level assignments cover their variations; color, SKU and size remain on the original WooCommerce lines. A family can be flagged for fulfillment only or mapped to a reusable production recipe. No product or inventory record is rewritten.</p>
      {canManage&&<button type="button" disabled={busy} onClick={()=>run({action:'seed_candidates'},r=>`Added ${r.created} review queue records; ${r.existing} already existed.`)}>Generate missing family review assignments</button>}
      <p><small>Classification is inferred from descriptions only. It is not verified decoration-method data.</small></p>
     </section>
     <div className="sc-cr-toolbar">
      <label>Search product, SKU or Woo ID<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search existing product families" /></label>
+     <label>Review order<select value={sortMode} onChange={e=>setSortMode(e.target.value)}><option value="attention">Open orders and blockers first</option><option value="demand">Most open units first</option><option value="name">Product name</option></select></label>
      <label>Readiness<select value={status} onChange={e=>setStatus(e.target.value)}>
       <option value="all">All families</option><option value="review">Needs assignment</option>
       <option value="awaiting_approval">Awaiting sample approval</option>
@@ -143,7 +151,8 @@ export default function CatalogProductionReadiness(){
     <div className="sc-cr-split"><div className="sc-cr-scroll">
      {filtered.map(f=><button type="button" key={f.woocommerce_product_id} className={'sc-cr-family '+(Number(familyId)===Number(f.woocommerce_product_id)?'chosen':'')} onClick={()=>choose(f)}>
       <strong>{f.product_name||'Unnamed family'} <small>#{f.woocommerce_product_id}</small></strong>
-      <span>{fmt(f.row_count)} rows · {fmt(f.variation_count)} variation IDs · {fmt(f.published_rows)} published</span>
+      <span>{fmt(f.row_count)} rows · {fmt(f.variation_count)} variations · {fmt(f.published_rows)} published · {fmt(demand.get(Number(f.woocommerce_product_id))||0)} units in open jobs</span>
+      {blockers.has(Number(f.woocommerce_product_id))&&demand.has(Number(f.woocommerce_product_id))&&<em>Open-order production setup needs review</em>}
       <span>{f.classification?.garment||'other'} · Process {f.classification?.method||'Needs review'} · {labels[f.readiness]}</span>
       {Number(f.missing_blank_rows)>0&&<em>{fmt(f.missing_blank_rows)} rows need blank mapping review</em>}
      </button>)}
@@ -151,6 +160,7 @@ export default function CatalogProductionReadiness(){
     <section className="card elevated-card sc-cr-detail">
      {!selected?<p>Choose a product family on the left to review its production routing.</p>:<>
       <h2>{titleFor(selected)}</h2>
+      <p><strong>Next steps:</strong> Check mappings → verify exact customer artwork → choose approved production instructions → inspect an open-order traveler. This page only links a recipe, it does not certify all artwork and variations.</p>
       <p>In catalog: {fmt(selected.row_count)} rows; {fmt(selected.finished_rows)} marked finished; {fmt(selected.missing_blank_rows)} blank mappings missing.</p>
       <p>Suggested garment: <strong>{selected.classification?.garment}</strong>. Decoration method: <strong>{selected.classification?.method}</strong> (unverified).</p>
       {canManage?<form onSubmit={e=>{e.preventDefault();run({action:'assign',woocommerce_product_id:selected.woocommerce_product_id,disposition,recipe_id:selectedRecipe,notes},()=>`Saved routing for Woo parent #${selected.woocommerce_product_id}.`);}}>
