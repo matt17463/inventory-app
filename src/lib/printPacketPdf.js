@@ -190,18 +190,18 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
   if(info.school&&design.visible.includes('school')&&!design.order.some(key=>key==='school'))y=cropLine(doc,info.school,13,y,262,9);
   if(cfg.labelShowOrder)y=cropLine(doc,'ORDER '+source.reference+'  |  JOB '+job.id,13,y+1,261,9,true)+3;
   doc.setDrawColor(185,196,200);doc.line(13,y,275,y);y+=15;
-  const active=fields.filter(([,value])=>value);
-  const rows=active.slice(0,7);
+  // A template controls field visibility; missing order metadata must not hide the field.
+  const rows=fields.slice(0,6);
   for(const [label,value] of rows){
-   if(y>291)break;
+   if(y>274)break;
    text(doc,label,13,y,103,7,{bold:true,color:[70,78,83]});
-   cropLine(doc,value,111,y+1,163,label==='STUDENT / PLAYER'?design.fontSize+1:design.fontSize,true);
+   cropLine(doc,value||'NOT PROVIDED',111,y+1,163,label==='STUDENT / PLAYER'?design.fontSize+1:design.fontSize,true);
    y+=23;
   }
-  if(!rows.length){
+  if(!fields.length){
    y=cropLine(doc,'Recipient details: verify with packing record',13,y+7,262,9)+8;
   }
-  const itemStart=Math.max(279,Math.min(310,y+5));
+  const itemStart=Math.max(294,Math.min(311,y+5));
   doc.setFillColor(245,247,248);doc.roundedRect(10,itemStart,268,82,4,4,'F');
   text(doc,cfg.labelShowItems?'PACKAGE CONTENTS / VERIFICATION':'FULFILLMENT CHECK',18,itemStart+15,249,8,{bold:true});
   let lineY=itemStart+31;
