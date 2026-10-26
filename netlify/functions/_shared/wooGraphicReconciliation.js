@@ -17,7 +17,7 @@ export async function persistWooGraphicSelections(db,order,{strict=false}={}){
     db.from('sc_client_graphic_rules').select('*').eq('family_id',raw.familyId).eq('enabled',true)
   ]);
   if(v.error||r.error){failures.push({lineId:line.id,reason:'Artwork rule lookup failed'});continue}
-  const context={garment_color:line.selected_color||'',size_group:line.selected_size||'',garment_style:line.selected_style||''};
+  const context={garment_color:line.selected_color||'',size_group:line.selected_size||'',garment_style:line.selected_style||'',placement_name:line.placement||''};
   const resolution=resolveGraphicVariant({familyId:raw.familyId,variants:v.data,rules:r.data,context});
   const snapshot=resolution.status==='resolved'?resolution:null;
   const payload={
