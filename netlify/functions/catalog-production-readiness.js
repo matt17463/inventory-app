@@ -30,10 +30,42 @@ async function getOverview(db){
    db.from('sc_material_recipes').select('id',{head:true,count:'exact'}).eq('status','approved')
   ]),
  ]);
+ // Observed Woo-linked production history is a prioritization signal, not authoritative
+ // WooCommerce sales reporting (Woo original order dates may be missing).
+ const since=new Date(Date.now()-180*86400000).toISOString();
+ const recentJobs=await rows(db.from('jobs')
+  .select('id,woocommerce_order_id,created_at,woo_status')
+  .not('woocommerce_order_id','is',null).gte('created_at',since)
+  .order('created_at',{ascending:false}).limit(2500),'Recent Woo-linked jobs');
+ const eligibleJobs=recentJobs.filter(j=>!['cancelled','refunded','failed'].includes(clean(j.woo_status).toLowerCase()));
+ const jobById=new Map(eligibleJobs.map(j=>[String(j.id),j]));
+ const activity=new Map();
+ if(eligibleJobs.length){
+  const ids=eligibleJobs.map(j=>j.id);
+  const recentLines=await rows(db.from('job_items')
+   .select('job_id,woocommerce_product_id,quantity').in('job_id',ids).limit(10000),'Recent Woo-linked lines');
+  const now=Date.now();
+  for(const line of recentLines){
+   const id=Number(line.woocommerce_product_id),job=jobById.get(String(line.job_id));
+   if(!id||!job)continue;
+   const age=(now-new Date(job.created_at).getTime())/86400000;
+   let item=activity.get(id);
+   if(!item){item={units_30d:0,units_90d:0,units_180d:0,orders_90d:new Set(),last_activity_at:null};activity.set(id,item);}
+   const qty=Math.max(0,Number(line.quantity)||0);
+   if(age<=30)item.units_30d+=qty;
+   if(age<=90){item.units_90d+=qty;item.orders_90d.add(String(job.woocommerce_order_id));}
+   if(age<=180)item.units_180d+=qty;
+   if(!item.last_activity_at||job.created_at>item.last_activity_at)item.last_activity_at=job.created_at;
+  }
+ }
+ const observedActivity=Object.fromEntries([...activity].map(([id,v])=>[id,{
+  units_30d:v.units_30d,units_90d:v.units_90d,units_180d:v.units_180d,
+  recorded_orders_90d:v.orders_90d.size,last_activity_at:v.last_activity_at
+ }]));
  const byId=new Map(assignments.map(x=>[Number(x.woocommerce_product_id),x]));
  const display=families.map(f=>({...f,classification:classifyCatalogFamily(f.product_name),
   readiness:statusFor(byId.get(Number(f.woocommerce_product_id)),versions)}));
- return {families:display,assignments,recipes,versions,
+ return {families:display,assignments,recipes,versions,observedActivity,
   clients:clients.filter(c=>c.source_orders||c.last_order_at),
   totals:{
    families:families.length,all_catalog_rows:families.reduce((s,f)=>s+Number(f.row_count||0),0),

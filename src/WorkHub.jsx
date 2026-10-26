@@ -132,6 +132,19 @@ export default function WorkHub(){
     {boardBusy||detailLoading?'Refreshing…':'Refresh work'}
    </button>
   </header>
+  <section className="card elevated-card" aria-label="How to complete an order">
+   <h2>How orders move through Skilled Crafting</h2>
+   <p>Choose an order below. The Work Hub will show the next action and the right tools for that specific job. You do not need to visit each department separately.</p>
+   <ol>
+    <li><strong>Review order</strong> — confirm items, payment, delivery date and customer information.</li>
+    <li><strong>Approve artwork</strong> — confirm the exact approved design and product choices.</li>
+    <li><strong>Prepare materials</strong> — check product mappings, blanks, stock and purchasing.</li>
+    <li><strong>Produce</strong> — use the approved production instructions and traveler.</li>
+    <li><strong>Check quality</strong> — inspect finished items and record QC.</li>
+    <li><strong>Print, pack and deliver</strong> — use this order's saved print templates, verify distribution details and close out.</li>
+   </ol>
+   <p><strong>Existing WooCommerce products:</strong> Older products may need an approved artwork or production setup before a traveler can be prepared. <Link to="/catalog-production-readiness">Review products that need setup →</Link></p>
+  </section>
   <section className="card elevated-card sc-hub-entry">
    <h2>Start new customer work</h2>
    <div className="sc-hub-entry-grid">

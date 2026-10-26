@@ -62,11 +62,60 @@ const fallbackNav = [
   ]},
 ];
 
+
+// Daily work is organized by user intent; specialist tools stay available in Advanced mode.
+const SIMPLE_NAV = [
+  {id:'daily-work',title:'Start Here',icon:'🏠',items:[
+    {label:'Work Hub — My Orders',path:'/work-hub'},
+    {label:'Orders Needing Attention',path:'/exception-center'},
+    {label:'Print an Order',path:'/print-center'},
+  ]},
+  {id:'orders-simple',title:'Orders',icon:'🧾',items:[
+    {label:'Production Queue',path:'/production-board'},
+    {label:'New Manual Order',path:'/manual-orders'},
+    {label:'Customer Order Requests',path:'/client-orders'},
+    {label:'Order Calendar',path:'/operations-calendar'},
+  ]},
+  {id:'products-simple',title:'Products & Setup',icon:'📦',items:[
+    {label:'Modernize Existing Products',path:'/catalog-production-readiness'},
+    {label:'Product & Customer Migration',path:'/catalog-modernization'},
+    {label:'Production Instructions',path:'/manufacturing-recipes'},
+    {label:'Product Catalog & Mappings',path:'/catalog-workbench'},
+  ]},
+  {id:'artwork-simple',title:'Artwork & Approval',icon:'🎨',items:[
+    {label:'Client Graphics',path:'/client-graphics'},
+    {label:'Artwork Requests',path:'/artwork-requests'},
+    {label:'Mockups',path:'/mockup-studio'},
+    {label:'Order Artwork',path:'/order-graphics'},
+  ]},
+  {id:'fulfillment-simple',title:'Production & Delivery',icon:'🏭',items:[
+    {label:'Pull Sheets & Inventory',path:'/pullsheets'},
+    {label:'Buy Missing Blanks',path:'/purchasing'},
+    {label:'Receive Blanks',path:'/add-item'},
+    {label:'Production Work Orders',path:'/production-travelers'},
+    {label:'Quality Check',path:'/qc-checklist'},
+  ]},
+  {id:'growth-simple',title:'Customers & Growth',icon:'👥',items:[
+    {label:'Marketing & Customers',path:'/marketing'},
+    {label:'Quotes',path:'/quote-builder'},
+    {label:'Team Stores',path:'/team-stores'},
+  ]},
+  {id:'admin-simple',title:'Help & Settings',icon:'⚙️',items:[
+    {label:'Application Guide',path:'/application-guide'},
+    {label:'Equipment & Remote Access',path:'/equipment-center'},
+    {label:'Menu Manager',path:'/menu-manager'},
+    {label:'User Management',path:'/user-management'},
+    {label:'Advanced Diagnostics',path:'/deployment-health'},
+  ]},
+];
+
 export default function AppShell({ children }) {
   const employeeAccess=useContext(EmployeeAccessContext);
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [advancedNav, setAdvancedNav] = useState(() => { try { return window.localStorage.getItem('sc_navigation_advanced_v1') === 'true'; } catch { return false; } });
+  const toggleAdvancedNav = () => setAdvancedNav(current => { const next = !current; try { window.localStorage.setItem('sc_navigation_advanced_v1', String(next)); } catch { /* optional preference */ } return next; });
   const baseNav = useMemo(() => {
     const configured = normalizeNavigation(navConfig);
     return configured.length ? configured : fallbackNav;
@@ -107,6 +156,7 @@ export default function AppShell({ children }) {
     return employeeAccess?.role==='marketing' ? result.map(s=>({...s,items:s.items.filter(i=>marketingPaths.has(i.path))})).filter(s=>s.items.length) : result;
   }, [baseNav, layout, employeeAccess?.role]);
 
+  const visibleNav = employeeAccess?.role === 'marketing' ? nav : advancedNav ? nav : SIMPLE_NAV;
   const allItems = nav.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
   const filtered = search.trim()
     ? allItems.filter((item) => `${item.label} ${item.section}`.toLowerCase().includes(search.toLowerCase())).slice(0, 10)
@@ -123,8 +173,9 @@ export default function AppShell({ children }) {
         <img src="/skilled-crafting-logo.png" alt="Skilled Crafting" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         <span>Skilled Crafting</span>
       </Link>
+      <div style={{padding:"8px 16px"}}><button type="button" onClick={toggleAdvancedNav} aria-pressed={advancedNav} style={{width:"100%",cursor:"pointer"}}>{advancedNav ? "✓ Advanced tools · Show simple menu" : "Simple menu · Show all tools"}</button></div>
       <nav className="sc-sidebar-nav">
-        {nav.map((section) => (
+        {visibleNav.map((section) => (
           <details className="sc-nav-section" key={`${section.id}-${location.pathname}`} open={section.items.some((item) => item.path === location.pathname)}>
             <summary className="sc-nav-section-title">{section.icon ? `${section.icon} ` : ''}{section.title} <small>({section.items.length})</small></summary>
             {section.items.map((item) => (
@@ -158,7 +209,7 @@ export default function AppShell({ children }) {
             <div className="sc-topbar-title-block">
               <div className="sc-kicker">Skilled Crafting</div>
               <h1>{location.pathname === '/' ? 'Operations Home' : allItems.find((i) => i.path === location.pathname)?.label || 'Operations'}</h1>
-              <p>Inventory • Artwork • Production • Purchasing</p>
+              <p>Orders → Artwork → Inventory → Production → Delivery</p>
             </div>
           </div>
           <div className="sc-topbar-actions">
