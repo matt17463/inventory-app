@@ -3,7 +3,7 @@ import {supabase} from './supabaseClient';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {canPrintCustomerCopy} from './lib/printModel';
 import {createInvoicePdf,createDistributionLabelsPdf,createProductionPacketPdf} from './lib/printPacketPdf';
-import {LABEL_PRESETS,normalizeLabelDesign,presetLabelDesign} from './lib/labelDesigner';
+import {LABEL_DESIGN_FIELDS,LABEL_PRESETS,normalizeLabelDesign,presetLabelDesign} from './lib/labelDesigner';
 import businessLogo from './assets/logo.png';
 import './QuickOrderPrint.css';
 
@@ -31,6 +31,7 @@ export default function QuickOrderPrint({jobId,onClose}){
  const [selected,setSelected]=useState(DEFAULT_DOCUMENTS);
  const [template,setTemplate]=useState('saved');
  const [packages,setPackages]=useState(1);
+ const [labelFields,setLabelFields]=useState({});
  const [preview,setPreview]=useState(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
@@ -78,7 +79,7 @@ export default function QuickOrderPrint({jobId,onClose}){
  const printerFor=key=>key==='labels'?'thermal':'letter';
  const routeReady=key=>Boolean(capabilities?.enabled&&capabilities?.[printerFor(key)]);
  async function makeDocument(key){
-  const args={source,job,travelers,origin:window.location.origin,prefs,labelDesign:design(),logoData:await logoData()};
+  const args={source,job,travelers,origin:window.location.origin,prefs,labelDesign:design(),labelFields,logoData:await logoData()};
   if(key==='customer')return createInvoicePdf({...args,kind:'customer'});
   if(key==='shop')return createInvoicePdf({...args,kind:'shop'});
   if(key==='labels')return createDistributionLabelsPdf(args);
@@ -141,6 +142,11 @@ export default function QuickOrderPrint({jobId,onClose}){
    </select></label>
    <label>Number of packages<input type="number" min="1" max="100" value={packages} onChange={e=>setPackages(e.target.value)}/></label>
    <p>Saved edits to built-in templates are used automatically. Edit and save designs in Print Center on this browser.</p>
+   <details className="sc-quick-print-details"><summary>Student / teacher / team details (optional)</summary><p>Order personalization fills fields when available. Add missing details below for this print session; missing values are labeled NOT PROVIDED instead of hiding template fields.</p>
+    <div className="sc-quick-print-field-grid">{design().order.filter(key=>design().visible.includes(key)).map(key=><label key={key}>{design().labels[key]||LABEL_DESIGN_FIELDS.find(([id])=>id===key)?.[1]}
+     <input type="text" maxLength={120} value={labelFields[key]||""} onChange={e=>setLabelFields(v=>({...v,[key]:e.target.value}))} placeholder="Auto from order or enter"/>
+    </label>)}</div>
+   </details>
    <p>Multiple-package labels do not assert which items are in each bag unless a verified allocation exists.</p>
   </div>}
   <div className="sc-quick-print-actions">
