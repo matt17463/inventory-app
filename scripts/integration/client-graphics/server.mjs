@@ -5,6 +5,7 @@ import {fixture,root,job,selection,asRole} from './fixture.mjs';
 import {adapter} from './adapter.mjs';
 const db=await fixture(),api=adapter(db);
 await job(db,90,{woo:false});await job(db,91);await selection(db,91);
+await job(db,92);await db.query('update jobs set woo_payload=$1 where id=92',[{line_items:[{id:20092,meta_data:[{key:'_sc_graphic_family_id',value:'00000000-0000-4000-8000-000000000020'}]}]}]);
 await db.exec("update mockup_artwork_assets set storage_bucket='fictional-bucket'");
 mock.module('../../../netlify/functions/_shared/security.js',{namedExports:{authorizeEmployee:async(_event,options)=>({ok:options.allowedRoles.includes('manager'),role:'manager',supabase:api}),jsonResponse:(statusCode,data)=>({statusCode,body:JSON.stringify(data)})}});
 const handlers={};for(const name of ['client-graphics','order-graphic-selection','traveler-graphic-selections'])handlers[name]=(await import('../../../netlify/functions/'+name+'.js')).handler;

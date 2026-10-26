@@ -17,11 +17,17 @@ export async function fixture(){
  await db.exec(table(mockups,'mockup_projects'));await db.exec(table(mockups,'mockup_artwork_assets'));
  await db.exec(table(await read('supabase/migrations/202610200001_uv_studio_material_recipes.sql'),'sc_material_recipes'));
  // gen_random_uuid is built into PostgreSQL; PGlite does not ship pgcrypto.
- for(const p of ['202610220001_manufacturing_recipes_travelers.sql','202610230001_grouped_production_travelers.sql','202610230002_recipe_manager.sql',...graphicsMigrations]){
+ for(const p of ['202610220001_manufacturing_recipes_travelers.sql','202610230001_grouped_production_travelers.sql','202610230002_recipe_manager.sql']){
   await db.exec((await read('supabase/migrations/'+p)).replace('create extension if not exists pgcrypto;',''));console.log('APPLIED',p);
  }
- for(const p of graphicsMigrations)await db.exec(await read('supabase/migrations/'+p));
- console.log('REAPPLIED all four graphics migrations');
+ // Rehearse an atomic rollout: traveler writes cannot enter between 003 and 004.
+ async function graphicsTransaction(label){
+  await db.exec('begin;lock table public.sc_job_travelers,public.sc_job_traveler_lines in access exclusive mode');
+  try{for(const p of graphicsMigrations){await db.exec(await read('supabase/migrations/'+p));console.log(label,p)}await db.exec('commit')}
+  catch(error){await db.exec('rollback');throw error}
+ }
+ await graphicsTransaction('APPLIED');await graphicsTransaction('REAPPLIED');
+ console.log('PASS atomic graphics rollout and repeat application with traveler-write locks');
  for(const [n,role] of [[1,'admin'],[2,'manager'],[3,'operator'],[4,'viewer']])await db.exec(`insert into auth.users values('${uid(n)}');insert into sc_app_user_roles(user_id,role) values('${uid(n)}','${role}')`);
  await db.exec(`insert into mockup_projects(id,project_name) values('${uid(10)}','Isolated school');insert into mockup_artwork_assets(id,project_id,artwork_name,storage_path,preflight_status,mime_type) values('${uid(11)}','${uid(10)}','Test front','fixtures/front.png','passed','image/png'),('${uid(12)}','${uid(10)}','Test youth','fixtures/youth.png','passed','image/png'),('${uid(13)}','${uid(10)}','Failed file','fixtures/failed.png','failed','image/png');
  insert into sc_client_graphic_families(id,name,state) values('${uid(20)}','School A','approved'),('${uid(21)}','School B','approved'),('${uid(22)}','School C','approved');

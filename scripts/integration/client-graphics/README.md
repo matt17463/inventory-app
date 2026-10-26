@@ -15,7 +15,8 @@ scripts/integration/client-graphics/node_modules/.bin/php-wasm-cli scripts/integ
 ```
 
 The integration command intentionally returns nonzero for unmet application
-requirements. At application commit 4f2b195 it reports 35 passes / four failures.
+requirements. The expanded release-verification cases cover the repaired status/null guards,
+legacy/inherited artwork preflight, original checkout capture fallback and retry.
 Do not convert these failures to passing expectations merely to make CI green.
 See `integration-results.json` for named cases and SQL error messages.
 
@@ -40,6 +41,11 @@ come from repository SQL unchanged. Relevant role functions are loaded from sour
 Artwork/project and material dependency table definitions also come from source.
 Unrelated inventory/customer FK targets, pre-existing job triggers, hosted Auth,
 PostgREST, storage-object existence and complete Supabase defaults are not reproduced.
+Graphics migrations are applied and reapplied in a single transaction while holding
+ACCESS EXCLUSIVE locks on the parent traveler and traveler-line tables. This tests
+a rollout plan that prevents writes between migrations 003 and 004; it does not
+apply the plan to production. The inheritance fixture uses normal draft/manager
+approval, leaves the original revision unchanged and never disables a trigger.
 The pgcrypto CREATE EXTENSION is omitted because UUID generation is built into the
 PostgreSQL runtime. No production rows, credentials or database dump are included.
 
