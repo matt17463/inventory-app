@@ -1,0 +1,45 @@
+name: Client Graphics Isolated Integration
+on:
+  push:
+    branches: [feature/client-graphics-production-rules-20261025]
+    paths:
+      - 'scripts/integration/client-graphics/**'
+      - 'supabase/migrations/20261025*.sql'
+      - 'netlify/functions/*graphic*.js'
+      - 'netlify/functions/_shared/wooGraphic*.js'
+      - 'src/lib/*Graphic*.js'
+      - '.github/workflows/client-graphics-isolated-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix scripts/integration/client-graphics
+      - name: Exercise actual traveler RPC and simulated integration handlers
+        env:
+          CG_TESTED_SHA: ${{ github.sha }}
+          CG_RESULTS: ${{ github.workspace }}/integration-results.json
+        run: node --experimental-test-module-mocks scripts/integration/client-graphics/verify.mjs 2>&1 | tee integration.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: client-graphics-isolated-results
+          path: |
+            integration-results.json
+            integration.log
+  wordpress-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP syntax
+        run: php -l wordpress/skilled-crafting-graphic-choices/skilled-crafting-graphic-choices.php
+      - name: Exercise actual graphic-choice checkout hooks using fictional fixtures
+        run: php scripts/integration/client-graphics/wordpress-runtime.php
