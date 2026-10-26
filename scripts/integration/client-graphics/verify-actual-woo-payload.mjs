@@ -1,0 +1,54 @@
+// Real WooCommerce output -> real reconciliation and traveler SQL. Object storage is simulated.
+import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
+import {readFile,writeFile} from 'node:fs/promises';
+import {mock} from 'node:test';
+import {fixture,uid,asRole} from './fixture.mjs';
+import {adapter} from './adapter.mjs';
+import {parseWooGraphicSelection} from '../../../src/lib/wooGraphicSelection.js';
+import {persistWooGraphicSelections} from '../../../netlify/functions/_shared/wooGraphicReconciliation.js';
+const path=process.argv[2];if(!path)throw Error('Supply isolated WordPress directory');
+const delivery=JSON.parse(await readFile(path+'/actual-woo-delivery.json','utf8'));
+assert.equal(createHmac('sha256','NONCUSTOMER-LOCAL-ONLY-SIGNING-SECRET-20261026').update(delivery.body).digest('base64'),delivery.signature);
+console.log('PASS actual Woo-generated webhook HMAC verifies locally');
+const raw=JSON.parse(delivery.body),db=await fixture(),api=adapter(db),heads=[];
+const meta=(l,keys)=>(l.meta_data||[]).find(m=>keys.includes(String(m.key).toLowerCase()))?.value||'';
+const order={...raw,line_items:raw.line_items.map(l=>({...l,graphic_selection:parseWooGraphicSelection(l),selected_color:meta(l,['pa_color','color']),selected_size:meta(l,['pa_size','size'])}))};
+assert.equal(order.line_items.length,2);assert.notEqual(order.line_items[0].graphic_selection.familyId,order.line_items[1].graphic_selection.familyId);
+mock.module('../../../netlify/functions/_shared/security.js',{namedExports:{authorizeEmployee:async()=>({ok:true,role:'operator',user:{id:uid(3)},supabase:api}),jsonResponse:(statusCode,body)=>({statusCode,body:JSON.stringify(body)})}});
+mock.module('../../../netlify/functions/_shared/mockupStorage.js',{namedExports:{r2BucketName:()=>'fictional-r2-test',safeObjectKey:k=>k,r2Client:()=>({send:async c=>{assert.equal(c.input.Bucket,'fictional-r2-test');assert(['fixtures/front.png','fixtures/youth.png'].includes(c.input.Key));heads.push(c.input);return {ContentLength:256}}})}});
+const preflight=(await import('../../../netlify/functions/traveler-artwork-preflight.js')).handler;
+await db.exec(await readFile(new URL('../../../supabase/migrations/202610250005_traveler_storage_preflight.sql',import.meta.url),'utf8'));
+for(const l of order.line_items)await db.query("insert into sc_client_graphic_product_bindings(woo_product_id,graphic_family_id,mode,allowed,verified_at) values($1,$2,'selectable',true,now())",[l.product_id,l.graphic_selection.familyId]);
+await db.query("insert into sc_client_graphic_variants(id,family_id,artwork_asset_id,label,state,width_inches,height_inches) values($1,$2,$3,'Youth away','approved',8,8)",[uid(141),uid(21),uid(12)]);
+await db.query("insert into sc_client_graphic_rules(family_id,variant_id,size_group,placement_name,enabled) values($1,$2,'youth','full_front',true)",[uid(21),uid(141)]);
+let r=await persistWooGraphicSelections(api,order);assert.equal(r.failures.length,0);
+console.log('PASS webhook before job sync preserves exact external order/line selections');
+await assert.rejects(asRole(db,'operator',()=>db.query('select sc_create_grouped_traveler($1,$2,$3)',[900,[9000],uid(31)])));
+console.log('PASS missing synchronized job blocks traveler');
+await db.query('insert into jobs(id,customer_name,job_name,woocommerce_order_id,woo_payload) values(900,$1,$2,$3,$4)',['NONCUSTOMER Fixture','Actual Woo checkout',raw.id,raw]);
+for(const [i,l] of order.line_items.entries())await db.query('insert into job_items(id,job_id,quantity,woocommerce_line_item_id,color,size,selected_color,selected_size,ordered_product_name) values($1,900,$2,$3,$4,$5,$4,$5,$6)',[9000+i,l.quantity,l.id,l.selected_color,l.selected_size,l.name]);
+for(let i=0;i<3;i++)assert.equal((await persistWooGraphicSelections(api,order)).failures.length,0);
+assert.equal((await db.query('select count(*)::int n from sc_order_graphic_selections')).rows[0].n,2);
+assert.equal((await db.query('select count(*)::int n from sc_job_travelers')).rows[0].n,0);
+console.log('PASS duplicate delivery keeps two selections and creates no production work');
+const selections=(await db.query('select * from sc_order_graphic_selections order by external_line_id::int')).rows;
+for(const [i,s] of selections.entries()){assert.equal(s.external_line_id,String(raw.line_items[i].id));assert.equal(s.selected_payload.variation_id,raw.line_items[i].variation_id);assert.equal(s.resolution_snapshot.artworkAssetId,uid(i?12:11));}
+console.log('PASS exact adult/youth lines resolve independent approved family artwork and rules');
+await asRole(db,'manager',async()=>{await db.query('insert into sc_manufacturing_recipe_versions(id,recipe_id,revision,placements,artwork_asset_id,verified_sample) values($1,$2,901,$3,$4,true)',[uid(901),uid(30),[{placement_name:'full_front',artwork_asset_id:uid(12),print_width_inches:8,print_height_inches:8,top_offset_inches:2,center_offset_inches:0,size_group:'youth'}],uid(12)]);await db.query("update sc_manufacturing_recipe_versions set status='approved',approved_by=auth.uid(),approved_at=now() where id=$1",[uid(901)])});
+for(const [i,recipe] of [uid(31),uid(901)].entries()){
+ const args=[900,[9000+i],recipe];
+ await assert.rejects(asRole(db,'operator',()=>db.query('select sc_create_grouped_traveler($1,$2,$3)',args)),/Fresh trusted artwork/);
+ const response=await preflight({httpMethod:'POST',body:JSON.stringify({job_id:900,job_item_ids:[9000+i],recipe_version_id:recipe})});assert.equal(response.statusCode,200,response.body);
+ assert((await asRole(db,'operator',()=>db.query('select sc_create_grouped_traveler($1,$2,$3) id',args))).rows[0].id);
+}
+const before=(await db.query('select * from sc_job_traveler_lines order by job_item_id')).rows;
+assert.equal(before.length,2);assert.equal(before[0].item_snapshot.approved_graphic_selection.family_id,uid(20));assert.equal(before[1].item_snapshot.approved_graphic_selection.family_id,uid(21));
+await db.exec("update sc_order_graphic_selections set selected_label='Later revision'");assert.deepEqual((await db.query('select * from sc_job_traveler_lines order by job_item_id')).rows,before);
+console.log('PASS endpoint-issued receipt authorizes exact traveler; later selection changes do not mutate snapshots');
+const invalid={...order,id:raw.id+100000,line_items:[{...order.line_items[0],graphic_selection:{status:'none'}}]};await persistWooGraphicSelections(api,invalid);assert.equal((await db.query('select status from sc_woo_graphic_capture_states where woo_order_id=$1',[invalid.id])).rows[0].status,'managed_failed');
+console.log('PASS missing canonical ID on verified product captures managed_failed');
+const noPlacement={...order,id:raw.id+200000,line_items:[{...order.line_items[0],meta_data:order.line_items[0].meta_data.filter(m=>m.key!=='placement')}]};await persistWooGraphicSelections(api,noPlacement);assert.equal((await db.query('select status from sc_woo_graphic_capture_states where woo_order_id=$1',[noPlacement.id])).rows[0].status,'managed_failed');
+console.log('PASS absent required placement cannot silently resolve artwork');
+await writeFile(path+'/actual-traveler-evidence.json',JSON.stringify({mode:'Actual local Woo payload and application/SQL execution; simulated R2 HEAD, no production writes',rawOrder:raw.id,lines:before,heads,travelers:(await db.query('select * from sc_job_travelers')).rows},null,2));
+await db.close();console.log('ACTUAL WOO PAYLOAD PIPELINE COMPLETE');
