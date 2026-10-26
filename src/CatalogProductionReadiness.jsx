@@ -4,6 +4,7 @@ import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
 import InlineProductBlankMapping from './InlineProductBlankMapping';
+import {listMockupProjects,getMockupProjectBundle} from './lib/mockupStudioApi';
 import './CatalogProductionReadiness.css';
 
 async function action(payload){
@@ -42,6 +43,9 @@ export default function CatalogProductionReadiness(){
  const [setupStep,setSetupStep]=useState(0);
  const [artworkAudit,setArtworkAudit]=useState(null);
  const [artworkError,setArtworkError]=useState('');
+ const [mockupProjects,setMockupProjects]=useState([]);
+ const [mockupDetails,setMockupDetails]=useState({});
+ const [mockupError,setMockupError]=useState('');
  const [selectedRecipe,setSelectedRecipe]=useState('');
  const [disposition,setDisposition]=useState('assigned');
  const [notes,setNotes]=useState('');
@@ -63,6 +67,13 @@ export default function CatalogProductionReadiness(){
   return ()=>{active=false};
  },[]);
  const artworkByProduct=useMemo(()=>new Map((artworkAudit?.scores||[]).map(row=>[Number(row.woocommerce_product_id),row])),[artworkAudit]);
+ useEffect(()=>{
+  let active=true;
+  listMockupProjects().then(rows=>{if(active){setMockupProjects(rows||[]);setMockupError('');}})
+   .catch(error=>{if(active)setMockupError(error.message)});
+  return ()=>{active=false};
+ },[]);
+
 
  const assignments=useMemo(()=>new Map((state?.assignments||[]).map(a=>[Number(a.woocommerce_product_id),a])),[state]);
  const families=state?.families||[];
@@ -219,6 +230,19 @@ export default function CatalogProductionReadiness(){
        </div>}
        {setupStep===3&&<p>Recipe routing: <strong>{labels[selected.readiness]}</strong>. Only managers may save the linked recipe below. Approved versions still require artwork and variation checks.</p>}
        {setupStep===4&&<div><p><strong>Mockup evidence:</strong> {artworkError?'Not available':!artworkAudit?'Loading…':selectedArtwork?.flags?.mockup?'Reviewed mockup flag is recorded':'No approved mockup flag found'}.</p><p>Customer sign-off and exact placement still require review in the source workflow.</p><p><Link to="/mockup-studio">Open mockup and customer approval →</Link></p></div>}
+              {setupStep===4&&<section aria-label="Related mockup projects">
+        <h4>Related mockup projects for this WooCommerce product</h4>
+        <p>Only project names explicitly containing this product's Woo ID are treated as candidates. A matching project title is not evidence of customer approval.</p>
+        {mockupError&&<p role="alert">Could not load mockup projects: {mockupError}</p>}
+        {mockupProjects.filter(p=>new RegExp('\\bWoo\\s*#?'+String(selected.woocommerce_product_id)+'\\b','i').test(String(p.project_name||''))).slice(0,15).map(project=><div key={project.id} className="sc-cr-listline">
+         <strong>{project.project_name}</strong>
+         <span>{project.status||'Status unknown'}</span>
+         <Link to={'/mockup-studio?project='+encodeURIComponent(project.id)}>Open project and approval history →</Link>
+         <button type="button" disabled={busy} onClick={async()=>{setBusy(true);try{const details=await getMockupProjectBundle(project.id);setMockupDetails(old=>({...old,[project.id]:details}));setMessage('Mockup evidence refreshed.');}catch(e){setMessage('Could not read mockup evidence: '+e.message);}finally{setBusy(false);}}}>Review approval evidence</button>
+         {mockupDetails[project.id]&&<p>{(mockupDetails[project.id].outputs||[]).length} mockup outputs · {(mockupDetails[project.id].reviews||[]).length} customer review records. Internal output approval does not equal a customer sign-off; check exact review details in Mockup Studio.</p>}
+        </div>)}
+        {!mockupProjects.some(p=>new RegExp('\\bWoo\\s*#?'+String(selected.woocommerce_product_id)+'\\b','i').test(String(p.project_name||'')))&&!mockupError&&<p>No explicitly Woo-ID-linked mockup project was found. Open Mockup Studio to verify whether the product's mockup lives under a different project name.</p>}
+       </section>}
        {setupStep===5&&<p>{fmt(demand.get(Number(selected.woocommerce_product_id))||0)} units appear in currently open production jobs. Use the traveler preview tab to check each eligible line.</p>}
 
        {setupStep===3&&<div>
