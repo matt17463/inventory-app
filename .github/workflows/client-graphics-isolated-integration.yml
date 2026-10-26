@@ -1,7 +1,7 @@
 name: Client Graphics Isolated Integration
 on:
   push:
-    branches: [feature/client-graphics-production-rules-20261025, feature/woo-client-graphics-integration-20261026, feature/woo-binding-approval-isolated-e2e-20261026]
+    branches: [feature/client-graphics-production-rules-20261025, feature/woo-client-graphics-integration-20261026, feature/woo-binding-approval-isolated-e2e-20261026, feature/woo-graphics-production-hardening-20261026]
     paths:
       - 'scripts/integration/client-graphics/**'
       - 'wordpress/skilled-crafting-graphic-choices/**'
