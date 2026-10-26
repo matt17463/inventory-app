@@ -1,10 +1,17 @@
 // Fail-closed reconciliation: canonical customer choice is accepted only if product binding was verified.
 import {resolveGraphicVariant} from '../../../src/lib/clientGraphicsRules.js';
+import {saveWooGraphicCapture} from './wooGraphicCaptureState.js';
 export async function persistWooGraphicSelections(db,order,{strict=false}={}){
  const failures=[],saved=[];
  for(const line of order.line_items||[]){
   const raw=line.graphic_selection;
-  if(raw?.status!=='mapped')continue; // legacy text is intentionally not guessed or migrated
+  if(raw?.status==='invalid-id'){
+   await saveWooGraphicCapture(db,order.id,line.id,'managed_failed','Invalid graphic ID');
+   failures.push({lineId:line.id,reason:'Invalid graphic ID'});
+   continue;
+  }
+  if(raw?.status!=='mapped')continue;
+  await saveWooGraphicCapture(db,order.id,line.id,'managed_pending','Awaiting verified graphic selection'); // legacy text is intentionally not guessed or migrated
   const productId=Number(line.product_id);
   if(!Number.isSafeInteger(productId)||productId<=0){failures.push({lineId:line.id,reason:'Missing product ID'});continue}
   const {data:binding,error:be}=await db.from('sc_client_graphic_product_bindings').select('graphic_family_id,allowed,verified_at,mode').eq('woo_product_id',productId).eq('graphic_family_id',raw.familyId).maybeSingle();
