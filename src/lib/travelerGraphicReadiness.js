@@ -7,8 +7,8 @@ export function validateTravelerGraphicReadiness({items=[],recipeVersion,artwork
  const placements=recipeVersion?.placements||[];
  const assets=new Map(artworkAssets.map(a=>[String(a.id),a]));
  const versionAsset=recipeVersion?.artwork_asset_id;
- if(!placements.length)blockers.push('Recipe has no decoration placements');
- for(const [index,p] of placements.entries()){
+ if(!placements.length && !versionAsset)blockers.push('Recipe has no decoration placements or approved recipe artwork');
+ for(const [index,p] of (placements.length?placements:[{artwork_asset_id:versionAsset}]).entries()){
   const id=p.artwork_asset_id||versionAsset;
   if(!id){blockers.push('Placement '+(index+1)+' has no production artwork');continue}
   const asset=assets.get(String(id));
@@ -26,7 +26,7 @@ export function validateTravelerGraphicReadiness({items=[],recipeVersion,artwork
  // A recipe may contain multiple placements, but the resolved primary design must
  // appear among its attached exact artwork assets.
  for(const x of resolved){
-  if(x.resolution_snapshot?.artworkAssetId && !placements.some(p=>String(p.artwork_asset_id||versionAsset)===String(x.resolution_snapshot.artworkAssetId)))
+  if(x.resolution_snapshot?.artworkAssetId && !(placements.length?placements:[{artwork_asset_id:versionAsset}]).some(p=>String(p.artwork_asset_id||versionAsset)===String(x.resolution_snapshot.artworkAssetId)))
    blockers.push('Recipe artwork does not match customer graphic selection');
  }
  return {ready:blockers.length===0,blockers:[...new Set(blockers)]};
