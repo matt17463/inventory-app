@@ -19,4 +19,15 @@ foreach($ids as $id) {
 $GLOBALS['cg_options'] = [['id'=>cg_id(20),'label'=>'Fixed logo']];$_POST=[];
 $data=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700);cg_check($data['sc_graphic_family_id']===cg_id(20),'fixed design assigned without customer input');
 $GLOBALS['cg_enabled']='no';cg_check($GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700)===[],'disabled storefront selector leaves cart untouched');
-echo "TOTAL 15 PASS 15 FAIL 0\n";
+
+$GLOBALS['cg_variation_parents']=[801=>700];
+$GLOBALS['cg_options_by_id']=[700=>$GLOBALS['cg_options'],801=>[]];
+$GLOBALS['cg_options_by_id'][700]=[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_id(21),'label'=>'Away']];
+$_POST=['sc_graphic_family_id'=>cg_id(21)];
+cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801)===true,'variation uses parent configured graphic options');
+$variationData=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700,801);
+cg_check($variationData['sc_graphic_family_id']===cg_id(21),'variation retains selected parent design');
+$_POST=['sc_graphic_family_id'=>cg_id(22)];
+cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801)===false,'variation rejects unavailable parent design');
+unset($GLOBALS['cg_options_by_id'],$GLOBALS['cg_variation_parents']);
+echo "VARIATION CHECKS COMPLETE\n";
