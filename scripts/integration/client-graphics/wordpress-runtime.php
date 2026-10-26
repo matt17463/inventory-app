@@ -58,4 +58,18 @@ $GLOBALS['cg_options_by_id'][700]=[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_i
 $GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);
 cg_check(true,'disabled selector never blocks Store API');
 unset($GLOBALS['cg_options_by_id']);
+
+function wc_get_product($id){return new class {function is_type($type){return $type==='simple';} function is_purchasable(){return true;}};}
+function wp_create_nonce($type){return $type==='wc_store_api'?'NONCUSTOMER-NONCE':'';}
+function rest_url($path){return 'https://store.example.invalid/wp-json/'.$path;}
+function plugins_url($path,$file){return 'https://store.example.invalid/fixture/'.$path;}
+function wp_enqueue_script($handle,$url,$deps,$version,$footer){$GLOBALS['cg_enqueued'][]=$handle;}
+$GLOBALS['cg_enabled']='yes';
+$GLOBALS['cg_options_by_id']=[700=>[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_id(21),'label'=>'Away']]];
+$blockHtml=sc_graphic_choices_render_block(['productId'=>700]);
+cg_check(str_contains($blockHtml,'data-sc-graphic-block') && str_contains($blockHtml,'data-sc-graphic-choice'),'opt-in simple product Blocks graphic selector renders');
+cg_check(str_contains($blockHtml,'NONCUSTOMER-NONCE') && str_contains($blockHtml,'cart/add-item'),'selector includes Store API endpoint and nonce');
+$GLOBALS['cg_enabled']='no';
+cg_check(sc_graphic_choices_render_block(['productId'=>700])==='','disabled selector does not render in Blocks');
+unset($GLOBALS['cg_options_by_id']);
 echo "VARIATION AND BLOCKS FAIL-CLOSED CHECKS COMPLETE\n";
