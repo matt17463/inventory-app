@@ -48,6 +48,28 @@ begin
  select count(*) into v_link_count from public.sc_order_graphic_selections
  where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id));
  if v_link_count>1 then raise exception 'Conflicting graphic assignments for job line'; end if;
+ -- Original Woo checkout metadata is independent evidence of managed graphics.
+ -- Even if the initial capture-state write failed, do not treat this as legacy.
+ if exists (
+  select 1
+  from public.job_items ji
+  join public.jobs j on j.id=ji.job_id
+  cross join lateral jsonb_array_elements(
+   case when jsonb_typeof(j.woo_payload->'line_items')='array'
+    then j.woo_payload->'line_items' else '[]'::jsonb end
+  ) checkout_line
+  cross join lateral jsonb_array_elements(
+   case when jsonb_typeof(checkout_line->'meta_data')='array'
+    then checkout_line->'meta_data' else '[]'::jsonb end
+  ) meta
+  where ji.id=new.job_item_id
+    and checkout_line->>'id'=ji.woocommerce_line_item_id::text
+    and lower(meta->>'key') in ('_sc_graphic_family_id','sc_graphic_family_id')
+    and v_link_count=0
+ ) then
+  raise exception 'WooCommerce customer graphic selection has no verified capture record';
+ end if;
+
  if v_link_count=0 and exists (select 1 from public.sc_woo_graphic_capture_states c join public.job_items i on i.id=new.job_item_id join public.jobs j on j.id=i.job_id where c.woo_order_id=j.woocommerce_order_id and c.woo_line_item_id=i.woocommerce_line_item_id) then raise exception 'Managed Woo selection is missing its approved artwork assignment'; end if;
  if exists (
   select 1 from public.sc_woo_graphic_capture_states c
