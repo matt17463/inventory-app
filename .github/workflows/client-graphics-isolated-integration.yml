@@ -23,6 +23,7 @@ jobs:
           node-version: '24'
       - run: npm ci --prefix scripts/integration/client-graphics
       - name: Exercise actual traveler RPC and simulated integration handlers
+        shell: bash
         env:
           CG_TESTED_SHA: ${{ github.sha }}
           CG_RESULTS: ${{ github.workspace }}/integration-results.json
