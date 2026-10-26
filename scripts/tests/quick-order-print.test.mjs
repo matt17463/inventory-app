@@ -5,7 +5,7 @@ const read=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8');
 test('Work Hub exposes Print Order without requiring print center navigation',()=>{
  const hub=read('src/WorkHub.jsx');
  assert.match(hub,/QuickOrderPrint/);
- assert.match(hub,/>Print Order</);
+ assert.match(hub,/printOpen\?'Close printing':'Print Order'/);
 });
 test('Simple printing uses authoritative source and retains financial and printer safeguards',()=>{
  const component=read('src/QuickOrderPrint.jsx');
