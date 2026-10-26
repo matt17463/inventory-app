@@ -21,6 +21,30 @@ begin
  if v_recipe is null then
   raise exception 'Traveler must use an approved recipe version';
  end if;
+ -- Both managed and historical orders require usable, preflight-approved recipe artwork.
+ if v_recipe->>'artwork_asset_id' is not null then
+  select a.preflight_status into v_asset_status
+   from public.mockup_artwork_assets a
+   where a.id=(v_recipe->>'artwork_asset_id')::uuid;
+  if coalesce(lower(v_asset_status),'') not in ('passed','approved','ready') then
+   raise exception 'Approved recipe artwork has not passed preflight';
+  end if;
+ end if;
+ if jsonb_typeof(v_placements)='array' then
+  if exists (
+   select 1 from jsonb_array_elements(v_placements) p
+   left join public.mockup_artwork_assets a
+    on a.id=(p->>'artwork_asset_id')::uuid
+   where p->>'artwork_asset_id' is null
+      or coalesce(lower(a.preflight_status),'') not in ('passed','approved','ready')
+  ) then
+   raise exception 'Recipe placement artwork has not passed preflight';
+  end if;
+ end if;
+ if (v_recipe->>'artwork_asset_id' is null)
+    and (v_placements is null or v_placements='[]'::jsonb) then
+  raise exception 'Approved recipe has no artwork or placements';
+ end if;
  select count(*) into v_link_count from public.sc_order_graphic_selections
  where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id));
  if v_link_count>1 then raise exception 'Conflicting graphic assignments for job line'; end if;
@@ -37,7 +61,7 @@ begin
   select family_id,resolution_snapshot,selected_payload from public.sc_order_graphic_selections where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id))
  loop
   if v_selection.family_id is null or v_selection.resolution_snapshot is null
-    or v_selection.resolution_snapshot->>'status'<>'resolved' then
+    or v_selection.resolution_snapshot->>'status' is distinct from 'resolved' then
    raise exception 'Order graphic resolution is missing or incomplete';
   end if;
   begin
@@ -61,11 +85,11 @@ begin
    and (coalesce(v_selection.selected_payload->>'placement_name','')=''
         or lower(coalesce(p->>'placement_name',''))=lower(v_selection.selected_payload->>'placement_name'))
   ) into v_asset_found;
-  if not v_asset_found
-     and not (
+  if not coalesce(v_asset_found,false)
+     and not coalesce(
       (v_placements='[]'::jsonb or v_placements is null)
       and v_recipe->>'artwork_asset_id'=v_art::text
-      and coalesce(v_selection.selected_payload->>'placement_name','')=''
+      and coalesce(v_selection.selected_payload->>'placement_name','')='',false
      ) then
    raise exception 'Selected artwork does not match the approved recipe placement';
   end if;
