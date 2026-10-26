@@ -153,7 +153,7 @@ export default function ProductionTravelers() {
       const preflightResponse=await fetch('/.netlify/functions/traveler-artwork-preflight',{
         method:'POST',
         headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
-        body:JSON.stringify({recipe_version_id:versionId}),
+        body:JSON.stringify({recipe_version_id:versionId,job_id:Number(jobId),job_item_ids:selectedItemIds}),
       });
       const preflight=await preflightResponse.json().catch(()=>({}));
       if(!preflightResponse.ok||preflight.verified!==true)
