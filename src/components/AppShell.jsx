@@ -77,10 +77,9 @@ const SIMPLE_NAV = [
     {label:'Order Calendar',path:'/operations-calendar'},
   ]},
   {id:'products-simple',title:'Products & Setup',icon:'📦',items:[
-    {label:'Modernize Existing Products',path:'/catalog-production-readiness'},
-    {label:'Product & Customer Migration',path:'/catalog-modernization'},
+    {label:'Product Setup & Readiness · Start Here',path:'/catalog-production-readiness'},
     {label:'Production Instructions',path:'/manufacturing-recipes'},
-    {label:'Product Catalog & Mappings',path:'/catalog-workbench'},
+    {label:'Product Catalog',path:'/catalog-workbench'},
   ]},
   {id:'artwork-simple',title:'Artwork & Approval',icon:'🎨',items:[
     {label:'Client Graphics',path:'/client-graphics'},
