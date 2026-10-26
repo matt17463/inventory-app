@@ -148,6 +148,16 @@ export default function ProductionTravelers() {
       if(!readiness.ready)throw Error(readiness.blockers.join('; '));
       const {data:auth,error:e}=await supabase.auth.getUser();
       if(e||!auth.user)throw Error('Sign in to create a traveler.');
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token)throw Error('Sign in again to verify artwork files.');
+      const preflightResponse=await fetch('/.netlify/functions/traveler-artwork-preflight',{
+        method:'POST',
+        headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
+        body:JSON.stringify({recipe_version_id:versionId}),
+      });
+      const preflight=await preflightResponse.json().catch(()=>({}));
+      if(!preflightResponse.ok||preflight.verified!==true)
+        throw Error(preflight.message||'Production artwork files could not be verified.');
       const {data,error}=await supabase.rpc('sc_create_grouped_traveler',{
         p_job_id:Number(jobId),p_job_item_ids:selectedItemIds,p_recipe_version_id:versionId,
       });
