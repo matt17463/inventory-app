@@ -26,8 +26,17 @@ export async function handler(event){
   if(!lineIds.length)return jsonResponse(200,{channel:'woocommerce',selections:[],unmapped_line_ids:ids},event);
   const {data:rows,error:re}=await auth.supabase.from('sc_order_graphic_selections').select('external_line_id,family_id,selected_label,resolution_snapshot').eq('source','woocommerce').eq('external_order_id',String(job.woocommerce_order_id)).in('external_line_id',lineIds);
   if(re)throw Error('Could not retrieve order graphics');
+  const {data:capture,error:captureError}=await auth.supabase.from('sc_woo_graphic_capture_states')
+   .select('woo_line_item_id,status,reason').eq('woo_order_id',Number(job.woocommerce_order_id))
+   .in('woo_line_item_id',lineIds.map(Number));
+  if(captureError)throw Error('Could not verify managed graphic capture states');
+  const captureByLine=new Map((capture||[]).map(c=>[String(c.woo_line_item_id),c]));
   const byLine=new Map((rows||[]).map(x=>[x.external_line_id,x]));
-  const selections=items.map(item=>({job_item_id:item.id,...(byLine.get(String(item.woocommerce_line_item_id))||{})}));
+  const selections=items.map(item=>({
+   job_item_id:item.id,
+   ...(byLine.get(String(item.woocommerce_line_item_id))||{}),
+   capture_status:captureByLine.get(String(item.woocommerce_line_item_id))?.status||null
+  }));
   return jsonResponse(200,{channel:'woocommerce',selections,unmapped_line_ids:items.filter(x=>!byLine.has(String(x.woocommerce_line_item_id))).map(x=>x.id)},event);
  }catch(e){return jsonResponse(500,{message:'Order graphic verification is unavailable'},event)}
 }
