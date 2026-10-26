@@ -28,6 +28,9 @@ jobs:
           CG_TESTED_SHA: ${{ github.sha }}
           CG_RESULTS: ${{ github.workspace }}/integration-results.json
         run: node --experimental-test-module-mocks scripts/integration/client-graphics/verify.mjs 2>&1 | tee integration.log
+      - name: Verify enforced storage receipts with actual PostgreSQL triggers
+        shell: bash
+        run: node scripts/integration/client-graphics/verify-storage-receipts.mjs 2>&1 | tee storage-receipt-integration.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -35,6 +38,7 @@ jobs:
           path: |
             integration-results.json
             integration.log
+            storage-receipt-integration.log
   wordpress-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 5
