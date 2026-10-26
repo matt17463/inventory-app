@@ -113,10 +113,11 @@ export default function PrintCenter(){
   catch{setError('Unable to save named template.');}
  }
  async function previewLabel(){
-  if(!source||!job)return;
   setError('');
   try{
-   const pdf=createDistributionLabelsPdf({source,job,prefs:{...prefs,packageCount:1},origin:window.location.origin,labelFields,labelDesign,logoData:await readBrandLogo()});
+   const previewSource=source||{shipName:'Sample Recipient',customerName:'Sample Recipient',reference:'SAMPLE',lines:[{name:'Sample team hoodie',quantity:1,metadata:[{label:'Student Name',value:'Sample Student'},{label:'Teacher Name',value:'Sample Teacher'},{label:'Team',value:'Sample Team'},{label:'Coach',value:'Sample Coach'}]}]};
+   const previewJob=job||{id:'SAMPLE'};
+   const pdf=createDistributionLabelsPdf({source:previewSource,job:previewJob,prefs:{...prefs,packageCount:1},origin:window.location.origin,labelFields,labelDesign,logoData:await readBrandLogo()});
    setLabelPreview(pdf.output('datauristring'));
   }catch(e){setError(e.message||'Label preview failed.');}
  }
@@ -196,10 +197,63 @@ export default function PrintCenter(){
      (e.message||'Could not queue standard packet.'));
   }finally{setBusy('');}
  }
+ const designerPanel=(
+ <section className="card elevated-card">
+    <h2>4×6 Label Designer</h2>
+    <p>Choose a template, select which recipient details appear, rename their captions, and arrange them in printing order. Changes apply to downloaded and queued label PDFs.</p>
+    <div className="sc-print-preferences">
+      <label>Quick template
+       <select defaultValue="" onChange={e=>{if(e.target.value)setLabelDesign(presetLabelDesign(e.target.value));}}>
+        <option value="">Select template…</option>
+        {Object.entries(LABEL_PRESETS).map(([key,item])=><option key={key} value={key}>{item.name}</option>)}
+       </select>
+      </label>
+      <label>Saved templates
+       <select defaultValue="" onChange={e=>{if(customDesigns[e.target.value])setLabelDesign(normalizeLabelDesign(customDesigns[e.target.value]));}}>
+        <option value="">Load saved design…</option>
+        {Object.keys(customDesigns).map(name=><option key={name} value={name}>{name}</option>)}
+       </select>
+      </label>
+      <label>New saved template name<input type="text" maxLength={50} value={designName} onChange={e=>setDesignName(e.target.value)} placeholder="e.g. SKSC Soccer"/></label>
+      <label>Field font size (pt)<input type="number" min="8" max="13" value={labelDesign.fontSize} onChange={e=>setDesignValue('fontSize',e.target.value)}/></label>
+      <label>Logo size (pt)<input type="number" min="24" max="60" value={labelDesign.logoSize} onChange={e=>setDesignValue('logoSize',e.target.value)}/></label>
+      <label className="sc-print-check"><input type="checkbox" checked={labelDesign.showLogo} onChange={e=>setDesignValue('showLogo',e.target.checked)}/>Show business logo</label>
+    </div>
+    <h3>Field order and display names</h3>
+    <div className="sc-label-designer-list">
+      {labelDesign.order.map((key,index)=>{
+       const defaultName=LABEL_DESIGN_FIELDS.find(([id])=>id===key)?.[1]||key;
+       return <div className="sc-label-designer-row" key={key}>
+        <label><input type="checkbox" aria-label={'Show '+defaultName} checked={labelDesign.visible.includes(key)}
+          onChange={e=>setDesignValue('visible',e.target.checked?[...labelDesign.visible,key]:labelDesign.visible.filter(v=>v!==key))}/> Display</label>
+        <label>{defaultName}<input type="text" maxLength={28} value={labelDesign.labels[key]}
+          onChange={e=>setDesignValue('labels',{...labelDesign.labels,[key]:e.target.value})}/></label>
+        <button type="button" disabled={index===0} onClick={()=>setLabelDesign(v=>moveLabelField(v,key,-1))} aria-label={'Move '+defaultName+' up'}>↑</button>
+        <button type="button" disabled={index===labelDesign.order.length-1} onClick={()=>setLabelDesign(v=>moveLabelField(v,key,1))} aria-label={'Move '+defaultName+' down'}>↓</button>
+       </div>;
+      })}
+    </div>
+    <div className="sc-label-designer-actions">
+     <button type="button" onClick={saveLabelDesign}>Save my label layout</button>
+     <button type="button" onClick={saveNamedDesign}>Save named template</button>
+     <button type="button" onClick={previewLabel} disabled={Boolean(busy)}>Preview actual 4×6 PDF</button>
+    </div>
+    {labelPreview&&<div><h3>PDF Preview</h3><iframe className="sc-label-pdf-preview" src={labelPreview} title="4 by 6 label preview" /></div>}
+    <small>Saved templates are currently stored in this browser, not shared across shop workstations. Use separate prints for different students until bag-level allocation is recorded.</small>
+   </section>
+ );
  if(!authorized)return <main className="page sc-print-center"><h1>Print Center</h1>
   <p>Manager or admin access is required to print invoices containing customer financial details.</p>
   <Link to="/work-hub">Return to Work Hub</Link></main>;
- if(!jobId)return <QuickBooksConnection />;
+ if(!jobId)return <main className="page sc-print-center">
+  <header className="page-header"><div><p className="eyebrow">Print Center · Label setup</p>
+    <h1>4×6 Label Designer</h1><p>Customize and preview labels without QuickBooks or an order. Printing actual fulfillment labels requires opening a production job.</p></div>
+    <Link to="/work-hub">Select a production job</Link></header>
+  {error&&<p className="sc-print-alert" role="alert">{error}</p>}
+  {message&&<p role="status">{message}</p>}
+  {designerPanel}
+  <details className="card elevated-card"><summary>QuickBooks connection settings (optional)</summary><QuickBooksConnection /></details>
+ </main>;
 
  return <main className="page sc-print-center">
   <header className="page-header"><div><p className="eyebrow">Fulfillment · Source-controlled documents</p>
@@ -255,49 +309,7 @@ export default function PrintCenter(){
     </div>
     <small>These details are not saved as global workstation defaults. For different recipients in one order, print separately by recipient until per-bag allocation is verified.</small>
    </section>
-   <section className="card elevated-card">
-    <h2>4×6 Label Designer</h2>
-    <p>Choose a template, select which recipient details appear, rename their captions, and arrange them in printing order. Changes apply to downloaded and queued label PDFs.</p>
-    <div className="sc-print-preferences">
-      <label>Quick template
-       <select defaultValue="" onChange={e=>{if(e.target.value)setLabelDesign(presetLabelDesign(e.target.value));}}>
-        <option value="">Select template…</option>
-        {Object.entries(LABEL_PRESETS).map(([key,item])=><option key={key} value={key}>{item.name}</option>)}
-       </select>
-      </label>
-      <label>Saved templates
-       <select defaultValue="" onChange={e=>{if(customDesigns[e.target.value])setLabelDesign(normalizeLabelDesign(customDesigns[e.target.value]));}}>
-        <option value="">Load saved design…</option>
-        {Object.keys(customDesigns).map(name=><option key={name} value={name}>{name}</option>)}
-       </select>
-      </label>
-      <label>New saved template name<input type="text" maxLength={50} value={designName} onChange={e=>setDesignName(e.target.value)} placeholder="e.g. SKSC Soccer"/></label>
-      <label>Field font size (pt)<input type="number" min="8" max="13" value={labelDesign.fontSize} onChange={e=>setDesignValue('fontSize',e.target.value)}/></label>
-      <label>Logo size (pt)<input type="number" min="24" max="60" value={labelDesign.logoSize} onChange={e=>setDesignValue('logoSize',e.target.value)}/></label>
-      <label className="sc-print-check"><input type="checkbox" checked={labelDesign.showLogo} onChange={e=>setDesignValue('showLogo',e.target.checked)}/>Show business logo</label>
-    </div>
-    <h3>Field order and display names</h3>
-    <div className="sc-label-designer-list">
-      {labelDesign.order.map((key,index)=>{
-       const defaultName=LABEL_DESIGN_FIELDS.find(([id])=>id===key)?.[1]||key;
-       return <div className="sc-label-designer-row" key={key}>
-        <label><input type="checkbox" aria-label={'Show '+defaultName} checked={labelDesign.visible.includes(key)}
-          onChange={e=>setDesignValue('visible',e.target.checked?[...labelDesign.visible,key]:labelDesign.visible.filter(v=>v!==key))}/> Display</label>
-        <label>{defaultName}<input type="text" maxLength={28} value={labelDesign.labels[key]}
-          onChange={e=>setDesignValue('labels',{...labelDesign.labels,[key]:e.target.value})}/></label>
-        <button type="button" disabled={index===0} onClick={()=>setLabelDesign(v=>moveLabelField(v,key,-1))} aria-label={'Move '+defaultName+' up'}>↑</button>
-        <button type="button" disabled={index===labelDesign.order.length-1} onClick={()=>setLabelDesign(v=>moveLabelField(v,key,1))} aria-label={'Move '+defaultName+' down'}>↓</button>
-       </div>;
-      })}
-    </div>
-    <div className="sc-label-designer-actions">
-     <button type="button" onClick={saveLabelDesign}>Save my label layout</button>
-     <button type="button" onClick={saveNamedDesign}>Save named template</button>
-     <button type="button" onClick={previewLabel} disabled={Boolean(busy)}>Preview actual 4×6 PDF</button>
-    </div>
-    {labelPreview&&<div><h3>PDF Preview</h3><iframe className="sc-label-pdf-preview" src={labelPreview} title="4 by 6 label preview" /></div>}
-    <small>Saved templates are currently stored in this browser, not shared across shop workstations. Use separate prints for different students until bag-level allocation is recorded.</small>
-   </section>
+   {designerPanel}
    <section className="card elevated-card">
     <button type="button" onClick={()=>setVisibleSettings(v=>!v)}>{visibleSettings?'Hide':'Customize'} print layout</button>
     {visibleSettings&&<div className="sc-print-preferences">
