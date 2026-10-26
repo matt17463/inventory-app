@@ -38,6 +38,10 @@ begin
    cross join lateral jsonb_array_elements(case when jsonb_typeof(rv.placements)='array' then rv.placements else '[]'::jsonb end) p
    where rv.id=v_recipe
   union
+  select ja.artwork_asset_id
+   from public.sc_job_line_placement_artwork ja
+   where ja.job_item_id=new.job_item_id and ja.recipe_version_id=v_recipe
+  union
   select (s.resolution_snapshot->>'artworkAssetId')::uuid
    from public.sc_order_graphic_selections s
    join public.job_items ji on ji.id=new.job_item_id
