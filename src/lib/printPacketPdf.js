@@ -1,4 +1,4 @@
-import {normalizeLabelDesign} from './labelDesigner';
+import {normalizeLabelDesign} from './labelDesigner.js';
 import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
 import {money,normalizePrintPrefs,canPrintCustomerCopy} from './printModel';
