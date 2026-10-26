@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {validateTravelerGraphicReadiness as check} from '../src/lib/travelerGraphicReadiness.js';
+const id='01234567-89ab-4cde-8abc-0123456789ab';
+const recipe={status:'approved',placements:[{artwork_asset_id:id}]};
+const assets=[{id,preflight_status:'passed'}];
+test('allows approved matching artwork',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe,artworkAssets:assets}).ready,true));
+test('blocks missing artwork',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe}).ready,false));
+test('blocks unapproved artwork',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe,artworkAssets:[{id,preflight_status:'pending'}]}).ready,false));
+test('blocks incompatible graphic families',()=>assert.equal(check({items:[{id:1},{id:2}],recipeVersion:recipe,artworkAssets:assets,selections:[{family_id:'a'},{family_id:'b'}]}).ready,false));
+test('blocks mismatched customer art',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe,artworkAssets:assets,selections:[{family_id:'a',resolution_snapshot:{artworkAssetId:'different'}}]}).ready,false));
