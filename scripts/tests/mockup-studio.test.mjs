@@ -503,3 +503,14 @@ test('Mockup Studio supports placement deletion, clearable tags, and common size
   assert.match(studio, /YXS, YS, YM, YL, YXL, AS, AM, AL, AXL, A2XL, A3XL/);
   assert.match(studio, /Adult only/);
 });
+
+test('R2 production download signing verifies object presence before returning a URL', async () => {
+  const storage = await read('netlify/functions/_shared/mockupStorage.js');
+  const signer = storage.slice(storage.indexOf('export async function signedStoredAssetUrl('),storage.indexOf('export async function presignedR2Put('));
+  assert.match(signer, /new HeadObjectCommand\(\{ Bucket: reference\.bucket, Key: key \}\)/);
+  assert.match(signer, /await r2Client\(\)\.send\(new HeadObjectCommand/);
+  assert.ok(signer.indexOf('await r2Client().send(new HeadObjectCommand') < signer.indexOf('return getSignedUrl('), 'HEAD must complete before a signed URL is returned');
+  const backend = await read('netlify/functions/mockup-storage.js');
+  assert.match(backend, /async function signDownload\(/);
+  assert.match(backend, /await signedStoredAssetUrl\(/);
+});
