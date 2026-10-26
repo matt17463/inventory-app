@@ -9,6 +9,7 @@ import {createInvoicePdf,createInvoicePairPdf,createDistributionLabelsPdf,create
 import PrintIntegrations from './PrintIntegrations';
 import QuickBooksConnection from './QuickBooksConnection';
 import './PrintCenter.css';
+import businessLogo from './assets/logo.png';
 
 const CONFIG_KEY='sc-print-center-prefs-v1';
 function initialPrefs(){
@@ -41,6 +42,19 @@ async function readArtwork(travelers){
  }));
  return images;
 }
+async function readBrandLogo(){
+ try{
+  const response=await fetch(businessLogo);
+  if(!response.ok)return '';
+  const blob=await response.blob();
+  return blob.size<2_000_000?await base64Image(blob):'';
+ }catch{return '';}
+}
+const LABEL_FIELDS=[
+ ['student','Student / player name'],['teacher','Teacher name'],['coach','Coach name'],
+ ['team','Team / classroom'],['grade','Grade'],['playerNumber','Player / jersey number'],
+ ['appliedName','Name applied to garment'],['school','School / organization'],
+];
 const jobNumber=id=>Number.isSafeInteger(Number(id))&&Number(id)>0?Number(id):null;
 export default function PrintCenter(){
  const access=useContext(EmployeeAccessContext);
@@ -54,8 +68,10 @@ export default function PrintCenter(){
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
  const [prefs,setPrefs]=useState(initialPrefs);
+ const [labelFields,setLabelFields]=useState({});
  const [visibleSettings,setVisibleSettings]=useState(false);
  const warnings=useMemo(()=>source?printWarnings(source,job,travelers):[],[source,job,travelers]);
+ const setLabelField=(key,value)=>setLabelFields(v=>({...v,[key]:value}));
  const setPref=(name,value)=>setPrefs(v=>normalizePrintPrefs({...v,[name]:value}));
  const reload=useCallback(async()=>{
    if(!jobId||!authorized)return;
@@ -84,7 +100,7 @@ export default function PrintCenter(){
   if(!source||!job||busy)return;
   setBusy(which);setError('');setMessage('');
   try{
-   const base={source,job,travelers,prefs,origin:window.location.origin};
+   const base={source,job,travelers,prefs,origin:window.location.origin,labelFields,logoData:await readBrandLogo()};
    let pdf,name;
    if(which==='invoices'){
      pdf=createInvoicePairPdf(base);name='SC-'+source.reference+'-Customer-and-Shop-Invoices.pdf';
@@ -131,7 +147,7 @@ export default function PrintCenter(){
    if(!cap?.enabled||!cap?.letter||!cap?.thermal)
     throw Error('Standard packet needs both verified Epson and thermal print queues. Configure/test the print agent first, or use individual PDF downloads.');
    if(prefs.productionPacket&&!travelers.length)throw Error('Attach approved QR travelers before including a production packet.');
-   const base={source,job,travelers,prefs,origin:window.location.origin};
+   const base={source,job,travelers,prefs,origin:window.location.origin,labelFields,logoData:await readBrandLogo()};
    const docs=[['invoice_pair',createInvoicePairPdf(base)],['packing_labels',createDistributionLabelsPdf(base)]];
    if(prefs.productionPacket){
     const artworkImages=await readArtwork(travelers);
@@ -177,9 +193,9 @@ export default function PrintCenter(){
    <section className="card elevated-card">
     <h2>Documents</h2>
     <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={printStandardPacket}>
-      Queue Standard Packet (Epson invoice pair + Munbyn labels{prefs.productionPacket?' + production packet':''})
+      Queue Standard Packet (Epson invoice pair + thermal labels{prefs.productionPacket?' + production packet':''})
     </button>
-    <p>Print invoice pair on Epson letter paper; print distribution labels on Munbyn 4 × 6 stock. Direct queueing stays disabled until the Pi agent and physical printers are validated and enabled.</p>
+    <p>Print invoice pair on Epson letter paper; print distribution labels on 4 × 6 thermal stock. Direct queueing stays disabled until the Pi agent and physical printers are validated and enabled.</p>
     <div className="sc-print-cards">
      <div><h3>Customer + Shop Invoices</h3>
       <p>One letter-size PDF contains both copies. Shop copy includes an authenticated job QR and item traveler references.</p>
@@ -189,9 +205,9 @@ export default function PrintCenter(){
       <button type="button" disabled={Boolean(busy)||!canPrintCustomerCopy(source)} onClick={()=>documentAction('customer')}>Customer copy only</button>
       <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('shop')}>Shop copy only{!source.financialVerified?' (DRAFT)':''}</button>
      </div>
-     <div><h3>4 × 6 Distribution Labels</h3><p>{prefs.packageCount} label(s), black-and-white thermal layout. No postage is purchased.</p>
-      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('labels')}>Download Munbyn label PDF</button>
-      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('labels',true)}>Queue thermal label (after printer setup)</button>
+     <div><h3>4 × 6 Distribution Labels</h3><p>{prefs.packageCount} label(s), branded black-and-white thermal labels for the configured printer. No postage is purchased.</p>
+      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('labels')}>Download 4×6 label PDF</button>
+      <button type="button" disabled={Boolean(busy)} onClick={()=>documentAction('labels',true)}>Queue 4×6 thermal label</button>
      </div>
      <div><h3>Production Packet</h3><p>One or more letter-size pages per approved traveler, including graphic previews when accessible, measured placement and saved settings.</p>
       <button type="button" disabled={Boolean(busy)||!travelers.length} onClick={()=>documentAction('production')}>Download production PDF</button>
@@ -199,6 +215,17 @@ export default function PrintCenter(){
       {!travelers.length&&<Link to={'/production-travelers?job='+job.id}>Add approved traveler →</Link>}
      </div>
     </div>
+   </section>
+   <section className="card elevated-card">
+    <h2>Distribution label recipient details</h2>
+    <p>Use these fields to identify bags by student, teacher, coach, team or personalized garment. Existing order item personalization is used automatically when available; entries here override it for this print session only.</p>
+    <div className="sc-print-preferences">
+      {LABEL_FIELDS.map(([key,title])=><label key={key}>{title}
+        <input type="text" maxLength={120} value={labelFields[key]||''}
+          placeholder="Auto from order, or enter here" onChange={e=>setLabelField(key,e.target.value)}/>
+      </label>)}
+    </div>
+    <small>These details are not saved as global workstation defaults. For different recipients in one order, print separately by recipient until per-bag allocation is verified.</small>
    </section>
    <section className="card elevated-card">
     <button type="button" onClick={()=>setVisibleSettings(v=>!v)}>{visibleSettings?'Hide':'Customize'} print layout</button>
