@@ -43,7 +43,7 @@ begin
  end if;
  if (v_recipe->>'artwork_asset_id' is null)
     and (v_placements is null or v_placements='[]'::jsonb) then
-  raise exception 'Approved recipe has no artwork or placements';
+  raise exception 'Selected artwork does not match approved recipe placement: recipe has no artwork or placements';
  end if;
  select count(*) into v_link_count from public.sc_order_graphic_selections
  where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id));
