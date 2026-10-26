@@ -42,3 +42,13 @@ test('generic recipe blocks unapproved attached artwork',()=>{
   lineArtworkByItem:assignment(15,['full_front','sleeve','full_back'])});
  assert.equal(result.ready,false);
 });
+
+test('managed selection cannot borrow a sibling order line artwork assignment',()=>{
+ const different='01234567-89ab-4cde-8abc-0123456789ac';
+ const result=check({items:[{id:20},{id:21}],recipeVersion:{status:'approved',placements:[{placement_name:'full_front'}]},
+  artworkAssets:[...assets,{id:different,preflight_status:'passed'}],
+  lineArtworkByItem:{20:[{placement_name:'full_front',artwork_asset_id:different}],
+   21:[{placement_name:'full_front',artwork_asset_id:id}]},
+  selections:[{job_item_id:20,family_id:'customer-one',resolution_snapshot:{status:'resolved',artworkAssetId:id}}]});
+ assert.equal(result.ready,false);assert.match(result.blockers.join(' '),/does not match/);
+});
