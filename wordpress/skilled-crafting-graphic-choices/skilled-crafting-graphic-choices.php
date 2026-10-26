@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skilled Crafting Graphic Choices
  * Description: Optional product-level graphic selection bridge. Disabled until store-by-store verification.
- * Version: 0.1.0
+ * Version: 0.2.0
  */
 defined('ABSPATH') || exit;
 const SC_GRAPHICS_OPTION = 'sc_graphics_selector_enabled';
@@ -49,10 +49,11 @@ add_filter('woocommerce_add_to_cart_validation', function($valid,$product_id,$qu
 },10,4);
 add_filter('woocommerce_add_cart_item_data',function($data,$product_id,$variation_id=0){
  if(!sc_graphics_enabled())return $data;
- $opts=sc_graphics_config($product_id);
+ $opts=sc_graphics_options_for_product($product_id,$variation_id);
  if(!$opts)return $data;
  $selected=isset($_POST['sc_graphic_family_id'])?sanitize_text_field(wp_unslash($_POST['sc_graphic_family_id'])):'';
  if(count($opts)===1)$selected=$opts[0]['id'];
+ if(count($opts)>1 && !in_array($selected,array_column($opts,'id'),true))return $data;
  foreach($opts as $row)if($row['id']===$selected){$data['sc_graphic_family_id']=$row['id'];$data['sc_graphic_label']=$row['label'];break;}
  return $data;
 },10,3);
