@@ -128,6 +128,7 @@ export const navSections = [
       { label: 'DTF Artwork Preflight', path: '/artwork-preflight', keywords: 'image png transparency white background remove 300dpi crop DTF artwork' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
       { label: 'Client Graphics', path: '/client-graphics', keywords: 'graphic logo family design production art variants woo customer choice' },
+      { label: 'Order Graphics', path: '/order-graphics', keywords: 'quickbooks manual invoice order production artwork choice' },
       { label: 'UV Studio — Textured Patches', path: '/uv-studio', keywords: 'UV printing faux embroidery dimensional raised patches laser leather vinyl TPU metal texture preview print cut calibration' },
       { label: 'Artwork Bridge', path: '/artwork-bridge', keywords: 'wordpress artwork bridge vault workflow sync', optional: true },
     ],
