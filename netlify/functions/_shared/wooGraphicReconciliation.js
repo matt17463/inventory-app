@@ -35,6 +35,9 @@ export async function persistWooGraphicSelections(db,order,{strict=false}={}){
   };
   const {error}=await db.from('sc_order_graphic_selections').upsert(payload,{onConflict:'source,external_order_id,external_line_id'});
   if(error){failures.push({lineId:line.id,reason:'Failed to persist order graphic selection'});continue}
+  await saveWooGraphicCapture(db,order.id,line.id,
+   resolution.status==='resolved'?'managed_resolved':'managed_failed',
+   resolution.status==='resolved'?null:'Artwork resolution: '+resolution.status);
   saved.push({lineId:line.id,status:resolution.status});
  }
  if(strict&&failures.length)throw Error('Graphic selection reconciliation failed');
