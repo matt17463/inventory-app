@@ -32,7 +32,7 @@ export function validateTravelerGraphicReadiness({items=[],recipeVersion,artwork
  // appear among its attached exact artwork assets.
  for(const x of resolved){
   const selectedId=String(x.resolution_snapshot?.artworkAssetId||'');
-  const mappedIds=Object.values(lineArtworkByItem).flat().map(a=>String(a.artwork_asset_id));
+  const mappedIds=(lineArtworkByItem[x.job_item_id]||[]).map(a=>String(a.artwork_asset_id));
   if(selectedId && !(placements.length?placements:[{artwork_asset_id:versionAsset}]).some(p=>String(p.artwork_asset_id||versionAsset)===selectedId)
     && !mappedIds.includes(selectedId))
    blockers.push('Recipe artwork does not match customer graphic selection');
