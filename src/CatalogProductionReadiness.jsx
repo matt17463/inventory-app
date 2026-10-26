@@ -39,6 +39,8 @@ export default function CatalogProductionReadiness(){
  const [activeOrderDemand,setActiveOrderDemand]=useState([]);
  const [familyId,setFamilyId]=useState(null);
  const [setupStep,setSetupStep]=useState(0);
+ const [artworkAudit,setArtworkAudit]=useState(null);
+ const [artworkError,setArtworkError]=useState('');
  const [selectedRecipe,setSelectedRecipe]=useState('');
  const [disposition,setDisposition]=useState('assigned');
  const [notes,setNotes]=useState('');
@@ -52,6 +54,15 @@ export default function CatalogProductionReadiness(){
   catch(e){setMessage(errorMessage(e));}finally{setBusy(false);}
  },[]);
  useEffect(()=>{load();},[load]);
+ useEffect(()=>{
+  let active=true;
+  authenticatedFunctionFetch('/.netlify/functions/legacy-catalog-modernization',{method:'POST',body:JSON.stringify({action:'dashboard'})})
+   .then(async response=>{const result=await response.json().catch(()=>({}));if(!response.ok||!result.success)throw Error(result.message||'Artwork review unavailable');if(active){setArtworkAudit(result.data);setArtworkError('');}})
+   .catch(error=>{if(active)setArtworkError(error.message)});
+  return ()=>{active=false};
+ },[]);
+ const artworkByProduct=useMemo(()=>new Map((artworkAudit?.scores||[]).map(row=>[Number(row.woocommerce_product_id),row])),[artworkAudit]);
+
  const assignments=useMemo(()=>new Map((state?.assignments||[]).map(a=>[Number(a.woocommerce_product_id),a])),[state]);
  const families=state?.families||[];
  const activity=state?.observedActivity||{};
@@ -63,6 +74,7 @@ export default function CatalogProductionReadiness(){
  }).sort((a,b)=>{if(sortMode==='name')return String(a.product_name||'').localeCompare(String(b.product_name||''));const demandDiff=(demand.get(Number(b.woocommerce_product_id))||0)-(demand.get(Number(a.woocommerce_product_id))||0);if(sortMode==='demand')return demandDiff;
  if(sortMode==='sales')return (Number(activity[b.woocommerce_product_id]?.units_90d)||0)-(Number(activity[a.woocommerce_product_id]?.units_90d)||0);const urgent=(f)=>Number(blockers.has(Number(f.woocommerce_product_id))&&demand.has(Number(f.woocommerce_product_id)))*100000+(demand.get(Number(f.woocommerce_product_id))||0)*1000+(Number(activity[f.woocommerce_product_id]?.units_90d)||0)*20+Number(f.missing_blank_rows||0);return urgent(b)-urgent(a);}),[families,search,status,sortMode,demand,blockers,activity]);
  const selected=families.find(x=>Number(x.woocommerce_product_id)===Number(familyId));
+ const selectedArtwork=selected?artworkByProduct.get(Number(selected.woocommerce_product_id)):null;
  const ready=(state?.versions||[]).filter(v=>v.status==='approved');
  const approvedRecipeIds=new Set(ready.map(v=>v.recipe_id));
  async function run(input,done){
@@ -190,7 +202,16 @@ export default function CatalogProductionReadiness(){
        <p>{SETUP_STEPS[setupStep].description}</p>
        {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
        {setupStep===1&&<p>{fmt(selected.missing_blank_rows)} catalog rows are flagged as missing blank mappings. Some finished or non-inventory products can legitimately have none; review classifications before editing.</p>}
-       {setupStep===2&&<p>{fmt(selected.legacy_logo_count)} different legacy logo references detected. These are clues, not proof of authorized production artwork.</p>}
+       {setupStep===2&&<div>
+        <p>{fmt(selected.legacy_logo_count)} different legacy logo references detected. These are clues, not proof of authorized production artwork.</p>
+        {artworkError?<p role="alert">Artwork review data unavailable: {artworkError}. Do not assume approval.</p>:
+         !artworkAudit?<p>Loading the existing artwork approval audit…</p>:
+         !selectedArtwork?<p>Product not found in the artwork approval audit. Confirm WooCommerce catalog synchronization.</p>:
+         <p><strong>Artwork evidence:</strong> {selectedArtwork.flags?.artwork?'Reviewed association recorded — confirm exact asset and client permissions':'Artwork approval/review required'}.
+          {selectedArtwork.artwork?.artwork_asset_id&&<> Linked asset: {selectedArtwork.artwork.artwork_asset_id}.</>}
+         </p>}
+        <p><Link to={'/catalog-pairing?product='+encodeURIComponent(selected.woocommerce_product_id)}>Review, upload or link artwork for this product →</Link></p>
+       </div>}
        {setupStep===3&&<p>Recipe routing: <strong>{labels[selected.readiness]}</strong>. Only managers may save the linked recipe below. Approved versions still require artwork and variation checks.</p>}
        {setupStep===5&&<p>{fmt(demand.get(Number(selected.woocommerce_product_id))||0)} units appear in currently open production jobs. Use the traveler preview tab to check each eligible line.</p>}
 
