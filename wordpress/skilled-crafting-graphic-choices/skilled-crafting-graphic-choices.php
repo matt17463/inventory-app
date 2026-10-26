@@ -67,15 +67,41 @@ add_action('woocommerce_checkout_create_order_line_item',function($item,$cart_it
  $item->add_meta_data('_sc_graphic_label',sanitize_text_field($values['sc_graphic_label']??''),true);
 },10,3);
 
+// The Woo Store API may submit a server-verified graphic ID as an explicit
+// request parameter. Never trust the client-supplied label or a free-text name.
+add_filter('woocommerce_store_api_add_to_cart_data',function($cart_data,$request){
+ if(!sc_graphics_enabled())return $cart_data;
+ $product_id=(int)($request['id']??0);
+ $variation_id=0;
+ if(function_exists('wp_get_post_parent_id')){
+  $parent_id=(int)wp_get_post_parent_id($product_id);
+  if($parent_id>0){$variation_id=$product_id;$product_id=$parent_id;}
+ }
+ $opts=sc_graphics_options_for_product($product_id,$variation_id);
+ if(!$opts)return $cart_data;
+ $selected=sanitize_text_field((string)($request['sc_graphic_family_id']??''));
+ if(count($opts)===1)$selected=$opts[0]['id'];
+ foreach($opts as $row){
+  if($row['id']!==$selected)continue;
+  $cart_data['cart_item_data']['sc_graphic_family_id']=$row['id'];
+  $cart_data['cart_item_data']['sc_graphic_label']=$row['label'];
+  break;
+ }
+ return $cart_data;
+},10,2);
 // Store API / Blocks requests do not submit the classic product-form selector.
-// Until a dedicated Blocks selection UI and signed cart-data path are verified,
+// The Store API requires a verified ID and still needs a supported Blocks UI,
 // reject managed multi-choice products rather than silently dropping customer art.
 add_action('woocommerce_store_api_validate_add_to_cart',function($product,$request){
  if(!sc_graphics_enabled() || !is_object($product) || !method_exists($product,'get_id'))return;
  $id=(int)$product->get_id();
  $parent=method_exists($product,'get_parent_id')?(int)$product->get_parent_id():0;
  $options=sc_graphics_config($parent>0?$parent:$id);
- if(count($options)>1)throw new Exception(__('This product requires selecting a graphic from its product page. Please use the standard product form.','skilledcrafting'));
+ if(count($options)>1){
+  $selected=sanitize_text_field((string)($request['sc_graphic_family_id']??''));
+  if(!in_array($selected,array_column($options,'id'),true))
+   throw new Exception(__('Please select an available graphic design.','skilledcrafting'));
+ }
 },10,2);
 // Activation deliberately never flips SC_GRAPHICS_OPTION.
 // Product graphic options must be populated only after explicit reconciliation.
