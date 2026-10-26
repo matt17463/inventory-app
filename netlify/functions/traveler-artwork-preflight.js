@@ -28,6 +28,19 @@ export async function handler(event) {
       .select('id,status,artwork_asset_id,placements').eq('id',recipeId).single();
     if (recipeError || recipe?.status !== 'approved') return jsonResponse(409, { message: 'Approved recipe not available' }, event);
     const rawPlacements = Array.isArray(recipe.placements) ? recipe.placements : [];
+    const {data:lineArtwork,error:lineArtworkError}=await auth.supabase.from('sc_job_line_placement_artwork')
+      .select('job_item_id,recipe_version_id,placement_name,artwork_asset_id')
+      .eq('recipe_version_id',recipeId).in('job_item_id',itemIds);
+    if(lineArtworkError)throw lineArtworkError;
+    const assignedFor=item=>(lineArtwork||[]).filter(row=>Number(row.job_item_id)===Number(item.id));
+    // Each generic placement must be backed by an exact approved job-line assignment.
+    for(const item of items){
+      for(const placement of rawPlacements){
+        if(placement.artwork_asset_id||recipe.artwork_asset_id)continue;
+        const matches=assignedFor(item).filter(row=>row.placement_name===placement.placement_name);
+        if(matches.length!==1)return jsonResponse(409,{message:'A required job artwork placement is not approved',job_item_id:item.id,placement_name:placement.placement_name},event);
+      }
+    }
     const recipeIds = [recipe.artwork_asset_id, ...rawPlacements.map(p => p.artwork_asset_id || recipe.artwork_asset_id)].filter(Boolean);
     const {data:allSelections,error:selectionError}=await auth.supabase.from('sc_order_graphic_selections')
       .select('job_item_id,source,external_order_id,external_line_id,resolution_snapshot')
@@ -39,7 +52,8 @@ export async function handler(event) {
        String(sel.external_order_id)===String(job.woocommerce_order_id) &&
        String(sel.external_line_id)===String(item.woocommerce_line_item_id))
     ).map(sel=>sel.resolution_snapshot?.artworkAssetId).filter(Boolean);
-    const ids = [...new Set([...recipeIds, ...items.flatMap(selectedArtwork)])];
+    const lineArtworkIds=item=>assignedFor(item).map(row=>row.artwork_asset_id);
+    const ids = [...new Set([...recipeIds, ...items.flatMap(item=>[...selectedArtwork(item),...lineArtworkIds(item)])])];
     if (!ids.length || ids.some(id => !isUuid(id))) return jsonResponse(409, { message: 'Recipe is missing valid artwork references' }, event);
     const { data: assets, error } = await auth.supabase.from('mockup_artwork_assets')
       .select('id,storage_provider,storage_bucket,storage_path,preflight_status').in('id',ids);
@@ -75,7 +89,7 @@ export async function handler(event) {
     // Only this authenticated service-role handler may issue a receipt; users cannot insert one.
     // Match the SQL trigger's deterministic, per-line storage reference fingerprint.
     for (const item of items) {
-      const lineIds=[...new Set([...recipeIds,...selectedArtwork(item)])].sort();
+      const lineIds=[...new Set([...recipeIds,...selectedArtwork(item),...lineArtworkIds(item)])].sort();
       const fingerprintInput=lineIds.map(id=>{
         const a=byId.get(id);
         return [a.id,a.storage_provider||'',a.storage_bucket||'',a.storage_path||'',a.preflight_status||''].join(':');
