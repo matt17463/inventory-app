@@ -7,6 +7,7 @@ import LocalQrCode from './components/LocalQrCode';
 import './ProductionTravelers.css';
 import { signedAssetUrl } from './lib/mockupStudioApi';
 import {validateTravelerGraphicReadiness} from './lib/travelerGraphicReadiness';
+import {graphicCompatibilityState} from './lib/graphicCompatibility';
 
 const eventKinds=[
   ['note','Work note'],['placement_checked','Placement measured / checked'],
@@ -28,7 +29,7 @@ export default function ProductionTravelers() {
   const [travelerList,setTravelerList]=useState([]);
   const [recipeVersions,setRecipeVersions]=useState([]);
   const [readinessAssets,setReadinessAssets]=useState([]);
-  const [orderGraphicCheck,setOrderGraphicCheck]=useState({loading:false,selections:[],unmapped_line_ids:[],error:''});
+  const [orderGraphicCheck,setOrderGraphicCheck]=useState({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:''});
   const [recipes,setRecipes]=useState([]);
   const [selectedItemIds,setSelectedItemIds]=useState([]);
   const [travelerLines,setTravelerLines]=useState([]);
@@ -112,7 +113,8 @@ export default function ProductionTravelers() {
 
   const chosenRecipe=recipeVersions.find(x=>x.id===versionId);
   const readiness=validateTravelerGraphicReadiness({items:chosenItems,recipeVersion:chosenRecipe,artworkAssets:readinessAssets,selections:orderGraphicCheck.selections});
-  const graphicsBlocked=orderGraphicCheck.loading||Boolean(orderGraphicCheck.error)||orderGraphicCheck.unmapped_line_ids.length>0;
+  const graphicMode=graphicCompatibilityState(orderGraphicCheck);
+  const graphicsBlocked=graphicMode.blocked;
   useEffect(()=>{
     const ids=[...new Set([chosenRecipe?.artwork_asset_id,...(chosenRecipe?.placements||[]).map(p=>p.artwork_asset_id)].filter(Boolean))];
     if(!ids.length){setReadinessAssets([]);return;}
@@ -123,23 +125,23 @@ export default function ProductionTravelers() {
     return ()=>{cancelled=true;};
   },[chosenRecipe]);
   useEffect(()=>{
-    if(!jobId||!selectedItemIds.length){setOrderGraphicCheck({loading:false,selections:[],unmapped_line_ids:[],error:''});return;}
+    if(!jobId||!selectedItemIds.length){setOrderGraphicCheck({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:''});return;}
     let cancelled=false;
-    setOrderGraphicCheck({loading:true,selections:[],unmapped_line_ids:[],error:''});
+    setOrderGraphicCheck({channel:'manual',loading:true,selections:[],unmapped_line_ids:[],error:''});
     (async()=>{
       const {data:{session}}=await supabase.auth.getSession();
       if(!session?.access_token)throw Error('Employee sign-in required');
       const response=await fetch('/.netlify/functions/traveler-graphic-selections',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({job_id:Number(jobId),job_item_ids:selectedItemIds})});
       const result=await response.json();if(!response.ok)throw Error(result.message||'Order graphic lookup failed');
-      if(!cancelled)setOrderGraphicCheck({loading:false,selections:result.selections||[],unmapped_line_ids:result.unmapped_line_ids||[],error:''});
-    })().catch(e=>{if(!cancelled)setOrderGraphicCheck({loading:false,selections:[],unmapped_line_ids:[],error:e.message});});
+      if(!cancelled)setOrderGraphicCheck({channel:result.channel||'manual',loading:false,selections:result.selections||[],unmapped_line_ids:result.unmapped_line_ids||[],error:''});
+    })().catch(e=>{if(!cancelled)setOrderGraphicCheck({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:e.message});});
     return ()=>{cancelled=true};
   },[jobId,selectedItemIds]);
   async function createTraveler(){
     setBusy(true);setMessage('');
     try{
       if(!jobId||!selectedItemIds.length||!versionId)throw Error('Choose at least one job line and an approved recipe version.');
-      if(graphicsBlocked)throw Error(orderGraphicCheck.error||'Order graphic choices require verification before production');
+      if(graphicsBlocked)throw Error(graphicMode.message);
       if(!readiness.ready)throw Error(readiness.blockers.join('; '));
       const {data:auth,error:e}=await supabase.auth.getUser();
       if(e||!auth.user)throw Error('Sign in to create a traveler.');
@@ -204,7 +206,7 @@ export default function ProductionTravelers() {
         {versionId&&<p>Approval-backed recipe selections are preserved on the traveler, including saved decoration placements, process steps and packaging instructions.</p>}
         {versionId&&readiness.blockers.length>0&&<div role="alert"><strong>Production artwork checks:</strong><ul>{readiness.blockers.map(reason=><li key={reason}>{reason}</li>)}</ul></div>}
         {selectedItemIds.length>0&&orderGraphicCheck.loading&&<p>Checking saved customer graphic selections…</p>}
-        {selectedItemIds.length>0&&(orderGraphicCheck.error||orderGraphicCheck.unmapped_line_ids.length>0)&&<p role="alert">{orderGraphicCheck.error||'Unverified WooCommerce graphic selections for order line(s): '+orderGraphicCheck.unmapped_line_ids.join(', ')}</p>}
+        {selectedItemIds.length>0&&!orderGraphicCheck.loading&&<p role={graphicsBlocked?'alert':'status'}>{graphicMode.message}</p>}
         {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready||graphicsBlocked}
           onClick={createTraveler}>{busy?'Saving…':'Create grouped traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
         <p><small>Creating a traveler records manufacturing instructions only; it does not move inventory, complete a pull sheet, charge a customer or change WooCommerce status.</small></p>
