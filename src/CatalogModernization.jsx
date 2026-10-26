@@ -75,7 +75,7 @@ export default function CatalogModernization(){
   <header className="page-header"><div><p className="eyebrow">Production · Catalog modernization</p>
    <h1>Product, Artwork & Client Modernization</h1>
    <p>Extend existing products and customers into the latest Skilled Crafting features. No historical orders, inventory, payment information, artwork files or approved recipe snapshots are overwritten.</p>
-  </div><button disabled={busy} onClick={load}>{busy?'Working…':'Refresh audit'}</button></header>
+  </div><Link to="/catalog-pairing">Open bulk artwork & recipe pairing →</Link><button disabled={busy} onClick={load}>{busy?'Working…':'Refresh audit'}</button></header>
   {notice&&<p className="sc-mo-message" role="status">{notice}</p>}
   <section className="sc-mo-kpis">
    <div><small>Existing product families</small><strong>{fmt(state?.totals?.products)}</strong></div>
