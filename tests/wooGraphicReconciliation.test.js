@@ -18,7 +18,7 @@ test('Woo reconciliation never assigns legacy text-only artwork',async()=>{
 function fixture({mode='selectable',allowed=true,verified=true,variants,rules}={}){
  const rows=new Map(),captures=new Map();
  const data={
-  sc_client_graphic_product_bindings:[{graphic_family_id:family,allowed,verified_at:verified?'2026-10-25':null,mode}],
+  sc_client_graphic_product_bindings:[{woo_product_id:7,graphic_family_id:family,allowed,verified_at:verified?'2026-10-25':null,mode}],
   sc_client_graphic_families:[{id:family,state:'approved'}],
   sc_client_graphic_variants:variants||[{id:variant,family_id:family,state:'approved',artwork_asset_id:'asset-1'}],
   sc_client_graphic_rules:rules||[{id:'rule',family_id:family,variant_id:variant,enabled:true,priority:100,placement_name:'left_chest'}],
@@ -26,8 +26,8 @@ function fixture({mode='selectable',allowed=true,verified=true,variants,rules}={
  return {rows,captures,db:{from(table){
   const filters=[];
   const query={select(){return query},eq(k,v){filters.push([k,v]);return query},
-   maybeSingle(){return Promise.resolve({data:(data[table]||[]).find(x=>filters.every(([k,v])=>k==='woo_product_id'||x[k]===v)),error:null})},
-   then(resolve,reject){return Promise.resolve({data:(data[table]||[]).filter(x=>filters.every(([k,v])=>k==='woo_product_id'||x[k]===v)),error:null}).then(resolve,reject)},
+   maybeSingle(){return Promise.resolve({data:(data[table]||[]).find(x=>filters.every(([k,v])=>x[k]===v)),error:null})},
+   then(resolve,reject){return Promise.resolve({data:(data[table]||[]).filter(x=>filters.every(([k,v])=>x[k]===v)),error:null}).then(resolve,reject)},
    upsert(payload,options){if(table==='sc_woo_graphic_capture_states'){assert.equal(options.onConflict,'woo_order_id,woo_line_item_id');captures.set([payload.woo_order_id,payload.woo_line_item_id].join(':'),payload)}else{assert.equal(options.onConflict,'source,external_order_id,external_line_id');rows.set([payload.source,payload.external_order_id,payload.external_line_id].join(':'),payload)}return Promise.resolve({error:null})}
   };return query;
  }}};
