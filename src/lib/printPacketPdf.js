@@ -209,16 +209,16 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
   let lineY=itemStart+31;
   if(cfg.labelShowItems&&cfg.packageCount===1){
    for(const line of (source.lines||[]).slice(0,2)){
-    cropLine(doc,String(line.quantity)+' x '+line.name,18,lineY,252,9);
+    cropLine(doc,String(line.quantity)+' x '+line.name,18,lineY,cfg.labelShowQR?182:252,9);
     lineY+=16;
    }
-   if((source.lines||[]).length>2)cropLine(doc,'+ '+(source.lines.length-2)+' more line(s); see packing list',18,lineY,252,8);
+   if((source.lines||[]).length>2)cropLine(doc,'+ '+(source.lines.length-2)+' more; see packing list',18,lineY,cfg.labelShowQR?180:252,8);
   }else{
-   cropLine(doc,cfg.packageCount>1?'Contents not allocated by package. Verify bag.':'Verify contents against order before handoff.',18,lineY,252,8);
+   cropLine(doc,cfg.packageCount>1?'Contents not allocated. Verify bag.':'Verify against order before handoff.',18,lineY,cfg.labelShowQR?180:252,8);
   }
   if(cfg.labelShowQR){
-   qrCode(doc,origin+'/work-hub?job='+encodeURIComponent(job.id),220,367,48);
-   text(doc,'STAFF QR',223,422,52,6,{bold:true});
+   qrCode(doc,origin+'/work-hub?job='+encodeURIComponent(job.id),218,itemStart+26,52);
+   text(doc,'STAFF QR',222,itemStart+79,49,6,{bold:true});
   }
   doc.setDrawColor(30,46,52);doc.line(11,406,cfg.labelShowQR?210:277,406);
   text(doc,'INTERNAL DISTRIBUTION LABEL - NOT POSTAGE',12,421,cfg.labelShowQR?200:265,7,{bold:true});
