@@ -1,3 +1,4 @@
+import {normalizeLabelDesign} from './labelDesigner';
 import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
 import {money,normalizePrintPrefs,canPrintCustomerCopy} from './printModel';
@@ -160,44 +161,41 @@ function cropLine(doc,value,x,y,width,size=10,bold=false){
  if(visible!==raw)visible=visible.trimEnd()+'...';
  doc.text(visible,x,y);return y+size+6;
 }
-export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount,labelFields={},logoData=''}) {
+export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount,labelFields={},logoData='',labelDesign={}}) {
  const cfg=normalizePrintPrefs({...prefs,packageCount:packageCount??prefs.packageCount});
  const doc=new jsPDF({unit:'pt',format:[288,432],compress:true});
  const info=deriveDistributionFields(source,labelFields);
- const fields=[
-  ['STUDENT / PLAYER',info.student],['TEACHER',info.teacher],['COACH',info.coach],
-  ['TEAM / CLASS',info.team],['GRADE',info.grade],['PLAYER #',info.playerNumber],
-  ['NAME APPLIED',info.appliedName],['SCHOOL',info.school],
- ];
+ const design=normalizeLabelDesign(labelDesign);
+ const fields=design.order.filter(key=>design.visible.includes(key)).map(key=>[design.labels[key].toUpperCase(),info[key]]);
  for(let i=0;i<cfg.packageCount;i++){
   if(i)doc.addPage([288,432]);
   doc.setFillColor(255);doc.rect(0,0,288,432,'F');
   doc.setFillColor(21,34,42);doc.rect(0,0,288,76,'F');
-  if(logoData){
+  if(logoData&&design.showLogo){
    try{
     const format=logoData.startsWith('data:image/jpeg')?'JPEG':'PNG';
     const props=doc.getImageProperties(logoData);
-    const scale=Math.min(60/props.width,51/props.height);
+    const scale=Math.min(design.logoSize/props.width,design.logoSize/props.height);
     doc.setFillColor(255);doc.roundedRect(10,9,65,56,5,5,'F');
     doc.addImage(logoData,format,42.5-props.width*scale/2,37-props.height*scale/2,props.width*scale,props.height*scale,undefined,'FAST');
    }catch{/* Wordmark remains as branding if the image cannot be rendered. */}
   }
-  text(doc,'SKILLED',logoData?84:16,31,192,20,{bold:true,color:[255,255,255]});
-  text(doc,'CRAFTING',logoData?84:16,49,192,20,{bold:true,color:[255,255,255]});
+  text(doc,'SKILLED',logoData&&design.showLogo?84:16,31,192,20,{bold:true,color:[255,255,255]});
+  text(doc,'CRAFTING',logoData&&design.showLogo?84:16,49,192,20,{bold:true,color:[255,255,255]});
   doc.setFillColor(233,238,240);doc.rect(0,76,288,23,'F');
   text(doc,'DISTRIBUTION / PACKING',12,91,183,9,{bold:true});
   text(doc,'BAG '+(i+1)+' / '+cfg.packageCount,204,91,75,10,{bold:true});
   let y=116;
   y=cropLine(doc,source.shipName||source.customerName||'Recipient not specified',13,y,261,cfg.labelFont+2,true)+3;
-  if(info.school)y=cropLine(doc,info.school,13,y,262,9);
+  if(info.school&&design.visible.includes('school')&&!design.order.some(key=>key==='school'))y=cropLine(doc,info.school,13,y,262,9);
   if(cfg.labelShowOrder)y=cropLine(doc,'ORDER '+source.reference+'  |  JOB '+job.id,13,y+1,261,9,true)+3;
   doc.setDrawColor(185,196,200);doc.line(13,y,275,y);y+=15;
-  const active=fields.filter(([key,value])=>value&&(key!=='SCHOOL'));
+  const active=fields.filter(([,value])=>value);
   const rows=active.slice(0,7);
   for(const [label,value] of rows){
    if(y>291)break;
    text(doc,label,13,y,103,7,{bold:true,color:[70,78,83]});
-   cropLine(doc,value,111,y+1,163,label==='STUDENT / PLAYER'?11:10,true);
+   cropLine(doc,value,111,y+1,163,label==='STUDENT / PLAYER'?design.fontSize+1:design.fontSize,true);
    y+=23;
   }
   if(!rows.length){
