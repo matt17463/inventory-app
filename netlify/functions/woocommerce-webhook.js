@@ -7,6 +7,7 @@ import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus, ter
 import { getHeader, validateWooCommerceSignature } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
 import { parseWooGraphicSelection } from '../../src/lib/wooGraphicSelection.js';
+import { persistWooGraphicSelections } from './_shared/wooGraphicReconciliation.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -889,6 +890,20 @@ export const handler = async (event) => {
           variation_id: lineItem.variation_id || null,
           error: itemError.message,
         });
+      }
+    }
+
+    // Additive only: persist verified customer graphic choices after legacy inventory sync.
+    // Unverified/legacy selections are not converted automatically.
+    if(process.env.SC_GRAPHIC_ORDER_CAPTURE_ENABLED==='true'){
+      try{
+        const graphicResult=await persistWooGraphicSelections(supabase,{
+          id:order.id,line_items:(order.line_items||[]).map(enrichedLineItem)
+        });
+        for(const failed of graphicResult.failures)errors.push({graphic_line_id:failed.lineId,error:failed.reason});
+      }catch(graphicError){
+        errors.push({error:'Graphics reconciliation unavailable; review order before production'});
+        console.error('Graphic reconciliation error:',graphicError);
       }
     }
 
