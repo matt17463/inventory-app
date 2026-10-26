@@ -63,7 +63,7 @@
     "test:marketing": "node --test scripts/tests/marketing-growth.test.mjs scripts/tests/marketing-catalog-policy.test.mjs scripts/tests/marketing-documents.test.mjs scripts/tests/marketing-ai.test.mjs scripts/tests/marketing-next-features.test.mjs scripts/tests/marketing-approval.test.mjs scripts/tests/marketing-sample-handoff.test.mjs scripts/tests/marketing-public-reviews.test.mjs scripts/tests/marketing-completion.test.mjs scripts/tests/marketing-prospect-response.test.mjs",
     "test:material-studio": "node --test scripts/tests/material-settings-uv-studio.test.mjs",
     "test:graphical-themes": "node --test scripts/tests/graphical-theme-gallery.test.mjs",
-    "test:print-center": "node --test scripts/tests/unified-print-center.test.mjs scripts/tests/label-designer.test.mjs scripts/tests/print-integrations.test.mjs scripts/tests/qbo-oauth-behavior.test.mjs",
+    "test:print-center": "node --test scripts/tests/unified-print-center.test.mjs scripts/tests/label-designer.test.mjs scripts/tests/quick-order-print.test.mjs scripts/tests/print-integrations.test.mjs scripts/tests/qbo-oauth-behavior.test.mjs",
     "test:nas-backup": "node --test scripts/tests/nas-backup-report.test.mjs",
     "test:storage-backup-read": "node --test scripts/tests/storage-backup-read.test.mjs"
   },

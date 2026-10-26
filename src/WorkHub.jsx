@@ -9,6 +9,7 @@ import GuidedJobPhaseTwo from './GuidedJobPhaseTwo';
 import GuidedPackingSignoff from './GuidedPackingSignoff';
 import JobCloseoutCenter from './JobCloseoutCenter';
 import CarrierShippingLabels from './CarrierShippingLabels';
+import QuickOrderPrint from './QuickOrderPrint';
 
 const STAGES=[
  {id:'new_order',label:'Review order'},
@@ -59,6 +60,7 @@ export default function WorkHub(){
  const [savingNote,setSavingNote]=useState(false);
  const [noteMessage,setNoteMessage]=useState('');
  const [openAll,setOpenAll]=useState(false);
+ const [printOpen,setPrintOpen]=useState(false);
 
  async function reloadBoard(){
   setBoardBusy(true);setBoardError('');
@@ -178,10 +180,11 @@ export default function WorkHub(){
       <div className="sc-hub-selected-head"><div>
        <p className="eyebrow">Job workspace</p><h3>{chosen.customer_name||chosen.job_name||labelJob(chosen)}</h3>
        <p>{labelJob(chosen)} · Due {formatDate(chosen.due_date||chosen.order_due_date)} · {printText(stage)}</p>
-      </div><button type="button" disabled={detailLoading} onClick={refreshSelected}>{detailLoading?'Loading…':'Refresh evidence'}</button>{['admin','manager'].includes(access?.role)&&<Link to={'/print-center?job='+currentId}>Print invoices + labels →</Link>}</div>
+      </div><button type="button" disabled={detailLoading} onClick={refreshSelected}>{detailLoading?'Loading…':'Refresh evidence'}</button>{['admin','manager'].includes(access?.role)&&<button type="button" onClick={()=>setPrintOpen(v=>!v)}>{printOpen?'Close printing':'Print Order'}</button>}</div>
       {issues.length>0&&<div className="sc-hub-blockers"><strong>Production Board blockers</strong>
        <ul>{issues.map((v,i)=><li key={i}>{typeof v==='string'?v:v?.message||v?.reason||'Review Production Board blocker'}</li>)}</ul>
        <Link to="/exception-center">Open Exception Center →</Link></div>}
+      {printOpen&&['admin','manager'].includes(access?.role)&&<QuickOrderPrint key={currentId} jobId={currentId} onClose={()=>setPrintOpen(false)}/>}
       {detailLoading&&<p role="status">Reading order, artwork, inventory, traveler and QC records…</p>}
       {detailError&&<p role="alert" className="message">{detailError} <Link to="/production-board">Open Production Board</Link></p>}
       {progress&&<>
