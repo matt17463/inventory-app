@@ -42,6 +42,7 @@ export default function ProductionTravelers() {
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [savedJob,setSavedJob]=useState(null);
+  const [placementArtworks,setPlacementArtworks]=useState({});
   const [artwork,setArtwork]=useState(null);
   const [artworkUrl,setArtworkUrl]=useState('');
 
