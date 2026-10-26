@@ -17,6 +17,13 @@ export async function handler(event){
   const {data:jobLine,error:lineError}=await auth.supabase.from('job_items').select('id,job_id').eq('id',jobItemId).eq('job_id',jobId).maybeSingle();
   if(lineError||!jobLine)return reply(409,{message:'Selected production line does not belong to this job'},event);
 
+  const {data:job,error:jobError}=await auth.supabase.from('jobs')
+   .select('id,woocommerce_order_id,source_invoice_number').eq('id',jobId).maybeSingle();
+  if(jobError||!job)return reply(409,{message:'Production job was not found'},event);
+  if(job.woocommerce_order_id)return reply(409,{message:'This job is linked to WooCommerce; use its original customer graphic selection'},event);
+  if(job.source_invoice_number && String(job.source_invoice_number).trim()!==selection.external_order_id)
+   return reply(409,{message:'Invoice number does not match the existing production job'},event);
+
   const {data:family,error:fe}=await auth.supabase.from('sc_client_graphic_families').select('id,state').eq('id',selection.family_id).maybeSingle();
   if(fe||family?.state!=='approved')return reply(409,{message:'Select an approved customer design'},event);
   const [versions,ruleRows]=await Promise.all([
