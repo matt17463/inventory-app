@@ -25,7 +25,7 @@ begin
  where job_item_id=new.job_item_id;
  if v_link_count>1 then raise exception 'Conflicting graphic assignments for job line'; end if;
  for v_selection in
-  select family_id,resolution_snapshot from public.sc_order_graphic_selections where job_item_id=new.job_item_id
+  select family_id,resolution_snapshot,selected_payload from public.sc_order_graphic_selections where job_item_id=new.job_item_id
  loop
   if v_selection.family_id is null or v_selection.resolution_snapshot is null
     or v_selection.resolution_snapshot->>'status'<>'resolved' then
@@ -49,7 +49,7 @@ begin
     case when jsonb_typeof(v_placements)='array' then v_placements else '[]'::jsonb end
    ) p
    where coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id')=v_art::text
-   and (coalesce(v_selection.resolution_snapshot->>'placement_name','')=''
+   and (coalesce(v_selection.selected_payload->>'placement_name','')=''
         or lower(coalesce(p->>'placement_name',''))=lower(v_selection.resolution_snapshot->>'placement_name'))
   ) into v_asset_found;
   if not v_asset_found
