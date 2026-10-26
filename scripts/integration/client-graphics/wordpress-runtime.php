@@ -43,6 +43,9 @@ cg_check($storeBlocked,'Store API blocks unverified multi-choice graphic product
 $validRequest=['id'=>801,'sc_graphic_family_id'=>cg_id(21),'sc_graphic_label'=>'FORGED'];
 $GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,$validRequest);
 $stored=$GLOBALS['cg_hooks']['woocommerce_store_api_add_to_cart_data'](['cart_item_data'=>[]],$validRequest);
+$_POST=[];
+cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801,[],$stored['cart_item_data'])===true,'legacy validation accepts verified Store API cart ID without form POST');
+cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801,[],[])===false,'legacy validation blocks Store API choice missing from cart data');
 cg_check($stored['cart_item_data']['sc_graphic_family_id']===cg_id(21),'Store API validates selected graphic for parent variation');
 cg_check($stored['cart_item_data']['sc_graphic_label']==='Away','Store API ignores forged customer graphic label');
 $bad=$GLOBALS['cg_hooks']['woocommerce_store_api_add_to_cart_data'](['cart_item_data'=>[]],['id'=>801,'sc_graphic_family_id'=>cg_id(99)]);
