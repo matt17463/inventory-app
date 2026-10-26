@@ -161,9 +161,13 @@ export async function signedStoredAssetUrl(supabase, row, expiresIn = 3600, opti
   if (!reference.provider || !reference.bucket || !reference.path) return '';
   if (reference.provider === 'r2') {
     if (reference.bucket !== r2BucketName()) throw new Error('Mockup asset references an unexpected R2 bucket.');
+    const key = safeObjectKey(reference.path);
+    // A presigned GET URL can be generated for an object that does not exist.
+    // Verify R2 actually contains the referenced bytes before returning a production URL.
+    await r2Client().send(new HeadObjectCommand({ Bucket: reference.bucket, Key: key }));
     return getSignedUrl(
       r2Client(),
-      new GetObjectCommand({ Bucket: reference.bucket, Key: safeObjectKey(reference.path) }),
+      new GetObjectCommand({ Bucket: reference.bucket, Key: key }),
       { expiresIn: Math.min(Math.max(Number(expiresIn || 3600), 60), 604800) },
     );
   }
