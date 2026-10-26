@@ -23,7 +23,9 @@ try{
  };
  const receipt=async(n,versionId=version)=>{
   const {rows:[a]}=await db.query('select id,storage_provider,storage_bucket,storage_path,preflight_status from mockup_artwork_assets where id=$1',[art]);
-  const fingerprint=createHash('md5').update([a.id,a.storage_provider||'',a.storage_bucket||'',a.storage_path||'',a.preflight_status||''].join(':')).digest('hex');
+  const mappings=await db.query('select placement_name,artwork_asset_id from sc_job_line_placement_artwork where job_item_id=$1 and recipe_version_id=$2 order by placement_name,artwork_asset_id',[n*10,versionId]);
+  const suffix=mappings.rows.length?'|placements:'+mappings.rows.map(row=>row.placement_name+':'+row.artwork_asset_id).join('|'):'';
+  const fingerprint=createHash('md5').update([a.id,a.storage_provider||'',a.storage_bucket||'',a.storage_path||'',a.preflight_status||''].join(':')+suffix).digest('hex');
   await db.query(`insert into sc_traveler_storage_preflight(job_id,recipe_version_id,requested_by,job_item_ids,artwork_fingerprint,checked_at,expires_at)
  values($1,$2,$3,$4,$5,now(),now()+interval '2 minutes')`,[n,versionId,uid(3),[n*10],fingerprint]);
  };
