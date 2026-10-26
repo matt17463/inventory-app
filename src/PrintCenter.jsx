@@ -15,6 +15,7 @@ import businessLogo from './assets/logo.png';
 const CONFIG_KEY='sc-print-center-prefs-v1';
 const DESIGN_KEY='sc-label-designer-v1';
 const CUSTOM_DESIGN_KEY='sc-label-designer-presets-v1';
+const BUILTIN_DESIGN_KEY='sc-label-designer-builtins-v1';
 function localJson(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}}
 function initialPrefs(){
  try{return normalizePrintPrefs(JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}'));}
@@ -76,6 +77,7 @@ export default function PrintCenter(){
  const [labelDesign,setLabelDesign]=useState(()=>normalizeLabelDesign(localJson(DESIGN_KEY,presetLabelDesign('general'))));
  const [customDesigns,setCustomDesigns]=useState(()=>localJson(CUSTOM_DESIGN_KEY,{}));
  const [designName,setDesignName]=useState('');
+ const [activeBuiltin,setActiveBuiltin]=useState('general');
  const [labelPreview,setLabelPreview]=useState('');
  const [visibleSettings,setVisibleSettings]=useState(false);
  const warnings=useMemo(()=>source?printWarnings(source,job,travelers):[],[source,job,travelers]);
@@ -102,7 +104,12 @@ export default function PrintCenter(){
  },[jobId,authorized]);
  useEffect(()=>{reload();},[reload]);
  function saveLabelDesign(){
-  try{localStorage.setItem(DESIGN_KEY,JSON.stringify(labelDesign));setMessage('Label layout saved on this browser.');}
+  try{
+   localStorage.setItem(DESIGN_KEY,JSON.stringify(labelDesign));
+   const presets={...localJson(BUILTIN_DESIGN_KEY,{})};presets[activeBuiltin]=normalizeLabelDesign(labelDesign);
+   localStorage.setItem(BUILTIN_DESIGN_KEY,JSON.stringify(presets));
+   setMessage('Saved '+LABEL_PRESETS[activeBuiltin].name+' layout for Work Hub printing on this browser.');
+  }
   catch{setError('Unable to save label design on this browser.');}
  }
  function saveNamedDesign(){
@@ -203,8 +210,8 @@ export default function PrintCenter(){
     <p>Choose a template, select which recipient details appear, rename their captions, and arrange them in printing order. Changes apply to downloaded and queued label PDFs.</p>
     <div className="sc-print-preferences">
       <label>Quick template
-       <select defaultValue="" onChange={e=>{if(e.target.value)setLabelDesign(presetLabelDesign(e.target.value));}}>
-        <option value="">Select template…</option>
+       <select value={activeBuiltin} onChange={e=>{if(e.target.value){setActiveBuiltin(e.target.value);setLabelDesign(normalizeLabelDesign(localJson(BUILTIN_DESIGN_KEY,{})[e.target.value]||presetLabelDesign(e.target.value)));}}}>
+        <option value="" disabled>Select template…</option>
         {Object.entries(LABEL_PRESETS).map(([key,item])=><option key={key} value={key}>{item.name}</option>)}
        </select>
       </label>

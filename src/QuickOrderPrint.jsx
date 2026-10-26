@@ -14,7 +14,7 @@ const TYPES=[
  ['labels','4×6 distribution labels','Thermal · D530 Pro'],
  ['production','Production travelers','Letter · Epson'],
 ];
-const cacheKey='sc-print-center-prefs-v1',designKey='sc-label-designer-v1',savedDesignKey='sc-label-designer-presets-v1';
+const cacheKey='sc-print-center-prefs-v1',designKey='sc-label-designer-v1',savedDesignKey='sc-label-designer-presets-v1',builtinsKey='sc-label-designer-builtins-v1';
 const readSaved=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}};
 const pdfBase64=pdf=>pdf.output('datauristring').split(',')[1];
 const fileName=value=>String(value||'order').replace(/[^a-zA-Z0-9_-]/g,'-');
@@ -63,7 +63,8 @@ export default function QuickOrderPrint({jobId,onClose}){
  function design(){
   if(template==='saved')return normalizeLabelDesign(readSaved(designKey,presetLabelDesign('general')));
   if(template.startsWith('custom:'))return normalizeLabelDesign(readSaved(savedDesignKey,{})[template.slice(7)]||presetLabelDesign('general'));
-  return presetLabelDesign(template);
+  const customized=readSaved(builtinsKey,{})[template];
+  return normalizeLabelDesign(customized||presetLabelDesign(template));
  }
  const prefs={...readSaved(cacheKey,{}),packageCount:Math.max(1,Math.min(100,Number(packages)||1))};
  const invoiceAllowed=source&&canPrintCustomerCopy(source);
@@ -135,10 +136,11 @@ export default function QuickOrderPrint({jobId,onClose}){
   {selected.includes('labels')&&<div className="sc-quick-print-settings">
    <label>Label template<select value={template} onChange={e=>setTemplate(e.target.value)}>
     <option value="saved">My saved default</option>
-    {Object.entries(LABEL_PRESETS).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}
+    {Object.entries(LABEL_PRESETS).map(([key,v])=><option key={key} value={key}>{v.name}{readSaved(builtinsKey,{})[key]?' (Customized)':''}</option>)}
     {savedNames.map(name=><option key={name} value={'custom:'+name}>{name}</option>)}
    </select></label>
    <label>Number of packages<input type="number" min="1" max="100" value={packages} onChange={e=>setPackages(e.target.value)}/></label>
+   <p>Saved edits to built-in templates are used automatically. Edit and save designs in Print Center on this browser.</p>
    <p>Multiple-package labels do not assert which items are in each bag unless a verified allocation exists.</p>
   </div>}
   <div className="sc-quick-print-actions">
