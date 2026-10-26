@@ -33,4 +33,19 @@ cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,8
 $invalidVariation=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700,801);
 cg_check(empty($invalidVariation['sc_graphic_family_id']),'invalid variation selection does not persist into cart');
 unset($GLOBALS['cg_options_by_id'],$GLOBALS['cg_variation_parents']);
-echo "VARIATION CHECKS COMPLETE\n";
+
+$blockProduct=new class { function get_id(){return 801;} function get_parent_id(){return 700;} };
+$GLOBALS['cg_options_by_id']=[700=>[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_id(21),'label'=>'Away']]];
+$GLOBALS['cg_enabled']='yes';
+$storeBlocked=false;
+try{$GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);}catch(Exception $e){$storeBlocked=true;}
+cg_check($storeBlocked,'Store API blocks unverified multi-choice graphic product');
+$GLOBALS['cg_options_by_id'][700]=[['id'=>cg_id(20),'label'=>'Fixed logo']];
+$GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);
+cg_check(true,'Store API permits fixed-design product');
+$GLOBALS['cg_enabled']='no';
+$GLOBALS['cg_options_by_id'][700]=[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_id(21),'label'=>'Away']];
+$GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);
+cg_check(true,'disabled selector never blocks Store API');
+unset($GLOBALS['cg_options_by_id']);
+echo "VARIATION AND BLOCKS FAIL-CLOSED CHECKS COMPLETE\n";
