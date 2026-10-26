@@ -11,12 +11,13 @@ async function request(entity,values,id){
  const result=await response.json();if(!response.ok)throw Error(result.message||'Graphics request failed');return result;
 }
 export default function ClientGraphics(){
- const [families,setFamilies]=useState([]),[variants,setVariants]=useState([]),[rules,setRules]=useState([]);
+ const [families,setFamilies]=useState([]),[variants,setVariants]=useState([]),[rules,setRules]=useState([]),[bindings,setBindings]=useState([]);
  const [selected,setSelected]=useState(''),[name,setName]=useState(''),[label,setLabel]=useState(''),[visibility,setVisibility]=useState('internal');
+ const [wooProductId,setWooProductId]=useState(''),[bindingMode,setBindingMode]=useState('fixed');
  const [asset,setAsset]=useState(''),[variantName,setVariantName]=useState(''),[width,setWidth]=useState(''),[height,setHeight]=useState('');
  const [ruleVariant,setRuleVariant]=useState(''),[ruleSize,setRuleSize]=useState(''),[ruleColor,setRuleColor]=useState(''),[rulePlacement,setRulePlacement]=useState('full_front'),[rulePriority,setRulePriority]=useState(100);
  const [art,setArt]=useState([]),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
- async function load(){const [a,b,c]=await Promise.all([request('families'),request('variants'),request('rules')]);setFamilies(a.records||[]);setVariants(b.records||[]);setRules(c.records||[]);}
+ async function load(){const [a,b,c,d]=await Promise.all([request('families'),request('variants'),request('rules'),request('bindings')]);setFamilies(a.records||[]);setVariants(b.records||[]);setRules(c.records||[]);setBindings(d.records||[]);}
  useEffect(()=>{load().catch(e=>setMessage(e.message));supabase.from('mockup_artwork_assets').select('id,artwork_name,preflight_status').limit(250).then(({data})=>setArt(data||[]));},[]);
  async function save(entity,values){setBusy(true);setMessage('');try{await request(entity,values);await load();setMessage('Saved as draft. No live storefront mapping was changed.');}catch(e){setMessage(e.message);}finally{setBusy(false)}}
  const choice=families.find(x=>x.id===selected),own=variants.filter(v=>v.family_id===selected);
@@ -33,6 +34,11 @@ export default function ClientGraphics(){
 <label>Application location<select value={rulePlacement} onChange={e=>setRulePlacement(e.target.value)}>{['full_front','center_chest','left_chest','right_chest','full_back','sleeve'].map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></label>
 <label>Rule priority<input type="number" value={rulePriority} onChange={e=>setRulePriority(Number(e.target.value))}/></label></div>
 <button disabled={busy||!ruleVariant} onClick={()=>save('rules',{family_id:selected,variant_id:ruleVariant,size_group:ruleSize||null,garment_color:ruleColor||null,placement_name:rulePlacement,priority:rulePriority,enabled:false})}>Save disabled draft rule</button>
+<h3>WooCommerce transfer preparation</h3><p>Stage a proposed product-to-graphic relationship here. This only saves a disabled mapping in Skilled Crafting; it does not publish options or change WooCommerce products.</p>
+<div className="form-grid"><label>WooCommerce parent product ID<input inputMode="numeric" value={wooProductId} onChange={e=>setWooProductId(e.target.value)} placeholder="Numeric parent product ID"/></label>
+<label>Proposed storefront behavior<select value={bindingMode} onChange={e=>setBindingMode(e.target.value)}><option value="fixed">Fixed graphic</option><option value="selectable">Customer-selectable</option><option value="internal">Production only</option></select></label></div>
+<button type="button" disabled={busy||!/^\\d+$/.test(wooProductId)||Number(wooProductId)<1} onClick={()=>save('bindings',{woo_product_id:Number(wooProductId),graphic_family_id:selected,mode:bindingMode,allowed:false})}>Stage disabled product mapping</button>
+<h4>Proposed product mappings</h4><ul>{bindings.filter(b=>b.graphic_family_id===selected).map(b=><li key={b.id}>Woo #{b.woo_product_id} · {b.mode} · {b.allowed?'Verified active':'Inactive — transfer pending'}</li>)}</ul>
 <h3>Existing rules</h3><ul>{rules.filter(rule=>rule.family_id===selected).map(rule=><li key={rule.id}>{own.find(v=>v.id===rule.variant_id)?.label||'Unknown variant'} · {rule.size_group||'all sizes'} · {rule.garment_color||'all colors'} · {rule.placement_name||'all locations'} · {rule.enabled?'Active':'Draft'}</li>)}</ul>
 <p><small>Production variants and rules remain unapproved until tested against verified physical samples. No changes are sent to WooCommerce.</small></p></>}</section></main>;
 }
