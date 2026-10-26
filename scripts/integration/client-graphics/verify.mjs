@@ -18,9 +18,16 @@ const call=(fn,body)=>fn({httpMethod:'POST',body:JSON.stringify(body),headers:{}
 async function rejected(n,options,pattern){await job(db,n);if(options.selection!==false)await selection(db,n,options);if(options.capture)await db.query('insert into sc_woo_graphic_capture_states values($1,$2,$3,null,now())',[10000+n,20000+n,options.capture]);let caught;try{await asRole(db,'operator',()=>rpc(db,n))}catch(e){caught=e}assert(caught,'RPC unexpectedly accepted invalid line');assert.match(caught.message,pattern);return caught.code+': '+caught.message}
 await test('recipe-level artwork fallback remains valid for placement without a separate file',async()=>{
  await job(db,60);await selection(db,60);
- await db.exec("update sc_manufacturing_recipe_versions set placements=jsonb_set(placements,'{0}',(placements->0)-'artwork_asset_id') where id='"+uid(31)+"'");
- try{const out=await asRole(db,'operator',()=>rpc(db,60));assert(out.rows[0].id)}
- finally{await db.exec("update sc_manufacturing_recipe_versions set placements=jsonb_set(placements,'{0,artwork_asset_id}',to_jsonb('"+uid(11)+"'::text),true) where id='"+uid(31)+"'")}
+ // Fixture-only: temporarily disable the immutability trigger while constructing
+ // an otherwise impossible-to-edit approved recipe variant, then restore it.
+ await db.exec('alter table sc_manufacturing_recipe_versions disable trigger sc_guard_recipe_version_update');
+ try{
+  await db.exec("update sc_manufacturing_recipe_versions set placements=jsonb_set(placements,'{0}',(placements->0)-'artwork_asset_id') where id='"+uid(31)+"'");
+  const out=await asRole(db,'operator',()=>rpc(db,60));assert(out.rows[0].id);
+ }finally{
+  await db.exec("update sc_manufacturing_recipe_versions set placements=jsonb_set(placements,'{0,artwork_asset_id}',to_jsonb('"+uid(11)+"'::text),true) where id='"+uid(31)+"'");
+  await db.exec('alter table sc_manufacturing_recipe_versions enable trigger sc_guard_recipe_version_update');
+ }
 });
 await test('approved exact artwork / correct full-front placement allows RPC',async()=>{await job(db,1);await selection(db,1);const out=await asRole(db,'operator',()=>rpc(db,1));assert(out.rows[0].id)});
 await test('managed resolved capture without assignment rejected',()=>rejected(2,{selection:false,capture:'managed_resolved'},/missing.*assignment/i));
