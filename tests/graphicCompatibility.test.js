@@ -7,3 +7,5 @@ test('lookup error remains fail closed',()=>assert.equal(check({channel:'woocomm
 
 test('managed capture failure cannot fall back to legacy',()=>assert.equal(check({channel:'woocommerce',selections:[{capture_status:'managed_failed'}]}).blocked,true));
 test('managed pending is not treated as legacy',()=>assert.equal(check({channel:'woocommerce',selections:[{capture_status:'managed_pending'}]}).blocked,true));
+
+test('resolved managed capture without selection is blocked',()=>assert.equal(check({channel:'woocommerce',selections:[{capture_status:'managed_resolved'}]}).blocked,true));
