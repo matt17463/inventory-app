@@ -55,7 +55,14 @@ add_filter('woocommerce_add_cart_item_data',function($data,$product_id,$variatio
  if(!sc_graphics_enabled())return $data;
  $opts=sc_graphics_options_for_product($product_id,$variation_id);
  if(!$opts)return $data;
- if(!empty($data['sc_graphic_family_id']) && in_array($data['sc_graphic_family_id'],array_column($opts,'id'),true))return $data;
+ if(!empty($data['sc_graphic_family_id'])) {
+  foreach($opts as $row)if($row['id']===$data['sc_graphic_family_id']){
+   // Retain only the canonical, configured label, never a submitted label.
+   $data['sc_graphic_label']=$row['label'];
+   return $data;
+  }
+  unset($data['sc_graphic_family_id'],$data['sc_graphic_label']);
+ }
  $selected=isset($_POST['sc_graphic_family_id'])?sanitize_text_field(wp_unslash($_POST['sc_graphic_family_id'])):'';
  if(count($opts)===1)$selected=$opts[0]['id'];
  if(count($opts)>1 && !in_array($selected,array_column($opts,'id'),true))return $data;
