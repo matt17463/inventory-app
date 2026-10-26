@@ -195,13 +195,16 @@ export default function CatalogProductionReadiness(){
         :setupStep===1?(Number(selected.missing_blank_rows)>0?'Missing blank mappings detected.':'No blank mapping gaps detected in the current catalog summary; verify actual variations.')
         :setupStep===2?'Artwork approval cannot be inferred from this catalog summary. Open Client Graphics to verify exact assets.'
         :setupStep===3?(selected.readiness==='approved'?'An approved recipe is linked; artwork and variation approval are separate checks.':'An approved recipe is not yet linked.')
-        :setupStep===4?'Customer sign-off and mockup evidence must be reviewed in the source artwork workflow.'
+        :setupStep===4?(selectedArtwork?.flags?.mockup?'Mockup review recorded. Verify exact customer approval and product variation.':'Mockup needs review; do not infer approval from an uploaded image.')
         :'Travelers must be checked at the individual job-line level; a family-wide assignment is not sufficient.'}
        </div>
        <h4>{SETUP_STEPS[setupStep].title}</h4>
        <p>{SETUP_STEPS[setupStep].description}</p>
        {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
-       {setupStep===1&&<p>{fmt(selected.missing_blank_rows)} catalog rows are flagged as missing blank mappings. Some finished or non-inventory products can legitimately have none; review classifications before editing.</p>}
+       {setupStep===1&&<div>
+        <p><strong>Blank mapping review:</strong> {fmt(selected.missing_blank_rows)} of {fmt(selected.row_count)} synchronized rows lack a blank mapping. Finished products or non-inventory items may legitimately have none; verify before fixing.</p>
+        <p><Link to="/product-blank-mappings">Repair specific blank mappings →</Link> · <Link to="/catalog-workbench">Review catalog details →</Link></p>
+       </div>}
        {setupStep===2&&<div>
         <p>{fmt(selected.legacy_logo_count)} different legacy logo references detected. These are clues, not proof of authorized production artwork.</p>
         {artworkError?<p role="alert">Artwork review data unavailable: {artworkError}. Do not assume approval.</p>:
@@ -213,6 +216,7 @@ export default function CatalogProductionReadiness(){
         <p><Link to={'/catalog-pairing?product='+encodeURIComponent(selected.woocommerce_product_id)}>Review, upload or link artwork for this product →</Link></p>
        </div>}
        {setupStep===3&&<p>Recipe routing: <strong>{labels[selected.readiness]}</strong>. Only managers may save the linked recipe below. Approved versions still require artwork and variation checks.</p>}
+       {setupStep===4&&<div><p><strong>Mockup evidence:</strong> {artworkError?'Not available':!artworkAudit?'Loading…':selectedArtwork?.flags?.mockup?'Reviewed mockup flag is recorded':'No approved mockup flag found'}.</p><p>Customer sign-off and exact placement still require review in the source workflow.</p><p><Link to="/mockup-studio">Open mockup and customer approval →</Link></p></div>}
        {setupStep===5&&<p>{fmt(demand.get(Number(selected.woocommerce_product_id))||0)} units appear in currently open production jobs. Use the traveler preview tab to check each eligible line.</p>}
 
        {setupStep===3&&<div>
