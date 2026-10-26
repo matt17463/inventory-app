@@ -7,6 +7,14 @@ export async function persistWooGraphicSelections(db,order,{strict=false}={}){
  for(const line of order.line_items||[]){
   const raw=line.graphic_selection;
   if(raw?.status==='invalid-id'){
+   // A legacy/unpaired product may have arbitrary historic add-on values. Only
+   // an explicitly manager-verified managed binding may fail checkout capture.
+   const productId=Number(line.product_id);
+   if(!Number.isSafeInteger(productId)||productId<=0){failures.push({lineId:line.id,reason:'Invalid graphic ID and missing product ID'});continue}
+   const {data:managed,error:lookupError}=await db.from('sc_client_graphic_product_bindings')
+    .select('graphic_family_id,allowed,verified_at,mode').eq('woo_product_id',productId).eq('allowed',true);
+   if(lookupError)throw new Error('Unable to verify managed graphics enrollment for order line '+line.id);
+   if(!(managed||[]).some(b=>b.verified_at&&['fixed','selectable'].includes(b.mode)))continue;
    await saveWooGraphicCapture(db,order.id,line.id,'managed_failed','Invalid graphic ID');
    failures.push({lineId:line.id,reason:'Invalid graphic ID'});
    continue;
