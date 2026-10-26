@@ -16,19 +16,19 @@ test('Woo reconciliation never assigns legacy text-only artwork',async()=>{
 // In-memory Supabase-shaped fixture: verifies the real reconciliation path,
 // including persisted checkout metadata, binding checks, and replay identity.
 function fixture({mode='selectable',allowed=true,verified=true,variants,rules}={}){
- const rows=new Map();
+ const rows=new Map(),captures=new Map();
  const data={
   sc_client_graphic_product_bindings:[{graphic_family_id:family,allowed,verified_at:verified?'2026-10-25':null,mode}],
   sc_client_graphic_families:[{id:family,state:'approved'}],
   sc_client_graphic_variants:variants||[{id:variant,family_id:family,state:'approved',artwork_asset_id:'asset-1'}],
   sc_client_graphic_rules:rules||[{id:'rule',family_id:family,variant_id:variant,enabled:true,priority:100,placement_name:'left_chest'}],
  };
- return {rows,db:{from(table){
+ return {rows,captures,db:{from(table){
   const filters=[];
   const query={select(){return query},eq(k,v){filters.push([k,v]);return query},
    maybeSingle(){return Promise.resolve({data:(data[table]||[]).find(x=>filters.every(([k,v])=>k==='woo_product_id'||x[k]===v)),error:null})},
    then(resolve,reject){return Promise.resolve({data:(data[table]||[]).filter(x=>filters.every(([k,v])=>x[k]===v)),error:null}).then(resolve,reject)},
-   upsert(payload,options){assert.equal(options.onConflict,'source,external_order_id,external_line_id');rows.set([payload.source,payload.external_order_id,payload.external_line_id].join(':'),payload);return Promise.resolve({error:null})}
+   upsert(payload,options){if(table==='sc_woo_graphic_capture_states'){assert.equal(options.onConflict,'woo_order_id,woo_line_item_id');captures.set([payload.woo_order_id,payload.woo_line_item_id].join(':'),payload)}else{assert.equal(options.onConflict,'source,external_order_id,external_line_id');rows.set([payload.source,payload.external_order_id,payload.external_line_id].join(':'),payload)}return Promise.resolve({error:null})}
   };return query;
  }}};
 }
@@ -57,8 +57,25 @@ test('missing and conflicting artwork persist unresolved snapshots rather than p
  }
 });
 test('rule lookup failure is reported without persisting an assignment',async()=>{
- const db={from(){const query={select(){return query},eq(){return query},maybeSingle(){return Promise.resolve({data:null,error:{message:'unavailable'}})}};return query}};
+ const db={from(table){const query={select(){return query},eq(){return query},upsert(){return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:null,error:{message:'unavailable'}})}};return query}};
  const result=await persistWooGraphicSelections(db,{id:1,line_items:[line()]});
  assert.equal(result.failures[0].reason,'Binding lookup failed');
  await assert.rejects(persistWooGraphicSelections(db,{id:1,line_items:[line()]},{strict:true}),/reconciliation failed/);
+});
+
+test('invalid managed graphic ID persists a failure marker',async()=>{
+ const {db,captures,rows}=fixture();
+ const result=await persistWooGraphicSelections(db,{id:1,line_items:[line({graphic_selection:{status:'invalid-id',rawFamilyId:'bad'}})]});
+ assert.equal(result.failures.length,1);assert.equal(rows.size,0);
+ assert.equal(captures.get('1:2').status,'managed_failed');
+});
+test('verified managed capture becomes resolved and is replay-safe',async()=>{
+ const {db,captures}=fixture();
+ for(let n=0;n<2;n++)await persistWooGraphicSelections(db,{id:1,line_items:[line()]});
+ assert.equal(captures.size,1);assert.equal(captures.get('1:2').status,'managed_resolved');
+});
+test('invalid binding retains pending capture status',async()=>{
+ const {db,captures}=fixture({allowed:false});
+ await persistWooGraphicSelections(db,{id:1,line_items:[line()]});
+ assert.equal(captures.get('1:2').status,'managed_pending');
 });
