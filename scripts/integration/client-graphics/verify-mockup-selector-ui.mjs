@@ -1,0 +1,26 @@
+// Real jQuery and Woo's variation event engine in an isolated DOM; no browser/network.
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {JSDOM} from 'jsdom';
+import jquery from 'jquery';
+const root=process.argv[2];if(!root)throw Error('Supply isolated WordPress directory');
+const dom=new JSDOM('<form class="variations_form"><div class="variations">'+[['color','Black','Blue'],['size','M','YM'],['logo','Home','Away','Third']].map(([k,...values])=>'<select name="attribute_'+k+'" data-attribute_name="attribute_'+k+'"><option value=""></option>'+values.map(v=>'<option value="'+v+'">'+v+'</option>').join('')+'</select>').join('')+'</div><div class="single_variation_wrap"><div class="single_variation"></div><button class="single_add_to_cart_button"></button><input name="variation_id" class="variation_id"></div></form>',{url:'http://127.0.0.1:4188',runScripts:'outside-only'});
+const w=dom.window,$=jquery(w);w.jQuery=$;w.$=$;w.wc_add_to_cart_variation_params={i18n_no_matching_variations_text:'No match',i18n_make_a_selection_text:'Choose',i18n_unavailable_text:'Unavailable'};$.fn.block=$.fn.unblock=function(){return this};
+const variations=JSON.parse(await readFile(root+'/actual-woo-variations.json','utf8'));
+$('body').append('<script type="text/template" id="tmpl-variation-template"><div>Fixture variation</div></script><script type="text/template" id="tmpl-unavailable-variation-template"><div>Unavailable</div></script>');
+const form=$('form');form.data('product_variations',variations);
+w.eval(await readFile(root+'/wp-content/plugins/woocommerce/assets/js/frontend/add-to-cart-variation.js','utf8'));
+w.eval(await readFile(new URL('../../../wordpress/skilled-crafting-mockup-variation-selector/assets/mockup-variation-selector.js',import.meta.url),'utf8'));
+await new Promise(r=>w.setTimeout(r,20));
+const field=k=>form.find('[name="attribute_'+k+'"]');
+assert.equal(field('size').prop('disabled'),true);assert.equal(field('logo').prop('disabled'),true);
+field('color').val('Black').trigger('change');await new Promise(r=>w.setTimeout(r,5));assert.equal(field('size').prop('disabled'),false);assert.equal(field('logo').prop('disabled'),true);
+field('size').val('M').trigger('change');await new Promise(r=>w.setTimeout(r,5));assert.equal(field('logo').prop('disabled'),false);
+field('logo').val('Home').trigger('change');await new Promise(r=>w.setTimeout(r,5));
+assert.equal(form.find('[name=sc_graphic_family_id]').val(),'00000000-0000-4000-8000-000000000020');assert.equal(form.find('[name=sc_graphic_family_id]').length,1);
+console.log('PASS real Woo variation events retain canonical hidden UUID after selection and preserve Color -> Size -> Logo sequence');
+field('logo').val('Away').trigger('change');await new Promise(r=>w.setTimeout(r,5));assert.equal(form.find('[name=sc_graphic_family_id]').val(),'00000000-0000-4000-8000-000000000021');
+field('color').val('Blue').trigger('change');await new Promise(r=>w.setTimeout(r,5));assert.equal(form.find('[name=sc_graphic_family_id]').val(),'');assert.equal(field('size').val(),'');assert.equal(field('logo').val(),'');
+console.log('PASS changed variation cannot reuse stale canonical ID');
+form.trigger('found_variation',[{sc_graphic_bridge_enabled:false}]);assert.equal(form.find('[name=sc_graphic_family_id]').length,0);console.log('PASS disabled bridge creates no canonical field');
+w.close();
