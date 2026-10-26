@@ -543,3 +543,17 @@ test('direct traveler RPC requires a short-lived trusted per-line storage receip
   assert.match(api, /requested_by:auth\.user\.id/);
   assert.match(ui, /job_item_ids:selectedItemIds/);
 });
+
+test('generic recipes have manager-approved exact job placement artwork mappings', async () => {
+ const sql=await read('supabase/migrations/202610260001_generic_recipe_line_artwork.sql');
+ const fn=await read('netlify/functions/job-line-placement-artwork.js');
+ assert.match(sql,/unique\(job_item_id,recipe_version_id,placement_name\)/);
+ assert.match(sql,/enable row level security/);
+ assert.match(sql,/revoke all on public\.sc_job_line_placement_artwork from public,anon,authenticated/);
+ assert.match(sql,/v\.status='approved'/);
+ assert.match(sql,/p->>'placement_name'=p_placement_name/);
+ assert.match(sql,/lower\(a\.preflight_status\) in/);
+ assert.match(sql,/Cannot change approved traveler artwork/);
+ assert.match(fn,/allowedRoles:\['admin','manager'\]/);
+ assert.match(fn,/sc_approve_job_line_placement_artwork/);
+});
