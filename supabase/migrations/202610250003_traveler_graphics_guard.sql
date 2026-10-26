@@ -69,6 +69,15 @@ begin
      ) then
    raise exception 'Selected artwork does not match the approved recipe placement';
   end if;
+  new.item_snapshot=jsonb_set(
+   coalesce(new.item_snapshot,'{}'::jsonb),
+   '{approved_graphic_selection}',
+   jsonb_build_object(
+    'family_id',v_selection.family_id,
+    'resolution_snapshot',v_selection.resolution_snapshot,
+    'selected_payload',v_selection.selected_payload,
+    'validated_at',now()
+   ),true);
   v_verified_count := v_verified_count+1;
  end loop;
  return new;
