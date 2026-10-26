@@ -1,0 +1,44 @@
+import {useCallback,useContext,useEffect,useMemo,useState} from 'react';
+import {Link} from 'react-router-dom';
+import {EmployeeAccessContext} from './lib/employeeAccessContext';
+import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
+import './CatalogPairingWorkbench.css';
+const api=async(endpoint,input)=>{const response=await authenticatedFunctionFetch('/.netlify/functions/'+endpoint,{method:'POST',body:JSON.stringify(input)});const body=await response.json().catch(()=>({}));if(!response.ok||!body.success)throw Error(body.message||'Catalog request failed');return body.data;};
+const words=s=>new Set(String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>2&&!['shirt','hoodie','black','size','adult','youth','logo','artwork','graphic','custom','apparel','print','design'].includes(x)));
+export function overlap(a,b){const aa=words(a),bb=words(b);return [...aa].filter(x=>bb.has(x)).length;}
+export function suggestions(product,assets,recipes){const text=[product.product_name,product.example_sku].join(' ');const candidates=entries=>entries.map(x=>({...x,matchCount:overlap(text,x.artwork_name||x.name)})).filter(x=>x.matchCount>0).sort((a,b)=>b.matchCount-a.matchCount);return {assets:candidates(assets).slice(0,5),recipes:candidates(recipes).slice(0,5)};}
+export default function CatalogPairingWorkbench(){
+ const access=useContext(EmployeeAccessContext),canManage=['admin','manager'].includes(access?.role);
+ const [catalog,setCatalog]=useState(null),[readiness,setReadiness]=useState(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ const [search,setSearch]=useState(''),[selected,setSelected]=useState(''),[assetId,setAssetId]=useState(''),[recipeId,setRecipeId]=useState(''),[evidence,setEvidence]=useState(''),[confirm,setConfirm]=useState(false);
+ const load=useCallback(async()=>{setBusy(true);try{const [a,b]=await Promise.all([api('legacy-catalog-modernization',{action:'dashboard'}),api('catalog-production-readiness',{action:'overview'})]);setCatalog(a);setReadiness(b);setMessage('Catalog refreshed. Suggestions are unverified and require review.');}catch(e){setMessage(e.message)}finally{setBusy(false)}},[]);
+ useEffect(()=>{load()},[load]);
+ const list=useMemo(()=>(catalog?.scores||[]).filter(x=>[x.product_name,x.example_sku,x.woocommerce_product_id].join(' ').toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.score-b.score),[catalog,search]);
+ const product=list.find(x=>String(x.woocommerce_product_id)===selected);
+ const recipes=readiness?.recipes||[];
+ const matches=product?suggestions(product,catalog?.assets||[],recipes):{assets:[],recipes:[]};
+ const stats={total:catalog?.scores?.length||0,withArtwork:(catalog?.scores||[]).filter(x=>x.flags?.artwork).length,withRecipe:(catalog?.scores||[]).filter(x=>x.flags?.recipe).length,review:(catalog?.scores||[]).filter(x=>!x.flags?.artwork||!x.flags?.recipe).length};
+ async function saveArtwork(){if(!canManage||!product||!assetId||!confirm||evidence.trim().length<12)return;setBusy(true);try{await api('legacy-catalog-modernization',{action:'link_artwork',woocommerce_product_id:product.woocommerce_product_id,artwork_asset_id:assetId,approval_evidence:evidence.trim(),confirm:true});await load();setMessage('Approved artwork association saved; WooCommerce checkout unchanged.')}catch(e){setMessage(e.message)}finally{setBusy(false)}}
+ async function saveRecipe(){if(!canManage||!product||!recipeId)return;setBusy(true);try{await api('catalog-production-readiness',{action:'assign',woocommerce_product_id:product.woocommerce_product_id,disposition:'assigned',recipe_id:recipeId,notes:'Catalog Pairing Workbench: draft association; physical sample and approved revision still required.'});await load();setMessage('Recipe candidate assigned. Production remains gated by recipe approval.')}catch(e){setMessage(e.message)}finally{setBusy(false)}}
+ function select(p){setSelected(String(p.woocommerce_product_id));setAssetId(p.artwork?.artwork_asset_id||'');setRecipeId(p.recipe_id||'');setEvidence('');setConfirm(false)}
+ function downloadAudit(){const records=list.map(x=>[x.woocommerce_product_id,x.product_name,x.flags?.artwork?'verified':'review',x.flags?.recipe?'approved':'review',x.score]);const csv=[['woo_product_id','product_name','artwork_status','recipe_status','readiness_score'],...records].map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='skilled-crafting-catalog-pairing-audit.csv';a.click();URL.revokeObjectURL(url)}
+ return <main className="page sc-pairing"><header className="page-header"><div><p className="eyebrow">Production · Existing products</p><h1>Catalog Artwork & Recipe Pairing</h1><p>Review every synced WooCommerce family, find likely artwork and recipe matches, and save only evidence-backed associations. No bulk guessed approvals or customer-facing activation.</p></div><button type="button" disabled={busy} onClick={load}>Refresh catalog</button></header>
+ {message&&<p role="status" className="message">{message}</p>}
+ <div className="sc-pairing-stats"><div><strong>{stats.total}</strong> families indexed</div><div><strong>{stats.withArtwork}</strong> artwork reviewed</div><div><strong>{stats.withRecipe}</strong> approved recipe</div><div><strong>{stats.review}</strong> require review</div></div>
+ <div className="sc-pairing-toolbar"><label>Search Woo product, name or SKU<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Marcus Whitman, team or SKU"/></label><button type="button" disabled={!catalog} onClick={downloadAudit}>Export full review CSV</button></div>
+ <div className="sc-pairing-layout"><div className="sc-pairing-list">{list.map(p=><button type="button" key={p.woocommerce_product_id} className={selected===String(p.woocommerce_product_id)?'selected':''} onClick={()=>select(p)}><strong>{p.product_name}</strong><small>Woo #{p.woocommerce_product_id} · {p.score}% ready · {p.row_count} synced rows</small><small>Artwork {p.flags?.artwork?'✓':'review'} · Recipe {p.flags?.recipe?'✓':'review'}</small></button>)}</div>
+ <section className="card sc-pairing-detail">{!product?<p>Select a synced product family to inspect proposed matches. Products missing from sync require WooCommerce catalog synchronization first.</p>:<>
+ <h2>{product.product_name}</h2><p>Woo parent #{product.woocommerce_product_id} · {product.variation_count} catalog variation IDs. Mapping at parent level does not prove each variation is correctly configured.</p>
+ <p><strong>Artwork:</strong> {product.artwork?.artwork_asset_id?'Linked '+product.artwork.artwork_asset_id:'No reviewed link'}</p>
+ <label>Artwork file (passed technical preflight)<select value={assetId} onChange={e=>{setAssetId(e.target.value);setConfirm(false)}}><option value="">Select verified file</option>{(catalog?.assets||[]).map(a=><option key={a.id} value={a.id}>{a.artwork_name}{matches.assets.some(m=>m.id===a.id)?' · possible name match':''}</option>)}</select></label>
+ <p><small>{matches.assets.length?matches.assets.map(a=>a.artwork_name).join(' · '):'No name-based artwork candidates. Search your artwork library and upload the exact file.'} Name similarity is not proof of client approval.</small></p>
+ <label>Approval evidence<textarea rows={2} placeholder="Approval date, customer proof, artwork identity and reviewer details" value={evidence} onChange={e=>setEvidence(e.target.value)}/></label>
+ <label className="sc-pairing-confirm"><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)}/> I personally verified this exact approved artwork for this product.</label>
+ <button type="button" disabled={!canManage||busy||!assetId||!confirm||evidence.trim().length<12} onClick={saveArtwork}>Save reviewed artwork link</button>
+ <hr/><p><strong>Production recipe:</strong> {product.recipe_id||'Not assigned'}</p>
+ <label>Production recipe<select value={recipeId} onChange={e=>setRecipeId(e.target.value)}><option value="">Choose production recipe</option>{recipes.map(r=><option key={r.id} value={r.id}>{r.name}{matches.recipes.some(m=>m.id===r.id)?' · name match':''}</option>)}</select></label>
+ <button type="button" disabled={!canManage||busy||!recipeId} onClick={saveRecipe}>Assign recipe for review</button>
+ <p>Assignment does not approve a draft recipe, enable selection rules, or modify orders. Adult/youth-specific variations require separate checks.</p>
+ <p><Link to="/manufacturing-recipes">Review recipe and physical sample</Link> · <Link to="/client-graphics">Graphic family bindings</Link> · <Link to="/catalog-production-readiness">Variation and readiness review</Link></p>
+ </>}</section></div></main>;
+}
