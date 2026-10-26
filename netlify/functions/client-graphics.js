@@ -37,10 +37,11 @@ export async function handler(event){
    const {data:existing,error:existingError}=await auth.supabase.from(TABLES.variants).select('state,artwork_asset_id,width_inches,height_inches,process,version').eq('id',input.id).single();
    if(existingError||!existing)return reply(404,{message:'Variant not found'},event);
    if(existing.state==='approved'){
-    const protectedFields=['artwork_asset_id','width_inches','height_inches','process','version'];
-    if(protectedFields.some(key=>Object.prototype.hasOwnProperty.call(record,key)&&String(record[key])!==String(existing[key])))
-     return reply(409,{message:'Approved artwork cannot be modified in place; create a new revision'},event);
+    if(Object.keys(record).some(key=>key!=='state') || record.state!=='retired')
+     return reply(409,{message:'Approved revisions may only be retired; create a new revision for changes'},event);
    }
+   if(existing.state==='retired')
+    return reply(409,{message:'Retired artwork revisions cannot be reactivated or edited'},event);
   }
   if(entity==='families' && record.state==='approved'){
    if(!input.id)return reply(409,{message:'Create a draft family before approval'},event);
@@ -54,6 +55,14 @@ export async function handler(event){
    if(sourceError||!source||!['approved','passed','ready'].includes(String(source.preflight_status).toLowerCase()))return reply(409,{message:'Source artwork must pass preflight before approval'},event);
    if(!input.verified_sample)return reply(409,{message:'Physical sample verification is required'},event);
    record.approved_at=new Date().toISOString();
+  }
+  if(entity==='rules'){
+   const {data:priorRule,error:ruleError}=input.id
+    ?await auth.supabase.from(TABLES.rules).select('*').eq('id',input.id).single()
+    :{data:null,error:null};
+   if(ruleError)return reply(404,{message:'Rule not found'},event);
+   if(priorRule?.enabled && record.enabled!==false)
+    return reply(409,{message:'Deactivate the active rule before changing its conditions; then reverify the sample'},event);
   }
   if(entity==='rules' && record.enabled===true){
    if(!input.verified_sample)return reply(409,{message:'Sample verification required before rule activation'},event);
