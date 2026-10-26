@@ -7,7 +7,7 @@ const FIELDS={
  bindings:['woo_product_id','graphic_family_id','mode','allowed'],
  transfer:['woo_product_id','woo_variation_id','source_kind','source_key','source_value','proposed_family_id','status','evidence','verified_by','verified_at']
 };
-const uuid=s=>/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(s||''));
+const uuid=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||''));
 const reply=(code,data,e)=>jsonResponse(code,data,e);
 export async function handler(event){
  if(event.httpMethod==='OPTIONS')return reply(204,{},event);
