@@ -4,5 +4,6 @@
  if(!is_blog_installed()){wp_install('NONCUSTOMER ISOLATED WOO','fictional_admin','admin@example.invalid',false,'','local-noncustomer-strong-test-only');echo "WordPress installed locally\n";}
  require_once ABSPATH.'wp-admin/includes/plugin.php';
  $r=activate_plugin('woocommerce/woocommerce.php','','',true);if(is_wp_error($r))throw new Exception($r->get_error_message());
+ WC_Install::install();
  update_option('blog_public',0);update_option('woocommerce_enable_guest_checkout','yes');update_option('woocommerce_calc_taxes','no');
  echo "Woo activation complete\n";
