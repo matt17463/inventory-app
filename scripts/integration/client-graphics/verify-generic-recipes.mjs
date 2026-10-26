@@ -55,7 +55,12 @@ try{
   await assert.rejects(asRole(db,'operator',()=>run(202)),/preflight|placement/i);
  });
  await check('No assignments block generic recipe',async()=>{
-  await job(db,203);await assert.rejects(asRole(db,'operator',()=>run(203)),/preflight|placement/i);
+  await job(db,203);
+  // Exercise the placement guard independently of the earlier receipt guard.
+  await db.query(`insert into sc_traveler_storage_preflight(job_id,recipe_version_id,requested_by,job_item_ids,artwork_fingerprint,expires_at)
+   values(203,$1,$2,array[2030],md5(''),now()+interval '2 minutes')`,[version,uid(3)]);
+  await assert.rejects(asRole(db,'operator',()=>run(203)),/preflight|placement/i);
+  assert.equal((await db.query('select count(*)::int n from sc_job_travelers where job_id=203')).rows[0].n,0);
  });
  await check('Changing approved placement invalidates earlier receipt',async()=>{
   await approved(206,['full_front','sleeve','full_back']);

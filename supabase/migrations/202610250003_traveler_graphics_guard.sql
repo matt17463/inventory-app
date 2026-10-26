@@ -150,7 +150,7 @@ begin
     join public.sc_job_travelers t on t.id=new.traveler_id
     where ja.job_item_id=new.job_item_id and ja.recipe_version_id=t.recipe_version_id),'[]'::jsonb),true);
  return new;
-end $;
+end $$;
 revoke all on function public.sc_validate_traveler_graphic_line() from public,anon,authenticated;
 drop trigger if exists sc_validate_traveler_graphic_line on public.sc_job_traveler_lines;
 create trigger sc_validate_traveler_graphic_line

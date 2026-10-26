@@ -12,6 +12,15 @@ const api=adapter(db);api.storage={from:bucket=>({download:async path=>({data:ex
 mock.module('../../../netlify/functions/_shared/security.js',{namedExports:{authorizeEmployee:async(_event,options)=>({ok:!!userId&&options.allowedRoles.includes(role),role,user:{id:userId},statusCode:userId?403:401,message:'Fixture authorization denied',supabase:api}),jsonResponse:(statusCode,data)=>({statusCode,body:JSON.stringify(data)})}});
 mock.module('../../../netlify/functions/_shared/mockupStorage.js',{namedExports:{r2BucketName:()=>'fictional-r2-test',safeObjectKey:key=>{if(!key||String(key).includes('..'))throw Error('Unsafe fixture key');return String(key).trim()},r2Client:()=>({send:async command=>{heads.push(command.input);if(storageError)throw Object.assign(Error('Simulated storage denial'),{name:storageError});if(!existing.has(command.input.Key))throw Object.assign(Error('Simulated missing test object'),{name:'NotFound'});return {ContentLength:objectSize}}})}});
 const endpoint=(await import('../../../netlify/functions/traveler-artwork-preflight.js')).handler;
+const assignmentEndpoint=(await import('../../../netlify/functions/job-line-placement-artwork.js')).handler;
+api.rpc=async(name,args)=>{
+ if(name!=='sc_approve_job_line_placement_artwork')throw Error('Unexpected fixture RPC');
+ try{
+  const {rows}=await db.query('select sc_approve_job_line_placement_artwork($1,$2,$3,$4,$5) id',[
+   args.p_job_item_id,args.p_recipe_version_id,args.p_placement_name,args.p_artwork_asset_id,args.p_actor]);
+  return {data:rows[0].id,error:null};
+ }catch(error){return {data:null,error:{message:error.message,code:error.code}};}
+};
 const migration=await readFile(new URL('../../../supabase/migrations/202610250005_traveler_storage_preflight.sql',import.meta.url),'utf8');await db.exec(migration);await db.exec(migration);
 async function test(name,fn){try{const detail=await fn();results.push({name,status:'pass',detail});console.log('PASS',name,detail||'')}catch(e){results.push({name,status:'FAIL',error:e.message,code:e.code});console.error('FAIL',name,e.message)}}
 const body=(n,extra={})=>({job_id:n,job_item_ids:[n*10],recipe_version_id:uid(31),...extra});
@@ -62,5 +71,33 @@ await test('generic recipe with missing artwork position rejects endpoint and mi
  const response=await call(97,{recipe_version_id:v});
  assert.equal(response.statusCode,409);
  assert.equal(await count(97),0);
+});
+await test('manager assignment API records authenticated actor and operator can read it',async()=>{
+ await job(db,98);
+ const payload={job_item_id:980,recipe_version_id:uid(134),placement_name:'full_front',artwork_asset_id:uid(11),p_actor:uid(1)};
+ role='manager';userId=uid(2);
+ try{
+  const saved=await assignmentEndpoint({httpMethod:'POST',body:JSON.stringify(payload)});
+  assert.equal(saved.statusCode,200);
+  role='operator';userId=uid(3);
+  const read=await assignmentEndpoint({httpMethod:'GET',queryStringParameters:{job_item_id:'980',recipe_version_id:uid(134)}});
+  assert.equal(read.statusCode,200);
+  assert.equal(JSON.parse(read.body).assignments[0].approved_by,uid(2));
+  assert.equal((await assignmentEndpoint({httpMethod:'POST',body:JSON.stringify(payload)})).statusCode,403);
+  role='viewer';userId=uid(4);
+  assert.equal((await assignmentEndpoint({httpMethod:'GET',queryStringParameters:{job_item_id:'980',recipe_version_id:uid(134)}})).statusCode,403);
+  userId=null;
+  assert.equal((await assignmentEndpoint({httpMethod:'POST',body:JSON.stringify(payload)})).statusCode,401);
+ }finally{role='operator';userId=uid(3);}
+});
+await test('assignment SQL denies browser RPC and non-manager actors, API rejects wrong placement',async()=>{
+ const args=[980,uid(134),'sleeve',uid(11),uid(2)];
+ await assert.rejects(asRole(db,'manager',()=>db.query('select sc_approve_job_line_placement_artwork($1,$2,$3,$4,$5)',args)),e=>e.code==='42501');
+ await assert.rejects(db.query('select sc_approve_job_line_placement_artwork($1,$2,$3,$4,$5)',[...args.slice(0,4),uid(3)]),/Manager approval required/);
+ role='manager';userId=uid(2);
+ try{
+  const response=await assignmentEndpoint({httpMethod:'POST',body:JSON.stringify({job_item_id:980,recipe_version_id:uid(134),placement_name:'left_chest',artwork_asset_id:uid(11)})});
+  assert.equal(response.statusCode,409);
+ }finally{role='operator';userId=uid(3);}
 });
 console.log('ENDPOINT SQL RECEIPT INTEGRATION',results.filter(r=>r.status==='pass').length,'PASS',results.filter(r=>r.status==='FAIL').length,'FAIL');await writeFile(process.env.CG_STORAGE_RESULTS||'storage-endpoint-results.json',JSON.stringify({testedCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),storageMode:'SIMULATED; no R2 network calls or real credentials',results,heads},null,2));await db.close();process.exitCode=results.some(r=>r.status==='FAIL')?1:0;

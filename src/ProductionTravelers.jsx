@@ -87,7 +87,10 @@ export default function ProductionTravelers() {
     setSelected(data);setEvents(ev.data||[]);setSavedJob(job.data);setJobId(String(data.job_id));
     setArtwork(null);setArtworkUrl('');
     setPlacementArtworks({});
-    const locationIds=[...new Set((data.recipe_snapshot?.placements||[]).map(p=>p.artwork_asset_id).filter(Boolean))];
+    const locationIds=[...new Set([
+      ...(data.recipe_snapshot?.placements||[]).map(p=>p.artwork_asset_id),
+      ...(lines.data||[]).flatMap(line=>(line.item_snapshot?.approved_placement_artwork||[]).map(a=>a.artwork_asset_id)),
+    ].filter(Boolean))];
     if(locationIds.length){
       const {data:locationAssets,error:locationError}=await supabase.from('mockup_artwork_assets').select('*').in('id',locationIds);
       if(!locationError&&locationAssets?.length){
@@ -314,10 +317,11 @@ export default function ProductionTravelers() {
             <ul>{line.item_snapshot.approved_placement_artwork.map(approval=>{
               const placement=(snap.placements||[]).find(p=>p.placement_name===approval.placement_name)||{};
               return <li key={approval.placement_name}>
-                {display(approval.placement_name)} — artwork {approval.artwork_asset_id}
+                {display(approval.placement_name)} — artwork {placementArtworks[approval.artwork_asset_id]?.name||approval.artwork_asset_id}
                 {placement.print_width_inches&&placement.print_height_inches?(' · '+placement.print_width_inches+' × '+placement.print_height_inches+' in'):''}
                 {placement.top_offset_inches!==undefined?(' · top offset '+placement.top_offset_inches+' in'):''}
                 {placement.reference_landmark?(' · '+placement.reference_landmark):''}
+                {placementArtworks[approval.artwork_asset_id]?.url&&<a href={placementArtworks[approval.artwork_asset_id].url} target="_blank" rel="noreferrer"> Open exact production graphic</a>}
               </li>;
             })}</ul>
           </div>)}
@@ -325,7 +329,7 @@ export default function ProductionTravelers() {
         </div>}
         {snap.placement&&<p>Order placement instruction: {snap.placement}</p>}
         <p><strong>Decoration method:</strong> {snap.decoration_method||'Confirm approved method'} · <strong>Recipe:</strong> {snap.recipe_name||'Saved revision'}</p>
-        <p><strong>Artwork:</strong> {artwork?.artwork_name||snap.artwork_asset_id||'Not attached — verify before production'}</p>
+        <p><strong>Artwork:</strong> {artwork?.artwork_name||snap.artwork_asset_id||(travelerLines.some(line=>(line.item_snapshot?.approved_placement_artwork||[]).length)?'Approved per-line files listed above':'Not attached — verify before production')}</p>
         {artworkUrl&&artwork?.mime_type?.startsWith('image/')&&<div className="sc-traveler-approved-art"><img src={artworkUrl} alt={artwork.artwork_name||'Linked production artwork'} /><small>Linked source artwork preview; verify the exact prepared production file and print dimensions before output.</small></div>}
         {artworkUrl&&<p><a href={artworkUrl} rel="noreferrer" target="_blank">Open linked artwork file ↗</a></p>}
         {snap.machine_settings?<div className="sc-traveler-machine">
