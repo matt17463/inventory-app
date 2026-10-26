@@ -37,20 +37,25 @@ add_action('woocommerce_before_add_to_cart_button', function () {
  foreach($opts as $option)echo '<option value="'.esc_attr($option['id']).'">'.esc_html($option['label']).'</option>';
  echo '</select></div>';
 });
-add_filter('woocommerce_add_to_cart_validation', function($valid,$product_id,$quantity=1,$variation_id=0) {
+add_filter('woocommerce_add_to_cart_validation', function($valid,$product_id,$quantity=1,$variation_id=0,$variation=[],$cart_item_data=[]) {
  if(!sc_graphics_enabled())return $valid;
  $opts=sc_graphics_options_for_product($product_id, $variation_id);
  if(count($opts)<2)return $valid;
  $selected=isset($_POST['sc_graphic_family_id'])?sanitize_text_field(wp_unslash($_POST['sc_graphic_family_id'])):'';
+ // Store API passes a separately validated cart_item_data array before its own validation action.
+ // Never trust a matching browser-submitted label; compare the ID to server options.
+ if(!$selected && isset($cart_item_data['sc_graphic_family_id']))
+  $selected=sanitize_text_field($cart_item_data['sc_graphic_family_id']);
  if(!in_array($selected,array_column($opts,'id'),true)){
   wc_add_notice(__('Please choose an available graphic.','skilledcrafting'),'error');return false;
  }
  return $valid;
-},10,4);
+},10,6);
 add_filter('woocommerce_add_cart_item_data',function($data,$product_id,$variation_id=0){
  if(!sc_graphics_enabled())return $data;
  $opts=sc_graphics_options_for_product($product_id,$variation_id);
  if(!$opts)return $data;
+ if(!empty($data['sc_graphic_family_id']) && in_array($data['sc_graphic_family_id'],array_column($opts,'id'),true))return $data;
  $selected=isset($_POST['sc_graphic_family_id'])?sanitize_text_field(wp_unslash($_POST['sc_graphic_family_id'])):'';
  if(count($opts)===1)$selected=$opts[0]['id'];
  if(count($opts)>1 && !in_array($selected,array_column($opts,'id'),true))return $data;
