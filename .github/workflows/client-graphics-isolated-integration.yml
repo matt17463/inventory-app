@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/integration/client-graphics/**'
       - 'supabase/migrations/20261025*.sql'
+      - 'supabase/migrations/202610260001_generic_recipe_line_artwork.sql'
+      - 'netlify/functions/job-line-placement-artwork.js'
       - 'netlify/functions/*graphic*.js'
       - 'netlify/functions/_shared/wooGraphic*.js'
       - 'netlify/functions/traveler-artwork-preflight.js'
@@ -42,6 +44,9 @@ jobs:
         env:
           CG_STORAGE_RESULTS: ${{ github.workspace }}/storage-endpoint-results.json
         run: node --experimental-test-module-mocks scripts/integration/client-graphics/verify-storage-endpoint.mjs 2>&1 | tee storage-endpoint-integration.log
+      - name: Verify generic recipe artwork assignments against PostgreSQL
+        shell: bash
+        run: node scripts/integration/client-graphics/verify-generic-recipes.mjs 2>&1 | tee generic-recipe-integration.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -52,6 +57,7 @@ jobs:
             storage-receipt-integration.log
             storage-endpoint-integration.log
             storage-endpoint-results.json
+            generic-recipe-integration.log
   wordpress-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 5
