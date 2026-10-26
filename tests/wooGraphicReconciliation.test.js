@@ -103,3 +103,15 @@ test('mixed order with one managed line does not invent selections for legacy si
  assert.ok(rows.has('woocommerce:102:2'));
  assert.equal(rows.has('woocommerce:102:3'),false);
 });
+
+test('unpaired product with malformed legacy artwork field keeps legacy checkout and no capture',async()=>{
+ const {db,captures,rows}=fixture({allowed:false});
+ const result=await persistWooGraphicSelections(db,{id:200,line_items:[line({graphic_selection:{status:'invalid-id',rawFamilyId:'historic-logo-text'}})]});
+ assert.deepEqual(result,{saved:[],failures:[]});assert.equal(captures.size,0);assert.equal(rows.size,0);
+});
+test('mixed cart keeps legacy product line out of managed capture while managed line resolves',async()=>{
+ const {db,captures,rows}=fixture();
+ const result=await persistWooGraphicSelections(db,{id:201,line_items:[line(),{id:3,product_id:9999,graphic_selection:{status:'none'}},{id:4,product_id:9999,graphic_selection:{status:'invalid-id',rawFamilyId:'historic-addon'}}]});
+ assert.deepEqual(result.failures,[]);assert.equal(rows.size,1);assert.equal(captures.size,1);
+ assert.equal(captures.get('201:2').status,'managed_resolved');
+});
