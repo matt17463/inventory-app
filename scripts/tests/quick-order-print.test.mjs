@@ -21,3 +21,12 @@ test('Simple printing uses authoritative source and retains financial and printe
  assert.match(component,/Preview selected documents/);
  assert.match(component,/Print selected to shop printers/);
 });
+
+test('selected school label uses customized built-in storage instead of resetting to factory layout',()=>{
+ const printCenter=read('src/PrintCenter.jsx');
+ const workHubPrint=read('src/QuickOrderPrint.jsx');
+ assert.match(printCenter,/BUILTIN_DESIGN_KEY/);
+ assert.match(printCenter,/presets\[activeBuiltin\]=normalizeLabelDesign\(labelDesign\)/);
+ assert.match(workHubPrint,/readSaved\(builtinsKey,\{\}\)\[template\]/);
+ assert.match(workHubPrint,/normalizeLabelDesign\(customized\|\|presetLabelDesign\(template\)\)/);
+});
