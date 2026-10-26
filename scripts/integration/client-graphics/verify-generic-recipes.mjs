@@ -57,6 +57,12 @@ try{
  await check('No assignments block generic recipe',async()=>{
   await job(db,203);await assert.rejects(asRole(db,'operator',()=>run(203)),/preflight|placement/i);
  });
+ await check('Changing approved placement invalidates earlier receipt',async()=>{
+  await approved(206,['full_front','sleeve','full_back']);
+  await receipt(206);
+  await db.query('update sc_job_line_placement_artwork set artwork_asset_id=$1 where job_item_id=$2 and placement_name=$3',[uid(12),2060,'sleeve']);
+  await assert.rejects(asRole(db,'operator',()=>run(206)),/Fresh trusted artwork storage verification/);
+ });
  await check('Wrong placement cannot be approved',async()=>{
   await job(db,204);
   await assert.rejects(db.query('select sc_approve_job_line_placement_artwork($1,$2,$3,$4,$5)',[2040,version,'left_chest',art,uid(2)]),/invalid/i);
