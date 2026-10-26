@@ -3,6 +3,7 @@ import {Link} from 'react-router-dom';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
+import InlineProductBlankMapping from './InlineProductBlankMapping';
 import './CatalogProductionReadiness.css';
 
 async function action(payload){
@@ -204,6 +205,7 @@ export default function CatalogProductionReadiness(){
        {setupStep===1&&<div>
         <p><strong>Blank mapping review:</strong> {fmt(selected.missing_blank_rows)} of {fmt(selected.row_count)} synchronized rows lack a blank mapping. Finished products or non-inventory items may legitimately have none; verify before fixing.</p>
         <p><Link to="/product-blank-mappings">Repair specific blank mappings →</Link> · <Link to="/catalog-workbench">Review catalog details →</Link></p>
+        <InlineProductBlankMapping key={selected.woocommerce_product_id} productId={selected.woocommerce_product_id} canManage={canManage} onSaved={load}/>
        </div>}
        {setupStep===2&&<div>
         <p>{fmt(selected.legacy_logo_count)} different legacy logo references detected. These are clues, not proof of authorized production artwork.</p>
