@@ -10,3 +10,35 @@ test('blocks incompatible graphic families',()=>assert.equal(check({items:[{id:1
 test('blocks mismatched customer art',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe,artworkAssets:assets,selections:[{family_id:'a',resolution_snapshot:{artworkAssetId:'different'}}]}).ready,false));
 
 test('supports legacy approved recipe-wide artwork when no per-placement entries exist',()=>assert.equal(check({items:[{id:1}],recipeVersion:{status:'approved',artwork_asset_id:id,placements:[]},artworkAssets:assets}).ready,true));
+
+const generic={status:'approved',artwork_asset_id:null,placements:[
+ {placement_name:'full_front',print_width_inches:8},
+ {placement_name:'sleeve',print_width_inches:3.5},
+ {placement_name:'full_back',print_width_inches:11},
+]};
+const assignment=(n,placements)=>({[n]:placements.map(name=>({placement_name:name,artwork_asset_id:id}))});
+test('generic two-position recipe allows exact approved line artwork',()=>{
+ const result=check({items:[{id:10}],recipeVersion:{...generic,placements:generic.placements.slice(0,2)},
+  artworkAssets:assets,lineArtworkByItem:assignment(10,['full_front','sleeve'])});
+ assert.equal(result.ready,true);
+});
+test('generic three-position recipe allows exact approved line artwork',()=>{
+ const result=check({items:[{id:11}],recipeVersion:generic,artworkAssets:assets,
+  lineArtworkByItem:assignment(11,['full_front','sleeve','full_back'])});
+ assert.equal(result.ready,true);
+});
+test('generic recipe blocks missing one of three artwork positions',()=>{
+ const result=check({items:[{id:12}],recipeVersion:generic,artworkAssets:assets,
+  lineArtworkByItem:assignment(12,['full_front','sleeve'])});
+ assert.equal(result.ready,false);assert.match(result.blockers.join(' '),/full_back/);
+});
+test('generic recipe blocks a position assigned to another line',()=>{
+ const result=check({items:[{id:13}],recipeVersion:generic,artworkAssets:assets,
+  lineArtworkByItem:assignment(14,['full_front','sleeve','full_back'])});
+ assert.equal(result.ready,false);
+});
+test('generic recipe blocks unapproved attached artwork',()=>{
+ const result=check({items:[{id:15}],recipeVersion:generic,artworkAssets:[{id,preflight_status:'failed'}],
+  lineArtworkByItem:assignment(15,['full_front','sleeve','full_back'])});
+ assert.equal(result.ready,false);
+});
