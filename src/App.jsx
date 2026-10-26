@@ -211,6 +211,7 @@ function EmployeeRoutes() {
       <Route path="/print-center" element={<PrintCenter />} />
       <Route path="/quickbooks" element={<QuickBooksConnection />} />
       <Route path="/manufacturing-recipes" element={<ManufacturingRecipes />} />
+      <Route path="/client-graphics" element={<ClientGraphics />} />
       <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
       <Route path="/production-travelers" element={<ProductionTravelers />} />
