@@ -8,3 +8,5 @@ test('blocks missing artwork',()=>assert.equal(check({items:[{id:1}],recipeVersi
 test('blocks unapproved artwork',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe,artworkAssets:[{id,preflight_status:'pending'}]}).ready,false));
 test('blocks incompatible graphic families',()=>assert.equal(check({items:[{id:1},{id:2}],recipeVersion:recipe,artworkAssets:assets,selections:[{family_id:'a'},{family_id:'b'}]}).ready,false));
 test('blocks mismatched customer art',()=>assert.equal(check({items:[{id:1}],recipeVersion:recipe,artworkAssets:assets,selections:[{family_id:'a',resolution_snapshot:{artworkAssetId:'different'}}]}).ready,false));
+
+test('supports legacy approved recipe-wide artwork when no per-placement entries exist',()=>assert.equal(check({items:[{id:1}],recipeVersion:{status:'approved',artwork_asset_id:id,placements:[]},artworkAssets:assets}).ready,true));
