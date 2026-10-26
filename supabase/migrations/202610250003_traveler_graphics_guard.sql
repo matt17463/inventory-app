@@ -22,10 +22,10 @@ begin
   raise exception 'Traveler must use an approved recipe version';
  end if;
  select count(*) into v_link_count from public.sc_order_graphic_selections
- where job_item_id=new.job_item_id;
+ where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id));
  if v_link_count>1 then raise exception 'Conflicting graphic assignments for job line'; end if;
  for v_selection in
-  select family_id,resolution_snapshot,selected_payload from public.sc_order_graphic_selections where job_item_id=new.job_item_id
+  select family_id,resolution_snapshot,selected_payload from public.sc_order_graphic_selections where job_item_id=new.job_item_id or (source='woocommerce' and external_order_id=(select j.woocommerce_order_id::text from public.job_items i join public.jobs j on j.id=i.job_id where i.id=new.job_item_id) and external_line_id=(select i.woocommerce_line_item_id::text from public.job_items i where i.id=new.job_item_id))
  loop
   if v_selection.family_id is null or v_selection.resolution_snapshot is null
     or v_selection.resolution_snapshot->>'status'<>'resolved' then
