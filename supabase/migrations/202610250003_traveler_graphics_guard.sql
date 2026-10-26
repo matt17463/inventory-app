@@ -34,8 +34,8 @@ begin
   if exists (
    select 1 from jsonb_array_elements(v_placements) p
    left join public.mockup_artwork_assets a
-    on a.id=(p->>'artwork_asset_id')::uuid
-   where p->>'artwork_asset_id' is null
+    on a.id=coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id')::uuid
+   where coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id') is null
       or coalesce(lower(a.preflight_status),'') not in ('passed','approved','ready')
   ) then
    raise exception 'Recipe placement artwork has not passed preflight';
