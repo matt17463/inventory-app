@@ -42,6 +42,11 @@ export async function handler(event){
      return reply(409,{message:'Approved artwork cannot be modified in place; create a new revision'},event);
    }
   }
+  if(entity==='families' && record.state==='approved'){
+   if(!input.id)return reply(409,{message:'Create a draft family before approval'},event);
+   const {data:familyVariants,error:ve}=await auth.supabase.from(TABLES.variants).select('id,state').eq('family_id',input.id);
+   if(ve||!familyVariants?.some(v=>v.state==='approved'))return reply(409,{message:'Approve at least one production artwork variant before approving this design'},event);
+  }
   if(entity==='variants' && record.state==='approved'){
    const sourceId=record.artwork_asset_id || (input.id?(await auth.supabase.from(TABLES.variants).select('artwork_asset_id').eq('id',input.id).single()).data?.artwork_asset_id:null);
    if(!uuid(sourceId))return reply(409,{message:'Approved variants require a linked source artwork file'},event);
@@ -61,7 +66,12 @@ export async function handler(event){
    const signature=x=>keys.map(k=>String(x[k]||'').toLowerCase().trim()).join('|');
    if((active||[]).some(x=>x.id!==input.id && x.priority===candidate.priority && signature(x)===signature(candidate) && x.variant_id!==candidate.variant_id))return reply(409,{message:'A competing active rule has identical conditions and priority'},event);
   }
-  if(entity==='bindings' && record.allowed===true)return reply(403,{message:'Storefront activation reserved for transfer verification phase'},event);
+  if(entity==='bindings'){
+   // Storefront assignments must never be activated or approved through draft editing.
+   if(record.allowed===true||input.values.verified_at||input.values.mode==='enabled')
+    return reply(403,{message:'Storefront activation reserved for transfer verification phase'},event);
+   record.allowed=false;
+  }
   if(entity==='families' && !String(record.name||'').trim() && !input.id)return reply(400,{message:'Graphic family name is required'},event);
   let q;
   if(input.id){if(!uuid(input.id))return reply(400,{message:'Invalid record ID'},event);q=db.update(record).eq('id',input.id).select('*').single();}
