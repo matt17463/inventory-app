@@ -27,7 +27,7 @@ Verified starting revision: `7cdd47786bf3b6f608a4ee23960e768b19bdd007` (2026-10-
 ## Deployment sequence — separate approval required
 1. Freeze candidate SHA and receive passing application, graphics and isolated-integration CI results for that exact SHA. Record backup/restore evidence, responsible operator and rollback decision point.
 2. Confirm the Client Graphics storefront selector remains disabled; staged bindings remain disallowed, and `SC_GRAPHIC_ORDER_CAPTURE_ENABLED` remains off until a coordinated activation.
-3. Assess transaction duration and locks off-hours. Apply graphics migrations `202610250001` through `202610250004` **together in one transaction** with appropriate exclusive traveler-table locks, as rehearsed; no traveler writes between 003 and 004. Capture exact schema migration log and verify RLS, grants, trigger status, RPC and dependency tables before permitting production traffic.
+3. Assess transaction duration and locks off-hours. Apply graphics migrations `202610250001` through `202610250004` **together in one transaction** with appropriate exclusive traveler-table locks, as rehearsed; no traveler writes between 003 and 004. Coordinate migration `202610250005_traveler_storage_preflight.sql` with the **same separately authorized maintenance window** and with availability of the authenticated receipt-issuing endpoint plus updated traveler UI. Migration 005's trigger will reject new travelers until that endpoint can issue receipts; avoid any live traveler writes during this transition. Capture migration logs, verify RLS/grants/trigger status, and exercise a non-customer authorized preflight/RPC smoke test before lifting the maintenance block.
 4. Deploy the verified application once after separately approved migration/release plan. Keep existing Woo graphics and customer store mappings unchanged.
 5. Run read-only authenticated smoke checks, followed by **explicitly authorized** controlled fictional test order and traveler checks. Monitor webhook failures, capture outcomes, R2 signing, RPC errors, QR routes, and inventory reconciliation.
 6. Activate storefront choice and webhook capture only after dedicated approval and source-product binding verification. Do not migrate historical customer mappings automatically.
@@ -45,5 +45,7 @@ Verified starting revision: `7cdd47786bf3b6f608a4ee23960e768b19bdd007` (2026-10-
 - [ ] Physical artwork and QR sample
 - [ ] Hosted Supabase limitation accepted
 - [ ] Exact-SHA CI recheck
+- [ ] Migration 005 + receipt endpoint/UI coordinated maintenance and direct RPC smoke approval
+- [ ] Empty/unknown R2 object size rejected before trusted receipt
 - [ ] Atomic migration/backup/rollback approval
 - [ ] Separate production deployment authorization
