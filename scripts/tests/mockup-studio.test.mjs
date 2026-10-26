@@ -526,3 +526,20 @@ test('traveler UI requires authenticated server-side artwork existence check', a
   assert.match(preflight, /\.download\(a\.storage_path\)/);
   assert.match(preflight, /verified:true/);
 });
+
+test('direct traveler RPC requires a short-lived trusted per-line storage receipt', async () => {
+  const migration=await read('supabase/migrations/202610250005_traveler_storage_preflight.sql');
+  const api=await read('netlify/functions/traveler-artwork-preflight.js');
+  const ui=await read('src/ProductionTravelers.jsx');
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /revoke all on public\.sc_traveler_storage_preflight from public,anon,authenticated/);
+  assert.match(migration, /grant all on public\.sc_traveler_storage_preflight to service_role/);
+  assert.match(migration, /p\.requested_by=auth\.uid\(\)/);
+  assert.match(migration, /p\.expires_at>clock_timestamp\(\)/);
+  assert.match(migration, /p\.artwork_fingerprint=v_fingerprint/);
+  assert.match(migration, /before insert on public\.sc_job_traveler_lines/);
+  assert.match(api, /new HeadObjectCommand/);
+  assert.match(api, /sc_traveler_storage_preflight/);
+  assert.match(api, /requested_by:auth\.user\.id/);
+  assert.match(ui, /job_item_ids:selectedItemIds/);
+});
