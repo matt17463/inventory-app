@@ -554,6 +554,6 @@ test('generic recipes have manager-approved exact job placement artwork mappings
  assert.match(sql,/p->>'placement_name'=p_placement_name/);
  assert.match(sql,/lower\(a\.preflight_status\) in/);
  assert.match(sql,/Cannot change approved traveler artwork/);
- assert.match(fn,/allowedRoles:\['admin','manager'\]/);
+ assert.match(fn,/event\.httpMethod==='GET'\?\['admin','manager','operator'\]:\['admin','manager'\]/);
  assert.match(fn,/sc_approve_job_line_placement_artwork/);
 });
