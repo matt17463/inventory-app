@@ -44,3 +44,11 @@ Do not enable customer-facing selection until the actual storefront supplies thi
 ## Store API / legacy validation ordering
 
 WooCommerce's current CartController executes `woocommerce_add_to_cart_validation` with six arguments before its `woocommerce_store_api_validate_add_to_cart` action. The WordPress plugin accepts a server-validated `cart_item_data.sc_graphic_family_id` from the sixth argument when classic `$_POST` has no graphic field; it still independently checks that ID against the product's allowed designs. The `woocommerce_add_cart_item_data` filter preserves already-validated Store API selection data instead of dropping it. This resolves a previously hidden rejection for otherwise valid Blocks add-to-cart requests. This is not an assertion that a Blocks product-selection interface exists yet.
+
+## Experimental simple-product Blocks selector
+
+The plugin now includes a dynamic `skilled-crafting/graphic-add-to-cart` block with an accessible design dropdown and Store API add-to-cart action in `assets/graphic-block.js`. It is intentionally inert while `sc_graphics_selector_enabled=no`. It renders **only for purchasable simple products** with multiple configured choices, and only in a product context or an explicitly set `productId`. The product template must use this control **in place of** a second independent add-to-cart control; do not place both active controls on one product.
+
+This is a development candidate rather than a released or live-tested plugin. Verify WordPress block registration/inserter behavior, nonce acceptance, Store API request schema and API response, cache/CDN behavior, cart item display, and exact checkout order-line metadata on a noncustomer test product. Variable products and the newer Add to Cart + Options block's full variation payload are **not covered** by this control. Keep the classic product form for those items until a dedicated variable-product Blocks interface is tested. Fail-closed Store API validation remains enabled when the feature is opted in.
+
+Do not merge, activate the feature option or install over production until native PHP hook tests, automated PR checks and authenticated sandbox checkout tests pass.
