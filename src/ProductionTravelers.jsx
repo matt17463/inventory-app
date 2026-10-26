@@ -46,6 +46,9 @@ export default function ProductionTravelers() {
   const [placementArtworks,setPlacementArtworks]=useState({});
   const [artwork,setArtwork]=useState(null);
   const [artworkUrl,setArtworkUrl]=useState('');
+  const [assignmentAssets,setAssignmentAssets]=useState([]);
+  const [lineAssignments,setLineAssignments]=useState({});
+  const [draftAssignments,setDraftAssignments]=useState({});
 
   const loadIndex=useCallback(async()=>{
     const [a,b,c]=await Promise.all([
@@ -114,6 +117,51 @@ export default function ProductionTravelers() {
   const qr=selected?window.location.origin+'/production-travelers/'+encodeURIComponent(selected.id):'';
 
   const chosenRecipe=recipeVersions.find(x=>x.id===versionId);
+  const needsLineArtwork=(chosenRecipe?.placements||[]).filter(p=>!p.artwork_asset_id&&!chosenRecipe?.artwork_asset_id);
+  useEffect(()=>{
+    if(!needsLineArtwork.length||!selectedItemIds.length||!versionId){setLineAssignments({});return;}
+    let cancelled=false;
+    (async()=>{
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token)throw Error('Sign in to view job artwork approvals');
+      const rows=await Promise.all(selectedItemIds.map(async id=>{
+        const qs=new URLSearchParams({recipe_version_id:versionId,job_item_id:String(id)});
+        const res=await fetch('/.netlify/functions/job-line-placement-artwork?'+qs,{headers:{Authorization:'Bearer '+session.access_token}});
+        const body=await res.json();if(!res.ok)throw Error(body.message||'Artwork approvals unavailable');
+        return [id,body.assignments||[]];
+      }));
+      if(!cancelled)setLineAssignments(Object.fromEntries(rows));
+    })().catch(e=>{if(!cancelled)setMessage(safeError(e));});
+    return ()=>{cancelled=true;};
+  },[versionId,selectedItemIds,needsLineArtwork.length]);
+  useEffect(()=>{
+    if(!needsLineArtwork.length)return;
+    supabase.from('mockup_artwork_assets').select('id,artwork_name,preflight_status')
+     .in('preflight_status',['passed','approved','ready']).limit(500)
+     .then(({data,error})=>{if(!error)setAssignmentAssets(data||[]);});
+  },[needsLineArtwork.length]);
+  const placementReady=chosenItems.every(item=>needsLineArtwork.every(p=>
+    (lineAssignments[item.id]||[]).some(a=>a.placement_name===p.placement_name)));
+  async function approveLineArtwork(itemId,placement){
+    const key=itemId+':'+placement;
+    const assetId=draftAssignments[key];
+    if(!assetId)throw Error('Select an approved artwork file');
+    setBusy(true);setMessage('');
+    try{
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token)throw Error('Employee sign-in required');
+      const res=await fetch('/.netlify/functions/job-line-placement-artwork',{
+        method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
+        body:JSON.stringify({job_item_id:Number(itemId),recipe_version_id:versionId,placement_name:placement,artwork_asset_id:assetId})
+      });
+      const body=await res.json();if(!res.ok)throw Error(body.message||'Could not approve artwork');
+      const qs=new URLSearchParams({recipe_version_id:versionId,job_item_id:String(itemId)});
+      const fresh=await fetch('/.netlify/functions/job-line-placement-artwork?'+qs,{headers:{Authorization:'Bearer '+session.access_token}});
+      const value=await fresh.json();if(!fresh.ok)throw Error(value.message||'Approval lookup failed');
+      setLineAssignments(prev=>({...prev,[itemId]:value.assignments||[]}));
+      setMessage('Approved placement artwork saved');
+    }catch(e){setMessage(safeError(e));}finally{setBusy(false);}
+  }
   const readiness=validateTravelerGraphicReadiness({items:chosenItems,recipeVersion:chosenRecipe,artworkAssets:readinessAssets,selections:orderGraphicCheck.selections});
   const graphicMode=graphicCompatibilityState(orderGraphicCheck);
   const graphicsBlocked=graphicMode.blocked || (graphicMode.legacy && !legacyArtVerified);
@@ -221,7 +269,27 @@ export default function ProductionTravelers() {
         {selectedItemIds.length>0&&orderGraphicCheck.loading&&<p>Checking saved customer graphic selections…</p>}
         {selectedItemIds.length>0&&!orderGraphicCheck.loading&&<p role={graphicsBlocked?'alert':'status'}>{graphicMode.message}</p>}
         {selectedItemIds.length>0&&!orderGraphicCheck.loading&&!orderGraphicCheck.error&&graphicMode.legacy&&<label><input type="checkbox" checked={legacyArtVerified} onChange={e=>setLegacyArtVerified(e.target.checked)}/> I verified the legacy customer artwork and approved recipe against the original order. This is not an automatic graphic mapping.</label>}
-        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready||graphicsBlocked}
+        {needsLineArtwork.length>0&&<section aria-label="Job-specific artwork approvals">
+          <h3>Approved artwork for this job</h3>
+          <p>Generic recipes use these exact files for each decoration position. A manager must approve each required position before a traveler can be created.</p>
+          {chosenItems.map(item=><div key={item.id}>
+            <strong>{itemLabel(item)}</strong>
+            {needsLineArtwork.map(p=>{
+              const key=item.id+':'+p.placement_name;
+              const current=(lineAssignments[item.id]||[]).find(a=>a.placement_name===p.placement_name);
+              return <div key={key}>
+                <label>{display(p.placement_name)} — {current?'Approved':'Approval needed'}
+                  {['admin','manager'].includes(access?.role)&&<select value={draftAssignments[key]||current?.artwork_asset_id||''} onChange={e=>setDraftAssignments(prev=>({...prev,[key]:e.target.value}))}>
+                    <option value="">Choose approved artwork</option>
+                    {assignmentAssets.map(a=><option key={a.id} value={a.id}>{a.artwork_name||a.id}</option>)}
+                  </select>}
+                </label>
+                {['admin','manager'].includes(access?.role)&&<button type="button" disabled={busy||!draftAssignments[key]} onClick={()=>approveLineArtwork(item.id,p.placement_name)}>Approve position</button>}
+              </div>;
+            })}
+          </div>)}
+        </section>}
+        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready||graphicsBlocked||!placementReady}
           onClick={createTraveler}>{busy?'Saving…':'Create grouped traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
         <p><small>Creating a traveler records manufacturing instructions only; it does not move inventory, complete a pull sheet, charge a customer or change WooCommerce status.</small></p>
         <Link to="/manufacturing-recipes">Need a recipe? Create or approve one →</Link>
