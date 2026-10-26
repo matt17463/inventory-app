@@ -47,6 +47,7 @@ const ManufacturingRecipes = lazy(() => import('./ManufacturingRecipes'));
 const ProductionTravelers = lazy(() => import('./ProductionTravelers'));
 const CatalogProductionReadiness = lazy(() => import('./CatalogProductionReadiness'));
 const CatalogModernization = lazy(() => import('./CatalogModernization'));
+const CatalogPairingWorkbench = lazy(() => import('./CatalogPairingWorkbench'));
 
 const ArtworkPreflight = lazy(() => import('./ArtworkPreflight'));
 const InventoryAudit = lazy(() => import('./InventoryAudit'));
@@ -140,6 +141,7 @@ function EmployeeRoutes() {
     <Route path="/marketing" element={<MarketingWorkspace />} />
     <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
+      <Route path="/catalog-pairing" element={<CatalogPairingWorkbench />} />
     <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
     <Route path="/application-guide" element={<ApplicationGuide />} />
     <Route path="/testing-mode" element={<TestingMode />} />
@@ -216,6 +218,7 @@ function EmployeeRoutes() {
       <Route path="/order-graphics" element={<OrderGraphicAssignment />} />
       <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
+      <Route path="/catalog-pairing" element={<CatalogPairingWorkbench />} />
       <Route path="/production-travelers" element={<ProductionTravelers />} />
       <Route path="/production-travelers/:travelerId" element={<ProductionTravelers />} />
       <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
