@@ -35,8 +35,17 @@ begin
    select 1 from jsonb_array_elements(v_placements) p
    left join public.mockup_artwork_assets a
     on a.id=coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id')::uuid
-   where coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id') is null
-      or coalesce(lower(a.preflight_status),'') not in ('passed','approved','ready')
+   where (coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id') is not null
+      and coalesce(lower(a.preflight_status),'') not in ('passed','approved','ready'))
+    or (coalesce(p->>'artwork_asset_id',v_recipe->>'artwork_asset_id') is null
+      and not exists (
+       select 1 from public.sc_job_line_placement_artwork ja
+       join public.mockup_artwork_assets assigned on assigned.id=ja.artwork_asset_id
+       join public.sc_job_travelers t on t.id=new.traveler_id
+       where ja.job_item_id=new.job_item_id and ja.recipe_version_id=t.recipe_version_id
+        and ja.placement_name=p->>'placement_name'
+        and lower(assigned.preflight_status) in ('passed','approved','ready')
+      ))
   ) then
    raise exception 'Recipe placement artwork has not passed preflight';
   end if;
@@ -126,8 +135,18 @@ begin
    ),true);
   v_verified_count := v_verified_count+1;
  end loop;
+ -- Freeze per-line approved placement mappings in the traveler snapshot.
+ new.item_snapshot=jsonb_set(coalesce(new.item_snapshot,'{}'::jsonb),
+  '{approved_placement_artwork}',
+  coalesce((select jsonb_agg(jsonb_build_object(
+    'placement_name',ja.placement_name,'artwork_asset_id',ja.artwork_asset_id,
+    'approved_by',ja.approved_by,'approved_at',ja.approved_at)
+    order by ja.placement_name)
+    from public.sc_job_line_placement_artwork ja
+    join public.sc_job_travelers t on t.id=new.traveler_id
+    where ja.job_item_id=new.job_item_id and ja.recipe_version_id=t.recipe_version_id),'[]'::jsonb),true);
  return new;
-end $$;
+end $;
 revoke all on function public.sc_validate_traveler_graphic_line() from public,anon,authenticated;
 drop trigger if exists sc_validate_traveler_graphic_line on public.sc_job_traveler_lines;
 create trigger sc_validate_traveler_graphic_line
