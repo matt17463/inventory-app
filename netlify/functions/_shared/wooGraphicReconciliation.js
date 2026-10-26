@@ -11,7 +11,24 @@ export async function persistWooGraphicSelections(db,order,{strict=false}={}){
    failures.push({lineId:line.id,reason:'Invalid graphic ID'});
    continue;
   }
-  if(raw?.status!=='mapped')continue;
+  if(raw?.status!=='mapped'){
+   // A verified graphic-enabled product must never silently fall through to legacy
+   // traveler rules just because the older selector omitted the canonical UUID.
+   const productId=Number(line.product_id);
+   if(Number.isSafeInteger(productId)&&productId>0){
+    const {data:bindings,error:lookupError}=await db.from('sc_client_graphic_product_bindings')
+      .select('graphic_family_id,allowed,verified_at,mode').eq('woo_product_id',productId).eq('allowed',true);
+    if(lookupError){
+     failures.push({lineId:line.id,reason:'Unable to determine whether the product requires graphic selection'});
+     throw new Error('Graphic binding lookup failed for order line '+line.id);
+    }
+    if((bindings||[]).some(b=>b.verified_at&&['fixed','selectable'].includes(b.mode))){
+     await saveWooGraphicCapture(db,order.id,line.id,'managed_failed','Verified product requires canonical graphic-family ID');
+     failures.push({lineId:line.id,reason:'Configured product is missing a valid graphic-family ID'});
+    }
+   }
+   continue;
+  }
   await saveWooGraphicCapture(db,order.id,line.id,'managed_pending','Awaiting verified graphic selection'); // legacy text is intentionally not guessed or migrated
   const productId=Number(line.product_id);
   if(!Number.isSafeInteger(productId)||productId<=0){failures.push({lineId:line.id,reason:'Missing product ID'});continue}

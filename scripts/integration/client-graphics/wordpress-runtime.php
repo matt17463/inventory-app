@@ -5,6 +5,7 @@ $ids=[cg_id(20),cg_id(21),cg_id(22)];
 $GLOBALS['cg_options'] = array_map(fn($id,$n)=>['id'=>$id,'label'=>'School '.($n+1)],$ids,array_keys($ids));
 ob_start();$GLOBALS['cg_hooks']['woocommerce_before_add_to_cart_button']();$html=ob_get_clean();
 cg_check(substr_count($html,'<option')===4,'three customer designs rendered plus placeholder');
+$GLOBALS['cg_external_selector'][700]='yes';ob_start();$GLOBALS['cg_hooks']['woocommerce_before_add_to_cart_button']();$externalHtml=ob_get_clean();cg_check($externalHtml==='','external Mockup Variation Selector suppresses duplicate graphic dropdown');unset($GLOBALS['cg_external_selector'][700]);
 $_POST=[];cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700)===false,'missing selection rejected');
 $_POST=['sc_graphic_family_id'=>'bad'];cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700)===false,'invalid UUID rejected');
 $_POST=['sc_graphic_family_id'=>cg_id(99)];cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700)===false,'unconfigured UUID rejected');
@@ -15,6 +16,7 @@ foreach($ids as $id) {
  cg_check($data['sc_graphic_family_id']===$id&&$data['sc_graphic_label']!=='Forged customer label','trusted family and label preserved');
  $item=new CgOrderItem();$GLOBALS['cg_hooks']['woocommerce_checkout_create_order_line_item']($item,'fixture',$data);
  cg_check($item->meta['_sc_graphic_family_id']===$id&&$item->meta['_sc_graphic_label']===$data['sc_graphic_label'],'checkout metadata preserved');
+ $forgedCheckout=new CgOrderItem();$GLOBALS['cg_hooks']['woocommerce_checkout_create_order_line_item']($forgedCheckout,'fixture',['sc_graphic_family_id'=>$id,'sc_graphic_label'=>'FAKE']);cg_check($forgedCheckout->meta['_sc_graphic_label']===$data['sc_graphic_label'],'checkout overrides forged cart display name');
 }
 $GLOBALS['cg_options'] = [['id'=>cg_id(20),'label'=>'Fixed logo']];$_POST=[];
 $data=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700);cg_check($data['sc_graphic_family_id']===cg_id(20),'fixed design assigned without customer input');
@@ -28,6 +30,8 @@ $_POST=['sc_graphic_family_id'=>cg_id(21)];
 cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801)===true,'variation uses parent configured graphic options');
 $variationData=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700,801);
 cg_check($variationData['sc_graphic_family_id']===cg_id(21),'variation retains selected parent design');
+$directVariation=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],801,0);
+cg_check($directVariation['sc_graphic_family_id']===cg_id(21),'Store API direct variation ID uses verified parent options');
 $_POST=['sc_graphic_family_id'=>cg_id(22)];
 cg_check($GLOBALS['cg_hooks']['woocommerce_add_to_cart_validation'](true,700,1,801)===false,'variation rejects unavailable parent design');
 $invalidVariation=$GLOBALS['cg_hooks']['woocommerce_add_cart_item_data']([],700,801);
