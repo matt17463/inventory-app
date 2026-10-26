@@ -77,6 +77,16 @@ export default function ProductionTravelers() {
     setTravelerLines(lines.data||[]);
     setSelected(data);setEvents(ev.data||[]);setSavedJob(job.data);setJobId(String(data.job_id));
     setArtwork(null);setArtworkUrl('');
+    setPlacementArtworks({});
+    const locationIds=[...new Set((data.recipe_snapshot?.placements||[]).map(p=>p.artwork_asset_id).filter(Boolean))];
+    if(locationIds.length){
+      const {data:locationAssets,error:locationError}=await supabase.from('mockup_artwork_assets').select('*').in('id',locationIds);
+      if(!locationError&&locationAssets?.length){
+        const entries=await Promise.all(locationAssets.map(async asset=>[asset.id,{name:asset.artwork_name,url:await signedAssetUrl(asset,3600,{preferPreview:false}).catch(()=>'')}]));
+        setPlacementArtworks(Object.fromEntries(entries));
+      }
+    }
+
     const sourceId=data.recipe_snapshot?.artwork_asset_id;
     if(sourceId) {
       const result=await supabase.from('mockup_artwork_assets').select('*').eq('id',sourceId).maybeSingle();
@@ -198,6 +208,9 @@ export default function ProductionTravelers() {
           <GarmentPlacementGuide blank={{asset_name:snap.blank?.style||snap.blank?.brand||'tee',product_view:p.placement_name}}
             placement={p} />
           <p><strong>Measured:</strong> {p.top_offset_inches} in top-edge offset from {p.reference_landmark||'approved physical landmark'}; horizontal {p.center_offset_inches} in relative to placement centerline; size group {p.size_group||'unspecified'}.</p>
+          {p.artwork_asset_id&&<div className="sc-traveler-approved-art"><strong>Exact graphic for this location:</strong> {placementArtworks[p.artwork_asset_id]?.name||p.artwork_asset_id}
+            {placementArtworks[p.artwork_asset_id]?.url&&<><img src={placementArtworks[p.artwork_asset_id].url} alt={'Production file for '+p.placement_name}/><a href={placementArtworks[p.artwork_asset_id].url} target="_blank" rel="noreferrer">Open exact production graphic</a></>}
+          </div>}
           <p>{p.instructions}</p>
         </div>)}</div>
       </section>
