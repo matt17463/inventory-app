@@ -36,6 +36,7 @@ unset($GLOBALS['cg_options_by_id'],$GLOBALS['cg_variation_parents']);
 
 $blockProduct=new class { function get_id(){return 801;} function get_parent_id(){return 700;} };
 $GLOBALS['cg_options_by_id']=[700=>[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_id(21),'label'=>'Away']]];
+$GLOBALS['cg_variation_parents']=[801=>700];
 $GLOBALS['cg_enabled']='yes';
 $storeBlocked=false;
 try{$GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);}catch(Exception $e){$storeBlocked=true;}
@@ -61,7 +62,7 @@ $GLOBALS['cg_enabled']='no';
 $GLOBALS['cg_options_by_id'][700]=[['id'=>cg_id(20),'label'=>'Home'],['id'=>cg_id(21),'label'=>'Away']];
 $GLOBALS['cg_hooks']['woocommerce_store_api_validate_add_to_cart']($blockProduct,[]);
 cg_check(true,'disabled selector never blocks Store API');
-unset($GLOBALS['cg_options_by_id']);
+unset($GLOBALS['cg_options_by_id'],$GLOBALS['cg_variation_parents']);
 
 function wc_get_product($id){return new class {function is_type($type){return $type==='simple';} function is_purchasable(){return true;}};}
 function wp_create_nonce($type){return $type==='wc_store_api'?'NONCUSTOMER-NONCE':'';}
