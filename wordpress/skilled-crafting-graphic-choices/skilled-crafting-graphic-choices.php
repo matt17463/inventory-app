@@ -110,3 +110,39 @@ add_action('woocommerce_store_api_validate_add_to_cart',function($product,$reque
 },10,2);
 // Activation deliberately never flips SC_GRAPHICS_OPTION.
 // Product graphic options must be populated only after explicit reconciliation.
+
+// Optional server-rendered graphic selector block for *simple* Woo products.
+// Place it in the product template instead of the ordinary add-to-cart control.
+// Variable products still use the verified classic form until the variation
+// selector and Store API variant payload are validated end-to-end.
+function sc_graphic_choices_render_block($attributes=[]) {
+ if(!sc_graphics_enabled() || !function_exists('wc_get_product'))return '';
+ $product_id=(int)($attributes['productId']??0);
+ if(!$product_id && function_exists('get_the_ID'))$product_id=(int)get_the_ID();
+ $product=wc_get_product($product_id);
+ if(!$product || !method_exists($product,'is_type') || !$product->is_type('simple'))return '';
+ $options=sc_graphics_config($product_id);
+ if(count($options)<2 || !method_exists($product,'is_purchasable') || !$product->is_purchasable())return '';
+ if(!function_exists('wp_create_nonce') || !function_exists('rest_url'))return '';
+ wp_enqueue_script('sc-graphic-block',plugins_url('assets/graphic-block.js',__FILE__),[], '0.3.0',true);
+ $nonce=wp_create_nonce('wc_store_api');
+ $api=rest_url('wc/store/v1/cart/add-item');
+ $html='<div data-sc-graphic-block data-product-id="'.esc_attr($product_id).'" data-store-nonce="'.esc_attr($nonce).'" data-api-url="'.esc_attr($api).'">';
+ $html.='<label for="sc-graphic-choice-'.esc_attr($product_id).'">Graphic design</label>';
+ $html.='<select required id="sc-graphic-choice-'.esc_attr($product_id).'" data-sc-graphic-choice><option value="">Choose a design</option>';
+ foreach($options as $opt)$html.='<option value="'.esc_attr($opt['id']).'">'.esc_html($opt['label']).'</option>';
+ $html.='</select><button type="button" data-sc-graphic-submit>Add selected design to cart</button>';
+ $html.='<p data-sc-graphic-message role="status" aria-live="polite"></p></div>';
+ return $html;
+}
+add_action('init',function(){
+ if(!function_exists('register_block_type'))return;
+ register_block_type('skilled-crafting/graphic-add-to-cart',[
+  'api_version'=>3,
+  'title'=>'Skilled Crafting Graphic Add to Cart',
+  'category'=>'woocommerce',
+  'attributes'=>['productId'=>['type'=>'integer','default'=>0]],
+  'render_callback'=>'sc_graphic_choices_render_block',
+ ]);
+});
+// Block is registered inert; rendering still checks sc_graphics_selector_enabled.
