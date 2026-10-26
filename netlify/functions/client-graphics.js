@@ -32,8 +32,25 @@ export async function handler(event){
   if(!values||typeof values!=='object'||Array.isArray(values))return reply(400,{message:'Missing data'},event);
   const record=Object.fromEntries(FIELDS[entity].filter(k=>Object.prototype.hasOwnProperty.call(values,k)).map(k=>[k,values[k]]));
   if(!Object.keys(record).length)return reply(400,{message:'No valid fields'},event);
-  if(entity==='variants' && record.state==='approved')return reply(403,{message:'Variant approval requires artwork preflight workflow'},event);
-  if(entity==='rules' && record.enabled===true)return reply(403,{message:'Rule activation requires verified sample and conflict tests'},event);
+  if(entity==='variants' && record.state==='approved'){
+   const sourceId=record.artwork_asset_id || (input.id?(await auth.supabase.from(TABLES.variants).select('artwork_asset_id').eq('id',input.id).single()).data?.artwork_asset_id:null);
+   if(!uuid(sourceId))return reply(409,{message:'Approved variants require a linked source artwork file'},event);
+   const {data:source,error:sourceError}=await auth.supabase.from('mockup_artwork_assets').select('id,preflight_status').eq('id',sourceId).single();
+   if(sourceError||!source||!['approved','passed','ready'].includes(String(source.preflight_status).toLowerCase()))return reply(409,{message:'Source artwork must pass preflight before approval'},event);
+   if(!input.verified_sample)return reply(409,{message:'Physical sample verification is required'},event);
+   record.approved_at=new Date().toISOString();
+  }
+  if(entity==='rules' && record.enabled===true){
+   if(!input.verified_sample)return reply(409,{message:'Sample verification required before rule activation'},event);
+   const row=input.id?(await auth.supabase.from(TABLES.rules).select('*').eq('id',input.id).single()).data:null;
+   const candidate={...row,...record};
+   const {data:variant}=await auth.supabase.from(TABLES.variants).select('id,state,family_id').eq('id',candidate.variant_id).single();
+   if(!variant||variant.state!=='approved'||variant.family_id!==candidate.family_id)return reply(409,{message:'Rule must select an approved variant from the same family'},event);
+   const {data:active}=await auth.supabase.from(TABLES.rules).select('*').eq('family_id',candidate.family_id).eq('enabled',true);
+   const keys=['garment_type','garment_style','garment_color','color_group','size_group','placement_name','process'];
+   const signature=x=>keys.map(k=>String(x[k]||'').toLowerCase().trim()).join('|');
+   if((active||[]).some(x=>x.id!==input.id && x.priority===candidate.priority && signature(x)===signature(candidate) && x.variant_id!==candidate.variant_id))return reply(409,{message:'A competing active rule has identical conditions and priority'},event);
+  }
   if(entity==='bindings' && record.allowed===true)return reply(403,{message:'Storefront activation reserved for transfer verification phase'},event);
   if(entity==='families' && !String(record.name||'').trim() && !input.id)return reply(400,{message:'Graphic family name is required'},event);
   let q;
