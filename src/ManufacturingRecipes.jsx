@@ -9,7 +9,7 @@ import './ManufacturingRecipes.css';
 const freshPlacement = () => ({
   placement_name:'full_front',print_width_inches:'11',print_height_inches:'11',
   top_offset_inches:'3',center_offset_inches:'0',reference_landmark:'Bottom of front collar trim',
-  size_group:'Adult',instructions:'Measure placement on the actual garment before pressing.',
+  size_group:'Adult',artwork_asset_id:'',instructions:'Measure placement on the actual garment before pressing.',
 });
 const newForm = () => ({
   id:'',name:'',garment_type:'tee',decoration_method:'DTF',notes:'',scope:'master',folder_id:'',customer_label:'',order_reference:'',tags:[],is_archived:false,is_favorite:false,sort_order:0,
@@ -289,7 +289,12 @@ export default function ManufacturingRecipes() {
             <label>Horizontal offset (in)<input type="number" step=".125" value={p.center_offset_inches} disabled={!editor} onChange={e=>updatePlacement(i,'center_offset_inches',e.target.value)}/></label>
           </div>
           <label>Offset reference landmark<input value={p.reference_landmark} disabled={!editor} onChange={e=>updatePlacement(i,'reference_landmark',e.target.value)}/></label>
-          <label>Position-specific instructions<textarea rows="2" value={p.instructions} disabled={!editor} onChange={e=>updatePlacement(i,'instructions',e.target.value)}/></label>
+          <label>Exact approved production graphic for this location<select value={p.artwork_asset_id||''} disabled={!editor} onChange={e=>updatePlacement(i,'artwork_asset_id',e.target.value)}>
+<option value="">Use recipe artwork fallback (legacy) / not yet assigned</option>
+{artworks.map(a=><option key={a.id} value={a.id}>{a.artwork_name} · {a.preflight_status}</option>)}
+</select></label>
+{p.artwork_asset_id&&<p><strong>Location-specific graphic:</strong> {artworks.find(a=>a.id===p.artwork_asset_id)?.artwork_name||p.artwork_asset_id}. Confirm exact print file and its dimensions before approval.</p>}
+<label>Position-specific instructions<textarea rows="2" value={p.instructions} disabled={!editor} onChange={e=>updatePlacement(i,'instructions',e.target.value)}/></label>
           <GarmentPlacementGuide blank={{asset_name:form.garment_type,product_view:p.placement_name}} placement={p}/>
           <p><strong>Measured top offset:</strong> {p.top_offset_inches} in from {p.reference_landmark} · <strong>Horizontal:</strong> {p.center_offset_inches} in relative to the named placement centerline.</p>
           {editor&&<button type="button" onClick={()=>change('placements',form.placements.filter((_,idx)=>idx!==i))}>Remove placement</button>}
