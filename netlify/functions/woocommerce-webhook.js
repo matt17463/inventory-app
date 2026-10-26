@@ -6,6 +6,7 @@ import { createServerSupabaseClient as createClient } from './_shared/serverSupa
 import { existingLineUpdate, mayPromoteToReserved, terminalProductionStatus, terminalOrderJobStatus } from './_shared/orderSyncReliability.js';
 import { getHeader, validateWooCommerceSignature } from './_shared/security.js';
 import { ensureJobItemReservation, finishPullsheetRun, startPullsheetRun } from './_shared/pullsheetReservations.js';
+import { parseWooGraphicSelection } from '../../src/lib/wooGraphicSelection.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -205,6 +206,7 @@ function enrichedLineItem(lineItem) {
     variation_id: variationId,
     sku,
     variation_sku: variationSku,
+    graphic_selection: parseWooGraphicSelection(lineItem),
     selected_brand: clean(lineItem.selected_brand) || getSelectedAttribute(lineItem, ['pa_brand', 'brand']),
     selected_style: clean(lineItem.selected_style) || getSelectedAttribute(lineItem, ['pa_style', 'style', 'product style']),
     selected_color: clean(lineItem.selected_color) || getSelectedAttribute(lineItem, ['pa_color', 'color', 'colour']),
