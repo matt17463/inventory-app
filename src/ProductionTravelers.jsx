@@ -6,6 +6,7 @@ import GarmentPlacementGuide from './components/GarmentPlacementGuide';
 import LocalQrCode from './components/LocalQrCode';
 import './ProductionTravelers.css';
 import { signedAssetUrl } from './lib/mockupStudioApi';
+import {validateTravelerGraphicReadiness} from './lib/travelerGraphicReadiness';
 
 const eventKinds=[
   ['note','Work note'],['placement_checked','Placement measured / checked'],
@@ -26,6 +27,7 @@ export default function ProductionTravelers() {
   const [items,setItems]=useState([]);
   const [travelerList,setTravelerList]=useState([]);
   const [recipeVersions,setRecipeVersions]=useState([]);
+  const [readinessAssets,setReadinessAssets]=useState([]);
   const [recipes,setRecipes]=useState([]);
   const [selectedItemIds,setSelectedItemIds]=useState([]);
   const [travelerLines,setTravelerLines]=useState([]);
@@ -45,7 +47,7 @@ export default function ProductionTravelers() {
     const [a,b,c]=await Promise.all([
       supabase.from('jobs').select('id,customer_name,job_name,woocommerce_order_id,due_date,status').order('created_at',{ascending:false}).limit(250),
       supabase.from('sc_manufacturing_recipes').select('id,name,garment_type,decoration_method').order('created_at',{ascending:false}).limit(250),
-      supabase.from('sc_manufacturing_recipe_versions').select('id,recipe_id,revision,status,placements,packaging').eq('status','approved').order('created_at',{ascending:false}).limit(400),
+      supabase.from('sc_manufacturing_recipe_versions').select('id,recipe_id,revision,status,placements,packaging,artwork_asset_id').eq('status','approved').order('created_at',{ascending:false}).limit(400),
     ]);
     if(a.error)throw a.error;if(b.error)throw b.error;if(c.error)throw c.error;
     setJobs(a.data||[]);setRecipes(b.data||[]);setRecipeVersions(c.data||[]);
@@ -107,10 +109,22 @@ export default function ProductionTravelers() {
   const snap=selected?.recipe_snapshot||{};
   const qr=selected?window.location.origin+'/production-travelers/'+encodeURIComponent(selected.id):'';
 
+  const chosenRecipe=recipeVersions.find(x=>x.id===versionId);
+  const readiness=validateTravelerGraphicReadiness({items:chosenItems,recipeVersion:chosenRecipe,artworkAssets:readinessAssets});
+  useEffect(()=>{
+    const ids=[...new Set([chosenRecipe?.artwork_asset_id,...(chosenRecipe?.placements||[]).map(p=>p.artwork_asset_id)].filter(Boolean))];
+    if(!ids.length){setReadinessAssets([]);return;}
+    let cancelled=false;
+    supabase.from('mockup_artwork_assets').select('id,preflight_status').in('id',ids).then(({data,error})=>{
+      if(!cancelled)setReadinessAssets(error?[]:(data||[]));
+    });
+    return ()=>{cancelled=true;};
+  },[chosenRecipe]);
   async function createTraveler(){
     setBusy(true);setMessage('');
     try{
       if(!jobId||!selectedItemIds.length||!versionId)throw Error('Choose at least one job line and an approved recipe version.');
+      if(!readiness.ready)throw Error(readiness.blockers.join('; '));
       const {data:auth,error:e}=await supabase.auth.getUser();
       if(e||!auth.user)throw Error('Sign in to create a traveler.');
       const {data,error}=await supabase.rpc('sc_create_grouped_traveler',{
@@ -172,7 +186,8 @@ export default function ProductionTravelers() {
           {selectableVersions.map(v=><option key={v.id} value={v.id}>{v.recipe?.name||'Recipe'} — Rev {v.revision}, {v.recipe?.garment_type||''}</option>)}
         </select></label>
         {versionId&&<p>Approval-backed recipe selections are preserved on the traveler, including saved decoration placements, process steps and packaging instructions.</p>}
-        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId}
+        {versionId&&readiness.blockers.length>0&&<div role="alert"><strong>Production artwork checks:</strong><ul>{readiness.blockers.map(reason=><li key={reason}>{reason}</li>)}</ul></div>}
+        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready}
           onClick={createTraveler}>{busy?'Saving…':'Create grouped traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
         <p><small>Creating a traveler records manufacturing instructions only; it does not move inventory, complete a pull sheet, charge a customer or change WooCommerce status.</small></p>
         <Link to="/manufacturing-recipes">Need a recipe? Create or approve one →</Link>
