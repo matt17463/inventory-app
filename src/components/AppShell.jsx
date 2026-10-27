@@ -78,6 +78,7 @@ const SIMPLE_NAV = [
   ]},
   {id:'products-simple',title:'Products & Setup',icon:'📦',items:[
     {label:'Product Setup & Readiness · Start Here',path:'/catalog-production-readiness'},
+    {label:'Map Existing Woo Artwork',path:'/woo-artwork-mapping'},
     {label:'Production Instructions',path:'/manufacturing-recipes'},
     {label:'Product Catalog',path:'/catalog-workbench'},
   ]},

@@ -1,5 +1,6 @@
 // Read-only WooCommerce logo-attribute migration audit. Does not mutate Woo products.
 import {authorizeEmployee,jsonResponse} from './_shared/security.js';
+import {fingerprint} from './_shared/wooLogoMigration.js';
 const clean=v=>String(v??'').trim();
 const env=(...keys)=>keys.map(k=>clean(process.env[k])).find(Boolean)||'';
 const isLogo=a=>/(^|[^a-z])(logo|graphic|design|artwork)([^a-z]|$)/i.test([a.name,a.slug].join(' '));
@@ -10,6 +11,23 @@ async function wc(path,key,secret,base){
  const response=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(12000),headers:{Authorization:'Basic '+Buffer.from(key+':'+secret).toString('base64'),Accept:'application/json'}});
  if(!response.ok)throw Error('WooCommerce read-only API request failed (HTTP '+response.status+').');
  return response.json();
+}
+export async function readWooLogoBaseline(id){
+ const key=env('WC_CONSUMER_KEY','WOOCOMMERCE_CONSUMER_KEY'),secret=env('WC_CONSUMER_SECRET','WOOCOMMERCE_CONSUMER_SECRET');
+ if(!key||!secret)throw Error('WooCommerce credentials are not configured.');
+ const base=new URL(env('WOO_SITE_URL','WOOCOMMERCE_SITE_URL','WP_SITE_URL','WORDPRESS_SITE_URL')||'https://skilledcrafting.com');
+ if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw Error('Woo site configuration invalid.');
+ const product=await wc('products/'+id,key,secret,base);
+ if(Number(product.id)!==id||product.type!=='variable')throw Error('Expected exact variable Woo parent.');
+ const variations=[];let complete=false;
+ for(let page=1;page<=10;page++){
+  const batch=await wc('products/'+id+'/variations?per_page=100&page='+page,key,secret,base);
+  if(!Array.isArray(batch))throw Error('Unexpected Woo variation response.');
+  variations.push(...batch);if(batch.length<100){complete=true;break;}
+ }
+ if(new Set(variations.map(v=>v.id)).size!==variations.length)throw Error('Duplicate Woo variation IDs returned.');
+ const snapshot={product,variations:variations.sort((a,b)=>a.id-b.id)};
+ return {...snapshot,complete,source_hash:fingerprint(snapshot),captured_at:new Date().toISOString()};
 }
 export async function handler(event){
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);

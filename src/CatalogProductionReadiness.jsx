@@ -4,7 +4,7 @@ import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
 import VariationCertificationPanel from './VariationCertificationPanel';
-import WooLogoMigrationPreview from './WooLogoMigrationPreview';
+import WooArtworkMapping from './WooArtworkMapping';
 import CatalogPairingWorkbench from './CatalogPairingWorkbench';
 import ManufacturingRecipes from './ManufacturingRecipes';
 import MockupStudio from './MockupStudio';
@@ -155,6 +155,7 @@ export default function CatalogProductionReadiness(){
    <p className="eyebrow">Catalog · Legacy adoption · Production</p>
    <h1>Product Setup & Readiness</h1>
    <p>Bring existing WooCommerce products and customers into newer shop workflows without re-creating orders or changing stock. Review all measured and artistic instructions before production.</p>
+   <p><Link to="/woo-artwork-mapping">Map existing WooCommerce artwork across the catalog →</Link> Save draft logo/file mappings and reuse them across products before completing production approvals.</p>
   </div><button type="button" onClick={load} disabled={busy}>{busy?'Working…':'Refresh live audit'}</button></header>
   {message&&<p className="sc-cr-message" role="status">{message}</p>}
   {!state?<section className="card"><p>{busy?'Auditing existing products…':'Readiness data unavailable. Refresh or verify the database migration.'}</p></section>:<>
@@ -225,7 +226,7 @@ export default function CatalogProductionReadiness(){
        <p>{SETUP_STEPS[setupStep].description}</p>
        {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
        {setupStep===0&&<VariationCertificationPanel key={'identity-'+selected.woocommerce_product_id} parentId={selected.woocommerce_product_id} identityOnly/>}
-       {setupStep===0&&<WooLogoMigrationPreview key={'logo-audit-'+selected.woocommerce_product_id} parentId={selected.woocommerce_product_id}/> }
+       {setupStep===0&&<WooArtworkMapping key={'logo-mapping-'+selected.woocommerce_product_id} embedded parentId={selected.woocommerce_product_id}/> }
        {setupStep===1&&<div>
         <p><strong>Blank mapping review:</strong> {fmt(selected.missing_blank_rows)} of {fmt(selected.row_count)} synchronized rows lack a blank mapping. Finished products or non-inventory items may legitimately have none; verify before fixing.</p>
         <p><Link to="/product-blank-mappings">Repair specific blank mappings →</Link> · <Link to="/catalog-workbench">Review catalog details →</Link></p>

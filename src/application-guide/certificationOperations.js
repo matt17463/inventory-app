@@ -2,6 +2,13 @@ export const certificationGuideChapter={
  id:'variation-certification-operations',title:'Product certification: first setup to the shop floor',
  description:'One exact garment variation, reviewed artwork file, tested recipe and customer proof. Follow this before making managed products.',
  sections:[
+  {id:'catalog-artwork-mapping',title:'Map existing Woo artwork before production review',summary:'Use Map Existing Woo Artwork for the whole catalog. Draft migration does not require customer approval or physical measurements.',relatedRoutes:['/woo-artwork-mapping','/catalog-production-readiness'],steps:[
+   'Select one or many existing Woo families in the mapping queue and choose Inspect selected products. The tool reads actual Woo variations, saves a recoverable baseline and resumes unchanged source revisions without rewriting products.',
+   'For each legacy logo choice, select the exact artwork file and either a shared graphic family or a new draft family. Review existing variation images side by side. Save partial drafts whenever information is missing.',
+   'Import mapped artwork as draft Client Graphics. This creates draft file revisions with unspecified measurements and disabled product associations; it grants no approval or live selector activation.',
+   'Reuse a saved mapping as a template for another product. Only exact legacy terms copy; image associations, retained physical variation IDs and approvals remain product-specific.',
+   'Export the baseline, mapping and historic variation crosswalk. Complete genuine production reviews later. Checking activation readiness reports remaining source, recipe, mockup and customer evidence without preventing draft mapping.'
+  ]},
   {id:'certification-start',title:'1. Open the product setup wizard',summary:'Start in Product Setup & Readiness. One family can contain many independently certified variations.',relatedRoutes:['/catalog-production-readiness','/product-blank-mappings'],steps:[
    'Search for the WooCommerce parent product. Compare the live parent ID, purchased variation ID, color, size and SKU with the physical product. A duplicate synchronized variation must be reconciled before certification; do not delete an old row merely to clear a blocker.',
    'Open Match physical blanks. Select the exact brand, style, color and size from the blank catalog. A similar name or SKU is only a candidate. Confirm the actual blank label before saving.',
@@ -12,7 +19,7 @@ export const certificationGuideChapter={
    'Keep Exact artwork locked for logos and text that must remain unchanged. Review transparency, white ink and physical print dimensions in preflight.',
    'In the final wizard step, open Artwork file revision and integrity. A manager enters the source revision inspected and chooses Register reviewed file bytes. The server computes SHA-256; the registration is an immutable file record, not an approval.',
    'Upload revised artwork as a new file/object. Preserve earlier files and evidence. Register the new file and obtain new source approvals before recertifying. A changed byte stream at an already registered object blocks preflight; do not repin changed bytes under the old key.'
-  ],warnings:['Never record a customer decision on their behalf or infer ownership from a filename. Direct R2/NAS administrators can still alter objects outside the application; use restricted credentials and inspect backup/restore health.']},
+  ],warnings:['Never impersonate a customer portal response or infer ownership from a filename. Managers may document genuine externally received approval with its source. Direct R2/NAS administrators can still alter objects outside the application; use restricted credentials and inspect backup/restore health.']},
   {id:'certification-recipe-proof',title:'3. Verify the recipe and customer proof',summary:'The recipe must describe a physically tested process and the proof must show this exact blank and every decoration.',relatedRoutes:['/manufacturing-recipes','/material-settings','/mockup-studio'],steps:[
    'Choose or draft the manufacturing recipe. Record the method, exact blank restrictions, each placement, width AND height, reference landmark, offsets, machine/material settings, process sequence and packaging.',
    'Perform and inspect the actual sample. A manager approves the immutable recipe revision after the real sample is verified. Starter dimensions and example machine parameters are not production instructions.',
