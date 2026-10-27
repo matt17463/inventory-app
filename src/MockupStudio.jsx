@@ -602,9 +602,9 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
       const response = await fetch(url);
       if (!response.ok) throw new Error('Could not download the original artwork (HTTP '+response.status+').');
       const blob = await response.blob();
-      if (!String(blob.type||row.mime_type||'').startsWith('image/') || /svg/i.test(blob.type||row.mime_type||''))
+      if (!String(row.mime_type||blob.type||'').startsWith('image/') || /svg/i.test(row.mime_type||blob.type||''))
         throw new Error('Automatic preflight supports raster images only. SVG and PDF require manual production-file verification.');
-      const file = new File([blob],row.original_file_name||row.artwork_name||'artwork.png',{type:blob.type||row.mime_type});
+      const file = new File([blob],row.original_file_name||row.artwork_name||'artwork.png',{type:row.mime_type||blob.type});
       const inspection = await inspectArtworkFile(file);
       if (!inspection.width || !inspection.height) throw new Error('Image dimensions could not be verified.');
       const lowResolution = Math.max(inspection.width,inspection.height)<1000;
