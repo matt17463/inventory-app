@@ -5,6 +5,7 @@ export const DEFAULT_PRINT_PREFS = Object.freeze({
   showSku: true, showPersonalization: true, showCustomerPhone: false,
   labelShowItems: true, labelShowOrder: true, labelShowQR: false,
   productionPacket: false, packageCount: 1,
+  businessName:'Skilled Crafting',businessWebsite:'skilledcrafting.com',businessPhone:'',businessAddress:'',
 });
 const str = v => String(v ?? '').replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<')
   .replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#039;/g,"'").trim();
@@ -31,7 +32,7 @@ export function normalizeWooPrintSource(order){
     id:line.id, name:str(line.name),sku:str(line.sku),quantity:qty(line.quantity),
     unitPrice:qty(line.quantity)>0&&amount(line.total)!=null?Number(line.total)/qty(line.quantity):null,
     total:amount(line.total),subtotal:amount(line.subtotal),
-    metadata:safeMeta(line.meta_data),
+    metadata:safeMeta(line.meta_data),thumbnailUrl:str(line.image?.src||line.image?.url||''),thumbnailData:str(line.thumbnailData||''),
   }));
   const shippedTo=order.shipping||{};
   return {
@@ -57,7 +58,7 @@ export function normalizeManualPrintSource(order,items){
     unitPrice:amount(line.price_per_item??line.unit_price),
     total:amount(line.line_total??line.total_price)??(
       amount(line.price_per_item??line.unit_price)===null?null:qty(line.quantity)*Number(line.price_per_item??line.unit_price)),
-    metadata: [
+    thumbnailUrl:'',thumbnailData:'',metadata: [
       ['Color',line.color||line.mapped_color],['Size',line.size||line.mapped_size],
       ['Name on back',line.name_on_back],['Number',line.jersey_number],
     ].filter(([,v])=>str(v)).map(([label,value])=>({label,value:str(value)})),
@@ -91,6 +92,10 @@ export function normalizePrintPrefs(v={}){
     showCustomerPhone:v.showCustomerPhone===true,labelShowItems:v.labelShowItems!==false,
     labelShowOrder:v.labelShowOrder!==false,labelShowQR:v.labelShowQR===true,
     productionPacket:v.productionPacket===true,
+    businessName:str(v.businessName||defaults.businessName).slice(0,100),
+    businessWebsite:str(v.businessWebsite||defaults.businessWebsite).slice(0,120),
+    businessPhone:str(v.businessPhone||'').slice(0,65),
+    businessAddress:str(v.businessAddress||'').slice(0,260),
   };
 }
 export function printWarnings(source,job={},travelers=[]){
