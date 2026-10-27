@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { PROCESS_ANGLES, PROCESS_CHANNELS, createProcessScreens, cmykCoverage, screenAngleWarnings } from '../../src/lib/dtfMulticolor.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -78,4 +79,85 @@ test('UI routes expose the new studio without replacing original preflight', () 
   assert.match(routes,/path="\/dtf-studio"/);
   assert.match(routes,/path="\/artwork-preflight"/);
   assert.match(nav,/DTF Prep Studio/);
+});
+
+test('CMYK multicolor defaults to conventional four independent rosette angles', () => {
+  assert.deepEqual(PROCESS_ANGLES,{C:15,M:75,Y:0,K:45});
+  assert.deepEqual(PROCESS_CHANNELS,['C','M','Y','K']);
+  assert.deepEqual(cmykCoverage(255,255,255),[0,0,0,0]);
+  assert.deepEqual(cmykCoverage(0,0,0),[0,0,0,1]);
+  assert.equal(createProcessScreens({lpi:35},300).C.cell,300/35);
+});
+test('pure CMYK primary colors stay separate and fully opaque in multicolor output', () => {
+  const inputs=[
+    {rgb:[0,255,255],print:[0,255,255]},
+    {rgb:[255,0,255],print:[255,0,255]},
+    {rgb:[255,255,0],print:[255,255,0]},
+    {rgb:[0,0,0],print:[0,0,0]},
+  ];
+  for(const {rgb,print} of inputs){
+    const p=new Uint8ClampedArray([...rgb,255]);
+    const stats=processDtfPixels(p,1,1,{halftone:'multicolor'},300);
+    assert.deepEqual(Array.from(p),[...print,255]);
+    assert.equal(stats.printable,1);
+  }
+});
+test('multicolor maintains fully transparent gaps and retains multiple distinct ink colors', () => {
+  const count=80*80, data=new Uint8ClampedArray(count*4);
+  for(let i=0;i<count;i++){data.set([120,170,90,255],i*4);}
+  const stats=processDtfPixels(data,80,80,{halftone:'multicolor',lpi:35},300);
+  const colors=new Set(),alphas=new Set();
+  for(let i=0;i<count;i++){
+    const off=i*4;alphas.add(data[off+3]);
+    if(data[off+3]===255)colors.add([data[off],data[off+1],data[off+2]].join(','));
+    else assert.deepEqual(Array.from(data.slice(off,off+4)),[0,0,0,0]);
+  }
+  assert.deepEqual([...alphas].sort((a,b)=>a-b),[0,255]);
+  assert.ok(colors.size>1,'multiple color-channel combinations must survive rasterization');
+  assert.equal(stats.partialAlpha,0);
+});
+test('single-channel view isolates only one CMYK ink, never a composite',()=>{
+  const red=[255,0,0,255];
+  const c=new Uint8ClampedArray(red);
+  processDtfPixels(c,1,1,{halftone:'multicolor',channelView:'C'},300);
+  assert.deepEqual(Array.from(c),[0,0,0,0]);
+  const magenta=new Uint8ClampedArray(red);
+  processDtfPixels(magenta,1,1,{halftone:'multicolor',channelView:'M'},300);
+  assert.deepEqual(Array.from(magenta),[255,0,255,255]);
+});
+test('disabled channels disappear from the printed multicolor composite',()=>{
+  const red=new Uint8ClampedArray([255,0,0,255]);
+  processDtfPixels(red,1,1,{halftone:'multicolor',screenEnabled:{C:true,M:false,Y:true,K:true}},300);
+  assert.deepEqual(Array.from(red),[255,255,0,255]);
+});
+test('whites create no CMYK ink even if dot gain is positive',()=>{
+  const white=new Uint8ClampedArray([255,255,255,255]);
+  processDtfPixels(white,1,1,{halftone:'multicolor',screenGain:20},300);
+  assert.deepEqual(Array.from(white),[0,0,0,0]);
+});
+test('angle collision warns about moire and standard angles have no collision warnings',()=>{
+  assert.deepEqual(screenAngleWarnings({}),[]);
+  assert.ok(screenAngleWarnings({screenAngles:{C:45,M:45,Y:0,K:45}}).length>=1);
+  const report=qualityReport(1800,1800,3600,3600,{partialAlpha:0},{halftone:'multicolor',lpi:35,screenAngles:{C:45,M:45}});
+  assert.ok(report.warnings.some(s=>s.includes('moire')||s.includes('moiré')));
+});
+test('original-color halftone preserves RGB color and has binary alpha',()=>{
+  const pixels=new Uint8ClampedArray(30*30*4);
+  for(let i=0;i<900;i++)pixels.set([12,130,240,255],i*4);
+  processDtfPixels(pixels,30,30,{halftone:'color-dots',colorDotDensity:60},300);
+  const opaque=[],transparent=[];
+  for(let i=0;i<900;i++){
+    const p=Array.from(pixels.slice(i*4,i*4+4));
+    if(p[3]===255)opaque.push(p);else transparent.push(p);
+  }
+  assert.ok(opaque.length>0&&transparent.length>0);
+  assert.ok(opaque.every(p=>p.join(',')==='12,130,240,255'));
+  assert.ok(transparent.every(p=>p.join(',')==='0,0,0,0'));
+});
+test('multicolor proof channel selection is isolated from PNG and R2 exports',()=>{
+  const studio=readFileSync(new URL('../../src/DTFPrepStudio.jsx',import.meta.url),'utf8');
+  assert.match(studio,/renderArtwork\(bitmap,\{\.\.\.opts,channelView\},950\)/);
+  assert.match(studio,/return renderArtwork\(bitmap,\{\.\.\.opts,channelView:'composite'\}\)/);
+  assert.match(studio,/screenEnabled/);
+  assert.match(studio,/CMYK multicolor rosette/);
 });
