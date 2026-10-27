@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {supabase} from './supabaseClient';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {canPrintCustomerCopy} from './lib/printModel';
-import {createInvoicePdf,createDistributionLabelsPdf,createProductionPacketPdf} from './lib/printPacketPdf';
+import {createInvoicePdf,createDistributionLabelsPdf} from './lib/printPacketPdf';
 import {LABEL_DESIGN_FIELDS,LABEL_PRESETS,normalizeLabelDesign,presetLabelDesign} from './lib/labelDesigner';
 import businessLogo from './assets/logo.png';
 import './QuickOrderPrint.css';
@@ -12,7 +12,6 @@ const TYPES=[
  ['customer','Customer invoice','Letter · Epson'],
  ['shop','Shop invoice / internal copy','Letter · Epson'],
  ['labels','4×6 distribution labels','Thermal · D530 Pro'],
- ['production','Production travelers','Letter · Epson'],
 ];
 const cacheKey='sc-print-center-prefs-v1',designKey='sc-label-designer-v1',savedDesignKey='sc-label-designer-presets-v1',builtinsKey='sc-label-designer-builtins-v1';
 const readSaved=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}};
@@ -46,7 +45,7 @@ export default function QuickOrderPrint({jobId,onClose}){
     const response=await authenticatedFunctionFetch('/.netlify/functions/print-order-source',{method:'POST',body:JSON.stringify({jobId:Number(jobId)})});
     const payload=await response.json().catch(()=>({}));
     if(!response.ok||!payload.success)throw Error(payload.error||'Order source cannot be verified.');
-    const {data,error:trError}=await supabase.from('sc_job_travelers').select('id,job_id,job_item_id,recipe_snapshot,ordered_quantity').eq('job_id',jobId).limit(500);
+    const {data,error:trError}=await supabase.from('sc_job_travelers').select('id,job_id,job_item_id,recipe_snapshot,ordered_quantity,superseded_at').eq('job_id',jobId).is('superseded_at',null).limit(500);
     if(trError)throw trError;
     if((data||[]).length===500)throw Error('Traveler count exceeds safe print limit.');
     if(active){setSource(payload.source);setJob(payload.job);setTravelers(data||[]);}
@@ -83,7 +82,6 @@ export default function QuickOrderPrint({jobId,onClose}){
   if(key==='customer')return createInvoicePdf({...args,kind:'customer'});
   if(key==='shop')return createInvoicePdf({...args,kind:'shop'});
   if(key==='labels')return createDistributionLabelsPdf(args);
-  if(key==='production')return createProductionPacketPdf(args);
   throw Error('Unknown print document.');
  }
  async function previewSelection(){
@@ -127,7 +125,12 @@ export default function QuickOrderPrint({jobId,onClose}){
    <button type="button" onClick={onClose}>Close</button></div>
   {error&&<p role="alert" className="sc-quick-print-error">{error}</p>}
   {message&&<p role="status">{message}</p>}
-  {source&&job&&<><div className="sc-quick-print-options">
+  {source&&job&&<><section className="sc-quick-print-travelers" aria-label="Print complete production travelers">
+    <h4>Complete production travelers</h4>
+    <p>Print each saved traveler from its authoritative detailed view. The old summary-only production packet omitted grouped line details and approved artwork previews and is no longer offered as a substitute.</p>
+    {travelers.map(t=><p key={t.id}><a href={'/production-travelers/'+encodeURIComponent(t.id)} target="_blank" rel="noopener noreferrer">Open and print full traveler {String(t.id).slice(0,8)}…</a></p>)}
+    {!travelers.length&&<p>No saved traveler yet for this order.</p>}
+   </section><div className="sc-quick-print-options">
    {TYPES.map(([key,label,printer])=><label key={key} className="sc-quick-print-item">
     <input type="checkbox" checked={selected.includes(key)} onChange={e=>setSelected(before=>e.target.checked?[...before,key]:before.filter(v=>v!==key))}/>
     <span><strong>{label}</strong><small>{blocked(key)||printer}</small></span>
