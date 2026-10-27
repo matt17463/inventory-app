@@ -4,7 +4,7 @@ import {
   DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds,
   processDtfPixels, qualityReport, exportDtfPng, vectorSilhouette, cmykToRgb,
 } from './lib/dtfStudioEngine';
-import { removeDtfBackground, inspectPngAlpha, validateDtfTransparency } from './lib/dtfBackgroundRemoval.js';
+import { removeDtfBackground, inspectPngAlpha, validateDtfTransparency, applyDtfMaskStrokes } from './lib/dtfBackgroundRemoval.js';
 import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtfMulticolor.js';
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
 import './DTFPrepStudio.css';
@@ -32,6 +32,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   let backgroundResult={removed:0,softened:0,matched:0,originalHadTransparency:false};
   if(opts.background!=='none'||opts.crop){
     const original=sc.getImageData(0,0,staged.width,staged.height);
+    const originalCopy=opts.maskStrokes?.length?new Uint8ClampedArray(original.data):null;
     const originallyTransparent=inspectPngAlpha(original.data,staged.width,staged.height).hasTransparency;
     backgroundResult.originalHadTransparency=originallyTransparent;
     if(opts.background!=='none'){
@@ -46,6 +47,11 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
         decontaminate:opts.backgroundDecontaminate!==false,
       });
       backgroundResult={...result,originalHadTransparency:originallyTransparent};
+    }
+    if(originalCopy){
+      const manual=applyDtfMaskStrokes(original.data,originalCopy,staged.width,staged.height,opts.maskStrokes);
+      backgroundResult.manualErased=manual.erased;
+      backgroundResult.manualRestored=manual.restored;
     }
     sc.putImageData(original,0,0);
     if(opts.crop)bounds=alphaBounds(original.data,staged.width,staged.height);
@@ -63,7 +69,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   const stats=processDtfPixels(pixels.data,outW,outH,{...opts,background:'none'},DTF_DPI*ratio);
   const finalAlpha=inspectPngAlpha(pixels.data,outW,outH);
   validateDtfTransparency({settings:opts,report:backgroundResult,finalAlpha});
-  stats.removedBackground=backgroundResult.removed;
+  stats.removedBackground=backgroundResult.removed+(backgroundResult.manualErased||0);
   stats.softenedBackground=backgroundResult.softened;
   ctx.putImageData(pixels,0,0);
   return {canvas:output,pixels,stats,backgroundResult,finalAlpha,
