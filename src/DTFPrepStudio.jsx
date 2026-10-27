@@ -266,7 +266,7 @@ export default function DTFPrepStudio(){
       <section className="dtf-viewer">
         <div className="dtf-canvasbar"><strong>01 / ORIGINAL SOURCE</strong><span>{sourceMeta?sourceMeta.width+' × '+sourceMeta.height+' px':'No source'}</span></div>
         <div className="dtf-canvas dtf-source">
-          {sourceUrl?<img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} className={opts.background==='pick'?'dtf-source-picker':''} title={opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
+          {sourceUrl?<img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} draggable={false} className={opts.background==='pick'||opts.maskTool!=='none'?'dtf-source-picker':''} title={opts.maskTool!=='none'?'Drag on Source to paint the working mask':opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground} onPointerDown={startMask} onPointerMove={e=>{if(maskDraggingRef.current&&(e.buttons||e.pointerType==='touch'))paintMask(e);}} onPointerUp={finishMask} onPointerCancel={finishMask} onLostPointerCapture={finishMask}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
         </div>
         <div className="dtf-canvasbar"><strong>02 / LIVE PROOF</strong><span>{target?target.width+' × '+target.height+' px':'No canvas'} · 300 PPI</span></div>
         <div className={'dtf-canvas dtf-proof '+(proofMode==='checker'?'dtf-checker':'')}
@@ -325,6 +325,20 @@ export default function DTFPrepStudio(){
             <label className="dtf-check"><input type="checkbox" checked={opts.backgroundDecontaminate!==false} onChange={e=>change('backgroundDecontaminate',e.target.checked)}/> Decontaminate edge colors</label>
             {report?.stats&&<div className="dtf-alpha-result"><strong>Real background removal</strong><span>{(report.stats.removedBackground||0).toLocaleString()} source pixels transparent · {(report.stats.softenedBackground||0).toLocaleString()} softened</span></div>}
           </>}
+          <div className="dtf-manual-mask">
+            <strong>Manual background cleanup</strong>
+            {field('Paint on original Source image',<select value={opts.maskTool||'none'} onChange={e=>change('maskTool',e.target.value)}>
+              <option value="none">No brush — select region</option>
+              <option value="erase">Erase to transparency</option>
+              <option value="restore">Restore original design pixels</option>
+            </select>)}
+            {opts.maskTool!=='none'&&<Slider label="Brush radius (source pixels)" min={2} max={180} value={opts.maskBrushSize||28} onChange={v=>change('maskBrushSize',v)}/>}
+            <div className="dtf-mask-buttons">
+              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>change('maskStrokes',(opts.maskStrokes||[]).slice(0,-1))}>Undo brush stroke</button>
+              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>change('maskStrokes',[])}>Clear manual mask</button>
+            </div>
+            <p className="dtf-note">{(opts.maskStrokes||[]).length} brush marks. Drag on the Source image to modify the working transparency mask; the original source file remains unchanged. Changes appear in Proof.</p>
+          </div>
           <Slider label="Defringe" value={opts.defringe} min={0} max={3} step={1} onChange={v=>change('defringe',v)}/>
           {field('Final alpha',<select value={opts.alphaMode} onChange={e=>change('alphaMode',e.target.value)}>
             <option value="hard">DTF hard alpha (opaque or transparent)</option>
