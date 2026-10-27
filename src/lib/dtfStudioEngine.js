@@ -7,6 +7,7 @@ const between = (n, min, max) => Math.max(min, Math.min(max, n));
 export const DTF_DEFAULTS = Object.freeze({
   width: 12, height: 12, background: 'none', threshold: 245, backgroundColor: '#ffffff',
   backgroundFeather: 12, backgroundScope: 'connected', backgroundPoint: null, backgroundDecontaminate: true,
+  maskTool: 'none', maskBrushSize: 28, maskStrokes: [],
   removalTolerance: 35, defringe: 0, alphaThreshold: 4, alphaMode: 'hard',
   knockout: 'none', shirtColor: '#000000', knockoutTolerance: 55,
   halftone: 'none', lpi: 35, angle: 22.5, dot: 'circle',
