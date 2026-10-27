@@ -253,9 +253,24 @@ export default function DTFPrepStudio(){
           {field('Shirt RGB',<input type="color" value={opts.shirtColor} onChange={e=>change('shirtColor',e.target.value)}/>)}
           <Slider label="Knockout tolerance" value={opts.knockoutTolerance} min={1} max={200} onChange={v=>change('knockoutTolerance',v)}/>
           <Slider label="Line frequency (LPI)" value={opts.lpi} min={15} max={55} onChange={v=>change('lpi',v)}/>
-          <Slider label="Screen angle" value={opts.angle} min={0} max={90} step={2.5} onChange={v=>change('angle',v)}/>
+
+          {opts.halftone!=='multicolor'&&<Slider label="Screen angle" value={opts.angle} min={0} max={90} step={2.5} onChange={v=>change('angle',v)}/>}
+          {opts.halftone==='color-dots'&&<Slider label="Dot coverage (%)" value={opts.colorDotDensity??80} min={10} max={100} step={5} onChange={v=>change('colorDotDensity',v)}/>}
+          {opts.halftone==='multicolor'&&<div className="dtf-color-channels">
+            <div className="dtf-channel-title"><strong>CMYK COLOR CHANNELS</strong><button type="button" className="dtf-secondary" onClick={()=>change('screenAngles',{...PROCESS_ANGLES})}>Reset angles</button></div>
+            {PROCESS_CHANNELS.map(channel=><div className="dtf-channel-row" key={channel}>
+              <label className="dtf-channel-toggle"><input type="checkbox" checked={opts.screenEnabled?.[channel]!==false} onChange={e=>changeChannel('screenEnabled',channel,e.target.checked)}/>
+                <span className={'dtf-ink-dot dtf-ink-'+channel.toLowerCase()} aria-hidden="true"/> <strong>{({C:'Cyan',M:'Magenta',Y:'Yellow',K:'Black'})[channel]}</strong>
+              </label>
+              <label className="dtf-angle-field">Angle (°)<input type="number" min="-180" max="180" step="2.5" value={opts.screenAngles?.[channel]??PROCESS_ANGLES[channel]} onChange={e=>changeChannel('screenAngles',channel,Number(e.target.value))} disabled={opts.screenEnabled?.[channel]===false}/></label>
+            </div>)}
+            <Slider label="Dot gain compensation (%)" value={opts.screenGain??0} min={-20} max={20} step={1} onChange={v=>change('screenGain',v)}/>
+            {field('Proof channel (preview only)',<select value={channelView} onChange={e=>setChannelView(e.target.value)}><option value="composite">Combined four-color proof</option><option value="C">Cyan screen only</option><option value="M">Magenta screen only</option><option value="Y">Yellow screen only</option><option value="K">Black screen only</option></select>)}
+            {channelWarnings.length>0&&<p className="dtf-channel-warning" role="alert">{channelWarnings.join(' ')}</p>}
+            <p className="dtf-note">This creates a CMYK-style rosette as fully opaque RGB dots on transparency. It is not an ICC conversion, actual CMYK ink separation, or white-ink channel. Export always uses combined enabled colors regardless of proof channel.</p>
+          </div>}
           {field('Dot shape',<select value={opts.dot} onChange={e=>change('dot',e.target.value)}>{['circle','ellipse','diamond','square','line'].map(s=><option key={s} value={s}>{s}</option>)}</select>)}
-          <p className="dtf-note">Start with a printed calibration sheet to determine your RIP/provider's minimum viable dot.</p>
+          <p className="dtf-note">Start with a printed calibration sheet to determine your RIP/provider's minimum viable dot. The RIP may screen or resample the PNG again.</p>
         </Tuning>
         <Tuning title="Tonal adjustments">
           <Slider label="Black point" value={opts.blackPoint} max={230} onChange={v=>change('blackPoint',v)}/>
