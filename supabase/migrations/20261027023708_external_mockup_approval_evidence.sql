@@ -1,5 +1,12 @@
 -- Record genuine approval received outside the customer portal without
 -- fabricating a customer login, review token, or customer-authored decision.
+-- Do not migrate an active certificate's provenance format without scoped review.
+-- This rollout is permitted only while the live certificate ledger is empty.
+do $$ begin
+ if exists(select 1 from public.sc_variation_certifications where status='certified') then
+  raise exception 'Active certificates require a separately reviewed provenance migration; no changes applied';
+ end if;
+end $$;
 create table public.sc_external_mockup_approvals (
  id uuid primary key default gen_random_uuid(),
  output_id uuid not null references public.mockup_outputs(id) on delete restrict,
@@ -66,9 +73,3 @@ end $$;
 revoke all on function sc_certification.evaluate(uuid),sc_certification.evaluate_before_external_approval(uuid) from public,anon,authenticated,service_role;
 create trigger sc_certification_source_revalidate after insert on public.sc_external_mockup_approvals
  for each statement execute function sc_certification.revalidate_sources();
--- Explicitly adopt the new provenance format rather than silently changing evidence.
-with revoked as (
- update public.sc_variation_certifications set status='revoked',revoked_at=clock_timestamp(),revocation_reason='Approval provenance format requires reviewed recertification'
- where status='certified' returning id,configuration_id
-) insert into public.sc_certification_audit(certification_id,configuration_id,kind,reason)
- select id,configuration_id,'revoked','Approval provenance format requires reviewed recertification' from revoked;
