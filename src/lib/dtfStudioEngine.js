@@ -1,5 +1,5 @@
 // Deterministic browser-side DTF processing. Never treat preview backdrops as artwork.
-import { removeEdgeConnectedWhite, alphaBounds, validatePrintDimensions, DTF_DPI, setPngDpi } from './dtfPreflight';
+import { removeEdgeConnectedWhite, alphaBounds, validatePrintDimensions, DTF_DPI, setPngDpi } from './dtfPreflight.js';
 
 const clamp = n => Math.max(0, Math.min(255, Math.round(n)));
 const between = (n, min, max) => Math.max(min, Math.min(max, n));
