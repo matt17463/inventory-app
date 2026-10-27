@@ -32,6 +32,7 @@ import {
   listArtworkVaultCandidates,
   listMockupCustomers,
   listMockupProjects,
+  linkMockupBlankCatalog,
   migrateMockupProjectStorage,
   publishMockupToWooCommerce,
   removeMockupAsset,
@@ -513,11 +514,15 @@ function BlankAssetsTab({ projectId, rows, urls, refresh, setBusy, setMessage })
         </form>
       </SectionCard>
       <SectionCard title={`Blank photos (${rows.length})`}>
+        <p>To repair an existing photo's missing catalog identity, search above and select the exact physical blank, color and size. Link only the matching photo below. Existing certifications will be rechecked; this does not change stock or replace files.</p>
+        {selectedCatalog&&<p><strong>Selected catalog blank:</strong> {selectedCatalog.sku_base} · {selectedCatalog.name} · {selectedCatalog.colors?.name} · {selectedCatalog.sizes?.name}</p>}
         {!rows.length ? <EmptyState title="No blank photos" description="Add at least one front, back, hat, or drinkware photo." /> : <div className="mockup-asset-grid">{rows.map((row) => (
           <article className="mockup-asset-card" key={row.id}>
             {urls[row.id] ? <img src={urls[row.id]} alt={row.asset_name} loading="lazy" decoding="async" /> : <div className="mockup-file-placeholder">No preview</div>}
             <h3>{row.asset_name}</h3><p>{row.product_type} · {row.product_color || 'No color'} · {row.product_view}</p><StatusBadge status={row.preflight_status} />
             {row.preflight_notes ? <small>{row.preflight_notes}</small> : null}
+            <p>Catalog blank: {row.blank_product_id_text || 'Not linked'}</p>
+            <ActionButton size="sm" disabled={!selectedCatalog || row.blank_product_id_text===String(selectedCatalog?.id)} onClick={async()=>{setBusy(true);try{await linkMockupBlankCatalog(row.id,selectedCatalog.id);await refresh();setMessage('Catalog identity linked to '+row.asset_name+'. Review updated mockup and customer evidence before certification.');}catch(error){setMessage(error.message)}finally{setBusy(false)}}}>Link selected catalog blank to {row.asset_name}</ActionButton>
             <ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm('Remove this blank photo and its placements?')) return; setBusy(true); try { await removeMockupAsset('mockup_blank_assets', row); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Remove</ActionButton>
           </article>
         ))}</div>}

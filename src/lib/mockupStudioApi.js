@@ -188,6 +188,14 @@ export async function updateMockupProject(projectId, changes) {
   return data;
 }
 
+export async function linkMockupBlankCatalog(assetId, blankProductId) {
+  if (!assetId || !blankProductId) throw new Error('Select the exact catalog blank first.');
+  const { data, error } = await supabase.from('mockup_blank_assets')
+    .update({ blank_product_id_text: String(blankProductId) }).eq('id', assetId).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteMockupProject(projectId) {
   const response = await authenticatedFunctionFetch('/.netlify/functions/mockup-delete-project', {
     method: 'POST',
