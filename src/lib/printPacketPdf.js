@@ -279,7 +279,29 @@ export function createProductionPacketPdf({source,job,travelers=[],origin='',art
         text(doc,'Artwork preview - verify file revision',179,y+25,280,9);
         y+=114;
       }catch{y=text(doc,'Artwork preview could not be embedded - scan traveler to verify.',38,y,520,9)+14;}
-    }else y=text(doc,'Artwork preview unavailable - scan QR to verify approved file.',38,y,515,9)+14;
+    }else if(snap.artwork_asset_id)throw Error('Approved artwork preview missing; printing blocked to avoid incomplete traveler.');
+    const groupLines=traveler.lines||[];
+    if(groupLines.length){
+      if(y>640){doc.addPage('letter');y=48;}
+      y=text(doc,'GROUPED ORDER LINES — '+groupLines.length+' DISTINCT LINE(S)',38,y,530,10,{bold:true})+7;
+      for(const line of groupLines){
+        if(y>686){doc.addPage('letter');y=48;}
+        const item=line.item_snapshot||{};
+        y=text(doc,'Line #'+line.job_item_id+' | Quantity '+line.quantity+' | '+(item.ordered_product_name||item.item_name||item.name||'Ordered garment'),42,y,514,9,{bold:true})+2;
+        const attrs=[item.color||item.selected_color,item.size||item.selected_size,item.order_sku||item.sku].filter(Boolean).join(' / ');
+        if(attrs)y=text(doc,attrs,42,y,510,8)+4;
+      }
+    }
+    const placementArts=[...new Set([...(snap.placements||[]).map(p=>p.artwork_asset_id),...groupLines.flatMap(l=>(l.item_snapshot?.approved_placement_artwork||[]).map(a=>a.artwork_asset_id))].filter(Boolean).map(String))];
+    for(const id of placementArts.filter(id=>id!==String(snap.artwork_asset_id||''))){
+      if(y>560){doc.addPage('letter');y=48;}
+      const pic=artworkImages[id];
+      if(!pic)throw Error('Required placement artwork image missing from printable traveler: '+id);
+      try{
+        doc.addImage(pic,pic.startsWith('data:image/jpeg')?'JPEG':'PNG',38,y,110,95,undefined,'FAST');
+        text(doc,'Approved placement artwork '+id,158,y+18,390,9);y+=108;
+      }catch{throw Error('Could not embed required placement artwork image '+id);}
+    }
     y=sizeDetail(doc,snap,y+4)+8;
     if(y>665){doc.addPage('letter');y=48;}
     y=text(doc,'MEASURED PLACEMENT GUIDE - NOT TO SCALE',38,y,530,9,{bold:true})+12;
