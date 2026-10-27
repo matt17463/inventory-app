@@ -17,7 +17,8 @@ export const certificationGuideChapter={
    'Choose or draft the manufacturing recipe. Record the method, exact blank restrictions, each placement, width AND height, reference landmark, offsets, machine/material settings, process sequence and packaging.',
    'Perform and inspect the actual sample. A manager approves the immutable recipe revision after the real sample is verified. Starter dimensions and example machine parameters are not production instructions.',
    'Create or open the linked Mockup Studio project. Pair each placement with the exact blank catalog ID and artwork. Choose the intended output and record internal review.',
-   'Obtain the customer decision through the existing customer-review workflow. Share a review link only as part of authorized customer communication. Customer approval must be current after the latest artwork, blank, placement and mockup change.'
+   'Obtain the customer decision through the existing customer-review workflow. Share a review link only as part of authorized customer communication. Customer approval must be current after the latest artwork, blank, placement and mockup change.',
+   'If genuine approval was already received outside the portal, a manager may record the exact output, approving party, source reference and verified facts under Record an approval received outside the customer portal. This is visibly a manager-recorded external decision, not a customer login. Record withdrawals as a new decision; never alter history or fabricate consent.'
   ]},
   {id:'certification-issue',title:'4. Save the exact configuration and certify',summary:'A family recipe assignment is a routing choice. Certification belongs to an individual synchronized variation.',relatedRoutes:['/catalog-production-readiness'],steps:[
    'In the final wizard step select the exact variation, approved recipe revision and one exact mockup output for each recipe placement, in placement order.',
