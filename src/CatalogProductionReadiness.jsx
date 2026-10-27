@@ -4,6 +4,7 @@ import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
 import VariationCertificationPanel from './VariationCertificationPanel';
+import WooLogoMigrationPreview from './WooLogoMigrationPreview';
 import CatalogPairingWorkbench from './CatalogPairingWorkbench';
 import ManufacturingRecipes from './ManufacturingRecipes';
 import MockupStudio from './MockupStudio';
@@ -224,6 +225,7 @@ export default function CatalogProductionReadiness(){
        <p>{SETUP_STEPS[setupStep].description}</p>
        {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
        {setupStep===0&&<VariationCertificationPanel key={'identity-'+selected.woocommerce_product_id} parentId={selected.woocommerce_product_id} identityOnly/>}
+       {setupStep===0&&<WooLogoMigrationPreview key={'logo-audit-'+selected.woocommerce_product_id} parentId={selected.woocommerce_product_id}/> }
        {setupStep===1&&<div>
         <p><strong>Blank mapping review:</strong> {fmt(selected.missing_blank_rows)} of {fmt(selected.row_count)} synchronized rows lack a blank mapping. Finished products or non-inventory items may legitimately have none; verify before fixing.</p>
         <p><Link to="/product-blank-mappings">Repair specific blank mappings →</Link> · <Link to="/catalog-workbench">Review catalog details →</Link></p>
