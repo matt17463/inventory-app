@@ -1,5 +1,5 @@
 // Pure metadata normalization shared by WooCommerce 4x6 labels and their tests.
-const printable=value=>String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim();
+const printable=value=>Array.from(String(value??'')).map(char=>{const code=char.codePointAt(0);return code<32||code===127?' ':char;}).join('').trim();
 const cleanValue=value=>printable(value).slice(0,120);
 const distributionAliases={
  student:'student name|student|child name|recipient name|player name|athlete name',
