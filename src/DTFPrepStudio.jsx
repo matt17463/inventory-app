@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds, removeEdgeColor,
+  DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds,
   processDtfPixels, qualityReport, exportDtfPng, vectorSilhouette, cmykToRgb,
 } from './lib/dtfStudioEngine';
-import { removeEdgeConnectedWhite } from './lib/dtfPreflight';
+import { removeDtfBackground, inspectPngAlpha, validateDtfTransparency } from './lib/dtfBackgroundRemoval.js';
 import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtfMulticolor.js';
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
 import './DTFPrepStudio.css';
@@ -21,7 +21,7 @@ const PRESETS = {
 function makeCanvas(width,height) {
   const c=document.createElement('canvas');c.width=width;c.height=height;return c;
 }
-function renderArtwork(bitmap, opts, maxEdge=0) {
+function renderArtwork(bitmap,opts,maxEdge=0) {
   const target=validatePrintDimensions(opts.width,opts.height);
   const ratio=maxEdge?Math.min(1,maxEdge/Math.max(target.width,target.height)):1;
   const outW=Math.max(1,Math.round(target.width*ratio)),outH=Math.max(1,Math.round(target.height*ratio));
@@ -29,14 +29,27 @@ function renderArtwork(bitmap, opts, maxEdge=0) {
   const staged=makeCanvas(bitmap.width,bitmap.height),sc=staged.getContext('2d',{willReadFrequently:true});
   sc.drawImage(bitmap,0,0);
   let bounds={x:0,y:0,width:bitmap.width,height:bitmap.height};
+  let backgroundResult={removed:0,softened:0,matched:0,originalHadTransparency:false};
   if(opts.background!=='none'||opts.crop){
-    const p=sc.getImageData(0,0,staged.width,staged.height);
-    if(opts.background==='white')removeEdgeConnectedWhite(p.data,staged.width,staged.height,Number(opts.threshold));
-    if(opts.background==='sampled')removeEdgeColor(p.data,staged.width,staged.height,
-      [0,2,4].map(i=>parseInt(opts.backgroundColor.slice(1).slice(i,i+2),16)),Number(opts.removalTolerance));
-    sc.putImageData(p,0,0);
-    if(opts.crop)bounds=alphaBounds(p.data,staged.width,staged.height);
-    if(!bounds)throw Error('All visible artwork was removed. Reduce the background threshold.');
+    const original=sc.getImageData(0,0,staged.width,staged.height);
+    const originallyTransparent=inspectPngAlpha(original.data,staged.width,staged.height).hasTransparency;
+    backgroundResult.originalHadTransparency=originallyTransparent;
+    if(opts.background!=='none'){
+      const mode=opts.background;
+      const result=removeDtfBackground(original.data,staged.width,staged.height,{
+        mode,
+        tolerance:mode==='white'?255-Number(opts.threshold):Number(opts.removalTolerance),
+        feather:Number(opts.backgroundFeather??12),
+        color:opts.backgroundColor,
+        point:opts.backgroundPoint,
+        scope:opts.backgroundScope||'connected',
+        decontaminate:opts.backgroundDecontaminate!==false,
+      });
+      backgroundResult={...result,originalHadTransparency:originallyTransparent};
+    }
+    sc.putImageData(original,0,0);
+    if(opts.crop)bounds=alphaBounds(original.data,staged.width,staged.height);
+    if(!bounds)throw Error('All visible artwork was removed. Reduce the tolerance or use a different background region.');
   }
   const output=makeCanvas(outW,outH),ctx=output.getContext('2d',{willReadFrequently:true});
   const drawRatio=Math.min(outW*.96/bounds.width,outH*.96/bounds.height);
@@ -45,11 +58,16 @@ function renderArtwork(bitmap, opts, maxEdge=0) {
   ctx.drawImage(staged,bounds.x,bounds.y,bounds.width,bounds.height,
     Math.round((outW-dw)/2),Math.round((outH-dh)/2),dw,dh);
   const pixels=ctx.getImageData(0,0,outW,outH);
-  // The background has already been removed on the native source; never flood the
-  // final canvas again, as that can erase isolated white artwork after resampling.
+  // Background removal occurs at original resolution BEFORE resampling and halftones.
+  // The proof garment is never drawn into this canvas.
   const stats=processDtfPixels(pixels.data,outW,outH,{...opts,background:'none'},DTF_DPI*ratio);
+  const finalAlpha=inspectPngAlpha(pixels.data,outW,outH);
+  validateDtfTransparency({settings:opts,report:backgroundResult,finalAlpha});
+  stats.removedBackground=backgroundResult.removed;
+  stats.softenedBackground=backgroundResult.softened;
   ctx.putImageData(pixels,0,0);
-  return {canvas:output,pixels,stats,sourceWidth:bounds.width,sourceHeight:bounds.height,dimensions:target};
+  return {canvas:output,pixels,stats,backgroundResult,finalAlpha,
+    sourceWidth:bounds.width,sourceHeight:bounds.height,dimensions:target};
 }
 function download(blob,name){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
