@@ -129,7 +129,7 @@ export default function PrintCenter(){
   }catch(e){setError(e.message||'Label preview failed.');}
  }
  function savePrefs(){
-   try{localStorage.setItem(CONFIG_KEY,JSON.stringify(prefs));setMessage('Layout defaults saved on this browser. They do not alter WooCommerce plugin settings.');}
+   try{localStorage.setItem(CONFIG_KEY,JSON.stringify(prefs));setMessage('Invoice branding and layout saved on this browser. They do not alter WooCommerce plugin settings.');}
    catch{setError('This browser cannot save local printing preferences.');}
  }
  async function documentAction(which,sendToPrinter=false){
@@ -321,6 +321,10 @@ export default function PrintCenter(){
     <button type="button" onClick={()=>setVisibleSettings(v=>!v)}>{visibleSettings?'Hide':'Customize'} print layout</button>
     {visibleSettings&&<div className="sc-print-preferences">
      <label>Invoice font size (pt)<input type="number" min="7" max="15" step="1" value={prefs.invoiceFont} onChange={e=>setPref('invoiceFont',e.target.value)}/></label>
+     <label>Business name on customer invoice<input type="text" maxLength={100} value={prefs.businessName} onChange={e=>setPref("businessName",e.target.value)}/></label>
+     <label>Business address (street, city, state and ZIP)<input type="text" maxLength={260} value={prefs.businessAddress} onChange={e=>setPref("businessAddress",e.target.value)} placeholder="Enter verified business mailing address"/></label>
+     <label>Business phone<input type="tel" maxLength={65} value={prefs.businessPhone} onChange={e=>setPref("businessPhone",e.target.value)} placeholder="Enter published shop phone"/></label>
+     <label>Business website<input type="text" maxLength={120} value={prefs.businessWebsite} onChange={e=>setPref("businessWebsite",e.target.value)}/></label>
      <label>Invoice heading size (pt)<input type="number" min="13" max="28" step="1" value={prefs.invoiceHeading} onChange={e=>setPref('invoiceHeading',e.target.value)}/></label>
      <label>Thermal label recipient font (pt)<input type="number" min="9" max="22" step="1" value={prefs.labelFont} onChange={e=>setPref('labelFont',e.target.value)}/></label>
      <label>Number of packages (1–100)<input type="number" min="1" max="100" step="1" value={prefs.packageCount} onChange={e=>setPref('packageCount',e.target.value)}/></label>
