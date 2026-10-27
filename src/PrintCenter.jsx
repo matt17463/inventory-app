@@ -204,6 +204,31 @@ export default function PrintCenter(){
      (e.message||'Could not queue standard packet.'));
   }finally{setBusy('');}
  }
+ const printSettingsPanel=(
+<section className="card elevated-card">
+    <button type="button" onClick={()=>setVisibleSettings(v=>!v)}>{visibleSettings?'Hide':'Customize'} invoice & print layout</button>
+    {visibleSettings&&<div className="sc-print-preferences">
+     <label>Invoice font size (pt)<input type="number" min="7" max="15" step="1" value={prefs.invoiceFont} onChange={e=>setPref('invoiceFont',e.target.value)}/></label>
+     <label>Business name on customer invoice<input type="text" maxLength={100} value={prefs.businessName} onChange={e=>setPref("businessName",e.target.value)}/></label>
+     <label>Business address (street, city, state and ZIP)<input type="text" maxLength={260} value={prefs.businessAddress} onChange={e=>setPref("businessAddress",e.target.value)} placeholder="Enter verified business mailing address"/></label>
+     <label>Business phone<input type="tel" maxLength={65} value={prefs.businessPhone} onChange={e=>setPref("businessPhone",e.target.value)} placeholder="Enter published shop phone"/></label>
+     <label>Business website<input type="text" maxLength={120} value={prefs.businessWebsite} onChange={e=>setPref("businessWebsite",e.target.value)}/></label>
+     <label>Invoice heading size (pt)<input type="number" min="13" max="28" step="1" value={prefs.invoiceHeading} onChange={e=>setPref('invoiceHeading',e.target.value)}/></label>
+     <label>Thermal label recipient font (pt)<input type="number" min="9" max="22" step="1" value={prefs.labelFont} onChange={e=>setPref('labelFont',e.target.value)}/></label>
+     <label>Number of packages (1–100)<input type="number" min="1" max="100" step="1" value={prefs.packageCount} onChange={e=>setPref('packageCount',e.target.value)}/></label>
+     {[
+      ['showSku','Invoice: Show SKUs'],['showPersonalization','Invoice: Show customer personalization'],
+      ['showCustomerPhone','Invoice: Show customer phone'],['labelShowOrder','Label: Show order and job #'],
+      ['labelShowItems','Label: Show items'],['productionPacket','Include optional production packet in Standard Packet'],['labelShowQR','Label: Include staff-only QR (internal bags only)']
+     ].map(([key,label])=><label key={key} className="sc-print-check">
+       <input type="checkbox" checked={prefs[key]}
+         onChange={e=>setPref(key,e.target.checked)}/>{label}</label>)}
+     {prefs.labelShowQR&&<p className="sc-print-alert">Staff QR requires authentication. Do not expose internal production links on customer-facing external labels.</p>}
+     <button type="button" onClick={savePrefs}>Save my workstation defaults</button>
+     <small>These layout settings are local to this browser for the first release; shared template management and silent print routing are later phases.</small>
+    </div>}
+   </section>
+ );
  const designerPanel=(
  <section className="card elevated-card">
     <h2>4×6 Label Designer</h2>
@@ -253,11 +278,12 @@ export default function PrintCenter(){
   <p>Manager or admin access is required to print invoices containing customer financial details.</p>
   <Link to="/work-hub">Return to Work Hub</Link></main>;
  if(!jobId)return <main className="page sc-print-center">
-  <header className="page-header"><div><p className="eyebrow">Print Center · Label setup</p>
-    <h1>4×6 Label Designer</h1><p>Customize and preview labels without QuickBooks or an order. Printing actual fulfillment labels requires opening a production job.</p></div>
+  <header className="page-header"><div><p className="eyebrow">Print Center · Document setup</p>
+    <h1>Print Center Settings</h1><p>Configure customer invoice branding, business contact details and 4×6 labels without selecting an order. Open a production job to preview or print actual invoices.</p></div>
     <Link to="/work-hub">Select a production job</Link></header>
   {error&&<p className="sc-print-alert" role="alert">{error}</p>}
   {message&&<p role="status">{message}</p>}
+  {printSettingsPanel}
   {designerPanel}
   <details className="card elevated-card"><summary>QuickBooks connection settings (optional)</summary><QuickBooksConnection /></details>
  </main>;
@@ -317,29 +343,7 @@ export default function PrintCenter(){
     <small>These details are not saved as global workstation defaults. For different recipients in one order, print separately by recipient until per-bag allocation is verified.</small>
    </section>
    {designerPanel}
-   <section className="card elevated-card">
-    <button type="button" onClick={()=>setVisibleSettings(v=>!v)}>{visibleSettings?'Hide':'Customize'} print layout</button>
-    {visibleSettings&&<div className="sc-print-preferences">
-     <label>Invoice font size (pt)<input type="number" min="7" max="15" step="1" value={prefs.invoiceFont} onChange={e=>setPref('invoiceFont',e.target.value)}/></label>
-     <label>Business name on customer invoice<input type="text" maxLength={100} value={prefs.businessName} onChange={e=>setPref("businessName",e.target.value)}/></label>
-     <label>Business address (street, city, state and ZIP)<input type="text" maxLength={260} value={prefs.businessAddress} onChange={e=>setPref("businessAddress",e.target.value)} placeholder="Enter verified business mailing address"/></label>
-     <label>Business phone<input type="tel" maxLength={65} value={prefs.businessPhone} onChange={e=>setPref("businessPhone",e.target.value)} placeholder="Enter published shop phone"/></label>
-     <label>Business website<input type="text" maxLength={120} value={prefs.businessWebsite} onChange={e=>setPref("businessWebsite",e.target.value)}/></label>
-     <label>Invoice heading size (pt)<input type="number" min="13" max="28" step="1" value={prefs.invoiceHeading} onChange={e=>setPref('invoiceHeading',e.target.value)}/></label>
-     <label>Thermal label recipient font (pt)<input type="number" min="9" max="22" step="1" value={prefs.labelFont} onChange={e=>setPref('labelFont',e.target.value)}/></label>
-     <label>Number of packages (1–100)<input type="number" min="1" max="100" step="1" value={prefs.packageCount} onChange={e=>setPref('packageCount',e.target.value)}/></label>
-     {[
-      ['showSku','Invoice: Show SKUs'],['showPersonalization','Invoice: Show customer personalization'],
-      ['showCustomerPhone','Invoice: Show customer phone'],['labelShowOrder','Label: Show order and job #'],
-      ['labelShowItems','Label: Show items'],['productionPacket','Include optional production packet in Standard Packet'],['labelShowQR','Label: Include staff-only QR (internal bags only)']
-     ].map(([key,label])=><label key={key} className="sc-print-check">
-       <input type="checkbox" checked={prefs[key]}
-         onChange={e=>setPref(key,e.target.checked)}/>{label}</label>)}
-     {prefs.labelShowQR&&<p className="sc-print-alert">Staff QR requires authentication. Do not expose internal production links on customer-facing external labels.</p>}
-     <button type="button" onClick={savePrefs}>Save my workstation defaults</button>
-     <small>These layout settings are local to this browser for the first release; shared template management and silent print routing are later phases.</small>
-    </div>}
-   </section>
+   {printSettingsPanel}
    <PrintIntegrations source={source} job={job} prefs={prefs} setPrefs={setPrefs} onRefresh={reload}/>
   </>}
  </main>;
