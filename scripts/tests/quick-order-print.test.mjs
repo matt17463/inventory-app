@@ -13,7 +13,8 @@ test('Simple printing uses authoritative source and retains financial and printe
  assert.match(component,/canPrintCustomerCopy/);
  assert.match(component,/createInvoicePdf/);
  assert.match(component,/createDistributionLabelsPdf/);
- assert.match(component,/createProductionPacketPdf/);
+ assert.doesNotMatch(component,/createProductionPacketPdf/);\n assert.match(component,/Open and print full traveler/);
+ assert.match(component,/production-travelers\//);
  assert.match(component,/action:'capabilities'/);
  assert.match(component,/!routeReady\(key\)/);
  assert.match(component,/idempotencyKey:crypto.randomUUID\(\)/);
