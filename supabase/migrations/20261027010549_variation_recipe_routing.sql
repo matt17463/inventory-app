@@ -86,8 +86,14 @@ begin
   end loop;
  end if;
  if p.woocommerce_product_id is not null and al.artwork_asset_id is not null and not exists(
-  select 1 from jsonb_array_elements(evidence) e where e->'artwork'->>'id'=al.artwork_asset_id::text) then
-  blockers=blockers||jsonb_build_array('Reviewed catalog artwork is absent from this configuration');
+  select 1 from jsonb_array_elements(evidence) e where e->'artwork'->>'id'=al.artwork_asset_id::text)
+  and exists(select 1 from jsonb_array_elements(evidence) e where not exists(
+   select 1 from public.sc_client_graphic_variants variant
+    join public.sc_client_graphic_families family on family.id=variant.family_id
+    join public.sc_client_graphic_product_bindings binding on binding.graphic_family_id=family.id
+   where binding.woo_product_id=p.woocommerce_product_id and binding.allowed and binding.verified_at is not null
+    and family.state='approved' and variant.state='approved' and variant.artwork_asset_id::text=e->'artwork'->>'id')) then
+  blockers=blockers||jsonb_build_array('Variation artwork needs its own verified approved graphic binding');
  end if;
  select jsonb_build_object(
   'bindings',(select coalesce(jsonb_agg(to_jsonb(g) order by g.id),'[]') from public.sc_client_graphic_product_bindings g where g.woo_product_id=p.woocommerce_product_id),
@@ -161,4 +167,102 @@ with revoked as (
 ) insert into public.sc_certification_audit(certification_id,configuration_id,kind,reason)
  select id,configuration_id,'revoked','Variation routing evidence requires revalidation' from revoked;
 create unique index sc_variation_one_current_product on public.sc_variation_certifications(product_id) where status='certified';
+
+create or replace function sc_certification.order_spec(p_item bigint) returns jsonb
+language sql security definer set search_path='' as $$
+ select jsonb_build_object('job_id',i.job_id,'job_item_id',i.id,'product_id',sc_certification.line_product(i.id),
+ 'parent',i.woocommerce_product_id,'variation',i.woocommerce_variation_id,'blank',i.blank_product_id,
+ 'finished_product',i.finished_product_id,'placement',i.placement,'decoration_size',i.decoration_size,
+ 'size',i.size,'color',i.color,'attributes',i.selected_attributes,'quantity',i.quantity,
+ 'selected_brand',i.selected_brand,'selected_style',i.selected_style,'selected_color',i.selected_color,'selected_size',i.selected_size,
+ 'production_notes',i.production_notes,'artwork_note',i.artwork_note,'notes',i.notes,'order_sku',i.order_sku,'sku',i.sku,'logo_id',i.logo_id,'logo',i.logo,'source_blank_product_id',i.source_blank_product_id,
+ 'capture_states',(select coalesce(jsonb_agg(to_jsonb(c) order by c.woo_line_item_id),'[]') from public.sc_woo_graphic_capture_states c join public.jobs j on j.id=i.job_id where c.woo_order_id=j.woocommerce_order_id and c.woo_line_item_id=i.woocommerce_line_item_id),
+ 'checkout_graphic_metadata',(select coalesce(jsonb_agg(meta),'[]') from public.jobs j cross join lateral jsonb_array_elements(case when jsonb_typeof(j.woo_payload->'line_items')='array' then j.woo_payload->'line_items' else '[]' end) line cross join lateral jsonb_array_elements(case when jsonb_typeof(line->'meta_data')='array' then line->'meta_data' else '[]' end) meta where j.id=i.job_id and line->>'id'=i.woocommerce_line_item_id::text and lower(meta->>'key') in ('_sc_graphic_family_id','sc_graphic_family_id')),
+ 'graphic_selections',(select coalesce(jsonb_agg(to_jsonb(s) order by s.id),'[]') from public.sc_order_graphic_selections s join public.jobs j on j.id=i.job_id
+  where s.job_item_id=i.id or(s.source='woocommerce' and s.external_order_id=j.woocommerce_order_id::text and s.external_line_id=i.woocommerce_line_item_id::text)),
+ 'placement_artwork',(select coalesce(jsonb_agg(to_jsonb(a) order by a.id),'[]') from public.sc_job_line_placement_artwork a where a.job_item_id=i.id))
+ from public.job_items i where i.id=p_item
+$$;
+
+create or replace function public.sc_revalidate_traveler(p_traveler_id uuid) returns void
+language plpgsql security definer set search_path='' as $$
+declare t public.sc_job_travelers%rowtype; l record; c_id uuid;
+begin
+ if auth.uid() is null or not public.sc_internal_access_allowed(array['admin','manager']) then raise exception 'Manager access required' using errcode='42501'; end if;
+ perform pg_advisory_xact_lock(17463,20261027);
+ select * into t from public.sc_job_travelers where id=p_traveler_id;
+ if t.id is null then raise exception 'Traveler not found'; end if;
+ if t.superseded_at is not null then raise exception 'Traveler was superseded; use its replacement'; end if;
+ for l in select job_item_id from public.sc_job_traveler_lines where traveler_id=t.id union select t.job_item_id loop
+  c_id=sc_certification.require_line(l.job_item_id,t.recipe_version_id);
+  if c_id is not null then
+   if exists(select 1 from public.sc_traveler_certification_bindings prior where prior.traveler_id=t.id and prior.job_item_id=l.job_item_id
+    and (prior.order_snapshot-array['graphic_selections','placement_artwork','capture_states','checkout_graphic_metadata']) is distinct from (sc_certification.order_spec(l.job_item_id)-array['graphic_selections','placement_artwork','capture_states','checkout_graphic_metadata'])) then
+    raise exception 'Originating order specifications changed; create a reviewed replacement traveler';
+   end if;
+   -- Revalidation cannot make old physical instructions describe a different revision.
+   if t.recipe_snapshot->>'recipe_version_id' is distinct from t.recipe_version_id::text then raise exception 'Historical recipe snapshot does not match the certified revision'; end if;
+   if exists(select 1 from public.sc_job_traveler_lines x where x.traveler_id=t.id and x.job_item_id=l.job_item_id
+    and (coalesce(x.item_snapshot->>'size','') is distinct from coalesce((sc_certification.order_spec(l.job_item_id))->>'size','')
+     or coalesce(x.item_snapshot->>'color','') is distinct from coalesce((sc_certification.order_spec(l.job_item_id))->>'color',''))) then
+    raise exception 'Historical traveler variation differs; a reviewed replacement traveler is required';
+   end if;
+   if exists(select 1 from public.sc_traveler_certification_bindings prior
+    join public.sc_variation_certifications old_cert on old_cert.id=prior.certification_id
+    join public.sc_variation_certifications next_cert on next_cert.id=c_id
+    where prior.traveler_id=t.id and prior.job_item_id=l.job_item_id and exists(
+     select 1 from jsonb_array_elements(old_cert.evidence_snapshot->'placements') old_e
+     where not exists(select 1 from jsonb_array_elements(next_cert.evidence_snapshot->'placements') new_e
+      where new_e->'recipe_placement'=old_e->'recipe_placement'
+       and new_e->'artwork'->>'id'=old_e->'artwork'->>'id'
+       and new_e->'artwork'->>'storage_path' is not distinct from old_e->'artwork'->>'storage_path'
+       and new_e->'artwork'->>'prepared_storage_path' is not distinct from old_e->'artwork'->>'prepared_storage_path'
+       and new_e->'artwork'->>'updated_at' is not distinct from old_e->'artwork'->>'updated_at'
+     ))) then raise exception 'Historical artwork changed; create a reviewed replacement traveler'; end if;
+   if exists(select 1 from public.sc_variation_certifications c cross join lateral jsonb_array_elements(c.evidence_snapshot->'placements') e
+    where c.id=c_id and (
+     coalesce(e->'recipe_placement'->>'artwork_asset_id',t.recipe_snapshot->>'artwork_asset_id')=e->'artwork'->>'id'
+     or exists(select 1 from public.sc_job_traveler_lines old_line cross join lateral jsonb_array_elements(coalesce(old_line.item_snapshot->'approved_placement_artwork','[]')) old_art
+       where old_line.traveler_id=t.id and old_line.job_item_id=l.job_item_id
+        and old_art->>'placement_name'=e->'recipe_placement'->>'placement_name' and old_art->>'artwork_asset_id'=e->'artwork'->>'id')
+    ) is not true) then
+    raise exception 'Historical traveler artwork differs; a reviewed replacement traveler is required';
+   end if;
+   insert into public.sc_traveler_certification_bindings(traveler_id,job_item_id,certification_id,order_snapshot,bound_by)
+    values(t.id,l.job_item_id,c_id,sc_certification.order_spec(l.job_item_id),auth.uid()) on conflict do nothing;
+   insert into public.sc_certification_audit(certification_id,kind,reason,details)
+    values(c_id,'traveler_revalidated','Existing immutable traveler checked against current evidence',jsonb_build_object('traveler_id',t.id,'job_item_id',l.job_item_id));
+  end if;
+ end loop;
+ perform sc_certification.require_traveler(t.id);
+end $$;
+
+create or replace function sc_certification.bind_traveler_line() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare c_id uuid; rv uuid;
+begin
+ select recipe_version_id into rv from public.sc_job_travelers where id=new.traveler_id;
+ c_id=sc_certification.require_line(new.job_item_id,rv);
+ if c_id is not null then
+  insert into public.sc_traveler_certification_bindings(traveler_id,job_item_id,certification_id,order_snapshot,bound_by)
+  values(new.traveler_id,new.job_item_id,c_id,sc_certification.order_spec(new.job_item_id),auth.uid());
+ end if;
+ new.item_snapshot=jsonb_set(coalesce(new.item_snapshot,'{}'::jsonb),'{production_order_context}',sc_certification.order_spec(new.job_item_id),true);
+ return new;
+end $$;
+drop trigger sc_certification_bind_line on public.sc_job_traveler_lines;
+create trigger sc_certification_bind_line before insert on public.sc_job_traveler_lines for each row execute function sc_certification.bind_traveler_line();
+create or replace function sc_certification.enroll_product() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare parent_id bigint; graphic_required boolean=false;
+begin
+ if TG_TABLE_NAME='sc_variation_configurations' then
+  select woocommerce_product_id into parent_id from public.products where id=new.product_id;
+ elsif TG_TABLE_NAME='sc_catalog_recipe_assignments' then
+  if new.disposition='assigned' then parent_id=new.woocommerce_product_id; end if;
+ elsif new.allowed and new.verified_at is not null then parent_id=new.woo_product_id; graphic_required=new.mode in ('fixed','selectable');
+ end if;
+ if parent_id is not null then insert into sc_certification.managed_parents(woocommerce_product_id,graphic_selection_required) values(parent_id,graphic_required) on conflict(woocommerce_product_id) do update set graphic_selection_required=sc_certification.managed_parents.graphic_selection_required or excluded.graphic_selection_required; end if;
+ return new;
+end $$;
 notify pgrst,'reload schema';

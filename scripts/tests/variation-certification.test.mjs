@@ -206,3 +206,35 @@ test('exact variation recipe overrides parent default and supersedes prior certi
   assert.equal((await s.query('select sc_check_variation_configuration($1) result',[config]))[0].result.ready,false);
  }finally{await s.db.close();}
 });
+
+test('production notes and selected garment specifications invalidate existing traveler bindings',async()=>{
+ const s=await setup();try{
+  await s.certify();
+  const traveler=(await s.query('select sc_create_grouped_traveler(1,array[1::bigint],$1) id',[version]))[0].id;
+  const frozen=(await s.query('select item_snapshot from sc_job_traveler_lines where traveler_id=$1',[traveler]))[0].item_snapshot;
+  assert.equal(frozen.production_order_context.quantity,2);
+  await s.db.exec("update job_items set production_notes='Changed personalization',selected_style='Changed garment' where id=1");
+  await assert.rejects(s.query('select sc_certification.require_traveler($1)',[traveler]),/revalidation/);
+  await assert.rejects(s.query('select sc_revalidate_traveler($1)',[traveler]),/Originating order specifications changed/);
+  assert.equal((await s.query('select item_snapshot from sc_job_traveler_lines where traveler_id=$1',[traveler]))[0].item_snapshot.production_order_context.production_notes,null);
+ }finally{await s.db.close();}
+});
+
+test('approved color-specific artwork can differ from the parent candidate only with verified graphic evidence',async()=>{
+ const s=await setup();try{
+  const alternate=id(81),family=id(82),variant=id(83),alternateRecipe=id(84),alternateVersion=id(85);
+  await s.db.exec(`insert into mockup_artwork_assets(id,project_id,preflight_status,updated_at) values('${alternate}','${project}','passed','2026-01-01');
+   update mockup_placements set artwork_asset_id='${alternate}' where id='${placement}';
+   insert into sc_manufacturing_recipes(id,name,decoration_method) values('${alternateRecipe}','Color-specific approved recipe','DTF');
+   insert into sc_manufacturing_recipe_versions(id,recipe_id,revision,placements,verified_sample,status,approved_by,approved_at,artwork_asset_id)
+   select '${alternateVersion}','${alternateRecipe}',1,placements,true,'approved','${actor}',approved_at,'${alternate}' from sc_manufacturing_recipe_versions where id='${version}';`);
+  const config=(await s.query('select sc_save_variation_configuration($1,$2,$3,$4) id',[product,alternateVersion,[output],'Exact alternate artwork reviewed for this color']))[0].id;
+  const check=async()=>(await s.query('select sc_check_variation_configuration($1) result',[config]))[0].result;
+  assert.equal((await check()).ready,false);
+  await s.db.exec(`insert into sc_client_graphic_families(id,state) values('${family}','approved');insert into sc_client_graphic_variants(id,family_id,artwork_asset_id,state,version) values('${variant}','${family}','${alternate}','approved',1);insert into sc_client_graphic_product_bindings(woo_product_id,graphic_family_id,mode,allowed,verified_at) values(100,'${family}','fixed',true,now());`);
+  assert.equal((await check()).ready,true);
+  await s.query('select sc_certify_variation($1)',[config]);
+  await s.db.exec(`update sc_client_graphic_variants set state='retired' where id='${variant}'`);
+  assert.equal((await check()).ready,false);
+ }finally{await s.db.close();}
+});
