@@ -1,6 +1,7 @@
 import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
 import {recentModernizationTutorials} from './recentModernizationTraining.js';
-export const TRAINING_VERSION = '1.7.0';
+import {certificationTutorial} from './certificationOperations.js';
+export const TRAINING_VERSION = '1.8.0';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
@@ -15,6 +16,7 @@ export const trainingRoles = [
 const step = (title, instruction, options = {}) => ({ title, instruction, ...options });
 
 export const trainingTutorials = [
+  certificationTutorial,
   {
     id:'marketing-research-brochure-artwork',title:'Marketing: Prospect Research, Brochures & Client Artwork',
     roles:['marketing','manager','owner-admin','artwork'],level:'Required',minutes:35,safeMode:'simulated-supported',

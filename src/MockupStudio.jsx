@@ -1455,7 +1455,7 @@ export default function MockupStudio({embedded=false,initialProjectId=''}) {
       <PageHeader eyebrow="Artwork & Storefront" title="Mockup Studio" description="Create accurate product mockups, collect approval, prepare pricing and production details, and create WooCommerce products.">
         {bundle ? <div className="sc-button-row"><StatusBadge status={bundle.project.status} />{!embedded&&<ActionButton onClick={() => { setSelectedId(''); setBundle(null); }}>All Projects</ActionButton>}<ActionButton onClick={() => loadProject()}>Refresh</ActionButton></div> : null}
       </PageHeader>
-      <HelpPanel title="Artwork accuracy is protected"><p>Use Exact Composite for crests, logos, and text that must not change. AI Assist is optional and should be reviewed before approval.</p></HelpPanel>
+      <HelpPanel title="Artwork accuracy is protected"><p>Use Exact Composite for crests, logos, and text that must not change. AI Assist is optional and should be reviewed before approval. Keep revised artwork as a new file and preserve earlier approvals. Product Setup & Readiness checks exact blank, placement, recipe, registered file bytes and the latest real customer decision before a variation can be certified. A technical preflight or internal image approval does not replace customer consent.</p></HelpPanel>
       {message ? <p className="message">{message}</p> : null}
       {busy ? <div className="mockup-busy">Working…</div> : null}
 

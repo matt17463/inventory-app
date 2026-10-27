@@ -38,9 +38,18 @@ export async function fixture(){
  insert into sc_client_graphic_rules(id,family_id,variant_id,priority,size_group,placement_name,enabled) values('${uid(50)}','${uid(20)}','${uid(40)}',100,'adult','full_front',true),('${uid(51)}','${uid(20)}','${uid(41)}',100,'youth','full_front',true);
  insert into sc_client_graphic_product_bindings(woo_product_id,graphic_family_id,mode,allowed,verified_at) values(700,'${uid(20)}','selectable',true,now());`);
  await db.exec("update mockup_artwork_assets set storage_provider='r2',storage_bucket='fictional-r2-test'");
+ // Legacy integration scenarios have no registered objects. The authoritative
+ // certificate suite applies the complete integrity migration and pins fixtures.
+ await db.exec(`create table sc_artwork_object_revisions(artwork_asset_id uuid,asset_updated_at timestamptz,storage_provider text,storage_bucket text,storage_path text,sha256 text,byte_size bigint)`);
  return db;
 }
 export async function asRole(db,role,run){await db.exec('begin');try{await db.query("select set_config('request.jwt.claim.sub',$1,true)",[role==='anon'?'':uid({admin:1,manager:2,operator:3,viewer:4}[role])]);await db.exec('set local role '+(role==='anon'?'anon':'authenticated'));const r=await run();await db.exec('commit');return r}catch(e){await db.exec('rollback');throw e}}
 export async function job(db,n,{woo=true,quantity=10}={}){await db.query('insert into jobs(id,customer_name,job_name,woocommerce_order_id,source_invoice_number) values($1,$2,$3,$4,$5)',[n,'Fictional school','Isolated job '+n,woo?10000+n:null,woo?null:'INV-'+n]);await db.query('insert into job_items(id,job_id,quantity,woocommerce_line_item_id,color,size,selected_color,selected_size,ordered_product_name) values($1,$2,$3,$4,$5,$6,$5,$6,$7)',[n*10,n,quantity,woo?20000+n:null,'Black','M','Soccer hoodie']);return n*10}
 export async function selection(db,n,{art=uid(11),status='resolved',placement='full_front',linked=false}={}){await db.query(`insert into sc_order_graphic_selections(source,external_order_id,external_line_id,job_item_id,family_id,selected_label,selected_payload,resolution_snapshot) values($1,$2,$3,$4,$5,'School A',$6,$7)`,[linked?'quickbooks':'woocommerce',linked?'INV-'+n:String(10000+n),linked?'QBO-LINE-1':String(20000+n),linked?n*10:null,uid(20),{placement_name:placement},{status,artworkAssetId:art,variantId:uid(40),dimensions:{width_inches:10,height_inches:10},process:'DTF'}])}
 export const rpc=(db,n,items=[n*10])=>db.query('select sc_create_grouped_traveler($1,$2,$3) as id',[n,items,uid(31)]);
+
+export async function applyCurrentStorageGuard(db){
+ const sql=await read("supabase/migrations/20261027003319_variation_certification_enforcement.sql");
+ const start=sql.indexOf("create or replace function public.sc_require_traveler_storage_preflight()");
+ await db.exec(sql.slice(start,sql.indexOf("end $$;",start)+7));
+}

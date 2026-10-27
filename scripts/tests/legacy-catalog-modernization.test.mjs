@@ -44,8 +44,8 @@ test('new screens, tutorials and PDF-backed guide have joined the current app',(
  const app=read('../../src/App.jsx'), nav=read('../../src/navigationConfig.js');
  assert.match(app,/path="\/catalog-modernization"/);
  assert.match(nav,/Product & Client Modernization/);
- assert.equal(GUIDE_VERSION,'1.7.0');
- assert.equal(TRAINING_VERSION,'1.7.0');
+ assert.equal(GUIDE_VERSION,'1.8.0');
+ assert.equal(TRAINING_VERSION,'1.8.0');
  for(const route of ['/catalog-modernization','/catalog-production-readiness','/print-center','/production-travelers'])
   assert.ok(guideChapters.some(c=>c.sections?.some(s=>s.relatedRoutes?.includes(route))));
  assert.ok(trainingTutorials.some(t=>t.id==='modernization-legacy-client-identities'));

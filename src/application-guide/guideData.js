@@ -1,6 +1,7 @@
 import {wordPressAuditChapters} from './wordpressAuditLearning.js';
 import {recentModernizationGuideChapters} from './recentModernizationGuide.js';
-export const GUIDE_VERSION = '1.7.0';
+import {certificationGuideChapter} from './certificationOperations.js';
+export const GUIDE_VERSION = '1.8.0';
 
 const section = (id, title, summary, options = {}) => ({
   id,
@@ -10,6 +11,7 @@ const section = (id, title, summary, options = {}) => ({
 });
 
 export const guideChapters = [
+  certificationGuideChapter,
   {
     id:'marketing-client-growth',title:'Marketing & Client Growth: Prospect to Delivery',
     description:'Build relationships, prepare client-specific commercial terms and carry one client record through design, storefront launch and operational fulfillment.',

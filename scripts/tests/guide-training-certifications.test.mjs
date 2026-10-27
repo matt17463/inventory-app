@@ -6,7 +6,7 @@ import {TRAINING_VERSION,trainingTutorials} from '../../src/application-guide/tr
 const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 
 test('training source contains finite approved tutorials and current version',()=>{
- assert.equal(TRAINING_VERSION,'1.7.0');
+ assert.equal(TRAINING_VERSION,'1.8.0');
  assert(trainingTutorials.length>=14);
  const ids=trainingTutorials.map(t=>t.id);
  assert.equal(ids.length,new Set(ids).size);

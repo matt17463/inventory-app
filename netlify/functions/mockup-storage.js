@@ -66,11 +66,12 @@ async function createUpload(user, supabase, body) {
     provider: 'r2',
     bucket: r2BucketName(),
     path: key,
-    upload_url: await presignedR2Put({ key, contentType }),
+    upload_url: await presignedR2Put({ key, contentType, createOnly:true }),
+    upload_headers: { 'If-None-Match':'*' },
     preview_provider: previewRequested ? 'r2' : null,
     preview_bucket: previewRequested ? r2BucketName() : null,
     preview_path: previewKey,
-    preview_upload_url: previewRequested ? await presignedR2Put({ key: previewKey, contentType: 'image/webp' }) : null,
+    preview_upload_url: previewRequested ? await presignedR2Put({ key: previewKey, contentType: 'image/webp', createOnly:true }) : null,
   };
 }
 
