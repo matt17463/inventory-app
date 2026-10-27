@@ -28,6 +28,7 @@ export default function QuickOrderPrint({jobId,onClose}){
  const [source,setSource]=useState(null);
  const [job,setJob]=useState(null);
  const [travelers,setTravelers]=useState([]);
+ const [travelerLines,setTravelerLines]=useState([]);
  const [selected,setSelected]=useState(DEFAULT_DOCUMENTS);
  const [template,setTemplate]=useState('saved');
  const [packages,setPackages]=useState(1);
