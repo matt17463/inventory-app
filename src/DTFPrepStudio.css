@@ -16,3 +16,15 @@
 .dtf-angle-field input{width:100%;min-width:0;color:#e6f9ff;background:#091829;border:1px solid #49617d;border-radius:7px;padding:.38rem .44rem}
 .dtf-angle-field input:disabled{opacity:.4}
 .dtf-channel-warning{color:#ffdc92!important;background:#47331c;border-left:3px solid #eca746;padding:.6rem .75rem;border-radius:6px;font-size:.76rem;margin:0}
+
+/* Source-pixel background picker and truthful alpha-removal feedback. */
+.dtf-studio .dtf-remove-action{width:100%;background:linear-gradient(100deg,#0a9fba,#268b9c);border:1px solid #54d6d8;box-shadow:0 4px 15px #001c334f;padding:.85rem}
+.dtf-source-picker{cursor:crosshair;outline:2px dashed #58e1d5;outline-offset:-3px}
+.dtf-pick-tip{border-left:3px solid #30b9ce;background:#123a49;color:#e2faff;padding:.75rem;border-radius:6px;font-size:.77rem;line-height:1.5;margin:0}
+.dtf-alpha-result{display:grid;gap:.3rem;background:#103b39;border:1px solid #287e76;color:#c3f9ed;border-radius:9px;padding:.75rem;font-size:.79rem}
+.dtf-alpha-result span{font-variant-numeric:tabular-nums}
+
+.dtf-manual-mask{border:1px solid #38667f;background:#112a3b;padding:.7rem;border-radius:10px;display:grid;gap:.65rem}
+.dtf-manual-mask>strong{color:#9fe8fa;font-size:.77rem}
+.dtf-mask-buttons{display:flex;gap:.5rem;flex-wrap:wrap}.dtf-mask-buttons button{flex:1;white-space:normal}
+.dtf-source-picker{touch-action:none;user-select:none;-webkit-user-drag:none}

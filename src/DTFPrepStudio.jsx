@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds, removeEdgeColor,
+  DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds,
   processDtfPixels, qualityReport, exportDtfPng, vectorSilhouette, cmykToRgb,
 } from './lib/dtfStudioEngine';
-import { removeEdgeConnectedWhite } from './lib/dtfPreflight';
+import { removeDtfBackground, inspectPngAlpha, validateDtfTransparency, applyDtfMaskStrokes } from './lib/dtfBackgroundRemoval.js';
 import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtfMulticolor.js';
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
 import './DTFPrepStudio.css';
@@ -21,7 +21,7 @@ const PRESETS = {
 function makeCanvas(width,height) {
   const c=document.createElement('canvas');c.width=width;c.height=height;return c;
 }
-function renderArtwork(bitmap, opts, maxEdge=0) {
+function renderArtwork(bitmap,opts,maxEdge=0) {
   const target=validatePrintDimensions(opts.width,opts.height);
   const ratio=maxEdge?Math.min(1,maxEdge/Math.max(target.width,target.height)):1;
   const outW=Math.max(1,Math.round(target.width*ratio)),outH=Math.max(1,Math.round(target.height*ratio));
@@ -29,14 +29,34 @@ function renderArtwork(bitmap, opts, maxEdge=0) {
   const staged=makeCanvas(bitmap.width,bitmap.height),sc=staged.getContext('2d',{willReadFrequently:true});
   sc.drawImage(bitmap,0,0);
   let bounds={x:0,y:0,width:bitmap.width,height:bitmap.height};
-  if(opts.background!=='none'||opts.crop){
-    const p=sc.getImageData(0,0,staged.width,staged.height);
-    if(opts.background==='white')removeEdgeConnectedWhite(p.data,staged.width,staged.height,Number(opts.threshold));
-    if(opts.background==='sampled')removeEdgeColor(p.data,staged.width,staged.height,
-      [0,2,4].map(i=>parseInt(opts.backgroundColor.slice(1).slice(i,i+2),16)),Number(opts.removalTolerance));
-    sc.putImageData(p,0,0);
-    if(opts.crop)bounds=alphaBounds(p.data,staged.width,staged.height);
-    if(!bounds)throw Error('All visible artwork was removed. Reduce the background threshold.');
+  let backgroundResult={removed:0,softened:0,matched:0,originalHadTransparency:false};
+  if(opts.background!=='none'||opts.crop||opts.maskStrokes?.length){
+    const original=sc.getImageData(0,0,staged.width,staged.height);
+    const originalCopy=opts.maskStrokes?.length?new Uint8ClampedArray(original.data):null;
+    const originallyTransparent=inspectPngAlpha(original.data,staged.width,staged.height).hasTransparency;
+    backgroundResult.originalHadTransparency=originallyTransparent;
+    if(opts.background!=='none'){
+      const mode=opts.background;
+      const result=removeDtfBackground(original.data,staged.width,staged.height,{
+        mode,
+        tolerance:mode==='white'?255-Number(opts.threshold):Number(opts.removalTolerance),
+        feather:Number(opts.backgroundFeather??12),
+        color:opts.backgroundColor,
+        point:opts.backgroundPoint,
+        scope:opts.backgroundScope||'connected',
+        decontaminate:opts.backgroundDecontaminate!==false,
+      });
+      backgroundResult={...result,originalHadTransparency:originallyTransparent};
+    }
+    if(originalCopy){
+      const manual=applyDtfMaskStrokes(original.data,originalCopy,staged.width,staged.height,opts.maskStrokes);
+      backgroundResult.manualErased=manual.erased;
+      backgroundResult.manualRestored=manual.restored;
+      backgroundResult.removed+=manual.erased;
+    }
+    sc.putImageData(original,0,0);
+    if(opts.crop)bounds=alphaBounds(original.data,staged.width,staged.height);
+    if(!bounds)throw Error('All visible artwork was removed. Reduce the tolerance or use a different background region.');
   }
   const output=makeCanvas(outW,outH),ctx=output.getContext('2d',{willReadFrequently:true});
   const drawRatio=Math.min(outW*.96/bounds.width,outH*.96/bounds.height);
@@ -45,11 +65,16 @@ function renderArtwork(bitmap, opts, maxEdge=0) {
   ctx.drawImage(staged,bounds.x,bounds.y,bounds.width,bounds.height,
     Math.round((outW-dw)/2),Math.round((outH-dh)/2),dw,dh);
   const pixels=ctx.getImageData(0,0,outW,outH);
-  // The background has already been removed on the native source; never flood the
-  // final canvas again, as that can erase isolated white artwork after resampling.
+  // Background removal occurs at original resolution BEFORE resampling and halftones.
+  // The proof garment is never drawn into this canvas.
   const stats=processDtfPixels(pixels.data,outW,outH,{...opts,background:'none'},DTF_DPI*ratio);
+  const finalAlpha=inspectPngAlpha(pixels.data,outW,outH);
+  validateDtfTransparency({settings:opts,report:backgroundResult,finalAlpha});
+  stats.removedBackground=backgroundResult.removed;
+  stats.softenedBackground=backgroundResult.softened;
   ctx.putImageData(pixels,0,0);
-  return {canvas:output,pixels,stats,sourceWidth:bounds.width,sourceHeight:bounds.height,dimensions:target};
+  return {canvas:output,pixels,stats,backgroundResult,finalAlpha,
+    sourceWidth:bounds.width,sourceHeight:bounds.height,dimensions:target};
 }
 function download(blob,name){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
@@ -76,12 +101,50 @@ export default function DTFPrepStudio(){
   const [garmentScale,setGarmentScale]=useState(45),[garmentTop,setGarmentTop]=useState(38);
   const [sourceMeta,setSourceMeta]=useState(null),[vectorColor,setVectorColor]=useState('#ffffff');
   const imgRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
+  const maskDraggingRef=useRef(false),maskLastRef=useRef(null);
   const change=(k,v)=>{setOpts(o=>({...o,[k]:v}));setSavedPrepared('');};
   const changeChannel=(section,channel,value)=>{
     setOpts(o=>({...o,[section]:{...o[section],[channel]:value}}));
     setSavedPrepared('');
   };
   const channelWarnings=useMemo(()=>opts.halftone==='multicolor'?screenAngleWarnings(opts):[],[opts]);
+  function chooseSource(nextFile) {
+    setFile(nextFile);setSavedSource('');setSavedPrepared('');
+    setOpts(o=>({...o,backgroundPoint:null,maskStrokes:[],background:o.background==='pick'?'none':o.background}));
+  }
+  function pickBackground(event) {
+    if(opts.background!=='pick'||opts.maskTool!=='none'||!bitmap)return;
+    const rect=event.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const x=Math.max(0,Math.min(bitmap.width-1,Math.floor((event.clientX-rect.left)/rect.width*bitmap.width)));
+    const y=Math.max(0,Math.min(bitmap.height-1,Math.floor((event.clientY-rect.top)/rect.height*bitmap.height)));
+    // The 1x1 canvas extracts the real source color, not a proof backdrop.
+    const canvas=makeCanvas(1,1),ctx=canvas.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(bitmap,x,y,1,1,0,0,1,1);
+    const rgb=Array.from(ctx.getImageData(0,0,1,1).data.slice(0,3));
+    setOpts(o=>({...o,backgroundPoint:{x,y},backgroundColor:'#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('')}));
+    setSavedPrepared('');
+  }
+  function paintMask(event) {
+    if(!bitmap||!['erase','restore'].includes(opts.maskTool))return;
+    const rect=event.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const x=Math.max(0,Math.min(bitmap.width-1,Math.round((event.clientX-rect.left)/rect.width*(bitmap.width-1))));
+    const y=Math.max(0,Math.min(bitmap.height-1,Math.round((event.clientY-rect.top)/rect.height*(bitmap.height-1))));
+    const radius=Math.max(1,Math.min(600,Number(opts.maskBrushSize)||28));
+    const last=maskLastRef.current;
+    if(last&&Math.hypot(last.x-x,last.y-y)<Math.max(2,radius*.27))return;
+    maskLastRef.current={x,y};
+    setOpts(o=>({...o,maskStrokes:[...(o.maskStrokes||[]).slice(-1999),{kind:o.maskTool,x,y,r:radius}]}));
+    setSavedPrepared('');
+  }
+  function startMask(event) {
+    if(!['erase','restore'].includes(opts.maskTool))return;
+    event.preventDefault();maskDraggingRef.current=true;maskLastRef.current=null;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    paintMask(event);
+  }
+  function finishMask(){maskDraggingRef.current=false;maskLastRef.current=null;}
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
@@ -133,7 +196,7 @@ export default function DTFPrepStudio(){
       const blob=await res.blob();
       if(!blob.type.startsWith('image/')||!['image/png','image/jpeg','image/webp'].includes(blob.type))
         throw Error('Choose a PNG, JPEG or WebP artwork asset.');
-      setFile(new File([blob],row.original_file_name||row.artwork_name||'r2-artwork.png',{type:blob.type}));
+      chooseSource(new File([blob],row.original_file_name||row.artwork_name||'r2-artwork.png',{type:blob.type}));
       setSavedSource(row.id);setSavedPrepared('');
       if(row.metadata?.recipe && typeof row.metadata.recipe==='object')setOpts(o=>({...o,...row.metadata.recipe}));
     }catch(e){setMessage('R2 artwork: '+e.message);}finally{setBusy(false);}
@@ -148,7 +211,7 @@ export default function DTFPrepStudio(){
     try{
       const render=await prepareFull(),blob=await exportDtfPng(render.canvas);
       download(blob,baseName(file.name)+'-dtf-'+opts.width+'x'+opts.height+'-300dpi.png');
-      setMessage('300 PPI PNG exported. Review in your RIP and complete a physical test before production.');
+      setMessage('300 PPI RGBA PNG exported with actual transparency. Background removed: '+render.backgroundResult.removed.toLocaleString()+' source pixels. Inspect checkerboard and verify in your RIP.');
     }catch(e){setMessage(e.message);}finally{setBusy(false);}
   }
   async function downloadVector(){
@@ -175,10 +238,11 @@ export default function DTFPrepStudio(){
       const prepared=new File([blob],baseName(file.name)+'-dtf-studio-300dpi.png',{type:'image/png'});
       const r=await addArtworkAsset({projectId,file:prepared,values:{
         artwork_name:prepared.name,pixel_width:render.canvas.width,pixel_height:render.canvas.height,
-        has_transparency:true,background_removed:opts.background!=='none',
+        has_transparency:render.finalAlpha.hasTransparency,background_removed:render.backgroundResult.removed>0,
         preflight_status:'warning',preflight_notes:'DTF Studio derivative — manual artwork and transfer approval required',
         exact_artwork_locked:true,metadata:{
           dtf_studio:'v1',role:'derived',source_artwork_asset_id:sourceId,recipe:{...opts},
+          background_removal:{...render.backgroundResult},output_alpha:{...render.finalAlpha},
           resolution:qualityReport(render.sourceWidth,render.sourceHeight,render.canvas.width,render.canvas.height,render.stats,opts),
           dpi:DTF_DPI,requires_visual_approval:true,approved_for_production:false
         }}});
@@ -203,7 +267,7 @@ export default function DTFPrepStudio(){
       <section className="dtf-viewer">
         <div className="dtf-canvasbar"><strong>01 / ORIGINAL SOURCE</strong><span>{sourceMeta?sourceMeta.width+' × '+sourceMeta.height+' px':'No source'}</span></div>
         <div className="dtf-canvas dtf-source">
-          {sourceUrl?<img ref={imgRef} alt="Original source artwork" src={sourceUrl}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{setSavedSource('');setSavedPrepared('');setFile(e.target.files?.[0]||null);}}/></label>}
+          {sourceUrl?<img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} draggable={false} className={opts.background==='pick'||opts.maskTool!=='none'?'dtf-source-picker':''} title={opts.maskTool!=='none'?'Drag on Source to paint the working mask':opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground} onPointerDown={startMask} onPointerMove={e=>{if(maskDraggingRef.current&&(e.buttons||e.pointerType==='touch'))paintMask(e);}} onPointerUp={finishMask} onPointerCancel={finishMask} onLostPointerCapture={finishMask}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
         </div>
         <div className="dtf-canvasbar"><strong>02 / LIVE PROOF</strong><span>{target?target.width+' × '+target.height+' px':'No canvas'} · 300 PPI</span></div>
         <div className={'dtf-canvas dtf-proof '+(proofMode==='checker'?'dtf-checker':'')}
@@ -222,7 +286,7 @@ export default function DTFPrepStudio(){
       </section>
       <aside className="dtf-sidebar">
         <Tuning title="Artwork source & R2 library">
-          {field('Upload customer artwork',<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{setSavedSource('');setSavedPrepared('');setFile(e.target.files?.[0]||null);}}/>)}
+          {field('Upload customer artwork',<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/>)}
           {field('Customer / mockup project',<select value={projectId} onChange={e=>{setProjectId(e.target.value);setAssetId('');setGarmentId('');setSavedSource('');setSavedPrepared('');}}><option value="">Choose a project for R2</option>{projects.map(p=><option key={p.id} value={p.id}>{p.project_name} · {p.customer_name||'Internal'}</option>)}</select>)}
           {field('Existing project artwork',<select value={assetId} onChange={e=>setAssetId(e.target.value)}><option value="">Choose an existing source</option>{(bundle?.artwork||[]).map(a=><option key={a.id} value={a.id}>{a.artwork_name}</option>)}</select>)}
           <button className="dtf-secondary" disabled={!assetId||busy} onClick={loadR2}>Load selected R2 artwork</button>
@@ -236,15 +300,53 @@ export default function DTFPrepStudio(){
           <label className="dtf-check"><input type="checkbox" checked={opts.crop} onChange={e=>change('crop',e.target.checked)}/> Crop transparent source margins</label>
           <p className="dtf-note">Output is resampled to true pixel dimensions. Upscaling does not recreate missing source detail.</p>
         </Tuning>
-        <Tuning title="Background & edge removal">
-          {field('Remove background',<select value={opts.background} onChange={e=>change('background',e.target.value)}>
-            <option value="none">Keep original</option><option value="white">Connected near-white</option><option value="sampled">Connected selected color</option>
+        <Tuning title="Remove background → Transparent PNG">
+          <button type="button" className="dtf-remove-action" disabled={!bitmap}
+            onClick={()=>{setOpts(o=>({...o,background:'auto',backgroundPoint:null,backgroundScope:'connected',backgroundFeather:12}));setSavedPrepared('');}}>
+            Remove background automatically
+          </button>
+          {field('Removal method',<select value={opts.background} onChange={e=>{change('background',e.target.value);}}>
+            <option value="none">Keep original background</option>
+            <option value="auto">Automatic — dominant edge color</option>
+            <option value="white">Remove white / off-white</option>
+            <option value="sampled">Remove chosen background color</option>
+            <option value="pick">Click a region in Source to remove</option>
           </select>)}
+          {opts.background==='pick'&&<p className="dtf-pick-tip"><strong>Click the unwanted background in SOURCE.</strong> The selected connected region becomes truly transparent. {opts.backgroundPoint?'Selected point: '+opts.backgroundPoint.x+', '+opts.backgroundPoint.y+'. Click again to change it.':'Choose a background pixel to continue.'}</p>}
           {opts.background==='white'&&<Slider label="White threshold" value={opts.threshold} min={200} max={255} onChange={v=>change('threshold',v)}/>}
-          {opts.background==='sampled'&&<>{field('Background RGB',<input type="color" value={opts.backgroundColor} onChange={e=>change('backgroundColor',e.target.value)}/>)}<Slider label="Tolerance" value={opts.removalTolerance} min={0} max={160} onChange={v=>change('removalTolerance',v)}/></>}
+          {opts.background==='sampled'&&field('Background RGB color',<input type="color" value={opts.backgroundColor} onChange={e=>change('backgroundColor',e.target.value)}/>)}
+          {opts.background!=='none'&&<>
+            {opts.background!=='white'&&<Slider label="Color tolerance" value={opts.removalTolerance} min={0} max={150} step={1} onChange={v=>change('removalTolerance',v)}/>}
+            <Slider label="Edge softness (source pixels)" value={opts.backgroundFeather??12} min={0} max={40} step={1} onChange={v=>change('backgroundFeather',v)}/>
+            {field('Removal coverage',<select value={opts.backgroundScope||'connected'} onChange={e=>change('backgroundScope',e.target.value)}>
+              <option value="connected">Connected background only (protect artwork)</option>
+              <option value="all">All matching pixels (also removes interior matches)</option>
+            </select>)}
+            {opts.backgroundScope==='all'&&<p className="dtf-channel-warning">All matching pixels can erase white lettering or other design details. Inspect the proof.</p>}
+            <label className="dtf-check"><input type="checkbox" checked={opts.backgroundDecontaminate!==false} onChange={e=>change('backgroundDecontaminate',e.target.checked)}/> Decontaminate edge colors</label>
+            {report?.stats&&<div className="dtf-alpha-result"><strong>Real background removal</strong><span>{(report.stats.removedBackground||0).toLocaleString()} source pixels transparent · {(report.stats.softenedBackground||0).toLocaleString()} softened</span></div>}
+          </>}
+          <div className="dtf-manual-mask">
+            <strong>Manual background cleanup</strong>
+            {field('Paint on original Source image',<select value={opts.maskTool||'none'} onChange={e=>change('maskTool',e.target.value)}>
+              <option value="none">No brush — select region</option>
+              <option value="erase">Erase to transparency</option>
+              <option value="restore">Restore original design pixels</option>
+            </select>)}
+            {opts.maskTool!=='none'&&<Slider label="Brush radius (source pixels)" min={2} max={180} value={opts.maskBrushSize||28} onChange={v=>change('maskBrushSize',v)}/>}
+            <div className="dtf-mask-buttons">
+              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>change('maskStrokes',(opts.maskStrokes||[]).slice(0,-1))}>Undo brush stroke</button>
+              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>change('maskStrokes',[])}>Clear manual mask</button>
+            </div>
+            <p className="dtf-note">{(opts.maskStrokes||[]).length} brush marks. Drag on the Source image to modify the working transparency mask; the original source file remains unchanged. Changes appear in Proof.</p>
+          </div>
           <Slider label="Defringe" value={opts.defringe} min={0} max={3} step={1} onChange={v=>change('defringe',v)}/>
-          {field('Alpha processing',<select value={opts.alphaMode} onChange={e=>change('alphaMode',e.target.value)}><option value="hard">Opaque pixels only (DTF)</option><option value="preserve">Preserve soft transparency</option></select>)}
+          {field('Final alpha',<select value={opts.alphaMode} onChange={e=>change('alphaMode',e.target.value)}>
+            <option value="hard">DTF hard alpha (opaque or transparent)</option>
+            <option value="preserve">Preserve soft edge transparency</option>
+          </select>)}
           <Slider label="Alpha cutoff" value={opts.alphaThreshold} min={0} max={254} onChange={v=>change('alphaThreshold',v)}/>
+          <p className="dtf-note">Transparency is written to the PNG alpha channel before the 300 PPI export. Checkerboard and garment colors are preview-only. Automatic color selection works best with solid backgrounds; detailed photographic backgrounds may require a manually refined mask.</p>
         </Tuning>
         <Tuning title="Halftones & garment knockout">
           {field('Quick preset',<select value="" onChange={e=>{setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
