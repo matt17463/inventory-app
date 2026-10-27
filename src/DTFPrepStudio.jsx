@@ -100,6 +100,23 @@ export default function DTFPrepStudio(){
     setSavedPrepared('');
   };
   const channelWarnings=useMemo(()=>opts.halftone==='multicolor'?screenAngleWarnings(opts):[],[opts]);
+  function chooseSource(nextFile) {
+    setFile(nextFile);setSavedSource('');setSavedPrepared('');
+    setOpts(o=>({...o,backgroundPoint:null,background:o.background==='pick'?'none':o.background}));
+  }
+  function pickBackground(event) {
+    if(opts.background!=='pick'||!bitmap)return;
+    const rect=event.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const x=Math.max(0,Math.min(bitmap.width-1,Math.floor((event.clientX-rect.left)/rect.width*bitmap.width)));
+    const y=Math.max(0,Math.min(bitmap.height-1,Math.floor((event.clientY-rect.top)/rect.height*bitmap.height)));
+    // The 1x1 canvas extracts the real source color, not a proof backdrop.
+    const canvas=makeCanvas(1,1),ctx=canvas.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(bitmap,x,y,1,1,0,0,1,1);
+    const rgb=Array.from(ctx.getImageData(0,0,1,1).data.slice(0,3));
+    setOpts(o=>({...o,backgroundPoint:{x,y},backgroundColor:'#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('')}));
+    setSavedPrepared('');
+  }
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
@@ -151,7 +168,7 @@ export default function DTFPrepStudio(){
       const blob=await res.blob();
       if(!blob.type.startsWith('image/')||!['image/png','image/jpeg','image/webp'].includes(blob.type))
         throw Error('Choose a PNG, JPEG or WebP artwork asset.');
-      setFile(new File([blob],row.original_file_name||row.artwork_name||'r2-artwork.png',{type:blob.type}));
+      chooseSource(new File([blob],row.original_file_name||row.artwork_name||'r2-artwork.png',{type:blob.type}));
       setSavedSource(row.id);setSavedPrepared('');
       if(row.metadata?.recipe && typeof row.metadata.recipe==='object')setOpts(o=>({...o,...row.metadata.recipe}));
     }catch(e){setMessage('R2 artwork: '+e.message);}finally{setBusy(false);}
@@ -166,7 +183,7 @@ export default function DTFPrepStudio(){
     try{
       const render=await prepareFull(),blob=await exportDtfPng(render.canvas);
       download(blob,baseName(file.name)+'-dtf-'+opts.width+'x'+opts.height+'-300dpi.png');
-      setMessage('300 PPI PNG exported. Review in your RIP and complete a physical test before production.');
+      setMessage('300 PPI RGBA PNG exported with actual transparency. Background removed: '+render.backgroundResult.removed.toLocaleString()+' source pixels. Inspect checkerboard and verify in your RIP.');
     }catch(e){setMessage(e.message);}finally{setBusy(false);}
   }
   async function downloadVector(){
@@ -193,10 +210,11 @@ export default function DTFPrepStudio(){
       const prepared=new File([blob],baseName(file.name)+'-dtf-studio-300dpi.png',{type:'image/png'});
       const r=await addArtworkAsset({projectId,file:prepared,values:{
         artwork_name:prepared.name,pixel_width:render.canvas.width,pixel_height:render.canvas.height,
-        has_transparency:true,background_removed:opts.background!=='none',
+        has_transparency:render.finalAlpha.hasTransparency,background_removed:render.backgroundResult.removed>0,
         preflight_status:'warning',preflight_notes:'DTF Studio derivative — manual artwork and transfer approval required',
         exact_artwork_locked:true,metadata:{
           dtf_studio:'v1',role:'derived',source_artwork_asset_id:sourceId,recipe:{...opts},
+          background_removal:{...render.backgroundResult},output_alpha:{...render.finalAlpha},
           resolution:qualityReport(render.sourceWidth,render.sourceHeight,render.canvas.width,render.canvas.height,render.stats,opts),
           dpi:DTF_DPI,requires_visual_approval:true,approved_for_production:false
         }}});
@@ -221,7 +239,7 @@ export default function DTFPrepStudio(){
       <section className="dtf-viewer">
         <div className="dtf-canvasbar"><strong>01 / ORIGINAL SOURCE</strong><span>{sourceMeta?sourceMeta.width+' × '+sourceMeta.height+' px':'No source'}</span></div>
         <div className="dtf-canvas dtf-source">
-          {sourceUrl?<img ref={imgRef} alt="Original source artwork" src={sourceUrl}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{setSavedSource('');setSavedPrepared('');setFile(e.target.files?.[0]||null);}}/></label>}
+          {sourceUrl?<img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} className={opts.background==='pick'?'dtf-source-picker':''} title={opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
         </div>
         <div className="dtf-canvasbar"><strong>02 / LIVE PROOF</strong><span>{target?target.width+' × '+target.height+' px':'No canvas'} · 300 PPI</span></div>
         <div className={'dtf-canvas dtf-proof '+(proofMode==='checker'?'dtf-checker':'')}
@@ -240,7 +258,7 @@ export default function DTFPrepStudio(){
       </section>
       <aside className="dtf-sidebar">
         <Tuning title="Artwork source & R2 library">
-          {field('Upload customer artwork',<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{setSavedSource('');setSavedPrepared('');setFile(e.target.files?.[0]||null);}}/>)}
+          {field('Upload customer artwork',<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/>)}
           {field('Customer / mockup project',<select value={projectId} onChange={e=>{setProjectId(e.target.value);setAssetId('');setGarmentId('');setSavedSource('');setSavedPrepared('');}}><option value="">Choose a project for R2</option>{projects.map(p=><option key={p.id} value={p.id}>{p.project_name} · {p.customer_name||'Internal'}</option>)}</select>)}
           {field('Existing project artwork',<select value={assetId} onChange={e=>setAssetId(e.target.value)}><option value="">Choose an existing source</option>{(bundle?.artwork||[]).map(a=><option key={a.id} value={a.id}>{a.artwork_name}</option>)}</select>)}
           <button className="dtf-secondary" disabled={!assetId||busy} onClick={loadR2}>Load selected R2 artwork</button>
