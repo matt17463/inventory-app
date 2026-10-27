@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeWooPrintSource,normalizeManualPrintSource,normalizePrintPrefs,canPrintCustomerCopy,printWarnings} from '../../src/lib/printModel.js';
+import {deriveDistributionFields,canonicalDistributionMetaLabel} from '../../src/lib/printPacketPdf.js';
 const read=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8');
 
 test('Woo source preserves original authoritative tax, discount, totals and payment',()=>{
@@ -53,4 +54,26 @@ test('Application print interface only reads billing sources and does not write 
  assert.match(pdf,/createProductionPacketPdf/);
  assert.match(pdf,/cfg.labelShowItems&&cfg.packageCount===1/);
  assert.match(pdf,/Contents not allocated/);
+});
+
+test('Woo add-on labels with colons and possessives populate 4x6 student distribution label',()=>{
+ const source=normalizeWooPrintSource({id:16148,line_items:[{id:1,name:'Sidney Glen ES Raglan Tee',quantity:1,total:'22.00',meta_data:[
+  {display_key:'Color:',display_value:'Royal Blue'},
+  {display_key:'Size:',display_value:'YM'},
+  {display_key:'Logo Selection:',display_value:'SG Dolphin'},
+  {display_key:'Student Name::',display_value:'Benzino Bustamante'},
+  {display_key:'Teacher Name::',display_value:'Ms. Bornfleth'},
+  {display_key:'Student’s Grade::',display_value:'4th Grade'}
+ ]}]});
+ const fields=deriveDistributionFields(source);
+ assert.equal(fields.student,'Benzino Bustamante');
+ assert.equal(fields.teacher,'Ms. Bornfleth');
+ assert.equal(fields.grade,'4th Grade');
+ assert.equal(canonicalDistributionMetaLabel(' Student Name:: '),'student name');
+ assert.equal(canonicalDistributionMetaLabel('Student’s Grade::'),'students grade');
+});
+test('packing label retains ambiguous metadata as MULTIPLE and honors manual corrections',()=>{
+ const source={lines:[{metadata:[{label:'Student Name::',value:'Alex'}]},{metadata:[{label:'Student Name:',value:'Taylor'}]}]};
+ assert.equal(deriveDistributionFields(source).student,'MULTIPLE - SEE PACKING LIST');
+ assert.equal(deriveDistributionFields(source,{student:'Override'}).student,'Override');
 });
