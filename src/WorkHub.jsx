@@ -2,7 +2,7 @@ import {useContext,useEffect,useMemo,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {boardColumnForRow,listProductionStatusBoard} from './lib/productionStatusApi';
-import {loadGuidedJobEvidence,addGuidedJobNote} from './lib/guidedJobApi';
+import {loadGuidedJobEvidence,addGuidedJobNote,setGuidedJobStepReview} from './lib/guidedJobApi';
 import {dueRisk,jobIdentity,deriveGuidedProgress,GUIDED_STEPS} from './lib/guidedJobProgress';
 import './WorkHub.css';
 import GuidedJobPhaseTwo from './GuidedJobPhaseTwo';
@@ -21,7 +21,7 @@ const STAGES=[
  {id:'ready_to_ship',label:'Ready for pickup'},
  {id:'completed',label:'Completed'},
 ];
-const stepLabels={verified:'Recorded',linked:'Linked / check',attention:'Action required',review:'Review',unknown:'Not available',not_applicable:'N/A'};
+const stepLabels={verified:'Recorded',linked:'Linked / check',attention:'Action required',review:'Review',unknown:'Not available',not_applicable:'N/A',in_progress:'In progress',blocked:'Blocked'};
 const formatDate=v=>{if(!v)return 'No due date';const date=/^\d{4}-\d{2}-\d{2}$/.test(v)?new Date(v+'T12:00:00'):new Date(v);return Number.isNaN(date.getTime())?String(v):date.toLocaleDateString();};
 const labelJob=r=>r?.woo_order_number?'Woo #'+r.woo_order_number:
   r?.woocommerce_order_id?'Woo #'+r.woocommerce_order_id:
@@ -61,6 +61,10 @@ export default function WorkHub(){
  const [noteMessage,setNoteMessage]=useState('');
  const [openAll,setOpenAll]=useState(false);
  const [printOpen,setPrintOpen]=useState(false);
+ const [stepEdit,setStepEdit]=useState('');
+ const [stepState,setStepState]=useState('review');
+ const [stepReason,setStepReason]=useState('');
+ const [stepBusy,setStepBusy]=useState(false);
 
  async function reloadBoard(){
   setBoardBusy(true);setBoardError('');
@@ -97,9 +101,12 @@ export default function WorkHub(){
  },[currentId]);
  const progress=useMemo(()=>chosen&&detail?deriveGuidedProgress(chosen,detail):null,[chosen,detail]);
  const steps=progress?.steps||GUIDED_STEPS;
+ const reviewByStep=new Map((detail?.stepReviews||[]).map(r=>[r.step_id,r]));
+ const toJobTool=href=>{const [path,query='']=String(href||'').split('?');if(path==='/work-hub')return href;const next=new URLSearchParams(query);if(currentId)next.set('returnJob',String(currentId));return path+'?'+next.toString()};
  const issues=Array.isArray(chosen?.blocking_issues)?chosen.blocking_issues:[];
  const unknowns=detail?.unavailable||{};
  const stepCounts=steps.reduce((count,s)=>{if(s.state==='verified')count++;return count;},0);
+ const canReviewSteps=['admin','manager'].includes(access?.role);
  function choose(row){
   const id=jobIdentity(row);if(!id)return;
   const next=new URLSearchParams(params);next.set('job',String(id));setParams(next,{replace:true});
@@ -111,6 +118,7 @@ export default function WorkHub(){
   catch(e){setDetailError(e.message||'Could not refresh job details.');}
   finally{setDetailLoading(false);}
  }
+ async function saveStepReview(e){e.preventDefault();if(!currentId||!stepEdit||!canReviewSteps)return;setStepBusy(true);setNoteMessage('');try{await setGuidedJobStepReview({jobId:currentId,stepId:stepEdit,state:stepState,reason:stepReason});setStepEdit('');setStepReason('');await refreshSelected();setNoteMessage('Step review saved. This is an annotation, not an artwork, QC, traveler, inventory or delivery approval.')}catch(err){setNoteMessage(err.message||'Could not save step review.')}finally{setStepBusy(false)}}
  async function saveHandoff(e){
   e.preventDefault();if(!currentId)return;
   setSavingNote(true);setNoteMessage('');
@@ -205,7 +213,7 @@ export default function WorkHub(){
         <p className="eyebrow">Recommended next step · {stepCounts} documented checkpoints</p>
         <h4>{progress.priority.title}</h4>
         <p>{progress.priority.reason}</p>
-        <Link className="sc-hub-primary-action" to={progress.priority.href}>Open the correct tool →</Link>
+        <Link className="sc-hub-primary-action" to={toJobTool(progress.priority.href)}>Open the correct tool →</Link>
        </div>
        <div className="sc-hub-meta">
         <span>{progress.indicators.itemCount} order lines</span>
@@ -223,8 +231,10 @@ export default function WorkHub(){
         {steps.map((s,i)=><div className={'sc-hub-checkpoint '+s.state} key={s.id}>
          <div className="sc-hub-checkpoint-number">{i+1}</div>
          <div><div className="sc-hub-checkpoint-heading"><strong>{s.title}</strong>
-          <span className={'sc-hub-proof '+s.state}>{stepLabels[s.state]||'Review'}</span></div>
-          <p>{s.reason}</p><Link to={s.href}>Open {s.title.toLowerCase()} →</Link>
+          <span className={'sc-hub-proof '+(reviewByStep.get(s.id)?.review_state||s.state)}>{stepLabels[reviewByStep.get(s.id)?.review_state||s.state]||'Review'}</span></div>
+          <p>{s.reason}</p>{reviewByStep.has(s.id)&&<p><small>Manager review: {reviewByStep.get(s.id).reason} · Source evidence: {stepLabels[s.state]||s.state}</small></p>}<Link to={toJobTool(s.href)}>Open {s.title.toLowerCase()} →</Link>
+          {canReviewSteps&&<button type="button" className="sc-hub-minor" onClick={()=>{setStepEdit(s.id);setStepState(reviewByStep.get(s.id)?.review_state||'review');setStepReason(reviewByStep.get(s.id)?.reason||'')}}>Update review state</button>}
+          {canReviewSteps&&stepEdit===s.id&&<form onSubmit={saveStepReview} style={{display:'grid',gap:8,marginTop:10}}><label>Review state<select value={stepState} onChange={e=>setStepState(e.target.value)}><option value="review">Needs review</option><option value="in_progress">In progress</option><option value="blocked">Blocked / action required</option>{['artwork','stock','recipe'].includes(s.id)&&<option value="not_applicable">Not applicable (N/A)</option>}</select></label><label>Reason / verification note<textarea rows={2} maxLength={1000} required minLength={8} value={stepReason} onChange={e=>setStepReason(e.target.value)} placeholder="Explain why this step is in this state"/></label><small>Review annotations do not certify work or bypass production approval and traveler enforcement.</small><div><button type="submit" disabled={stepBusy||stepReason.trim().length<8}>Save review</button> <button type="button" onClick={()=>setStepEdit('')}>Cancel</button></div></form>}
          </div>
         </div>)}
        </div>

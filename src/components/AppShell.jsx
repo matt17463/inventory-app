@@ -111,6 +111,8 @@ const SIMPLE_NAV = [
 export default function AppShell({ children }) {
   const employeeAccess=useContext(EmployeeAccessContext);
   const location = useLocation();
+  const returnJob = new URLSearchParams(location.search).get('returnJob');
+  const returnJobId = /^[1-9][0-9]*$/.test(returnJob||'') ? returnJob : null;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [advancedNav, setAdvancedNav] = useState(() => { try { return window.localStorage.getItem('sc_navigation_advanced_v1') === 'true'; } catch { return false; } });
@@ -239,7 +241,7 @@ export default function AppShell({ children }) {
             <DarkModeToggle />
           </div>
         </header>
-        <main className="sc-page-shell">{children}</main>
+        <main className="sc-page-shell">{returnJobId&&location.pathname!=='/work-hub'&&<div role="navigation" aria-label="Return to current Work Hub job" style={{padding:'10px 16px',marginBottom:12,background:'var(--sc-surface,#f0f5fa)',border:'1px solid var(--sc-border,#ccd7e3)',borderRadius:10}}><Link to={'/work-hub?job='+returnJobId} style={{fontWeight:700}}>← Return to Work Hub · Job #{returnJobId}</Link></div>}{children}</main>
         <footer aria-label="Legal information" style={{ marginTop: 'auto', padding: '16px 24px 24px', display: 'flex', gap: 18, justifyContent: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--sc-muted)' }}>
           <a href="/privacy-policy.html" style={{ textDecoration: 'underline' }}>Privacy Policy</a>
           <a href="/eula.html" style={{ textDecoration: 'underline' }}>End User License Agreement</a>

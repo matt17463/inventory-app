@@ -40,6 +40,8 @@ const JOB_STATUS_BOARD_COLUMNS = {
   on_hold: 'on_hold',
   cancelled: 'cancelled',
   canceled: 'cancelled',
+  voided: 'cancelled',
+  void: 'cancelled',
 };
 
 export function boardColumnForRow(row) {
