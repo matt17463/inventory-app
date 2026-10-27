@@ -31,7 +31,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
   for(let n=0;n<ids.length;n++){
    if(stopInspection.current)break;
    setMessage(`Inspecting ${n+1} of ${ids.length}: Woo #${ids[n]}. Only draft mapping records are saved.`);
-   try{const p=await request({action:'inspect',woo_product_id:ids[n]});if(ids.length===1)adopt(p);completed++;}catch(e){problems.push({parent:ids[n],message:e.message});}
+   try{const p=await request({action:'inspect',woo_product_id:ids[n]});if(ids.length===1)adopt(p);setCatalog(c=>({...c,plans:[{id:p.id,woo_product_id:p.woo_product_id,source_hash:p.source_hash,revision:p.revision,analysis:{mapping_complete:p.analysis.mapping_complete,mapped_choices:p.analysis.mapped_choices,total_choices:p.analysis.total_choices},updated_at:p.updated_at},...c.plans.filter(x=>x.id!==p.id)]}));completed++;}catch(e){problems.push({parent:ids[n],message:e.message});}
   }
   setInspecting(false);await load();setErrors(problems);setMessage(`Inspection ${stopInspection.current?'paused':'finished'}: ${completed} saved drafts, ${problems.length} need attention. Resume by selecting Not inspected. No WooCommerce or approval changes.`);
  }

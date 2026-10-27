@@ -55,6 +55,7 @@ export const navSections = [
       { label: 'Pull Sheet Due Dates', path: '/pullsheet-due-dates', keywords: 'due dates schedule production deadline pull sheets' },
       { label: 'Product & Client Modernization', path: '/catalog-modernization', keywords: 'legacy client migration CRM duplicate shared artwork inheritance readiness scoring reorders sublimation HTV UV laser presets' },
       { label: 'Catalog Production Readiness', path: '/catalog-production-readiness', keywords: 'bulk recipe templates product catalog backfill legacy clients customer adoption DTF garment placements approval traveler readiness' },
+      { label: 'Map Existing Woo Artwork', path: '/woo-artwork-mapping', keywords: 'WooCommerce logo migration bulk artwork mapping existing products shared graphics draft import baseline crosswalk' },
       { label: 'Production Recipe Library', path: '/manufacturing-recipes', keywords: 'manufacturing recipe placement guide tee hoodie polo DTF vinyl print measurements' },
       { label: 'QR Job Travelers', path: '/production-travelers', keywords: 'scannable recipe QR job traveler production form packaging instructions' },
       { label: 'Print Center', path: '/print-center', keywords: 'customer invoice shop invoice QR packing label 4x6 thermal Munbyn Epson print packet' },

@@ -1,7 +1,7 @@
 import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
 import {recentModernizationTutorials} from './recentModernizationTraining.js';
 import {certificationTutorial} from './certificationOperations.js';
-export const TRAINING_VERSION = '1.8.0';
+export const TRAINING_VERSION = '1.9.0';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },

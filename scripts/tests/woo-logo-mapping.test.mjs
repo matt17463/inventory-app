@@ -5,7 +5,13 @@ import {PGlite} from '@electric-sql/pglite';
 import pg from 'pg';
 import {randomUUID} from 'node:crypto';
 import {applyMappingTemplate,buildMigrationPlan,fingerprint,physicalKey,reviewMigrationEvidence} from '../../netlify/functions/_shared/wooLogoMigration.js';
+import {productionVariantIssues} from '../../netlify/functions/_shared/graphicApproval.js';
 const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+test('imported artwork can remain unmeasured in draft but cannot be production-approved until details exist',()=>{
+ assert.equal(productionVariantIssues({width_inches:null,height_inches:null,process:'Unspecified'}).length,2);
+ assert.equal(productionVariantIssues({width_inches:10,height_inches:10,process:'DTF'}).length,0);
+ assert(productionVariantIssues({width_inches:Infinity,height_inches:10,process:'DTF'}).length);
+});
 async function isolatedDatabase(){
  if(!process.env.SC_CERTIFICATION_TEST_DATABASE_URL)return new PGlite();
  const admin=new pg.Client({connectionString:process.env.SC_CERTIFICATION_TEST_DATABASE_URL});await admin.connect();
