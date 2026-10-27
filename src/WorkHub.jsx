@@ -21,7 +21,7 @@ const STAGES=[
  {id:'ready_to_ship',label:'Ready for pickup'},
  {id:'completed',label:'Completed'},
 ];
-const stepLabels={verified:'Recorded',linked:'Linked / check',attention:'Action required',review:'Review',unknown:'Not available',not_applicable:'N/A',in_progress:'In progress',blocked:'Blocked'};
+const stepLabels={verified:'Completed / verified',linked:'Evidence recorded',attention:'Action required',review:'Review',unknown:'Not available',not_applicable:'N/A',in_progress:'In progress',blocked:'Blocked'};
 const formatDate=v=>{if(!v)return 'No due date';const date=/^\d{4}-\d{2}-\d{2}$/.test(v)?new Date(v+'T12:00:00'):new Date(v);return Number.isNaN(date.getTime())?String(v):date.toLocaleDateString();};
 const labelJob=r=>r?.woo_order_number?'Woo #'+r.woo_order_number:
   r?.woocommerce_order_id?'Woo #'+r.woocommerce_order_id:
@@ -119,6 +119,29 @@ export default function WorkHub(){
   finally{setDetailLoading(false);}
  }
  async function saveStepReview(e){e.preventDefault();if(!currentId||!stepEdit||!canReviewSteps)return;setStepBusy(true);setNoteMessage('');try{await setGuidedJobStepReview({jobId:currentId,stepId:stepEdit,state:stepState,reason:stepReason});setStepEdit('');setStepReason('');await refreshSelected();setNoteMessage('Step review saved. This is an annotation, not an artwork, QC, traveler, inventory or delivery approval.')}catch(err){setNoteMessage(err.message||'Could not save step review.')}finally{setStepBusy(false)}}
+ async function verifyPhysicalPull(){
+  if(!canReviewSteps||!currentId||!progress?.stockReserved||progress.physicalPullVerified)return;
+  if(!window.confirm('Confirm you physically checked the actual blank item, style, color and quantity for EVERY active order line against the pull sheet? Stock reservation alone is not sufficient.'))return;
+  const required=(detail?.items||[]).filter(i=>i.inventory_required!==false);
+  const signature=required.map(i=>[i.id,i.quantity,i.blank_product_id].join(':')).sort().join('|');
+  setStepBusy(true);setNoteMessage('');
+  try{
+   await addGuidedJobNote({jobId:currentId,kind:'production_note',note:'WorkHub physical pull verified: '+signature});
+   await refreshSelected();setNoteMessage('Physical pull verification recorded for the current exact blank identities and quantities. This does not deduct inventory.');
+  }catch(e){setNoteMessage(e.message||'Could not verify the physical pull.');}
+  finally{setStepBusy(false);}
+ }
+ async function setWorkflowType(type){
+  if(!canReviewSteps||!currentId||!['blank_only','decorated','mixed'].includes(type))return;
+  const message=type==='blank_only'?'Confirm every active order line is an undecorated blank item? This changes Work Hub guidance only; it does not bypass invoice, stock, packing or shipping checks.':'Confirm the selected workflow type for this order?';
+  if(!window.confirm(message))return;
+  setStepBusy(true);setNoteMessage('');
+  try{
+   await addGuidedJobNote({jobId:currentId,kind:'production_note',note:'WorkHub workflow: '+type+' | Manager reviewed all active order lines.'});
+   await refreshSelected();setNoteMessage('Workflow guidance updated. Source production, approval and fulfillment controls are unchanged.');
+  }catch(e){setNoteMessage(e.message||'Could not save workflow classification.');}
+  finally{setStepBusy(false);}
+ }
  async function saveHandoff(e){
   e.preventDefault();if(!currentId)return;
   setSavingNote(true);setNoteMessage('');
@@ -209,6 +232,17 @@ export default function WorkHub(){
       {detailLoading&&<p role="status">Reading order, artwork, inventory, traveler and QC records…</p>}
       {detailError&&<p role="alert" className="message">{detailError} <Link to="/production-board">Open Production Board</Link></p>}
       {progress&&<>
+       <section className="card" aria-label="Order workflow applicability">
+        <h4>Order workflow: {progress.workflow==='blank_only'?'Blank items only':progress.workflow==='decorated'?'Decorated production':progress.workflow==='mixed'?'Mixed blanks and decoration':'Needs classification'}</h4>
+        <p>For blank-only orders, artwork, recipes, manufacturing and decoration QC are not needed. Stock reservations, physical pull confirmation, packing and delivery still require their own evidence.</p>
+        {progress.stockReserved&&<p><strong>Stock:</strong> {progress.physicalPullVerified?'Physical pull verified against current ordered quantities.':'Required blanks reserved; physical pull has not been verified in Work Hub.'}</p>}
+        {canReviewSteps&&progress.stockReserved&&!progress.physicalPullVerified&&<button type="button" disabled={stepBusy} onClick={verifyPhysicalPull}>Confirm physical stock pull</button>}
+        {canReviewSteps&&<div className="sc-button-row">
+         <button type="button" disabled={stepBusy} onClick={()=>setWorkflowType('blank_only')}>Confirm blank-only order</button>
+         <button type="button" disabled={stepBusy} onClick={()=>setWorkflowType('decorated')}>Decorated order</button>
+         <button type="button" disabled={stepBusy} onClick={()=>setWorkflowType('mixed')}>Mixed order</button>
+        </div>}
+       </section>
        <div className={'sc-hub-priority '+progress.priority.kind}>
         <p className="eyebrow">Recommended next step · {stepCounts} documented checkpoints</p>
         <h4>{progress.priority.title}</h4>
@@ -231,7 +265,7 @@ export default function WorkHub(){
         {steps.map((s,i)=><div className={'sc-hub-checkpoint '+s.state} key={s.id}>
          <div className="sc-hub-checkpoint-number">{i+1}</div>
          <div><div className="sc-hub-checkpoint-heading"><strong>{s.title}</strong>
-          <span className={'sc-hub-proof '+(reviewByStep.get(s.id)?.review_state||s.state)}>{stepLabels[reviewByStep.get(s.id)?.review_state||s.state]||'Review'}</span></div>
+          <span className={'sc-hub-proof '+(s.state==='not_applicable'?s.state:reviewByStep.get(s.id)?.review_state||s.state)}>{stepLabels[reviewByStep.get(s.id)?.review_state||s.state]||'Review'}</span></div>
           <p>{s.reason}</p>{reviewByStep.has(s.id)&&<p><small>Manager review: {reviewByStep.get(s.id).reason} · Source evidence: {stepLabels[s.state]||s.state}</small></p>}<Link to={toJobTool(s.href)}>Open {s.title.toLowerCase()} →</Link>
           {canReviewSteps&&<button type="button" className="sc-hub-minor" onClick={()=>{setStepEdit(s.id);setStepState(reviewByStep.get(s.id)?.review_state||'review');setStepReason(reviewByStep.get(s.id)?.reason||'')}}>Update review state</button>}
           {canReviewSteps&&stepEdit===s.id&&<form onSubmit={saveStepReview} style={{display:'grid',gap:8,marginTop:10}}><label>Review state<select value={stepState} onChange={e=>setStepState(e.target.value)}><option value="review">Needs review</option><option value="in_progress">In progress</option><option value="blocked">Blocked / action required</option>{['artwork','stock','recipe'].includes(s.id)&&<option value="not_applicable">Not applicable (N/A)</option>}</select></label><label>Reason / verification note<textarea rows={2} maxLength={1000} required minLength={8} value={stepReason} onChange={e=>setStepReason(e.target.value)} placeholder="Explain why this step is in this state"/></label><small>Review annotations do not certify work or bypass production approval and traveler enforcement.</small><div><button type="submit" disabled={stepBusy||stepReason.trim().length<8}>Save review</button> <button type="button" onClick={()=>setStepEdit('')}>Cancel</button></div></form>}
