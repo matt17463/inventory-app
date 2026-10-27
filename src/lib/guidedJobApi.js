@@ -7,12 +7,11 @@ function successOrUnavailable(key,result,unavailable){
 export async function loadGuidedJobEvidence(jobId){
  const numeric=Number(jobId);
  if(!Number.isSafeInteger(numeric)||numeric<=0)throw Error('Select a valid production job.');
- const [jobResult,itemsResult,reservationsResult,travelersResult,travelerLinesResult,qcResult,handoffsResult,notesResult,fulfillmentResult,artworkLinksResult,photosResult,packingResult,pickupResult,revisionChecksResult,deliveryResult,customerMessagesResult,stepReviewResult]=await Promise.all([
+ const [jobResult,itemsResult,reservationsResult,travelersResult,qcResult,handoffsResult,notesResult,fulfillmentResult,artworkLinksResult,photosResult,packingResult,pickupResult,revisionChecksResult,deliveryResult,customerMessagesResult,stepReviewResult]=await Promise.all([
    supabase.from('jobs').select('id,customer_name,job_name,order_source,status,due_date,woocommerce_order_id,manual_order_id,woo_order_number,woo_payment_status,payment_received,source_invoice_number,production_started_at,production_completed_at,production_priority,notes').eq('id',numeric).single(),
    supabase.from('job_items').select('id,job_id,quantity,status,blank_product_id,inventory_required,order_sku,sku,ordered_product_name,item_name,selected_color,selected_size,pairing_warning').eq('job_id',numeric).order('id').limit(500),
    supabase.from('inventory_reservations').select('id,job_id,job_item_id,quantity,quantity_reserved,status,blank_product_id').eq('job_id',numeric).limit(500),
    supabase.from('sc_job_travelers').select('id,job_id,job_item_id,recipe_version_id,created_at,superseded_at').eq('job_id',numeric).is('superseded_at',null).limit(500),
-   supabase.from('sc_job_traveler_lines').select('traveler_id,job_item_id,superseded_at').is('superseded_at',null).limit(2000),
    supabase.from('phase5_qc_checklists').select('id,job_id,passed,qc_completed_at,created_at').eq('job_id',numeric).order('created_at',{ascending:false}).limit(60),
    supabase.from('sc_approval_production_handoffs').select('id,source_system,artwork_title,approved_file_url,automation_status,production_job_id,created_at').eq('production_job_id',String(numeric)).limit(60),
    supabase.from('sc_job_work_handoffs').select('id,job_id,kind,note,created_by,created_at').eq('job_id',numeric).order('created_at',{ascending:false}).limit(50),
@@ -34,11 +33,12 @@ export async function loadGuidedJobEvidence(jobId){
  if(reservations.length===500)unavailable.reservations='More than 500 reservations; see Purchasing.';
  const travelers=successOrUnavailable('travelers',travelersResult,unavailable);
  if(travelers.length===500)unavailable.travelers='More than 500 traveler records; see traveler page.';
- const allTravelerLines=successOrUnavailable('travelerLines',travelerLinesResult,unavailable);
- if(allTravelerLines.length===2000)unavailable.travelerLines='Traveler line history exceeded review limit.';
- const currentTravelerIds=new Set(travelers.map(t=>String(t.id)));
- const travelerLines=allTravelerLines.filter(line=>currentTravelerIds.has(String(line.traveler_id)));
-  const qc=successOrUnavailable('qc',qcResult,unavailable);
+ const travelerIds=travelers.map(t=>t.id);
+ const travelerLinesResult=travelerIds.length?await supabase.from('sc_job_traveler_lines')
+   .select('traveler_id,job_item_id,superseded_at').in('traveler_id',travelerIds).is('superseded_at',null).limit(2000):{data:[],error:null};
+ const travelerLines=successOrUnavailable('travelerLines',travelerLinesResult,unavailable);
+ if(travelerLines.length===2000)unavailable.travelerLines='Traveler line coverage exceeded review limit.';
+ const qc=successOrUnavailable('qc',qcResult,unavailable);
  if(qc.length===60)unavailable.qc='Only most recent 60 inspections were checked.';
  const handoffs=successOrUnavailable('handoffs',handoffsResult,unavailable);
  if(handoffs.length===60)unavailable.handoffs='Only first 60 artwork handoffs were checked.';
