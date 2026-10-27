@@ -88,6 +88,16 @@ export default function CatalogProductionReadiness(){
  if(sortMode==='sales')return (Number(activity[b.woocommerce_product_id]?.units_90d)||0)-(Number(activity[a.woocommerce_product_id]?.units_90d)||0);const urgent=(f)=>Number(blockers.has(Number(f.woocommerce_product_id))&&demand.has(Number(f.woocommerce_product_id)))*100000+(demand.get(Number(f.woocommerce_product_id))||0)*1000+(Number(activity[f.woocommerce_product_id]?.units_90d)||0)*20+Number(f.missing_blank_rows||0);return urgent(b)-urgent(a);}),[families,search,status,sortMode,demand,blockers,activity]);
  const selected=families.find(x=>Number(x.woocommerce_product_id)===Number(familyId));
  const selectedArtwork=selected?artworkByProduct.get(Number(selected.woocommerce_product_id)):null;
+ const linkedMockups=selected?mockupProjects.filter(p=>Number(p.woo_product_id)===Number(selected.woocommerce_product_id)):[];
+ const readinessEvidence=selected?{
+  mappings:Number(selected.missing_blank_rows)===0,
+  artwork:Boolean(selectedArtwork?.flags?.artwork&&selectedArtwork?.artwork?.artwork_asset_id),
+  recipe:selected.readiness==='approved',
+  mockup:linkedMockups.some(p=>(mockupDetails[p.id]?.outputs||[]).some(o=>o.is_selected&&o.approval_status==='internal_approved')),
+  customer:linkedMockups.some(p=>(mockupDetails[p.id]?.outputs||[]).some(o=>o.is_selected&&o.approval_status==='internal_approved'&&(mockupDetails[p.id]?.reviews||[]).some(r=>String(r.output_id)===String(o.id)&&['approved','approve','accepted'].includes(String(r.decision||'').toLowerCase()))))
+ }:null;
+ const fullyVerified=Boolean(readinessEvidence&&Object.values(readinessEvidence).every(Boolean));
+
  const ready=(state?.versions||[]).filter(v=>v.status==='approved');
  const approvedRecipeIds=new Set(ready.map(v=>v.recipe_id));
  async function run(input,done){
@@ -198,6 +208,10 @@ export default function CatalogProductionReadiness(){
       <h2>{titleFor(selected)}</h2>
       <section className="card elevated-card" aria-label="Guided product modernization wizard">
        <h3>Guided product setup</h3>
+       <p role="status"><strong>Read-only readiness audit:</strong> {fullyVerified?'All currently modeled evidence checks passed; verify variation and production traveler before release.':'Not certified for managed production. Missing evidence must be resolved.'}</p>
+       {readinessEvidence&&<ul>{Object.entries(readinessEvidence).map(([name,passed])=><li key={name}>{passed?'✓':'Needs evidence'} — {name==='customer'?'Customer approval of exact selected output':name==='mockup'?'Internally approved selected mockup':name==='mappings'?'Blank mappings':name==='artwork'?'Linked artwork review':'Approved recipe'}</li>)}</ul>}
+       <small>This evidence panel is advisory and never changes production eligibility or writes a certification. Product variations, customer authority, revisions and travelers require independent validation.</small>
+
        <p>Complete these six reviews in order. The wizard remembers the selected product while you move through the steps. A linked recipe alone is not proof that a product is fully ready.</p>
        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
         {SETUP_STEPS.map((s,i)=><button key={s.title} type="button" aria-current={setupStep===i?'step':undefined} onClick={()=>setSetupStep(i)} style={{fontWeight:setupStep===i?700:400}}>{i+1}{setupStep===i?' · Current':''}</button>)}
@@ -233,9 +247,9 @@ export default function CatalogProductionReadiness(){
        {setupStep===4&&<div><p><strong>Mockup evidence:</strong> {artworkError?'Not available':!artworkAudit?'Loading…':selectedArtwork?.flags?.mockup?'Reviewed mockup flag is recorded':'No approved mockup flag found'}.</p><p>Customer sign-off and exact placement still require review in the source workflow.</p><p><Link to="/mockup-studio">Open mockup and customer approval →</Link></p></div>}
               {setupStep===4&&<section aria-label="Related mockup projects">
         <h4>Related mockup projects for this WooCommerce product</h4>
-        <p>Only project names explicitly containing this product's Woo ID are treated as candidates. A matching project title is not evidence of customer approval.</p>
+        <p>Only projects with the exact stored WooCommerce product ID are shown. Matching names are not accepted as product identity or approval evidence.</p>
         {mockupError&&<p role="alert">Could not load mockup projects: {mockupError}</p>}
-        {mockupProjects.filter(p=>new RegExp('\\bWoo\\s*#?'+String(selected.woocommerce_product_id)+'\\b','i').test(String(p.project_name||''))).slice(0,15).map(project=><div key={project.id} className="sc-cr-listline">
+        {mockupProjects.filter(p=>Number(p.woo_product_id)===Number(selected.woocommerce_product_id)).slice(0,15).map(project=><div key={project.id} className="sc-cr-listline">
          <strong>{project.project_name}</strong>
          <span>{project.status||'Status unknown'}</span>
          <Link to={'/mockup-studio?project='+encodeURIComponent(project.id)}>Open project and approval history →</Link>
@@ -254,7 +268,7 @@ export default function CatalogProductionReadiness(){
           <p>Review customer responses and exact output revision in Mockup Studio. Never treat a link creation or an internal decision as customer approval.</p>
          </div>}
         </div>)}
-        {!mockupProjects.some(p=>new RegExp('\\bWoo\\s*#?'+String(selected.woocommerce_product_id)+'\\b','i').test(String(p.project_name||'')))&&!mockupError&&<p>No explicitly Woo-ID-linked mockup project was found. Open Mockup Studio to verify whether the product's mockup lives under a different project name.</p>}
+        {!mockupProjects.some(p=>Number(p.woo_product_id)===Number(selected.woocommerce_product_id))&&!mockupError&&<p>No mockup project has a verified WooCommerce product ID linking it to this product. Older unlinked projects require an explicit association before certification.</p>}
        </section>}
        {setupStep===5&&<p>{fmt(demand.get(Number(selected.woocommerce_product_id))||0)} units appear in currently open production jobs. Use the traveler preview tab to check each eligible line.</p>}
 
