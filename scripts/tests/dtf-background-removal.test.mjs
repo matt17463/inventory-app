@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { readFileSync } from 'node:fs';
-import { detectEdgeBackground, removeDtfBackground, inspectPngAlpha, validateDtfTransparency } from '../../src/lib/dtfBackgroundRemoval.js';
+import { detectEdgeBackground, removeDtfBackground, inspectPngAlpha, validateDtfTransparency, applyDtfMaskStrokes } from '../../src/lib/dtfBackgroundRemoval.js';
 import { setPngDpi } from '../../src/lib/dtfPreflight.js';
 const pixels=(w,h,color=[255,255,255,255])=>{
   const array=new Uint8ClampedArray(w*h*4);
@@ -116,4 +116,39 @@ test('the studio uses original-source background cleanup and presents click-to-p
   assert.match(jsx,/Remove background automatically/);
   assert.match(jsx,/Click the unwanted background in SOURCE/);
   assert.match(jsx,/background_removed:render\.backgroundResult\.removed>0/);
+});
+
+test('manual erase brush makes JPEG-like opaque pixels truly transparent while preserving original',()=>{
+  const w=9,h=9,source=pixels(w,h,[210,175,98,255]),working=new Uint8ClampedArray(source);
+  const result=applyDtfMaskStrokes(working,source,w,h,[{kind:'erase',x:4,y:4,r:2}]);
+  assert.ok(result.erased>=9);
+  assert.deepEqual(at(working,w,4,4),[0,0,0,0]);
+  assert.deepEqual(at(working,w,0,0),[210,175,98,255]);
+  assert.deepEqual(at(source,w,4,4),[210,175,98,255]);
+});
+test('restore brush recovers original artwork after automated removal without modifying original pixels',()=>{
+  const w=9,h=9,source=pixels(w,h),working=new Uint8ClampedArray(source);
+  const change=removeDtfBackground(working,w,h,{mode:'white',tolerance:15,feather:0});
+  assert.equal(change.removed,81);
+  applyDtfMaskStrokes(working,source,w,h,[{kind:'restore',x:4,y:4,r:2}]);
+  assert.deepEqual(at(working,w,4,4),[255,255,255,255]);
+  assert.deepEqual(at(working,w,0,0),[0,0,0,0]);
+});
+test('manual mask replay is deterministic and clearing strokes recovers original source',()=>{
+  const w=11,h=11,src=pixels(w,h,[200,30,60,255]),one=new Uint8ClampedArray(src),two=new Uint8ClampedArray(src);
+  const strokes=[{kind:'erase',x:3,y:3,r:3},{kind:'restore',x:3,y:3,r:1},{kind:'erase',x:8,y:8,r:2}];
+  applyDtfMaskStrokes(one,src,w,h,strokes);
+  applyDtfMaskStrokes(two,src,w,h,strokes);
+  assert.deepEqual(one,two);
+  const clear=new Uint8ClampedArray(src);
+  applyDtfMaskStrokes(clear,src,w,h,[]);
+  assert.deepEqual(clear,src);
+});
+test('UI provides non-destructive mask editing and stores mask recipe for reproducible R2 revisions',()=>{
+  const jsx=readFileSync(new URL('../../src/DTFPrepStudio.jsx',import.meta.url),'utf8');
+  assert.match(jsx,/applyDtfMaskStrokes/);
+  assert.match(jsx,/Erase to transparency/);
+  assert.match(jsx,/Restore original design pixels/);
+  assert.match(jsx,/maskStrokes/);
+  assert.match(jsx,/onPointerMove/);
 });
