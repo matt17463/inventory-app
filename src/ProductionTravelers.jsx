@@ -16,6 +16,23 @@ const eventKinds=[
 ];
 const display=(value)=>String(value||'').replaceAll('_',' ');
 const itemLabel=(item)=>item?.ordered_product_name||item?.item_name||item?.name||item?.order_sku||('Line '+item?.id);
+// Legacy Woo SKUs contain a trailing graphic choice. Show it as an UNVERIFIED hint,
+// never as authorization or an authoritative canonical artwork selection.
+const legacyGraphicHint=item=>{
+ const sku=String(item?.order_sku||item?.sku||'');
+ const markers=['-EAST-PORT-ORCHARD-','-EPO-ORCAS-'];
+ const upper=sku.toUpperCase();
+ const marker=markers.find(m=>upper.includes(m));
+ return marker?sku.slice(upper.indexOf(marker)+1).replace(/-/g,' '):'';
+};
+const travelerLineIdentity=item=>[
+ 'Line #'+item.id,
+ item.color?'Color: '+item.color:'',
+ item.size?'Size: '+item.size:'',
+ 'SKU: '+(item.order_sku||item.sku||'not recorded'),
+ legacyGraphicHint(item)?'Legacy logo hint (verify): '+legacyGraphicHint(item):'Graphic: confirm original order / approved selection'
+].filter(Boolean);
+
 const safeError=(err)=>err?.message||'Could not load production traveler.';
 export default function ProductionTravelers() {
   const {travelerId}=useParams();
@@ -268,10 +285,16 @@ export default function ProductionTravelers() {
             <input type="checkbox" value={item.id} checked={selectedItemIds.includes(Number(item.id))}
               onChange={e=>setSelectedItemIds(old=>e.target.checked?[...old,Number(item.id)]:old.filter(x=>x!==Number(item.id)))}
               disabled={claimedItemIds.includes(Number(item.id))} />
-            <span>{itemLabel(item)} · {item.color||''} {item.size||''} · Qty {item.quantity}
-              {claimedItemIds.includes(Number(item.id))?' — traveler exists':''}</span>
+            <span><strong>{itemLabel(item)} · Qty {item.quantity}</strong>
+              {claimedItemIds.includes(Number(item.id))?' — traveler exists':''}
+              <small style={{display:'block',whiteSpace:'normal',overflowWrap:'anywhere',lineHeight:1.55}}>{travelerLineIdentity(item).map((part,i)=><span key={i} style={{display:'block'}}>{part}</span>)}</small>
+            </span>
           </label>)}
           {!items.length&&<p>There are no linked production line items for this job.</p>}
+          {items.length>1&&<div className="sc-traveler-line-helper"><p><strong>Different logos or production instructions?</strong> Create one traveler for each compatible group. The displayed legacy logo is inferred from the old SKU and must be verified against the original Woo order; it does not grant artwork approval.</p>
+            <button type="button" onClick={()=>setSelectedItemIds([])}>Clear selected lines</button>
+            {Array.from(new Set(items.map(legacyGraphicHint).filter(Boolean))).map(hint=><button key={hint} type="button" onClick={()=>setSelectedItemIds(items.filter(i=>legacyGraphicHint(i)===hint&&!claimedItemIds.includes(Number(i.id))).map(i=>Number(i.id)))}>Select legacy group: {hint}</button>)}
+          </div>}
         </div></div>}
         {jobId&&<div><h3>Existing travelers</h3>
           {travelerList.map(t=><p key={t.id}><Link to={'/production-travelers/'+t.id}>Open traveler (primary line #{t.job_item_id}) →</Link></p>)}
@@ -280,7 +303,7 @@ export default function ProductionTravelers() {
       </section>
       <section className="card elevated-card">
         <h2>Create a QR production form</h2>
-        {chosenItems.length?<p><strong>{chosenItems.length} order lines</strong> · {selectedQuantity} total garments selected</p>:<p>Select all compatible job lines that share this exact approved recipe and artwork.</p>}
+        {chosenItems.length?<p><strong>{chosenItems.length} order lines</strong> · {selectedQuantity} total garments selected</p>:<p>Select only compatible lines sharing an approved recipe, logo, and placement. Create additional travelers for different logos or production instructions.</p>}
         <label>Physically approved recipe revision<select value={versionId} onChange={e=>setVersionId(e.target.value)}>
           <option value="">Choose an approved version</option>
           {selectableVersions.map(v=><option key={v.id} value={v.id}>{v.recipe?.name||'Recipe'} — Rev {v.revision}, {v.recipe?.garment_type||''}</option>)}
