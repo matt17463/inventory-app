@@ -80,13 +80,13 @@ export function deriveGuidedProgress(row,evidence={}){
   Number(latestPacking.get(Number(i.id))?.packed_quantity??-1)===Number(i.quantity||0));
  const hasPacking=packingComplete||fulfillment.some(f=>f.kind==='packing_checked');
  const handedOff=pickup.length>0||fulfillment.some(f=>['picked_up','shipped'].includes(f.kind));
+ const missing=evidence.unavailable||{};
  const coveredLines=new Set([...travelers.map(t=>Number(t.job_item_id)),...travelerLines.map(t=>Number(t.job_item_id))].filter(Number.isSafeInteger));
  const coveredRequired=required.filter(i=>coveredLines.has(Number(i.id))).length;
  const allTraveled=required.length>0&&coveredRequired===required.length&&!missing.travelers&&!missing.travelerLines;
  const productionStarted=producing.has(status)||Boolean(job.production_started_at);
  const pastQc=qcStage.has(status);
  const actualCompletion=completed||Boolean(job.production_completed_at);
- const missing=evidence.unavailable||{};
  const steps=[];
  function add(id,state,title,detail,href){
    const base=GUIDED_STEPS.find(s=>s.id===id);
