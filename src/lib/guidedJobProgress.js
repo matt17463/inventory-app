@@ -65,6 +65,7 @@ export function deriveGuidedProgress(row,evidence={}){
   const id=Number(r.job_item_id);reservationQty.set(id,(reservationQty.get(id)||0)+Number(r.quantity_reserved||0));
  }
  const stockReserved=required.length>0&&!unpaired.length&&required.every(i=>(reservationQty.get(Number(i.id))||0)>=Number(i.quantity||0));
+ const physicalPullVerified=stockReserved&&notes.some(n=>clean(n.note).startsWith('workhub physical pull verified: '));
  const latestQc=[...qc].sort((a,b)=>new Date(b.qc_completed_at||b.created_at||0)-new Date(a.qc_completed_at||a.created_at||0))[0];
  const qcPassed=latestQc?.passed===true;
  const artworkLinked=artworkLinks.some(x=>Boolean(x.handoff?.approved_file_url)) || handoffs.some(h=>Boolean(h.approved_file_url));
@@ -101,7 +102,7 @@ export function deriveGuidedProgress(row,evidence={}){
     'No approved artwork file was found linked to this job; confirm approval in the artwork workflow.',
     '/approval-automation');
  add('stock',missing.items||missing.reservations?'unknown':
-    unpaired.length?'attention':!required.length?'not_applicable':stockReserved?'linked':'review',null,
+    unpaired.length?'attention':!required.length?'not_applicable':physicalPullVerified?'verified':stockReserved?'linked':'review',null,
     missing.items||missing.reservations?'Inventory detail is unavailable; open the Purchasing Report.':
     unpaired.length?unpaired.length+' line(s) have no paired blank product. Correct mapping before pulling stock.':
     !required.length?'No inventory-required blanks in the job.':'Blanks are paired; '+reservations.length+
@@ -128,7 +129,7 @@ export function deriveGuidedProgress(row,evidence={}){
     'No recorded packing or customer handoff. QC and completion alone do not prove delivery.',
     jobId?'/work-hub?job='+jobId:'/production-board');
  if(cancelledJob)return {steps,priority:{title:'Order cancelled / on hold',reason:'Do not produce. Confirm cancellation and reservation release in the Production Board.',href:'/production-board',kind:'blocked'},
-   notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,travelers:travelers.length,activeReservations:reservations.length,qcPassed},workflow,stockReserved,isWoo,manual,completed,cancelled:true,blankOnly};
+   notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,travelers:travelers.length,activeReservations:reservations.length,qcPassed},workflow,stockReserved,physicalPullVerified,isWoo,manual,completed,cancelled:true,blankOnly};
  const hardBlock=Array.isArray(row?.blocking_issues)?row.blocking_issues:[];
  const blockerMessage=hardBlock.map(x=>typeof x==='string'?x:x?.message||x?.reason).filter(Boolean).slice(0,4);
  let priority;
