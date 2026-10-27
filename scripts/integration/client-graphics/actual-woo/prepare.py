@@ -5,6 +5,7 @@ root=Path(__file__).resolve().parents[4]
 out=Path(sys.argv[1]).resolve()
 if out.exists(): raise SystemExit('Fixture path must not exist')
 out.mkdir(parents=True)
+(out/'.sc-fictional-woo').write_text('Fresh noncustomer local WordPress fixture\n')
 archives=[('wordpress','https://wordpress.org/wordpress-7.1.3.zip',out),('woocommerce','https://downloads.wordpress.org/plugin/woocommerce.11.2.1.zip',out/'wordpress/wp-content/plugins'),('sqlite','https://downloads.wordpress.org/plugin/sqlite-database-integration.3.1.1.zip',out/'wordpress/wp-content/plugins')]
 for name,url,target in archives:
     archive=out/(name+'.zip')

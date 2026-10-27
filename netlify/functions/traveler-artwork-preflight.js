@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { r2BucketName, r2Client, safeObjectKey } from './_shared/mockupStorage.js';
+import {matchingRevision,verifyRegisteredArtwork} from './_shared/artworkIntegrity.js';
 
 const isUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value||''));
 
@@ -58,6 +59,8 @@ export async function handler(event) {
     const { data: assets, error } = await auth.supabase.from('mockup_artwork_assets')
       .select('id,storage_provider,storage_bucket,storage_path,preflight_status,updated_at').in('id',ids);
     if (error) throw error;
+    const {data:revisions,error:revisionError}=await auth.supabase.from('sc_artwork_object_revisions').select('*').in('artwork_asset_id',ids);
+    if(revisionError)throw revisionError;
     const byId = new Map((assets || []).map(asset => [asset.id, asset]));
     for (const id of ids) {
       const a = byId.get(id);
@@ -85,6 +88,8 @@ export async function handler(event) {
       } else {
         return jsonResponse(409,{message:'Unsupported artwork storage provider',asset_id:id},event);
       }
+      const pin=matchingRevision(a,revisions||[]);
+      if(pin)await verifyRegisteredArtwork(auth.supabase,a,pin,auth.user.id);
     }
     // Only this authenticated service-role handler may issue a receipt; users cannot insert one.
     // Match the SQL trigger's deterministic, per-line storage reference fingerprint.
@@ -109,6 +114,7 @@ export async function handler(event) {
     }
     return jsonResponse(200,{verified:true,artwork_asset_ids:ids,expires_in_seconds:120},event);
   } catch (e) {
+    if(e.code==='ARTWORK_INTEGRITY_CHANGED')return jsonResponse(409,{message:e.message},event);
     console.error('Traveler artwork preflight unavailable',e);
     return jsonResponse(503,{message:'Artwork storage verification is unavailable; traveler creation must remain blocked'},event);
   }

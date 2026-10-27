@@ -1,0 +1,25 @@
+name: Isolated production activation acceptance
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  actual-local-woocommerce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix scripts/integration/client-graphics
+      - name: Prepare fresh fictional WordPress and WooCommerce with external side effects blocked
+        run: python3 scripts/integration/client-graphics/actual-woo/prepare.py "$RUNNER_TEMP/sc-activation-woo"
+      - name: Run real local cart, checkout, webhook builder and application capture pipeline
+        run: node scripts/integration/client-graphics/run-local-woo.mjs "$RUNNER_TEMP/sc-activation-woo"
+      - name: Verify current endpoint and SQL storage receipt compatibility
+        run: node --experimental-test-module-mocks scripts/integration/client-graphics/verify-storage-endpoint.mjs

@@ -62,8 +62,8 @@ async function browserPreview(file, maxPixels = 800) {
   }
 }
 
-async function putPresigned(url, blob, contentType) {
-  const response = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+async function putPresigned(url, blob, contentType, requiredHeaders = {}) {
+  const response = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType,...requiredHeaders }, body: blob });
   if (!response.ok) throw new Error(`R2 upload failed (HTTP ${response.status}). Confirm the R2 CORS configuration and Netlify environment variables.`);
 }
 
@@ -77,8 +77,8 @@ async function uploadFile({ file, bucket, projectId, folder }) {
       filename: file.name || 'asset', content_type: file.type || 'application/octet-stream', file_size: file.size,
       preview_content_type: preview ? 'image/webp' : null,
     });
-    await putPresigned(upload.upload_url, file, file.type || 'application/octet-stream');
-    if (preview && upload.preview_upload_url) await putPresigned(upload.preview_upload_url, preview, 'image/webp');
+    await putPresigned(upload.upload_url, file, file.type || 'application/octet-stream',upload.upload_headers);
+    if (preview && upload.preview_upload_url) await putPresigned(upload.preview_upload_url, preview, 'image/webp',upload.upload_headers);
     return {
       storage_provider: 'r2', storage_bucket: upload.bucket, storage_path: upload.path, file_size_bytes: file.size,
       preview_storage_provider: preview ? 'r2' : null,

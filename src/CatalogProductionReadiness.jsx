@@ -207,6 +207,7 @@ export default function CatalogProductionReadiness(){
        <p>Authoritative certification and current blockers are available in step six for each individual variation.</p>
 
        <p>Complete these six reviews in order. The wizard remembers the selected product while you move through the steps. A linked recipe alone is not proof that a product is fully ready.</p>
+       <aside aria-label="Certification operator help"><strong>First time through?</strong> <Link to="/application-guide">Open the Application Guide</Link> and search “Product certification”. Confirm exact variation → physical blank → authorized artwork → tested recipe → customer proof → certification → traveler. A manager records file checksums in the final step. Work Hub N/A reviews never replace source approval. Keep revised files and superseded travelers in history.</aside>
        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
         {SETUP_STEPS.map((s,i)=><button key={s.title} type="button" aria-current={setupStep===i?'step':undefined} onClick={()=>setSetupStep(i)} style={{fontWeight:setupStep===i?700:400}}>{i+1}{setupStep===i?' · Current':''}</button>)}
        </div>

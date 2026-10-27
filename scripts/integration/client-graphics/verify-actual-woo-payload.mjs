@@ -1,3 +1,4 @@
+import {applyCurrentStorageGuard} from './fixture.mjs';
 // Real WooCommerce output -> real reconciliation and traveler SQL. Object storage is simulated.
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
@@ -19,6 +20,7 @@ mock.module('../../../netlify/functions/_shared/security.js',{namedExports:{auth
 mock.module('../../../netlify/functions/_shared/mockupStorage.js',{namedExports:{r2BucketName:()=>'fictional-r2-test',safeObjectKey:k=>k,r2Client:()=>({send:async c=>{assert.equal(c.input.Bucket,'fictional-r2-test');assert(['fixtures/front.png','fixtures/youth.png'].includes(c.input.Key));heads.push(c.input);return {ContentLength:256}}})}});
 const preflight=(await import('../../../netlify/functions/traveler-artwork-preflight.js')).handler;
 await db.exec(await readFile(new URL('../../../supabase/migrations/202610250005_traveler_storage_preflight.sql',import.meta.url),'utf8'));
+await applyCurrentStorageGuard(db);
 for(const l of order.line_items)await db.query("insert into sc_client_graphic_product_bindings(woo_product_id,graphic_family_id,mode,allowed,verified_at) values($1,$2,'selectable',true,now())",[l.product_id,l.graphic_selection.familyId]);
 await db.query("insert into sc_client_graphic_variants(id,family_id,artwork_asset_id,label,state,width_inches,height_inches) values($1,$2,$3,'Youth away','approved',8,8)",[uid(141),uid(21),uid(12)]);
 await db.query("insert into sc_client_graphic_rules(family_id,variant_id,size_group,placement_name,enabled) values($1,$2,'youth','full_front',true)",[uid(21),uid(141)]);

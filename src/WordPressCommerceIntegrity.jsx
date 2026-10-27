@@ -23,10 +23,11 @@ export default function WordPressCommerceIntegrity(){
  const access=useContext(EmployeeAccessContext);
  const allowed=access?.role==='admin'||access?.role==='manager';
  const [result,setResult]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [productId,setProductId]=useState('');
  async function check(){
   setBusy(true);setError('');
   try{
-   const res=await authenticatedFunctionFetch('/.netlify/functions/wordpress-commerce-integrity',{method:'GET'});
+   const res=await authenticatedFunctionFetch('/.netlify/functions/wordpress-commerce-integrity'+(productId?'?product_id='+encodeURIComponent(productId):''),{method:'GET'});
    const data=await res.json().catch(()=>({}));
    if(!res.ok||!data.success)throw Error(data.error||'The WordPress read-only check could not run.');
    setResult(data);
@@ -44,13 +45,24 @@ export default function WordPressCommerceIntegrity(){
    <div><p className="eyebrow">Tools & Admin / Read-only diagnostic</p>
     <h1>WordPress Commerce Integrity</h1>
     <p>Investigate client storefront version drift, SKU ownership conflicts, and overlapping shipping rules without changing real products, checkout rates, or customer orders.</p></div>
-   <div><button type="button" disabled={busy} onClick={check}>{busy?'Checking…':'Run read-only checks'}</button></div>
+   <div><label>Optional Woo parent product ID<input inputMode="numeric" value={productId} onChange={e=>setProductId(e.target.value)} placeholder="For example, 15424"/></label><button type="button" disabled={busy} onClick={check}>{busy?'Checking…':'Run read-only checks'}</button></div>
   </header>
   <section className="card sc-preflight-caution">
    <strong>Evidence boundaries</strong>
    <p>Work confirmed in read-only source review that deployed Storefronts 0.1.2 lacks several 0.1.3 category-context safeguards; the two enabled SKU hook writers can overlap; and core versus extension free-shipping rules use different threshold bases. This is NOT a checkout or save-path test. Current API checks still only read metadata and small samples.</p>
    <p>Last live read: <strong>{date(result?.checkedAt)}</strong>. No changes or test orders are performed.</p>
    {error&&<p role="alert">{error}</p>}
+  </section>
+  <section className="card"><h2>Graphic selection and order capture</h2>
+   <p>One customer chooser owns the product. Canonical graphic IDs must survive its variation form, cart, checkout and signed webhook. Read-only configuration is not a checkout acceptance test.</p>
+   {plugin?.graphicPlugins&&<ul>{plugin.graphicPlugins.map(p=><li key={p.slug}>{p.slug} · {p.version||'not listed'} · {p.status}</li>)}</ul>}
+   {result?.graphicIntegration&&<><p>Application graphic capture: <strong>{result.graphicIntegration.captureEnabled?'Enabled':'Off'}</strong>. The WordPress global selector option is not exposed by its core REST API.</p>
+    <p>{result.graphicIntegration.webhookError||'Webhook destinations omit query strings and credentials.'}</p>
+    {result.graphicIntegration.webhooks&&<ul>{result.graphicIntegration.webhooks.map(h=><li key={h.id}>#{h.id} · {h.status} · {h.topic} · {h.destination}</li>)}</ul>}
+    {result.graphicIntegration.productError&&<p>{result.graphicIntegration.productError}</p>}
+    {result.graphicIntegration.product&&<pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(result.graphicIntegration.product,null,2)}</pre>}
+   </>}
+   <p>Before rollout, verify approved product bindings, exact variation restrictions, genuine customer proof, isolated checkout and retry recovery. Keep unreviewed products out of managed selection.</p>
   </section>
   <section className="card">
    <h2>1. Client Storefronts plugin version</h2>

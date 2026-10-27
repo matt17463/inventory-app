@@ -25,13 +25,15 @@ async function setup(){
  await db.exec(await read('supabase/migrations/202610250005_traveler_storage_preflight.sql'));
  await db.exec(await read('supabase/migrations/20261027003319_variation_certification_enforcement.sql'));
  await db.exec(await read('supabase/migrations/20261027010549_variation_recipe_routing.sql'));
+ await db.exec(await read('supabase/migrations/20261027014211_artwork_integrity_registration.sql'));
  await db.exec(`set test.actor='${actor}'; set test.role='manager';
  insert into blank_products(id) values('${blank}');
+ insert into sc_material_recipes(id,status,settings) values('${id(90)}','approved','{"temperature":100}');
  insert into products(id,sku,size,woocommerce_product_id,woocommerce_variation_id,blank_product_id,is_finished) values('${product}','TEST-S','S',100,101,'${blank}',true);
- insert into mockup_artwork_assets(id,project_id,preflight_status,updated_at) values('${art}','${project}','passed','2026-01-01');
+ insert into mockup_artwork_assets(id,project_id,preflight_status,updated_at,storage_provider,storage_bucket,storage_path) values('${art}','${project}','passed','2026-01-01','r2','fictional','fixture.png');
  insert into sc_manufacturing_recipes(id,name,decoration_method) values('${recipe}','Isolated test recipe','DTF');
- insert into sc_manufacturing_recipe_versions(id,recipe_id,revision,placements,verified_sample,status,approved_by,approved_at,artwork_asset_id)
- values('${version}','${recipe}',1,'[{"placement_name":"full_front","print_width_inches":8,"print_height_inches":8}]',true,'approved','${actor}','2026-01-01','${art}');
+ insert into sc_manufacturing_recipe_versions(id,recipe_id,revision,placements,verified_sample,status,approved_by,approved_at,artwork_asset_id,machine_settings_id)
+ values('${version}','${recipe}',1,'[{"placement_name":"full_front","print_width_inches":8,"print_height_inches":8}]',true,'approved','${actor}','2026-01-01','${art}','${id(90)}');
  insert into sc_catalog_recipe_assignments(woocommerce_product_id,recipe_id,disposition) values(100,'${recipe}','assigned');
  insert into sc_catalog_artwork_links(woocommerce_product_id,artwork_asset_id,approval_evidence,review_required,reviewed_at,reviewed_by) values(100,'${art}','Isolated test evidence only',false,'2026-01-01','${actor}');
  insert into mockup_projects(id,woo_product_id) values('${project}',100);
@@ -47,8 +49,10 @@ async function setup(){
  await db.exec(`insert into sc_traveler_storage_preflight(job_id,recipe_version_id,requested_by,job_item_ids,artwork_fingerprint,expires_at)
  select 1,'${version}','${actor}',array[1,2,3,4],md5(id::text||':'||coalesce(storage_provider,'')||':'||coalesce(storage_bucket,'')||':'||coalesce(storage_path,'')||':'||preflight_status||':'||coalesce(to_char(updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'')),now()+interval '4 minutes' from mockup_artwork_assets where id='${art}';`);
  const query=async(sql,args=[])=> (await db.query(sql,args)).rows;
+ await query(`select sc_register_artwork_object_revision(id,updated_at,coalesce(storage_provider,''),coalesce(storage_bucket,''),coalesce(storage_path,''),repeat('a',64),256,$1,'Isolated checksum fixture only') from mockup_artwork_assets`,[actor]);
+ const register=async(asset=art)=>query(`select sc_register_artwork_object_revision(id,updated_at,storage_provider,storage_bucket,storage_path,repeat('a',64),256,$1,'Isolated checksum fixture only') from mockup_artwork_assets where id=$2`,[actor,asset]);
  const configuration=(await query('select sc_save_variation_configuration($1,$2,$3,$4) id',[product,version,[output],'Isolated exact variation review']))[0].id;
- return {db,query,configuration,connect,check:async()=> (await query('select sc_check_variation_configuration($1) result',[configuration]))[0].result,
+ return {db,query,configuration,connect,register,check:async()=> (await query('select sc_check_variation_configuration($1) result',[configuration]))[0].result,
  certify:async()=> (await query('select sc_certify_variation($1) id',[configuration]))[0].id};
 }
 test('exact variation certification, history, duplicate requests and isolation',async()=>{
@@ -92,7 +96,7 @@ test('existing travelers, grouped creation, manual orders, status release, recer
   await s.db.exec(`insert into job_items(id,job_id,quantity,finished_product_id,size) values(3,1,1,'${product}','S');`);
   await s.db.exec(`update sc_traveler_storage_preflight set artwork_fingerprint=(select md5(id::text||':'||coalesce(storage_provider,'')||':'||coalesce(storage_bucket,'')||':'||coalesce(storage_path,'')||':'||preflight_status||':'||coalesce(to_char(updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'')) from mockup_artwork_assets where id='${art}')`);
   await assert.rejects(s.query('select sc_create_grouped_traveler(1,array[3::bigint],$1)',[version]),/certificate/);
-  await s.db.exec(`update mockup_reviews set created_at='2026-03-01'`);
+  await s.db.exec(`update mockup_reviews set created_at='2026-03-01'`);await s.register();
   const next=await s.certify();assert.notEqual(next,cert);
   await assert.rejects(s.query('select sc_certification.require_traveler($1)',[traveler]),/revalidation/);
   await assert.rejects(s.query('select sc_revalidate_traveler($1)',[traveler]),/Historical artwork changed/);
@@ -223,11 +227,12 @@ test('production notes and selected garment specifications invalidate existing t
 test('approved color-specific artwork can differ from the parent candidate only with verified graphic evidence',async()=>{
  const s=await setup();try{
   const alternate=id(81),family=id(82),variant=id(83),alternateRecipe=id(84),alternateVersion=id(85);
-  await s.db.exec(`insert into mockup_artwork_assets(id,project_id,preflight_status,updated_at) values('${alternate}','${project}','passed','2026-01-01');
+  await s.db.exec(`insert into mockup_artwork_assets(id,project_id,preflight_status,updated_at,storage_provider,storage_bucket,storage_path) values('${alternate}','${project}','passed','2026-01-01','r2','fictional','alternate.png');
    update mockup_placements set artwork_asset_id='${alternate}' where id='${placement}';
    insert into sc_manufacturing_recipes(id,name,decoration_method) values('${alternateRecipe}','Color-specific approved recipe','DTF');
    insert into sc_manufacturing_recipe_versions(id,recipe_id,revision,placements,verified_sample,status,approved_by,approved_at,artwork_asset_id)
    select '${alternateVersion}','${alternateRecipe}',1,placements,true,'approved','${actor}',approved_at,'${alternate}' from sc_manufacturing_recipe_versions where id='${version}';`);
+  await s.register(alternate);
   const config=(await s.query('select sc_save_variation_configuration($1,$2,$3,$4) id',[product,alternateVersion,[output],'Exact alternate artwork reviewed for this color']))[0].id;
   const check=async()=>(await s.query('select sc_check_variation_configuration($1) result',[config]))[0].result;
   assert.equal((await check()).ready,false);
@@ -236,5 +241,70 @@ test('approved color-specific artwork can differ from the parent candidate only 
   await s.query('select sc_certify_variation($1)',[config]);
   await s.db.exec(`update sc_client_graphic_variants set state='retired' where id='${variant}'`);
   assert.equal((await check()).ready,false);
+ }finally{await s.db.close();}
+});
+
+async function unrelatedConfiguration(s){
+ const ids=[product,blank,recipe,version,project,art,mockBlank,placement,output,review,token,id(90)];
+ const tables=['sc_material_recipes','blank_products','products','mockup_projects','mockup_artwork_assets','sc_manufacturing_recipes','sc_manufacturing_recipe_versions','mockup_blank_assets','mockup_placements','mockup_outputs','mockup_review_tokens','mockup_reviews'];
+ for(const table of tables){
+  const rows=await s.query('select to_jsonb(t) data from '+table+' t limit 1');
+  let json=JSON.stringify(rows[0].data);
+  ids.forEach((old,i)=>{json=json.replaceAll(old,id(200+i));});
+  const data=JSON.parse(json);
+  if(table==='products'){data.woocommerce_product_id=200;data.woocommerce_variation_id=201;data.sku='UNRELATED';}
+  if(table==='mockup_projects')data.woo_product_id=200;
+  if(table==='mockup_artwork_assets')data.storage_path='unrelated.png';
+  await s.query('insert into '+table+' select (jsonb_populate_record(null::'+table+',$1::jsonb)).*',[data]);
+ }
+ await s.query('insert into sc_catalog_recipe_assignments(woocommerce_product_id,recipe_id,disposition) values(200,$1,\'assigned\')',[id(202)]);
+ await s.query("insert into sc_catalog_artwork_links(woocommerce_product_id,artwork_asset_id,approval_evidence,review_required,reviewed_at,reviewed_by) values(200,$1,'Isolated unrelated source evidence',false,'2026-01-01',$2)",[id(205),actor]);
+ await s.register(id(205));
+ const configuration=(await s.query('select sc_save_variation_configuration($1,$2,$3,$4) id',[id(200),id(203),[id(208)],'Isolated unrelated configuration']))[0].id;
+ return (await s.query('select sc_certify_variation($1) id',[configuration]))[0].id;
+}
+for(const [name,prepare,mutation] of [
+ ['blank specification','',"update blank_products set name='Changed physical blank' where id='"+blank+"'"],
+ ['artwork revision','',"update mockup_artwork_assets set storage_path='new-object.png',updated_at='2026-02-01' where id='"+art+"'"],
+ ['new recipe revision','',"insert into sc_manufacturing_recipe_versions(recipe_id,revision) values('"+recipe+"',2)"],
+ ['production placement','',"update mockup_placements set print_width_inches=9 where id='"+placement+"'"],
+ ['machine settings','',"update sc_material_recipes set settings='{\"temperature\":110}' where id='"+id(90)+"'"],
+ ['mockup output','',"update mockup_outputs set caption_text='Changed proof' where id='"+output+"'"],
+ ['customer withdrawal','',"update mockup_reviews set decision='changes_requested' where id='"+review+"'"],
+ ['Woo variation specification','',"update products set size='M' where id='"+product+"'"],
+])test('activation matrix: '+name+' revokes only affected evidence and blocks existing traveler',async()=>{
+ const s=await setup();try{
+  const unrelated=await unrelatedConfiguration(s);
+  if(prepare)await s.db.exec(prepare);
+  const cert=await s.certify();
+  const traveler=(await s.query('select sc_create_grouped_traveler(1,array[1::bigint],$1) id',[version]))[0].id;
+  const frozen=(await s.query('select recipe_snapshot from sc_job_travelers where id=$1',[traveler]))[0].recipe_snapshot;
+  await s.db.exec(mutation);
+  assert.equal((await s.query('select status from sc_variation_certifications where id=$1',[cert]))[0].status,'revoked');
+  const audit=(await s.query("select reason,details from sc_certification_audit where certification_id=$1 and kind='revoked'",[cert]))[0];
+  assert.match(audit.reason,/evidence changed/);assert(audit.details.affected_travelers.includes(traveler));
+  await assert.rejects(s.query('select sc_certification.require_traveler($1)',[traveler]),/certificate|Order size/);
+  await assert.rejects(s.db.exec("update job_items set status='completed' where id=1"),/certificate|Order size/);
+  assert.deepEqual((await s.query('select recipe_snapshot from sc_job_travelers where id=$1',[traveler]))[0].recipe_snapshot,frozen);
+  assert.equal((await s.query('select status from sc_variation_certifications where id=$1',[unrelated]))[0].status,'certified');
+ }finally{await s.db.close();}
+});
+test('registered bytes are immutable, required for certification and cannot be forged by browser roles',async()=>{
+ const s=await setup();try{
+  await s.db.exec("update mockup_artwork_assets set storage_path='new-review.png',updated_at='2026-02-01'");
+  assert.match((await s.check()).blockers.join(';'),/checksum/);
+  await assert.rejects(s.certify(),/checksum/);
+  await s.register();await s.db.exec("update mockup_reviews set created_at='2026-03-01'");
+  const cert=await s.certify();
+  await assert.rejects(s.db.exec("update sc_artwork_object_revisions set sha256=repeat('b',64)"),/immutable/);
+  await s.query('select sc_report_artwork_integrity_failure($1,$2,$3,$4,$5)',[art,'2026-02-01',actor,'a'.repeat(64),'b'.repeat(64)]);
+  assert.equal((await s.query('select status from sc_variation_certifications where id=$1',[cert]))[0].status,'revoked');
+  await assert.rejects(s.query("select sc_register_artwork_object_revision(id,updated_at,storage_provider,storage_bucket,storage_path,repeat('b',64),256,$1,'Cannot bless overwritten key') from mockup_artwork_assets",[actor]),/cannot be repinned/);
+  for(const role of ['anon','authenticated']){
+   await s.db.exec('set role '+role);
+   await assert.rejects(s.query('select sc_report_artwork_integrity_failure($1,$2,$3,$4,$5)',[art,'2026-02-01',actor,'a','b']),/permission denied/);
+   await assert.rejects(s.db.exec("insert into sc_artwork_object_revisions default values"),/permission denied/);
+   await s.db.exec('reset role');
+  }
  }finally{await s.db.close();}
 });

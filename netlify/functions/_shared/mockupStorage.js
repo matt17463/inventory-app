@@ -179,10 +179,10 @@ export async function signedStoredAssetUrl(supabase, row, expiresIn = 3600, opti
   throw new Error(`Unsupported mockup storage provider: ${reference.provider}.`);
 }
 
-export async function presignedR2Put({ key, contentType, expiresIn = 900 }) {
+export async function presignedR2Put({ key, contentType, expiresIn = 900, createOnly = false }) {
   return getSignedUrl(
     r2Client(),
-    new PutObjectCommand({ Bucket: r2BucketName(), Key: safeObjectKey(key), ContentType: contentType || 'application/octet-stream' }),
+    new PutObjectCommand({ Bucket: r2BucketName(), Key: safeObjectKey(key), ContentType: contentType || 'application/octet-stream', ...(createOnly?{IfNoneMatch:'*'}:{}) }),
     { expiresIn: Math.min(Math.max(Number(expiresIn || 900), 60), 3600) },
   );
 }
@@ -195,8 +195,8 @@ export async function putMockupObject(supabase, { key, bytes, contentType = 'app
   const previewKey = preview ? `previews/${safeKey.replace(/\.[a-z0-9]{1,8}$/i, '')}.webp` : null;
   if (provider === 'r2') {
     const bucket = r2BucketName();
-    await r2Client().send(new PutObjectCommand({ Bucket: bucket, Key: safeKey, Body: buffer, ContentType: contentType }));
-    if (preview) await r2Client().send(new PutObjectCommand({ Bucket: bucket, Key: previewKey, Body: preview, ContentType: 'image/webp', CacheControl: 'public, max-age=31536000, immutable' }));
+    await r2Client().send(new PutObjectCommand({ Bucket: bucket, Key: safeKey, Body: buffer, ContentType: contentType, IfNoneMatch:'*' }));
+    if (preview) await r2Client().send(new PutObjectCommand({ Bucket: bucket, Key: previewKey, Body: preview, ContentType: 'image/webp', CacheControl: 'public, max-age=31536000, immutable', IfNoneMatch:'*' }));
     return {
       storage_provider: 'r2', storage_bucket: bucket, storage_path: safeKey, file_size_bytes: buffer.length,
       preview_storage_provider: preview ? 'r2' : null,

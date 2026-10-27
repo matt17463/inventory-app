@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  GetBucketCorsCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -185,5 +186,14 @@ export async function operationalStorageHealth() {
     const result = await r2Client().send(new ListObjectsV2Command({ Bucket: r2BucketName(), Prefix: prefix, MaxKeys: 1 }));
     counts[prefix] = Number(result.KeyCount || 0);
   }
-  return { provider: 'r2', bucket: r2BucketName(), reachable: true, prefixes: counts };
+  let conditionalUploads='not-verified';
+  try{
+    const cors=await r2Client().send(new GetBucketCorsCommand({Bucket:r2BucketName()}));
+    conditionalUploads=(cors.CORSRules||[]).some(rule=>
+      (rule.AllowedOrigins||[]).some(origin=>origin==='*'||origin==='https://inventory.skilledcrafting.com')&&
+      (rule.AllowedMethods||[]).includes('PUT')&&
+      ['if-none-match','content-type'].every(header=>(rule.AllowedHeaders||[]).some(value=>value==='*'||value.toLowerCase()===header))
+    )?'permitted':'not-permitted';
+  }catch{ /* Configuration read may require a separately scoped R2 credential. */ }
+  return { provider: 'r2', bucket: r2BucketName(), reachable: true, prefixes: counts,conditional_upload_cors:conditionalUploads };
 }

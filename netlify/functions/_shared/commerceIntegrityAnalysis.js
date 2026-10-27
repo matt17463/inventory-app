@@ -29,6 +29,7 @@ export function summarizePlugins(rows,{expectedStorefrontVersion='0.1.4'}={}){
   caveat:'Plugin activation does not prove generation enabled; WP Wham was internally disabled in the October 22 browser audit. Hook ownership requires controlled tests.',
   advancedFreeShippingActive:advanced?.status==='active',
   source:'wordpress-rest',
+  graphicPlugins:['skilled-crafting-graphic-choices','skilled-crafting-mockup-variation-selector','skilled-crafting-product-options'].map(slug=>known.get(slug)||{slug,status:'not-listed',version:null}),
  };
 }
 export function summarizeShippingZones(zones,methodsByZone){
