@@ -115,3 +115,29 @@ export function validateDtfTransparency({settings,report,finalAlpha}){
     throw Error('No source-background pixels were removed. Try another tolerance or click a background region in Source.');
   return true;
 }
+
+/** Replay bounded erase/restore strokes against the original source, not a flattened preview. */
+export function applyDtfMaskStrokes(data,original,width,height,strokes=[]) {
+  if(data.length!==original.length||data.length!==width*height*4)throw Error('Invalid mask buffers.');
+  if(!Array.isArray(strokes)||strokes.length>2000)throw Error('The manual mask has too many strokes. Save this version and start another revision.');
+  let erased=0,restored=0;
+  for(const stroke of strokes) {
+    const {x,y,r,kind}=stroke||{};
+    if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(r)||r<1||r>600||
+      (kind!=='erase'&&kind!=='restore'))throw Error('Invalid manual mask stroke.');
+    const minX=Math.max(0,Math.floor(x-r)),maxX=Math.min(width-1,Math.ceil(x+r));
+    const minY=Math.max(0,Math.floor(y-r)),maxY=Math.min(height-1,Math.ceil(y+r));
+    for(let cy=minY;cy<=maxY;cy++)for(let cx=minX;cx<=maxX;cx++) {
+      if((cx-x)**2+(cy-y)**2>r*r)continue;
+      const i=(cy*width+cx)*4;
+      if(kind==='erase') {
+        if(data[i+3]!==0)erased++;
+        data[i]=data[i+1]=data[i+2]=data[i+3]=0;
+      }else{
+        if(data[i+3]!==original[i+3])restored++;
+        data[i]=original[i];data[i+1]=original[i+1];data[i+2]=original[i+2];data[i+3]=original[i+3];
+      }
+    }
+  }
+  return {erased,restored,strokeCount:strokes.length};
+}
