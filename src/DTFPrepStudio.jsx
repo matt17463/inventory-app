@@ -126,6 +126,7 @@ export default function DTFPrepStudio(){
         throw Error('Choose a PNG, JPEG or WebP artwork asset.');
       setFile(new File([blob],row.original_file_name||row.artwork_name||'r2-artwork.png',{type:blob.type}));
       setSavedSource(row.id);setSavedPrepared('');
+      if(row.metadata?.recipe && typeof row.metadata.recipe==='object')setOpts(o=>({...o,...row.metadata.recipe}));
     }catch(e){setMessage('R2 artwork: '+e.message);}finally{setBusy(false);}
   }
   async function prepareFull(){
@@ -143,7 +144,7 @@ export default function DTFPrepStudio(){
   async function downloadVector(){
     setBusy(true);
     try{
-      const render=renderArtwork(bitmap,opts,850),svg=vectorSilhouette(render.pixels.data,render.canvas.width,render.canvas.height,vectorColor);
+      const render=renderArtwork(bitmap,opts,850),svg=vectorSilhouette(render.pixels.data,render.canvas.width,render.canvas.height,vectorColor,12000,DTF_DPI*render.canvas.width/render.dimensions.width);
       download(new Blob([svg],{type:'image/svg+xml'}),baseName(file.name)+'-one-color-outline.svg');
       setMessage('One-color silhouette SVG exported for limited solid artwork. This is not a faithful full-color vectorization.');
     }catch(e){setMessage(e.message);}finally{setBusy(false);}
