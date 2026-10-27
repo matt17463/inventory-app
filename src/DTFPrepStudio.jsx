@@ -272,15 +272,39 @@ export default function DTFPrepStudio(){
           <label className="dtf-check"><input type="checkbox" checked={opts.crop} onChange={e=>change('crop',e.target.checked)}/> Crop transparent source margins</label>
           <p className="dtf-note">Output is resampled to true pixel dimensions. Upscaling does not recreate missing source detail.</p>
         </Tuning>
-        <Tuning title="Background & edge removal">
-          {field('Remove background',<select value={opts.background} onChange={e=>change('background',e.target.value)}>
-            <option value="none">Keep original</option><option value="white">Connected near-white</option><option value="sampled">Connected selected color</option>
+        <Tuning title="Remove background → Transparent PNG">
+          <button type="button" className="dtf-remove-action" disabled={!bitmap}
+            onClick={()=>{setOpts(o=>({...o,background:'auto',backgroundPoint:null,backgroundScope:'connected',backgroundFeather:12}));setSavedPrepared('');}}>
+            Remove background automatically
+          </button>
+          {field('Removal method',<select value={opts.background} onChange={e=>{change('background',e.target.value);}}>
+            <option value="none">Keep original background</option>
+            <option value="auto">Automatic — dominant edge color</option>
+            <option value="white">Remove white / off-white</option>
+            <option value="sampled">Remove chosen background color</option>
+            <option value="pick">Click a region in Source to remove</option>
           </select>)}
+          {opts.background==='pick'&&<p className="dtf-pick-tip"><strong>Click the unwanted background in SOURCE.</strong> The selected connected region becomes truly transparent. {opts.backgroundPoint?'Selected point: '+opts.backgroundPoint.x+', '+opts.backgroundPoint.y+'. Click again to change it.':'Choose a background pixel to continue.'}</p>}
           {opts.background==='white'&&<Slider label="White threshold" value={opts.threshold} min={200} max={255} onChange={v=>change('threshold',v)}/>}
-          {opts.background==='sampled'&&<>{field('Background RGB',<input type="color" value={opts.backgroundColor} onChange={e=>change('backgroundColor',e.target.value)}/>)}<Slider label="Tolerance" value={opts.removalTolerance} min={0} max={160} onChange={v=>change('removalTolerance',v)}/></>}
+          {opts.background==='sampled'&&field('Background RGB color',<input type="color" value={opts.backgroundColor} onChange={e=>change('backgroundColor',e.target.value)}/>)}
+          {opts.background!=='none'&&<>
+            {opts.background!=='white'&&<Slider label="Color tolerance" value={opts.removalTolerance} min={0} max={150} step={1} onChange={v=>change('removalTolerance',v)}/>}
+            <Slider label="Edge softness (source pixels)" value={opts.backgroundFeather??12} min={0} max={40} step={1} onChange={v=>change('backgroundFeather',v)}/>
+            {field('Removal coverage',<select value={opts.backgroundScope||'connected'} onChange={e=>change('backgroundScope',e.target.value)}>
+              <option value="connected">Connected background only (protect artwork)</option>
+              <option value="all">All matching pixels (also removes interior matches)</option>
+            </select>)}
+            {opts.backgroundScope==='all'&&<p className="dtf-channel-warning">All matching pixels can erase white lettering or other design details. Inspect the proof.</p>}
+            <label className="dtf-check"><input type="checkbox" checked={opts.backgroundDecontaminate!==false} onChange={e=>change('backgroundDecontaminate',e.target.checked)}/> Decontaminate edge colors</label>
+            {report?.stats&&<div className="dtf-alpha-result"><strong>Real background removal</strong><span>{(report.stats.removedBackground||0).toLocaleString()} source pixels transparent · {(report.stats.softenedBackground||0).toLocaleString()} softened</span></div>}
+          </>}
           <Slider label="Defringe" value={opts.defringe} min={0} max={3} step={1} onChange={v=>change('defringe',v)}/>
-          {field('Alpha processing',<select value={opts.alphaMode} onChange={e=>change('alphaMode',e.target.value)}><option value="hard">Opaque pixels only (DTF)</option><option value="preserve">Preserve soft transparency</option></select>)}
+          {field('Final alpha',<select value={opts.alphaMode} onChange={e=>change('alphaMode',e.target.value)}>
+            <option value="hard">DTF hard alpha (opaque or transparent)</option>
+            <option value="preserve">Preserve soft edge transparency</option>
+          </select>)}
           <Slider label="Alpha cutoff" value={opts.alphaThreshold} min={0} max={254} onChange={v=>change('alphaThreshold',v)}/>
+          <p className="dtf-note">Transparency is written to the PNG alpha channel before the 300 PPI export. Checkerboard and garment colors are preview-only. Automatic color selection works best with solid backgrounds; detailed photographic backgrounds may require a manually refined mask.</p>
         </Tuning>
         <Tuning title="Halftones & garment knockout">
           {field('Quick preset',<select value="" onChange={e=>{setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
