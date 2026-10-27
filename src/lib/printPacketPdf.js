@@ -1,3 +1,4 @@
+import {deriveDistributionFields} from './distributionMetadata.js';
 import {normalizeLabelDesign} from './labelDesigner.js';
 import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
@@ -128,30 +129,6 @@ export function createInvoicePairPdf(args){
   return doc;
 }
 
-const distributionAliases={
- student:'student name|student|child name|recipient name|player name|athlete name',
- teacher:'teacher name|teacher|homeroom teacher|homeroom',
- coach:'coach name|coach|head coach',
- playerNumber:'player number|jersey number|jersey #|number',
- grade:'grade|grade level|year',
- team:'team assignment|team name|team|class|classroom',
- appliedName:'name applied|name on back|personalized name|custom name|player name on back|name text',
- school:'school|school name',
-};
-const cleanLabel=v=>plain(v).slice(0,120);
-export function deriveDistributionFields(source,overrides={}){
- const found={};
- for(const [field,aliases] of Object.entries(distributionAliases)){
-  const keys=aliases.split('|');
-  const values=new Set();
-  for(const line of source?.lines||[])for(const meta of line.metadata||[]){
-   if(keys.includes(String(meta.label||'').trim().toLowerCase()))values.add(cleanLabel(meta.value));
-  }
-  const unique=[...values].filter(Boolean);
-  found[field]=cleanLabel(overrides[field]|| (unique.length===1?unique[0]:unique.length>1?'MULTIPLE - SEE PACKING LIST':''));
- }
- return found;
-}
 function cropLine(doc,value,x,y,width,size=10,bold=false){
  const raw=plain(value);
  if(!raw)return y;

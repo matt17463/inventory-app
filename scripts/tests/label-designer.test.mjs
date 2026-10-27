@@ -19,5 +19,7 @@ test('PDF generator uses normalized designer and true 4x6 dimensions',()=>{
  assert.match(code,/normalizeLabelDesign\(labelDesign\)/);
  assert.match(code,/design\.order\.filter/);
  assert.match(code,/format:\[288,432\]/);
- assert.match(code,/MULTIPLE - SEE PACKING LIST/);
+ const metadata=readFileSync(new URL('../../src/lib/distributionMetadata.js',import.meta.url),'utf8');
+ assert.match(code,/deriveDistributionFields\(source,labelFields\)/);
+ assert.match(metadata,/MULTIPLE - SEE PACKING LIST/);
 });
