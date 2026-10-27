@@ -33,6 +33,10 @@ test('three designs share four physical variations, with a complete historic ima
 test('missing approval inputs do not prevent an incomplete plan being represented as a draft',()=>{
  const p=buildMigrationPlan({...fixture(),mappings:{},canonical:{}});assert.equal(p.ready,false);assert.equal(p.counts.after,4);assert.equal(p.baseline.variations.length,12);assert(p.blockers.some(b=>b.includes('explicitly select')));
 });
+test('simple products and products without logo variations can retain a baseline without inventing choices',()=>{
+ const p=buildMigrationPlan({product:{id:201,type:'simple',attributes:[]},variations:[],mappings:{},canonical:{}});
+ assert.equal(p.baseline.product.type,'simple');assert.equal(p.options.length,0);assert.equal(p.crosswalk.length,0);assert.equal(p.ready,false);
+});
 for(const [name,change] of [
  ['price',f=>f.variations[1].regular_price='13.00'],['tax',f=>f.variations[1].tax_class='reduced'],['stock',f=>f.variations[1].stock_status='outofstock'],
  ['independent logo stock',f=>f.variations.forEach(v=>{v.manage_stock=true;v.stock_quantity=5;})],['foreign parent',f=>f.variations[0].parent_id=999],

@@ -23,7 +23,8 @@ const commerceKeys=['regular_price','sale_price','date_on_sale_from','date_on_sa
 export function buildMigrationPlan({product,variations,complete=true,mappings={},canonical={},snapshotHash=null}){
  const blockers=[],groups=new Map(),source={product,variations:[...variations].sort((a,b)=>a.id-b.id)};
  const id=Number(product?.id);
- if(!Number.isSafeInteger(id)||id<1||product.type!=='variable')throw Error('An exact variable Woo parent is required.');
+ if(!Number.isSafeInteger(id)||id<1||!['variable','simple'].includes(product.type))throw Error('An exact simple or variable Woo parent is required.');
+ if(product.type==='simple')blockers.push('This simple product has no legacy logo variations to consolidate; retain the saved artwork mapping for separate activation review.');
  if(!complete)blockers.push('Variation pagination is incomplete.');
  const logos=(product.attributes||[]).filter(logoAttribute);
  if(logos.length!==1||!logos[0]?.variation)blockers.push('Exactly one active logo variation attribute must be reviewed.');

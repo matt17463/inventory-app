@@ -18,9 +18,9 @@ export async function readWooLogoBaseline(id){
  const base=new URL(env('WOO_SITE_URL','WOOCOMMERCE_SITE_URL','WP_SITE_URL','WORDPRESS_SITE_URL')||'https://skilledcrafting.com');
  if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw Error('Woo site configuration invalid.');
  const product=await wc('products/'+id,key,secret,base);
- if(Number(product.id)!==id||product.type!=='variable')throw Error('Expected exact variable Woo parent.');
- const variations=[];let complete=false;
- for(let page=1;page<=10;page++){
+ if(Number(product.id)!==id||!['variable','simple'].includes(product.type))throw Error('Expected an exact simple or variable Woo product.');
+ const variations=[];let complete=product.type==='simple';
+ for(let page=1;product.type==='variable'&&page<=10;page++){
   const batch=await wc('products/'+id+'/variations?per_page=100&page='+page,key,secret,base);
   if(!Array.isArray(batch))throw Error('Unexpected Woo variation response.');
   variations.push(...batch);if(batch.length<100){complete=true;break;}

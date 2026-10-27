@@ -15,6 +15,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
  const [dirty,setDirty]=useState(false),[validation,setValidation]=useState(null),[history,setHistory]=useState([]),[template,setTemplate]=useState(''),[allArtwork,setAllArtwork]=useState(false);
  const stopInspection=useRef(false);
  const [inspecting,setInspecting]=useState(false);
+ const [newChoice,setNewChoice]=useState('');
  const load=useCallback(async()=>{const c=await request({action:'catalog'});setCatalog(c);return c;},[]);
  useEffect(()=>{load().catch(e=>setMessage(e.message));},[load]);
  const latest=useMemo(()=>new Map(catalog.plans.map(p=>[p.woo_product_id,catalog.plans.find(x=>x.woo_product_id===p.woo_product_id)])),[catalog.plans]);
@@ -22,7 +23,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
   const p=latest.get(f.woocommerce_product_id),s=p?(p.analysis?.mapping_complete?'mapped':'draft'):'uninspected';
   return (filter==='all'||s===filter)&&[f.product_name,f.woocommerce_product_id,f.example_sku].join(' ').toLowerCase().includes(search.toLowerCase());
  });
- function adopt(p){setPlan(p);setDirty(false);setValidation(null);setHistory([]);}
+ function adopt(p){setPlan(p);setDirty(false);setValidation(null);setHistory([]);setNewChoice('');}
  async function run(fn){setBusy(true);setErrors([]);try{await fn();}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  async function inspect(ids){
   if(dirty)throw Error('Save this draft before inspecting another product.');
@@ -56,6 +57,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
    <div className="sc-logo-toolbar"><button disabled={busy||!dirty} onClick={()=>run(save)}>Save draft mapping</button><button disabled={busy||dirty} onClick={()=>download(`woo-${plan.woo_product_id}-artwork-mapping.json`,{...plan,exported_at:new Date().toISOString(),notice:'Mapping evidence only. No approvals or production activation implied.'})}>Export baseline & mapping</button><button disabled={busy||dirty} onClick={()=>run(async()=>{setHistory(await request({action:'history',plan_id:plan.id}));setMessage('Saved mapping history loaded. Baseline remains immutable.');})}>View mapping history</button></div>
    <details><summary>Reuse another product’s mapping as a draft template</summary><p>Only identical legacy logo terms are copied. Images, physical variation choices and approvals are never copied.</p><label>Template product<select value={template} onChange={e=>setTemplate(e.target.value)}><option value="">Choose saved mapping</option>{catalog.plans.filter(p=>p.id!==plan.id).map(p=><option key={p.id} value={p.id}>Woo #{p.woo_product_id} · revision {p.revision}</option>)}</select></label><button disabled={busy||dirty||!template} onClick={()=>run(async()=>{adopt(await request({action:'template',plan_id:plan.id,template_id:template,revision:plan.revision}));await load();setMessage('Template saved as a proposal. Review every file and product-specific image.');})}>Apply draft template</button></details>
    <h3>1. Map the existing logo choices</h3><p>Choose exact files yourself. Similar names are not automatically accepted. You can leave missing files blank and return later.</p>
+   <details><summary>Add a fixed or missing artwork choice</summary><p>Products with no legacy logo attribute can still be mapped. Add the intended choice explicitly; it remains a manager-entered draft, not a discovered Woo value or approval.</p><label>New artwork choice label<input value={newChoice} onChange={e=>setNewChoice(e.target.value)}/></label><button disabled={busy||dirty||newChoice.trim().length<2} onClick={()=>run(async()=>{adopt(await request({action:'add_choice',plan_id:plan.id,revision:plan.revision,label:newChoice}));await load();setMessage('Added an explicit draft artwork choice. No Woo attributes or source approvals changed.');})}>Add draft choice</button></details>
    <label><input type="checkbox" checked={allArtwork} onChange={e=>setAllArtwork(e.target.checked)}/> Show shared artwork from all product projects</label>
    <div className="sc-logo-choices">{Object.entries(plan.mappings).map(([choice,m])=>{
     const source=plan.baseline.variations.filter(v=>String(v.attributes.find(a=>/(logo|graphic|design|artwork)/i.test(a.name))?.option||'').trim().toLowerCase().replace(/\s+/g,' ')===choice);

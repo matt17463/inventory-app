@@ -8,7 +8,7 @@ const uuid=v=>/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.
 async function rows(q){const {data,error}=await q;if(error)throw Error(error.message);return data||[];}
 function analysis(record){
  const plan=buildMigrationPlan({...record.baseline,mappings:record.mappings,canonical:record.canonical,snapshotHash:record.source_hash});
- const choices=(record.baseline.product.attributes||[]).filter(logoAttribute).flatMap(a=>a.options||[]).map(normalizeChoice);
+ const choices=Object.keys(record.mappings);
  const mapped=choices.filter(c=>uuid(record.mappings[c]?.family_id)&&uuid(record.mappings[c]?.artwork_asset_id)).length;
  return {mapping_complete:choices.length>0&&mapped===choices.length,mapped_choices:mapped,total_choices:choices.length,
   counts:plan.counts,blockers:plan.blockers,plan_hash:plan.plan_hash,crosswalk:plan.crosswalk,operations:plan.operations};
@@ -66,6 +66,11 @@ export async function handler(event){
    }
    case 'load': result=await planFor(db,input.plan_id);break;
    case 'history': result=await rows(db.from('sc_woo_logo_mapping_events').select('*').eq('plan_id',(await planFor(db,input.plan_id)).id).order('revision',{ascending:false}).limit(100));break;
+   case 'add_choice':{
+    const prior=await planFor(db,input.plan_id),label=String(input.label||'').trim(),choice=normalizeChoice(label);
+    if(label.length<2||label.length>160||Object.hasOwn(prior.mappings,choice))throw Error('Enter a distinct artwork choice label (2–160 characters).');
+    result=await save(db,prior,{mappings:{...prior.mappings,[choice]:{label,family_id:'',artwork_asset_id:'',variant_id:'',recipe_version_id:'',output_by_image:{},source_kind:'manager_added_draft'}},note:prior.note+'\nManager added draft artwork choice: '+label+'; no source approval inferred.'},auth.user.id,input.revision);break;
+   }
    case 'save':{
     const prior=await planFor(db,input.plan_id);
     if(!input.mappings||typeof input.mappings!=='object'||Array.isArray(input.mappings)||!input.canonical||typeof input.canonical!=='object'||Array.isArray(input.canonical))throw Error('Mapping and physical-variation selections must be objects.');
