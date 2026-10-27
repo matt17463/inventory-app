@@ -34,6 +34,7 @@ export function deriveGuidedProgress(row,evidence={}){
  const items=evidence.items||[];
  const reservations=evidence.reservations||[];
  const travelers=evidence.travelers||[];
+ const travelerLines=evidence.travelerLines||[];
  const handoffs=evidence.handoffs||[];
  const qc=evidence.qc||[];
  const notes=evidence.notes||[];
@@ -79,7 +80,9 @@ export function deriveGuidedProgress(row,evidence={}){
   Number(latestPacking.get(Number(i.id))?.packed_quantity??-1)===Number(i.quantity||0));
  const hasPacking=packingComplete||fulfillment.some(f=>f.kind==='packing_checked');
  const handedOff=pickup.length>0||fulfillment.some(f=>['picked_up','shipped'].includes(f.kind));
- const allTraveled=required.length>0&&required.every(i=>travelers.some(t=>Number(t.job_item_id)===Number(i.id)));
+ const coveredLines=new Set([...travelers.map(t=>Number(t.job_item_id)),...travelerLines.map(t=>Number(t.job_item_id))].filter(Number.isSafeInteger));
+ const coveredRequired=required.filter(i=>coveredLines.has(Number(i.id))).length;
+ const allTraveled=required.length>0&&coveredRequired===required.length&&!missing.travelers&&!missing.travelerLines;
  const productionStarted=producing.has(status)||Boolean(job.production_started_at);
  const pastQc=qcStage.has(status);
  const actualCompletion=completed||Boolean(job.production_completed_at);
@@ -109,10 +112,10 @@ export function deriveGuidedProgress(row,evidence={}){
     !required.length?'No inventory-required blanks in the job.':'Blanks are paired; '+reservations.length+
     ' reservation record(s) exist. Review active shortages, bins and existing supplier orders in Purchasing.',
     unpaired.length?pull:'/purchasing');
- add('recipe',blankOnly?'not_applicable':missing.travelers||missing.items?'unknown':allTraveled?'linked':!required.length?'not_applicable':'review',null,
-    blankOnly?'Blank-only fulfillment: production recipe and traveler not required.':missing.travelers||missing.items?'Job traveler details unavailable. Open QR travelers.':
+ add('recipe',blankOnly?'not_applicable':missing.travelers||missing.travelerLines||missing.items?'unknown':allTraveled?'verified':!required.length?'not_applicable':'review',null,
+    blankOnly?'Blank-only fulfillment: production recipe and traveler not required.':missing.travelers||missing.travelerLines||missing.items?'Grouped traveler coverage unavailable; open Digital Job Travelers.':
     !required.length?'No blank production lines require a garment traveler.':
-    travelers.length+'/'+required.length+' inventory-required line(s) have saved QR travelers. Check approved recipes and placement measurements.',
+    coveredRequired+'/'+required.length+' inventory-required line(s) are covered by '+travelers.length+' current QR traveler(s). Check approved recipes and placement measurements.',
     traveler);
  add('production',blankOnly?'not_applicable':productionStarted?'linked':'review',null,
     blankOnly?'Blank-only fulfillment: no decoration or manufacturing step.':productionStarted?'Production Board indicates work has started or progressed. Inspect actual open line items before completion.':
