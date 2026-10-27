@@ -1,5 +1,6 @@
 // Deterministic browser-side DTF processing. Never treat preview backdrops as artwork.
 import { removeEdgeConnectedWhite, alphaBounds, validatePrintDimensions, DTF_DPI, setPngDpi } from './dtfPreflight.js';
+import { PROCESS_ANGLES, PROCESS_ENABLED, createProcessScreens, createColorDotScreen, screenProcessPixel, screenColorDotPixel, screenAngleWarnings } from './dtfMulticolor.js';
 
 const clamp = n => Math.max(0, Math.min(255, Math.round(n)));
 const between = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -8,6 +9,8 @@ export const DTF_DEFAULTS = Object.freeze({
   removalTolerance: 35, defringe: 0, alphaThreshold: 4, alphaMode: 'hard',
   knockout: 'none', shirtColor: '#000000', knockoutTolerance: 55,
   halftone: 'none', lpi: 35, angle: 22.5, dot: 'circle',
+  screenAngles: PROCESS_ANGLES, screenEnabled: PROCESS_ENABLED,
+  screenGain: 0, colorDotDensity: 80,
   gamma: 1, blackPoint: 0, whitePoint: 255, sharpen: 0,
   crop: true, preserveRatio: true,
 });
@@ -79,6 +82,8 @@ export function processDtfPixels(data,width,height,options={},ppi=300) {
   const lpi=between(Number(o.lpi),15,55),angle=Number(o.angle)||0;
   const alphaCut=between(Number(o.alphaThreshold),0,255);
   const fringe=between(Number(o.defringe),0,3);
+  const processScreens=o.halftone==='multicolor'?createProcessScreens(o,ppi):null;
+  const colorScreen=o.halftone==='color-dots'?createColorDotScreen(o,ppi):null;
   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
     const i=(y*width+x)*4;
     let alpha=data[i+3];
@@ -97,6 +102,16 @@ export function processDtfPixels(data,width,height,options={},ppi=300) {
       if(d<t){alpha=clamp(alpha*d/t);stats.knockedOut++;}
     }
     if(alpha<=alphaCut)alpha=0;
+    if(alpha && processScreens) {
+      const ink=screenProcessPixel(data,i,x,y,alpha,processScreens);
+      if(ink)stats.printable++;else stats.transparent++;
+      continue;
+    }
+    if(alpha && colorScreen) {
+      const ink=screenColorDotPixel(data,i,x,y,alpha,colorScreen);
+      if(ink)stats.printable++;else stats.transparent++;
+      continue;
+    }
     if(alpha && o.halftone!=='none') {
       const lum=(.2126*data[i]+.7152*data[i+1]+.0722*data[i+2])/255;
       let coverage=alpha/255;
@@ -118,6 +133,12 @@ export function qualityReport(sourceWidth,sourceHeight,outputWidth,outputHeight,
   if(stats.partialAlpha)warnings.push(stats.partialAlpha.toLocaleString()+' partly transparent pixels remain; inspect for haze.');
   if(options.halftone!=='none' && DTF_DPI/Number(options.lpi)<6)warnings.push('Halftone cell has fewer than 6 pixels; test for stable dots.');
   if(options.knockout==='shirt')warnings.push('Review knockout carefully: the chosen color may also occur inside the artwork.');
+  if(options.halftone==='multicolor') {
+    warnings.push(...screenAngleWarnings(options));
+    warnings.push('CMYK-dot composite is a visual RGB simulation, not RIP channel separations or an ICC-managed proof. Validate output and underbase with your printer.');
+    warnings.push('Pure white CMYK pixels make no colored dots. White ink must be handled through the DTF RIP.');
+  }
+  if(options.halftone==='color-dots')warnings.push('Original-color dots are an artistic alpha pattern. Confirm RIP white underbase and actual transfer quality before production.');
   return {outputWidth,outputHeight,dpi:DTF_DPI,sourceWidth,sourceHeight,estimatedNativeDpi:Math.round(DTF_DPI/Math.max(scale,.01)),stats,warnings};
 }
 export async function exportDtfPng(canvas) {

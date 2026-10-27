@@ -5,6 +5,7 @@ import {
   processDtfPixels, qualityReport, exportDtfPng, vectorSilhouette, cmykToRgb,
 } from './lib/dtfStudioEngine';
 import { removeEdgeConnectedWhite } from './lib/dtfPreflight';
+import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtfMulticolor.js';
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
 import './DTFPrepStudio.css';
 
@@ -14,6 +15,8 @@ const PRESETS = {
   'Colored shirt': { background:'none', halftone:'knockout', knockout:'shirt', alphaMode:'hard', defringe:1 },
   'Fades only': { background:'none', halftone:'fades', knockout:'none', alphaMode:'hard' },
   'Vintage halftone': { background:'none', halftone:'full', knockout:'none', alphaMode:'hard' },
+  'CMYK multicolor dots': { background:'none', halftone:'multicolor', knockout:'none', alphaMode:'hard', lpi:35, screenAngles:{...PROCESS_ANGLES}, screenEnabled:{C:true,M:true,Y:true,K:true}, screenGain:0 },
+  'Original-color dots': { background:'none', halftone:'color-dots', knockout:'none', alphaMode:'hard', lpi:35, colorDotDensity:80 },
 };
 function makeCanvas(width,height) {
   const c=document.createElement('canvas');c.width=width;c.height=height;return c;
@@ -69,10 +72,16 @@ export default function DTFPrepStudio(){
   const [assetId,setAssetId]=useState(''),[garmentId,setGarmentId]=useState(''),[garmentUrls,setGarmentUrls]=useState({});
   const [proofMode,setProofMode]=useState('checker'),[proofColor,setProofColor]=useState('#161b25');
   const [colorMode,setColorMode]=useState('rgb'),[cmyk,setCmyk]=useState([0,0,0,95]);
+  const [channelView,setChannelView]=useState('composite');
   const [garmentScale,setGarmentScale]=useState(45),[garmentTop,setGarmentTop]=useState(38);
   const [sourceMeta,setSourceMeta]=useState(null),[vectorColor,setVectorColor]=useState('#ffffff');
   const imgRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
   const change=(k,v)=>{setOpts(o=>({...o,[k]:v}));setSavedPrepared('');};
+  const changeChannel=(section,channel,value)=>{
+    setOpts(o=>({...o,[section]:{...o[section],[channel]:value}}));
+    setSavedPrepared('');
+  };
+  const channelWarnings=useMemo(()=>opts.halftone==='multicolor'?screenAngleWarnings(opts):[],[opts]);
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
@@ -101,7 +110,7 @@ export default function DTFPrepStudio(){
     const number=++currentRef.current;
     const timeout=setTimeout(()=>{
       try{
-        const render=renderArtwork(bitmap,opts,950);
+        const render=renderArtwork(bitmap,{...opts,channelView},950);
         if(number!==currentRef.current)return;
         const url=render.canvas.toDataURL('image/png');
         setProofUrl(url);
@@ -111,7 +120,7 @@ export default function DTFPrepStudio(){
       }catch(e){if(number===currentRef.current){setProofUrl('');setReport(null);setMessage(e.message);}}
     },140);
     return ()=>{clearTimeout(timeout);currentRef.current++;};
-  },[bitmap,opts]);
+  },[bitmap,opts,channelView]);
   async function loadR2(){
     const row=bundle?.artwork?.find(r=>r.id===assetId);
     if(!row)return;
@@ -131,7 +140,8 @@ export default function DTFPrepStudio(){
   }
   async function prepareFull(){
     if(!bitmap)throw Error('Upload an image first.');
-    return renderArtwork(bitmap,opts);
+    // Preview-only channel isolation must never leak into an exported or saved file.
+    return renderArtwork(bitmap,{...opts,channelView:'composite'});
   }
   async function downloadPng(){
     setBusy(true);
@@ -144,7 +154,7 @@ export default function DTFPrepStudio(){
   async function downloadVector(){
     setBusy(true);
     try{
-      const render=renderArtwork(bitmap,opts,850),svg=vectorSilhouette(render.pixels.data,render.canvas.width,render.canvas.height,vectorColor,12000,DTF_DPI*render.canvas.width/render.dimensions.width);
+      const render=renderArtwork(bitmap,{...opts,channelView:'composite'},850),svg=vectorSilhouette(render.pixels.data,render.canvas.width,render.canvas.height,vectorColor,12000,DTF_DPI*render.canvas.width/render.dimensions.width);
       download(new Blob([svg],{type:'image/svg+xml'}),baseName(file.name)+'-one-color-outline.svg');
       setMessage('One-color silhouette SVG exported for limited solid artwork. This is not a faithful full-color vectorization.');
     }catch(e){setMessage(e.message);}finally{setBusy(false);}
@@ -205,7 +215,7 @@ export default function DTFPrepStudio(){
         <div className="dtf-metrics">
           <span><b>OUTPUT</b> {target?target.width+' × '+target.height+' px':'—'}</span>
           <span><b>NATIVE DETAIL</b> {report?report.estimatedNativeDpi+' PPI':'—'}</span>
-          <span><b>HALFTONE</b> {opts.halftone==='none'?'Off':opts.lpi+' LPI'}</span>
+          <span><b>HALFTONE</b> {opts.halftone==='none'?'Off':opts.halftone==='multicolor'?'CMYK multicolor · '+opts.lpi+' LPI':opts.halftone==='color-dots'?'Original-color dots · '+opts.lpi+' LPI':opts.lpi+' LPI'}</span>
         </div>
         {report?.warnings?.length>0&&<aside className="dtf-warning"><b>Preflight checks</b><ul>{report.warnings.map((w,i)=><li key={i}>{w}</li>)}</ul></aside>}
         <p className="dtf-note">Shirt previews are visual mockups, not color-managed RIP simulations. PNG exports never contain the garment backdrop.</p>
@@ -238,14 +248,29 @@ export default function DTFPrepStudio(){
         </Tuning>
         <Tuning title="Halftones & garment knockout">
           {field('Quick preset',<select value="" onChange={e=>{setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
-          {field('Halftone style',<select value={opts.halftone} onChange={e=>change('halftone',e.target.value)}><option value="none">Off</option><option value="fades">Transparent gradients only</option><option value="knockout">Shirt-color knockout</option><option value="full">Full halftone (vintage)</option></select>)}
+          {field('Halftone style',<select value={opts.halftone} onChange={e=>change('halftone',e.target.value)}><option value="none">Off</option><option value="fades">Transparent gradients only</option><option value="knockout">Shirt-color knockout</option><option value="full">Full halftone (vintage)</option><option value="multicolor">CMYK multicolor rosette (4 channels)</option><option value="color-dots">Original-color dots (RGB)</option></select>)}
           {field('Knockout',<select value={opts.knockout} onChange={e=>change('knockout',e.target.value)}><option value="none">Do not knock out</option><option value="shirt">Remove shirt-matched color</option></select>)}
           {field('Shirt RGB',<input type="color" value={opts.shirtColor} onChange={e=>change('shirtColor',e.target.value)}/>)}
           <Slider label="Knockout tolerance" value={opts.knockoutTolerance} min={1} max={200} onChange={v=>change('knockoutTolerance',v)}/>
           <Slider label="Line frequency (LPI)" value={opts.lpi} min={15} max={55} onChange={v=>change('lpi',v)}/>
-          <Slider label="Screen angle" value={opts.angle} min={0} max={90} step={2.5} onChange={v=>change('angle',v)}/>
+
+          {opts.halftone!=='multicolor'&&<Slider label="Screen angle" value={opts.angle} min={0} max={90} step={2.5} onChange={v=>change('angle',v)}/>}
+          {opts.halftone==='color-dots'&&<Slider label="Dot coverage (%)" value={opts.colorDotDensity??80} min={10} max={100} step={5} onChange={v=>change('colorDotDensity',v)}/>}
+          {opts.halftone==='multicolor'&&<div className="dtf-color-channels">
+            <div className="dtf-channel-title"><strong>CMYK COLOR CHANNELS</strong><button type="button" className="dtf-secondary" onClick={()=>change('screenAngles',{...PROCESS_ANGLES})}>Reset angles</button></div>
+            {PROCESS_CHANNELS.map(channel=><div className="dtf-channel-row" key={channel}>
+              <label className="dtf-channel-toggle"><input type="checkbox" checked={opts.screenEnabled?.[channel]!==false} onChange={e=>changeChannel('screenEnabled',channel,e.target.checked)}/>
+                <span className={'dtf-ink-dot dtf-ink-'+channel.toLowerCase()} aria-hidden="true"/> <strong>{({C:'Cyan',M:'Magenta',Y:'Yellow',K:'Black'})[channel]}</strong>
+              </label>
+              <label className="dtf-angle-field">Angle (°)<input type="number" min="-180" max="180" step="2.5" value={opts.screenAngles?.[channel]??PROCESS_ANGLES[channel]} onChange={e=>changeChannel('screenAngles',channel,Number(e.target.value))} disabled={opts.screenEnabled?.[channel]===false}/></label>
+            </div>)}
+            <Slider label="Dot gain compensation (%)" value={opts.screenGain??0} min={-20} max={20} step={1} onChange={v=>change('screenGain',v)}/>
+            {field('Proof channel (preview only)',<select value={channelView} onChange={e=>setChannelView(e.target.value)}><option value="composite">Combined four-color proof</option><option value="C">Cyan screen only</option><option value="M">Magenta screen only</option><option value="Y">Yellow screen only</option><option value="K">Black screen only</option></select>)}
+            {channelWarnings.length>0&&<p className="dtf-channel-warning" role="alert">{channelWarnings.join(' ')}</p>}
+            <p className="dtf-note">This creates a CMYK-style rosette as fully opaque RGB dots on transparency. It is not an ICC conversion, actual CMYK ink separation, or white-ink channel. Export always uses combined enabled colors regardless of proof channel.</p>
+          </div>}
           {field('Dot shape',<select value={opts.dot} onChange={e=>change('dot',e.target.value)}>{['circle','ellipse','diamond','square','line'].map(s=><option key={s} value={s}>{s}</option>)}</select>)}
-          <p className="dtf-note">Start with a printed calibration sheet to determine your RIP/provider's minimum viable dot.</p>
+          <p className="dtf-note">Start with a printed calibration sheet to determine your RIP/provider's minimum viable dot. The RIP may screen or resample the PNG again.</p>
         </Tuning>
         <Tuning title="Tonal adjustments">
           <Slider label="Black point" value={opts.blackPoint} max={230} onChange={v=>change('blackPoint',v)}/>
