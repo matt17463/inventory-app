@@ -622,7 +622,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
 }
 
 function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBusy, setMessage }) {
-  const empty = { project_id: projectId, blank_asset_id: blanks[0]?.id || '', artwork_asset_id: artwork[0]?.id || '', placement_name: 'center_chest', decoration_method: 'dtf', x_pct: 50, y_pct: 44, width_pct: 42, print_width_inches: 10, rotation_degrees: 0, opacity: 1, blend_mode: 'source-over', preserve_white_ink: true, shadow_strength: 0.15, generation_instructions: '' };
+  const empty = { project_id: projectId, blank_asset_id: blanks[0]?.id || '', artwork_asset_id: artwork[0]?.id || '', placement_name: 'center_chest', decoration_method: 'dtf', x_pct: 50, y_pct: 44, width_pct: 42, print_width_inches: 10, print_height_inches: 10, rotation_degrees: 0, opacity: 1, blend_mode: 'source-over', preserve_white_ink: true, shadow_strength: 0.15, generation_instructions: '' };
   const [form, setForm] = useState(empty);
   useEffect(() => setForm((current) => ({ ...current, project_id: projectId, blank_asset_id: current.blank_asset_id || blanks[0]?.id || '', artwork_asset_id: current.artwork_asset_id || artwork[0]?.id || '' })), [projectId, blanks, artwork]);
   const blank = blanks.find((row) => row.id === form.blank_asset_id);
@@ -659,7 +659,7 @@ function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBus
               <FormField label="Rotation"><input type="number" step="1" value={form.rotation_degrees || 0} onChange={(e) => setForm({ ...form, rotation_degrees: e.target.value })} /></FormField>
               <FormField label="White ink"><label className="mockup-check"><input type="checkbox" checked={protectsWhiteInk(form)} onChange={(e) => setForm({ ...form, preserve_white_ink: e.target.checked, blend_mode: e.target.checked ? 'source-over' : form.blend_mode })} /> Protect visible white as opaque ink</label></FormField>
               <FormField label="Blend mode" help={protectsWhiteInk(form) ? 'White-ink protection uses Normal compositing. Turn protection off only for intentional fabric blending.' : 'Multiply lightens/removes white; Screen lightens dark colors.'}><select disabled={protectsWhiteInk(form)} value={protectsWhiteInk(form) ? 'source-over' : form.blend_mode} onChange={(e) => setForm({ ...form, blend_mode: e.target.value })}><option value="source-over">Normal — opaque print</option><option value="multiply">Multiply — fabric blend</option><option value="screen">Screen — light blend</option><option value="overlay">Overlay</option></select></FormField>
-              <FormField label="AI instructions"><textarea value={form.generation_instructions || ''} placeholder="Preserve the exact logo and make the DTF print follow the hoodie folds." onChange={(e) => setForm({ ...form, generation_instructions: e.target.value })} /></FormField>
+              <FormField label="Print height (inches)"><input type="number" min="0.01" step="0.125" value={form.print_height_inches || ''} onChange={e=>setForm({...form,print_height_inches:e.target.value})}/></FormField><FormField label="AI instructions"><textarea value={form.generation_instructions || ''} placeholder="Preserve the exact logo and make the DTF print follow the hoodie folds." onChange={(e) => setForm({ ...form, generation_instructions: e.target.value })} /></FormField>
             </FieldGrid>
             <div className="sc-button-row"><ActionButton type="submit" tone="primary">{form.id ? 'Update Placement' : 'Save Placement'}</ActionButton>{form.id ? <ActionButton onClick={() => setForm(empty)}>Cancel Edit</ActionButton> : null}</div>
           </form>
@@ -1383,7 +1383,8 @@ async function urlsForWorkflowTab(bundle, tab) {
   return {};
 }
 
-export default function MockupStudio() {
+export default function MockupStudio({embedded=false,initialProjectId=''}) {
+  const Container=embedded?'section':'main';
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [bundle, setBundle] = useState(null);
@@ -1410,7 +1411,7 @@ export default function MockupStudio() {
   useEffect(() => {
     loadProjects();
     listMockupCustomers().then(setCustomers).catch(() => setCustomers([]));
-    const linkedProject = new URLSearchParams(window.location.search).get('project');
+    const linkedProject = initialProjectId || new URLSearchParams(window.location.search).get('project');
     if (linkedProject) {
       setSelectedId(linkedProject);
       loadProject(linkedProject).catch(error => setMessage(error.message));
@@ -1450,9 +1451,9 @@ export default function MockupStudio() {
     : false;
 
   return (
-    <main className="page mockup-studio-page">
+    <Container className={embedded?'mockup-studio-page':'page mockup-studio-page'}>
       <PageHeader eyebrow="Artwork & Storefront" title="Mockup Studio" description="Create accurate product mockups, collect approval, prepare pricing and production details, and create WooCommerce products.">
-        {bundle ? <div className="sc-button-row"><StatusBadge status={bundle.project.status} /><ActionButton onClick={() => { setSelectedId(''); setBundle(null); }}>All Projects</ActionButton><ActionButton onClick={() => loadProject()}>Refresh</ActionButton></div> : null}
+        {bundle ? <div className="sc-button-row"><StatusBadge status={bundle.project.status} />{!embedded&&<ActionButton onClick={() => { setSelectedId(''); setBundle(null); }}>All Projects</ActionButton>}<ActionButton onClick={() => loadProject()}>Refresh</ActionButton></div> : null}
       </PageHeader>
       <HelpPanel title="Artwork accuracy is protected"><p>Use Exact Composite for crests, logos, and text that must not change. AI Assist is optional and should be reviewed before approval.</p></HelpPanel>
       {message ? <p className="message">{message}</p> : null}
@@ -1484,6 +1485,6 @@ export default function MockupStudio() {
           <SectionCard tone="danger" title="Delete project permanently" description="Deleting a project removes its Mockup Studio records and any Supabase or R2 files that remain. It does not delete a local archive folder or change WooCommerce products. Admin or manager access is required."><ActionButton tone="danger" onClick={async () => { if (!window.confirm(`Permanently delete mockup project “${bundle.project.project_name}”? Local archive folders on your computer will not be deleted.`)) return; setBusy(true); try { await deleteMockupProject(bundle.project.id); setBundle(null); setSelectedId(''); await loadProjects(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Delete Mockup Project</ActionButton></SectionCard>
         </>
       )}
-    </main>
+    </Container>
   );
 }

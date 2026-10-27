@@ -38,6 +38,8 @@ export default function ProductionTravelers() {
   const [versionId,setVersionId]=useState('');
   const [selected,setSelected]=useState(null);
   const [events,setEvents]=useState([]);
+  const [certification,setCertification]=useState(null);
+  const [replacementReason,setReplacementReason]=useState('');
   const [eventKind,setEventKind]=useState('note');
   const [eventText,setEventText]=useState('');
   const [busy,setBusy]=useState(false);
@@ -63,8 +65,8 @@ export default function ProductionTravelers() {
     if(!id) {setItems([]);setTravelerList([]);return;}
     const [a,b,c]=await Promise.all([
       supabase.from('job_items').select('id,job_id,quantity,order_sku,sku,ordered_product_name,item_name,name,size,color,brand,product_type,placement,status').eq('job_id',id).order('id'),
-      supabase.from('sc_job_travelers').select('id,job_item_id,job_id,created_at,recipe_version_id').eq('job_id',id).order('created_at',{ascending:false}),
-      supabase.from('sc_job_traveler_lines').select('traveler_id,job_item_id,quantity').order('job_item_id'),
+      supabase.from('sc_job_travelers').select('id,job_item_id,job_id,created_at,recipe_version_id').is('superseded_at',null).eq('job_id',id).order('created_at',{ascending:false}),
+      supabase.from('sc_job_traveler_lines').select('traveler_id,job_item_id,quantity').is('superseded_at',null).order('job_item_id'),
     ]);
     if(a.error)throw a.error;if(b.error)throw b.error;if(c.error)throw c.error;
     const groupIds=new Set((b.data||[]).map(t=>t.id));
@@ -75,7 +77,7 @@ export default function ProductionTravelers() {
   const loadTraveler=useCallback(async(id)=>{
     if(!id) {setSelected(null);setEvents([]);return;}
     const {data,error}=await supabase.from('sc_job_travelers')
-      .select('id,job_id,job_item_id,recipe_version_id,recipe_snapshot,ordered_quantity,created_at').eq('id',id).single();
+      .select('id,job_id,job_item_id,recipe_version_id,recipe_snapshot,ordered_quantity,created_at,superseded_at').eq('id',id).single();
     if(error)throw error;
     const [ev,job,lines]=await Promise.all([
       supabase.from('sc_job_traveler_events').select('id,kind,details,created_at').eq('traveler_id',id).order('created_at'),
@@ -83,6 +85,9 @@ export default function ProductionTravelers() {
       supabase.from('sc_job_traveler_lines').select('job_item_id,quantity,item_snapshot').eq('traveler_id',id).order('job_item_id'),
     ]);
     if(ev.error)throw ev.error;if(job.error)throw job.error;if(lines.error)throw lines.error;
+    const proof=await supabase.rpc('sc_check_traveler_certification',{p_traveler_id:id});
+    setCertification(proof.error?{ready:false,blockers:[proof.error.message]}:proof.data);
+    setVersionId(data.recipe_version_id);
     setTravelerLines(lines.data||[]);
     setSelected(data);setEvents(ev.data||[]);setSavedJob(job.data);setJobId(String(data.job_id));
     setArtwork(null);setArtworkUrl('');
@@ -216,6 +221,19 @@ export default function ProductionTravelers() {
       navigate('/production-travelers/'+data);
     }catch(e){setMessage(safeError(e));}finally{setBusy(false);}
   }
+  async function revalidateTraveler(){
+    setBusy(true);setMessage('');try{const {error}=await supabase.rpc('sc_revalidate_traveler',{p_traveler_id:selected.id});if(error)throw error;await loadTraveler(selected.id);setMessage('Traveler revalidated against current exact evidence.');}catch(e){setMessage(safeError(e));}finally{setBusy(false);}
+  }
+  async function replaceTraveler(){
+    setBusy(true);setMessage('');try{
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token)throw Error('Employee sign-in required');
+      const response=await fetch('/.netlify/functions/traveler-artwork-preflight',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({job_id:selected.job_id,job_item_ids:travelerLines.map(l=>Number(l.job_item_id)),recipe_version_id:versionId})});
+      const proof=await response.json();if(!response.ok||proof.verified!==true)throw Error(proof.message||'Artwork storage verification failed');
+      const {data,error}=await supabase.rpc('sc_replace_managed_traveler',{p_traveler_id:selected.id,p_recipe_version_id:versionId,p_reason:replacementReason});
+      if(error)throw error;setReplacementReason('');navigate('/production-travelers/'+data);
+    }catch(e){setMessage(safeError(e));}finally{setBusy(false);}
+  }
   async function addEvent(){
     if(!selected||!eventText.trim())return;
     setBusy(true);setMessage('');
@@ -299,6 +317,20 @@ export default function ProductionTravelers() {
       </section>
     </div>}
     {travelerId&&(selected?<article className="sc-traveler-paper">
+      <section aria-label="Current production certification">
+        <h3>{certification?.ready?(certification.managed?'Current production evidence validated':'Legacy traveler — no variation certification asserted'):'Production blocked'}</h3>
+        <ul>{(certification?.blockers||['Checking authoritative evidence…']).map((b,i)=><li key={i}>{b}</li>)}</ul>
+        {selected.superseded_at&&<p>This historical traveler was superseded. Use the active replacement in the job traveler list.</p>}
+        {['admin','manager'].includes(access?.role)&&!selected.superseded_at&&<div className="sc-traveler-no-print">
+          <button disabled={busy} onClick={revalidateTraveler}>Revalidate unchanged traveler evidence</button>
+          <details><summary>Replace changed production instructions</summary>
+            <p>The current traveler and all snapshots remain in history. Replacement requires current certificates and freshly verified artwork for every line.</p>
+            <label>Approved replacement recipe<select value={versionId} onChange={e=>setVersionId(e.target.value)}>{selectableVersions.map(v=><option key={v.id} value={v.id}>{v.recipe?.name||v.recipe_id} · revision {v.revision}</option>)}</select></label>
+            <label>Reason and reviewed differences<textarea value={replacementReason} onChange={e=>setReplacementReason(e.target.value)}/></label>
+            <button disabled={busy||!versionId||replacementReason.trim().length<12} onClick={replaceTraveler}>Create reviewed replacement traveler</button>
+          </details>
+        </div>}
+      </section>
       <header className="sc-traveler-paper-header">
         <div><p className="sc-traveler-brand">SKILLED CRAFTING · PRODUCTION TRAVELER</p>
           <h2>{savedJob?.customer_name||'Customer job'}</h2>
@@ -370,7 +402,7 @@ export default function ProductionTravelers() {
         </select></label>
         <label>What happened?<textarea rows="3" value={eventText} onChange={e=>setEventText(e.target.value)}
           placeholder="Record measured placement confirmation, items completed or an exception." /></label>
-        <button type="button" disabled={busy||!eventText.trim()} onClick={addEvent}>{busy?'Saving…':'Save activity note'}</button>
+        <button type="button" disabled={busy||!eventText.trim()||(!certification?.ready&&!['note','exception'].includes(eventKind))} onClick={addEvent}>{busy?'Saving…':'Save activity note'}</button>
         <p><Link to="/qc-checklist">Complete official QC →</Link> · <Link to="/production-board">Update job status →</Link></p>
       </section>}
       <footer className="sc-traveler-paper-footer"><span>Internal manufacturing instructions · Scan requires authenticated app access</span>

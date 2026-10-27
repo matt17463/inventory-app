@@ -160,6 +160,7 @@ export async function createMockupProject(values) {
   const storage = await getMockupStorageStatus();
   const payload = {
     project_name: String(values.project_name || '').trim(),
+    woo_product_id: Number.isSafeInteger(Number(values.woo_product_id))&&Number(values.woo_product_id)>0?Number(values.woo_product_id):null,
     customer_id_text: values.customer_id_text || null,
     customer_name: String(values.customer_name || '').trim() || null,
     campaign_name: String(values.campaign_name || '').trim() || null,
