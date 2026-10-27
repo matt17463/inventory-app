@@ -17,6 +17,31 @@ function wooEndpoint(id){
     throw Error('WooCommerce HTTPS site configuration is invalid.');
   return new URL('/wp-json/wc/v3/orders/'+id,base).toString();
 }
+// Download only bounded, public Woo storefront thumbnails. Never fetch arbitrary hosts.
+async function safeWooThumbnail(url){
+ try{
+  const base=new URL(wooBase()),target=new URL(String(url||''));
+  if(target.protocol!=='https:'||target.hostname!==base.hostname||target.port||target.username||target.password)return '';
+  const response=await fetch(target.toString(),{redirect:'error',signal:AbortSignal.timeout(4500),headers:{Accept:'image/png,image/jpeg,image/webp'}});
+  if(!response.ok)return '';
+  const type=String(response.headers.get('content-type')||'').split(';')[0].toLowerCase();
+  if(!['image/png','image/jpeg'].includes(type))return '';
+  if(Number(response.headers.get('content-length')||0)>800000)return '';
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(bytes.length>800000)return '';
+  return 'data:'+type+';base64,'+bytes.toString('base64');
+ }catch{return ''}
+}
+async function imageForWooProduct(id,key,secret){
+ if(!Number.isSafeInteger(Number(id))||Number(id)<1)return '';
+ try{
+  const target=new URL('/wp-json/wc/v3/products/'+Number(id),wooBase());
+  const response=await fetch(target.toString(),{redirect:'error',signal:AbortSignal.timeout(4500),headers:{Authorization:'Basic '+Buffer.from(key+':'+secret).toString('base64'),Accept:'application/json'}});
+  if(!response.ok)return '';
+  const product=await response.json();
+  return product.images?.[0]?.src||'';
+ }catch{return ''}
+}
 async function loadWooSource(orderId){
   const key=clean(process.env.WC_CONSUMER_KEY||process.env.WOOCOMMERCE_CONSUMER_KEY);
   const secret=clean(process.env.WC_CONSUMER_SECRET||process.env.WOOCOMMERCE_CONSUMER_SECRET);
@@ -31,7 +56,17 @@ async function loadWooSource(orderId){
     if(!response.ok)throw Error('WooCommerce order read failed (HTTP '+response.status+').');
     const order=await readJson(response);
     if(!order||Number(order.id)!==orderId)throw Error('WooCommerce order identity did not match.');
-    return normalizeWooPrintSource(order);
+    const source=normalizeWooPrintSource(order);
+    // Max eight distinct product images, read only. Any missing/unavailable image
+    // leaves an intentional text-only row; never delay or block printing financial data.
+    const itemIds=[...new Set((order.line_items||[]).map(x=>Number(x.product_id)).filter(x=>x>0))].slice(0,8);
+    const imageById=new Map(await Promise.all(itemIds.map(async productId=>{
+     const line=(order.line_items||[]).find(x=>Number(x.product_id)===productId);
+     const url=line?.image?.src||line?.image?.url||await imageForWooProduct(productId,key,secret);
+     return [productId,await safeWooThumbnail(url)];
+    })));
+    for(let i=0;i<source.lines.length;i++)source.lines[i].thumbnailData=imageById.get(Number(order.line_items[i]?.product_id))||'';
+    return source;
   }finally{clearTimeout(timeout);}
 }
 async function loadManualSource(supabase,manualId){

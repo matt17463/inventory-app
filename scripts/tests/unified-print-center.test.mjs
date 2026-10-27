@@ -77,3 +77,23 @@ test('packing label retains ambiguous metadata as MULTIPLE and honors manual cor
  assert.equal(deriveDistributionFields(source).student,'MULTIPLE - SEE PACKING LIST');
  assert.equal(deriveDistributionFields(source,{student:'Override'}).student,'Override');
 });
+
+test('WooCommerce customer invoice carries original product image reference and verified amounts',()=>{
+ const order={id:16148,number:'16148',billing:{first_name:'Sample',last_name:'Customer'},line_items:[{id:3,product_id:123,name:'Raglan Tee',quantity:1,total:'22.00',subtotal:'22.00',image:{src:'https://skilledcrafting.com/wp-content/uploads/item.jpg'},meta_data:[{display_key:'Student Name::',display_value:'Sample Student'}]}],total:'24.02',total_tax:'2.02',shipping_total:'0'};
+ const source=normalizeWooPrintSource(order);
+ assert.equal(source.lines[0].thumbnailUrl,'https://skilledcrafting.com/wp-content/uploads/item.jpg');
+ assert.equal(source.lines[0].metadata[0].value,'Sample Student');
+ assert.equal(source.total,24.02);
+});
+test('Customer invoice branding is configurable but never fabricates business phone or address',()=>{
+ const defaults=normalizePrintPrefs({});
+ assert.equal(defaults.businessWebsite,'skilledcrafting.com');
+ assert.equal(defaults.businessAddress,'');assert.equal(defaults.businessPhone,'');
+ const custom=normalizePrintPrefs({businessName:'Skilled Crafting',businessAddress:'Shop mailbox',businessPhone:'(360) 000-0000'});
+ assert.equal(custom.businessAddress,'Shop mailbox');
+ assert.equal(custom.businessPhone,'(360) 000-0000');
+ const pdf=read('src/lib/printPacketPdf.js');
+ assert.match(pdf,/line\.thumbnailData/);
+ assert.match(pdf,/businessWebsite/);
+ assert.match(pdf,/logoData/);
+});
