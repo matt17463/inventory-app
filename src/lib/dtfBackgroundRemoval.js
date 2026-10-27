@@ -110,7 +110,8 @@ export function validateDtfTransparency({settings,report,finalAlpha}){
   if(finalAlpha.allTransparent)throw Error('Background removal erased all artwork. Adjust tolerance or restore the source.');
   if(settings.background&&settings.background!=='none'&&!finalAlpha.hasTransparency)
     throw Error('The exported image would still have an opaque background. Select a background region and retry.');
-  if(settings.background&&settings.background!=='none'&&report.removed===0&&report.softened===0&&finalAlpha.transparent===0)
-    throw Error('No background pixels were removed. Choose the correct color or Pick from Source.');
+  // Transparent padding added during sizing does NOT count as background removal.
+  if(settings.background&&settings.background!=='none'&&report.removed===0&&report.softened===0&&!report.originalHadTransparency)
+    throw Error('No source-background pixels were removed. Try another tolerance or click a background region in Source.');
   return true;
 }
