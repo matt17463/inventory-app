@@ -52,6 +52,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
       const manual=applyDtfMaskStrokes(original.data,originalCopy,staged.width,staged.height,opts.maskStrokes);
       backgroundResult.manualErased=manual.erased;
       backgroundResult.manualRestored=manual.restored;
+      backgroundResult.removed+=manual.erased;
     }
     sc.putImageData(original,0,0);
     if(opts.crop)bounds=alphaBounds(original.data,staged.width,staged.height);
@@ -69,7 +70,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   const stats=processDtfPixels(pixels.data,outW,outH,{...opts,background:'none'},DTF_DPI*ratio);
   const finalAlpha=inspectPngAlpha(pixels.data,outW,outH);
   validateDtfTransparency({settings:opts,report:backgroundResult,finalAlpha});
-  stats.removedBackground=backgroundResult.removed+(backgroundResult.manualErased||0);
+  stats.removedBackground=backgroundResult.removed;
   stats.softenedBackground=backgroundResult.softened;
   ctx.putImageData(pixels,0,0);
   return {canvas:output,pixels,stats,backgroundResult,finalAlpha,
