@@ -66,6 +66,16 @@ export async function handler(event){
    }
    case 'load': result=await planFor(db,input.plan_id);break;
    case 'history': result=await rows(db.from('sc_woo_logo_mapping_events').select('*').eq('plan_id',(await planFor(db,input.plan_id)).id).order('revision',{ascending:false}).limit(100));break;
+   case 'sync_review':{
+    const prior=await planFor(db,input.plan_id),products=[];let complete=false;
+    for(let offset=0;offset<10000;offset+=1000){const page=await rows(db.from('products').select('id,sku,woocommerce_variation_id,blank_product_id').eq('woocommerce_product_id',prior.woo_product_id).order('id').range(offset,offset+999));products.push(...page);if(page.length<1000){complete=true;break;}}
+    const grouped=new Map();for(const p of products){const key=Number(p.woocommerce_variation_id||0);grouped.set(key,[...(grouped.get(key)||[]),p]);}
+    const actual=new Set(prior.baseline.variations.map(v=>v.id));
+    result={synced_rows:products.length,distinct_variation_ids:[...grouped.keys()].filter(Boolean).length,complete,
+     duplicate_variations:[...grouped].filter(([,r])=>r.length>1).map(([variation_id,records])=>({variation_id,records})),
+     stale_app_variations:[...grouped.keys()].filter(v=>v&&!actual.has(v)),missing_app_variations:[...actual].filter(v=>!grouped.has(v)),
+     note:'Read-only comparison. Duplicate and stale records are preserved; mapping drafts do not require deletion or stock reconciliation.'};break;
+   }
    case 'add_choice':{
     const prior=await planFor(db,input.plan_id),label=String(input.label||'').trim(),choice=normalizeChoice(label);
     if(label.length<2||label.length>160||Object.hasOwn(prior.mappings,choice))throw Error('Enter a distinct artwork choice label (2–160 characters).');
