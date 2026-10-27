@@ -97,3 +97,14 @@ test('Customer invoice branding is configurable but never fabricates business ph
  assert.match(pdf,/businessWebsite/);
  assert.match(pdf,/logoData/);
 });
+
+test('Print Center exposes customer invoice branding on the no-job settings screen',()=>{
+ const component=read('src/PrintCenter.jsx');
+ assert.match(component,/const printSettingsPanel=\(/);
+ const noJob=component.split('if\(!jobId\)return')[1]?.split('return <main className="page sc-print-center">')[0]||'';
+ assert.match(noJob,/\{printSettingsPanel\}/);
+ assert.match(noJob,/\{designerPanel\}/);
+ assert.match(component,/businessAddress/);
+ assert.match(component,/businessPhone/);
+ assert.match(component,/Save my workstation defaults/);
+});
