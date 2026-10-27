@@ -65,7 +65,8 @@ export function deriveGuidedProgress(row,evidence={}){
   const id=Number(r.job_item_id);reservationQty.set(id,(reservationQty.get(id)||0)+Number(r.quantity_reserved||0));
  }
  const stockReserved=required.length>0&&!unpaired.length&&required.every(i=>(reservationQty.get(Number(i.id))||0)>=Number(i.quantity||0));
- const physicalPullVerified=stockReserved&&notes.some(n=>clean(n.note).startsWith('workhub physical pull verified: '));
+ const pullSignature=required.map(i=>[i.id,i.quantity,i.blank_product_id].join(':')).sort().join('|');
+ const physicalPullVerified=stockReserved&&notes.some(n=>clean(n.note)===clean('WorkHub physical pull verified: '+pullSignature));
  const latestQc=[...qc].sort((a,b)=>new Date(b.qc_completed_at||b.created_at||0)-new Date(a.qc_completed_at||a.created_at||0))[0];
  const qcPassed=latestQc?.passed===true;
  const artworkLinked=artworkLinks.some(x=>Boolean(x.handoff?.approved_file_url)) || handoffs.some(h=>Boolean(h.approved_file_url));
