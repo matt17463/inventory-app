@@ -1,3 +1,4 @@
+import {deriveDistributionFields} from './distributionMetadata.js';
 import {normalizeLabelDesign} from './labelDesigner.js';
 import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
@@ -128,36 +129,6 @@ export function createInvoicePairPdf(args){
   return doc;
 }
 
-const distributionAliases={
- student:'student name|student|child name|recipient name|player name|athlete name',
- teacher:'teacher name|teacher|homeroom teacher|homeroom',
- coach:'coach name|coach|head coach',
- playerNumber:'player number|jersey number|jersey #|number',
- grade:'grade|grade level|student grade|students grade|students grade level|student s grade|year',
- team:'team assignment|team name|team|class|classroom',
- appliedName:'name applied|name on back|personalized name|custom name|player name on back|name text',
- school:'school|school name',
-};
-const cleanLabel=v=>plain(v).slice(0,120);
-// Woo add-on labels frequently contain punctuation (e.g. "Student Name::")
-// and possessives ("Student’s Grade::"). Match normalized *whole* labels,
-// never substring guesses that could accidentally route unrelated metadata.
-export const canonicalDistributionMetaLabel=value=>plain(value).normalize('NFKC').toLowerCase()
- .replace(/[\u2018\u2019\u02bc]/g,"'").replace(/['’]s\b/g,'s')
- .replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
-export function deriveDistributionFields(source,overrides={}){
- const found={};
- for(const [field,aliases] of Object.entries(distributionAliases)){
-  const keys=aliases.split('|');
-  const values=new Set();
-  for(const line of source?.lines||[])for(const meta of line.metadata||[]){
-   if(keys.some(key=>canonicalDistributionMetaLabel(key)===canonicalDistributionMetaLabel(meta.label)))values.add(cleanLabel(meta.value));
-  }
-  const unique=[...values].filter(Boolean);
-  found[field]=cleanLabel(overrides[field]|| (unique.length===1?unique[0]:unique.length>1?'MULTIPLE - SEE PACKING LIST':''));
- }
- return found;
-}
 function cropLine(doc,value,x,y,width,size=10,bold=false){
  const raw=plain(value);
  if(!raw)return y;
