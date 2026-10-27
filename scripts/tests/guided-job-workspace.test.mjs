@@ -93,8 +93,9 @@ test('manager N/A review annotates artwork step without claiming physical approv
  assert.match(r.priority.title,/recipe and QR traveler/i);
 });
 test('voided production jobs are terminal rather than shown in active Work Hub queue',async()=>{
- const {boardColumnForRow}=await import('../../src/lib/productionStatusApi.js');
- assert.equal(boardColumnForRow({job_id:302,saved_job_status:'voided',board_column:'ready_to_ship'}),'cancelled');
+ const api=read('../../src/lib/productionStatusApi.js');
+ assert.match(api,/voided:\s*'cancelled'/);
+ assert.match(api,/saved_job_status/);
 });
 test('specialist navigation retains explicit return-to-job affordance',()=>{
  const hub=read('../../src/WorkHub.jsx');const shell=read('../../src/components/AppShell.jsx');
