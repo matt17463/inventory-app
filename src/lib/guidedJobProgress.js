@@ -10,7 +10,7 @@ export const GUIDED_STEPS = [
   { id:'delivery', title:'Pack and deliver', detail:'Pack by order, confirm pickup/shipping and close out', link:'/production-board' },
 ];
 const terminal = new Set(['completed','production_complete']);
-const cancelled = new Set(['cancelled','canceled']);
+const cancelled = new Set(['cancelled','canceled','voided','void']);
 const producing = new Set(['in_production','qc','ready_to_ship','production_complete','completed']);
 const qcStage = new Set(['ready_to_ship','production_complete','completed']);
 function clean(v){return String(v||'').trim().toLowerCase();}
@@ -38,6 +38,8 @@ export function deriveGuidedProgress(row,evidence={}){
  const qc=evidence.qc||[];
  const notes=evidence.notes||[];
  const artworkLinks=evidence.artworkLinks||[];
+ const manualReviews=new Map((evidence.stepReviews||[]).map(r=>[r.step_id,r]));
+ const artworkNA=manualReviews.get('artwork')?.review_state==='not_applicable';
  const fulfillment=evidence.fulfillment||[];
  const photos=evidence.photos||[];
  const packing=evidence.packing||[];
@@ -126,12 +128,12 @@ export function deriveGuidedProgress(row,evidence={}){
  else if(unpaired.length)priority={title:'Pair '+unpaired.length+' blank line(s)',reason:'Product-to-blank mapping is missing; review the pull sheet before production.',href:pull,kind:'blocked'};
  else if(status==='qc'&&!qcPassed)priority={title:'Record official QC',reason:'The job is at QC without a passing inspection.',href:jobId?'/qc-checklist?job='+jobId:'/qc-checklist',kind:'action'};
  else if(status==='ready_to_ship')priority={title:handedOff?'Close out completed delivery':packingComplete?'Collect pickup signature or record shipment':'Verify every package line',reason:handedOff?'Receipt/delivery is recorded; confirm Production Board closeout.':packingComplete?'Packing counts match the order. Confirm actual pickup/shipment after QC.':'Pack every active job item to the exact ordered count before customer handoff.',href:handedOff?'/production-board':'/work-hub?job='+jobId,kind:'action'};
- else if(!artworkLinked)priority={title:'Verify approved artwork',reason:'No linked approved artwork file was found. This may be an unlinked legacy project; review client proof and print-ready file.',href:'/approval-automation',kind:'action'};
+ else if(!artworkLinked&&!artworkNA)priority={title:'Verify approved artwork',reason:'No linked approved artwork file was found. This may be an unlinked legacy project; review client proof and print-ready file.',href:'/approval-automation',kind:'action'};
  else if(!allTraveled&&required.length)priority={title:'Prepare recipe and QR traveler',reason:'Create approved production instructions for each item as applicable.',href:traveler,kind:'action'};
  else if(status==='needs_attention'||status==='on_hold')priority={title:'Resolve current hold',reason:'Review the Production Board and purchasing exceptions before advancing.',href:'/exception-center',kind:'blocked'};
  else if(status==='ready_to_produce')priority={title:'Start production',reason:'Review the pull sheet and verified materials before decorating.',href:pull,kind:'action'};
  else if(status==='in_production')priority={title:'Complete production lines',reason:'Finish the approved instructions, then record QC.',href:traveler,kind:'action'};
  else priority={title:'Review the job',reason:'Check the authoritative production status and confirm the next required step.',href:'/production-board',kind:'action'};
- return {steps,priority,notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,
+ return {steps:steps.map(s=>manualReviews.has(s.id)?{...s,reviewAnnotation:manualReviews.get(s.id)}:s),priority,notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,
    travelers:travelers.length,activeReservations:reservations.length,qcPassed},isWoo,manual,completed,cancelled:false};
 }
