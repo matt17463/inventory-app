@@ -124,7 +124,7 @@ export async function exportDtfPng(canvas) {
   return new Blob([setPngDpi(new Uint8Array(await blob.arrayBuffer()),DTF_DPI)],{type:'image/png'});
 }
 // Actual one-color vector silhouette consisting of horizontal rectangles. Not a photo/vector reproduction.
-export function vectorSilhouette(data,width,height,fill='#000000',maxRuns=12000) {
+export function vectorSilhouette(data,width,height,fill='#000000',maxRuns=12000,ppi=300) {
   const rects=[];
   for(let y=0;y<height;y++)for(let x=0;x<width;){
     if(data[(y*width+x)*4+3]!==255){x++;continue;}
