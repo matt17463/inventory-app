@@ -65,10 +65,10 @@ export function screenProcessPixel(data,index,x,y,alpha,screens) {
     return false;
   }
   // Display simulated subtractive CMYK ink over transparency; any ink hit is opaque.
-  const [c,m,y,k]=mask;
+  const [c,m,yInk,k]=mask;
   data[index]=c||k?0:255;
   data[index+1]=m||k?0:255;
-  data[index+2]=y||k?0:255;
+  data[index+2]=yInk||k?0:255;
   data[index+3]=255;
   return true;
 }
