@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
-import {getProductBlankMappingIssues,searchMappingBlanks,setProductBlankMapping} from './lib/productBlankMappingApi';
+import {getProductScopedBlankMappingIssues,searchMappingBlanks,setProductBlankMapping} from './lib/productBlankMappingApi';
 
 const label=x=>[x.sku_base||x.name,x.brand,x.style,x.color,x.size].filter(Boolean).join(' · ');
 export default function InlineProductBlankMapping({productId,canManage,onSaved}){
@@ -9,7 +9,7 @@ export default function InlineProductBlankMapping({productId,canManage,onSaved})
   setBusy(true);setError('');
   try{
    // Use the existing guarded mapping endpoint; never operate on rows from another family.
-   const rows=await getProductBlankMappingIssues('',500);
+   const rows=await getProductScopedBlankMappingIssues(productId);
    setIssues((rows||[]).filter(x=>Number(x.woo_product_id)===Number(productId)));
   }catch(e){setError(e.message);}finally{setBusy(false);}
  },[productId]);
@@ -40,7 +40,7 @@ export default function InlineProductBlankMapping({productId,canManage,onSaved})
   <p>Showing unresolved mapping rows returned for WooCommerce parent #{productId}. Rows already paired are not modified.</p>
   <button type="button" disabled={busy} onClick={load}>Refresh mapping issues</button>
   {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
-  {!issues.length?<p>No unresolved variation rows for this product were returned in the first 500 issues. Check the specialist mapping page if the catalog summary still reports gaps.</p>:<div>
+  {!issues.length?<p>No unresolved blank mappings were found for this product. If the catalog summary reports gaps, refresh its source data.</p>:<div>
    {issues.map(x=><div key={x.product_row_id} className="sc-cr-listline">
     <span><strong>{x.sku||x.product_name||'Unnamed variation'}</strong> · {[x.brand,x.style,x.color,x.size].filter(Boolean).join(' / ')} · {x.issue_status}</span>
     {canManage&&<button type="button" disabled={busy} onClick={()=>selectRow(x)}>Choose blank</button>}

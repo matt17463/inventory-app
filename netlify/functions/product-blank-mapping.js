@@ -62,6 +62,24 @@ export async function handler(event) {
         p_search: clean(input.search),
         p_limit: Math.max(1, Math.min(Number(input.limit) || 250, 1000)),
       });
+    } else if (action === 'product_issues') {
+      // The legacy issues RPC resolves every unmatched blank across the entire catalog
+      // before applying LIMIT; this exact-parent query is bounded and avoids that scan.
+      const productId = Number(input.woo_product_id);
+      if (!Number.isSafeInteger(productId) || productId <= 0) return jsonResponse(400, {success:false,message:'Valid Woo product ID required.'}, event);
+      const {data: productRows,error: productError} = await auth.supabase
+        .from('products')
+        .select('id,woocommerce_product_id,woocommerce_variation_id,sku,name,blank_product_id,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)')
+        .eq('woocommerce_product_id',productId).is('blank_product_id',null)
+        .order('woocommerce_variation_id',{ascending:true,nullsFirst:false}).limit(1000);
+      if(productError) throw rpcError(productError);
+      data = (productRows||[]).filter(row=>row.woocommerce_variation_id || clean(row.sku)).map(row=>({
+        product_row_id:row.id,woo_product_id:row.woocommerce_product_id,
+        woo_variation_id:row.woocommerce_variation_id,sku:row.sku,product_name:row.name,
+        brand:row.brands?.name||row.brands?.code||'',style:row.product_types?.name||row.product_types?.code||'',
+        color:row.colors?.name||row.colors?.code||'',size:row.sizes?.name||row.sizes?.code||'',
+        issue_status:'needs_review',candidate_count:0,deterministic_blank_product_id:null
+      }));
     } else if (action === 'search_blanks') {
       data = await searchBlanks(auth.supabase, input.search, input.limit);
     } else if (action === 'set') {
