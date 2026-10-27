@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeWooPrintSource,normalizeManualPrintSource,normalizePrintPrefs,canPrintCustomerCopy,printWarnings} from '../../src/lib/printModel.js';
-import {deriveDistributionFields,canonicalDistributionMetaLabel} from '../../src/lib/printPacketPdf.js';
+import {deriveDistributionFields,canonicalDistributionMetaLabel} from '../../src/lib/distributionMetadata.js';
 const read=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8');
 
 test('Woo source preserves original authoritative tax, discount, totals and payment',()=>{
