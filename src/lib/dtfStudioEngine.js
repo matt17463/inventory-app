@@ -6,6 +6,7 @@ const clamp = n => Math.max(0, Math.min(255, Math.round(n)));
 const between = (n, min, max) => Math.max(min, Math.min(max, n));
 export const DTF_DEFAULTS = Object.freeze({
   width: 12, height: 12, background: 'none', threshold: 245, backgroundColor: '#ffffff',
+  backgroundFeather: 12, backgroundScope: 'connected', backgroundPoint: null, backgroundDecontaminate: true,
   removalTolerance: 35, defringe: 0, alphaThreshold: 4, alphaMode: 'hard',
   knockout: 'none', shirtColor: '#000000', knockoutTolerance: 55,
   halftone: 'none', lpi: 35, angle: 22.5, dot: 'circle',
@@ -133,6 +134,10 @@ export function qualityReport(sourceWidth,sourceHeight,outputWidth,outputHeight,
   if(stats.partialAlpha)warnings.push(stats.partialAlpha.toLocaleString()+' partly transparent pixels remain; inspect for haze.');
   if(options.halftone!=='none' && DTF_DPI/Number(options.lpi)<6)warnings.push('Halftone cell has fewer than 6 pixels; test for stable dots.');
   if(options.knockout==='shirt')warnings.push('Review knockout carefully: the chosen color may also occur inside the artwork.');
+  if(options.background && options.background!=='none') {
+    if(!stats.removedBackground&&!stats.softenedBackground)warnings.push('No source background pixels removed; adjust background selection or tolerance.');
+    warnings.push('Review the removed edges and interior artwork against black, white, and checkerboard backgrounds before DTF printing.');
+  }
   if(options.halftone==='multicolor') {
     warnings.push(...screenAngleWarnings(options));
     warnings.push('CMYK-dot composite is a visual RGB simulation, not RIP channel separations or an ICC-managed proof. Validate output and underbase with your printer.');
