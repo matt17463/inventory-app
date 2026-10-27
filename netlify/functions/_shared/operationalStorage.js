@@ -195,5 +195,17 @@ export async function operationalStorageHealth() {
       ['if-none-match','content-type'].every(header=>(rule.AllowedHeaders||[]).some(value=>value==='*'||value.toLowerCase()===header))
     )?'permitted':'not-permitted';
   }catch{ /* Configuration read may require a separately scoped R2 credential. */ }
+  if(conditionalUploads==='not-verified'){
+    try{
+      // OPTIONS inspects the effective browser policy without uploading an object.
+      // Do not log or return the short-lived signed URL.
+      const url=await getSignedUrl(r2Client(),new PutObjectCommand({Bucket:r2BucketName(),Key:'diagnostics/no-write-cors-probe',ContentType:'application/octet-stream',IfNoneMatch:'*'}),{expiresIn:60});
+      const probe=await fetch(url,{method:'OPTIONS',redirect:'error',signal:AbortSignal.timeout(5000),headers:{Origin:'https://inventory.skilledcrafting.com','Access-Control-Request-Method':'PUT','Access-Control-Request-Headers':'content-type,if-none-match'}});
+      const origin=probe.headers.get('access-control-allow-origin');
+      const headers=(probe.headers.get('access-control-allow-headers')||'').toLowerCase().split(',').map(s=>s.trim());
+      const methods=(probe.headers.get('access-control-allow-methods')||'').toUpperCase().split(',').map(s=>s.trim());
+      conditionalUploads=probe.ok&&['*','https://inventory.skilledcrafting.com'].includes(origin)&&methods.includes('PUT')&&['content-type','if-none-match'].every(h=>headers.includes('*')||headers.includes(h))?'permitted':'not-permitted';
+    }catch{ /* Leave unknown when the read-only probe cannot complete. */ }
+  }
   return { provider: 'r2', bucket: r2BucketName(), reachable: true, prefixes: counts,conditional_upload_cors:conditionalUploads };
 }
