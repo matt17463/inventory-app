@@ -85,3 +85,20 @@ test('Work Hub shows evidence-based next actions and never mutates job state dir
  assert.doesNotMatch(jsx,/updateProductionBoardStatus|sc_set_production_board_status/);
  assert.doesNotMatch(api,/from\('jobs'\)\.update|from\('inventory_reservations'\)\.update/);
 });
+
+test('manager N/A review annotates artwork step without claiming physical approval',()=>{
+ const r=deriveGuidedProgress({job_id:250,saved_job_status:'ready_to_produce'},{...base,job:{id:250,woocommerce_order_id:180,woo_payment_status:'paid'},stepReviews:[{step_id:'artwork',review_state:'not_applicable',reason:'Undecorated blank garment'}]});
+ assert.equal(r.steps.find(x=>x.id==='artwork').state,'review');
+ assert.equal(r.steps.find(x=>x.id==='artwork').reviewAnnotation.review_state,'not_applicable');
+ assert.match(r.priority.title,/recipe and QR traveler/i);
+});
+test('voided production jobs are terminal rather than shown in active Work Hub queue',async()=>{
+ const {boardColumnForRow}=await import('../../src/lib/productionStatusApi.js');
+ assert.equal(boardColumnForRow({job_id:302,saved_job_status:'voided',board_column:'ready_to_ship'}),'cancelled');
+});
+test('specialist navigation retains explicit return-to-job affordance',()=>{
+ const hub=read('../../src/WorkHub.jsx');const shell=read('../../src/components/AppShell.jsx');
+ assert.match(hub,/next\.set\('returnJob'/);
+ assert.match(shell,/Return to Work Hub/);
+ assert.match(hub,/Update review state/);
+});
