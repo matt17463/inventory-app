@@ -126,6 +126,7 @@ export const navSections = [
     icon: '🎨',
     items: [
       { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
+      { label: 'DTF Prep Studio', path: '/dtf-studio', keywords: 'DTF prepress source proof halftones alpha cleanup knockout shirt garment 300 DPI artwork processing' },
       { label: 'DTF Artwork Preflight', path: '/artwork-preflight', keywords: 'image png transparency white background remove 300dpi crop DTF artwork' },
       { label: 'Artwork Requests', path: '/artwork-requests', keywords: 'artwork request design prompt wpforms' },
       { label: 'Client Graphics', path: '/client-graphics', keywords: 'graphic logo family design production art variants woo customer choice' },
