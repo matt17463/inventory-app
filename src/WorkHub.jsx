@@ -119,6 +119,18 @@ export default function WorkHub(){
   finally{setDetailLoading(false);}
  }
  async function saveStepReview(e){e.preventDefault();if(!currentId||!stepEdit||!canReviewSteps)return;setStepBusy(true);setNoteMessage('');try{await setGuidedJobStepReview({jobId:currentId,stepId:stepEdit,state:stepState,reason:stepReason});setStepEdit('');setStepReason('');await refreshSelected();setNoteMessage('Step review saved. This is an annotation, not an artwork, QC, traveler, inventory or delivery approval.')}catch(err){setNoteMessage(err.message||'Could not save step review.')}finally{setStepBusy(false)}}
+ async function verifyPhysicalPull(){
+  if(!canReviewSteps||!currentId||!progress?.stockReserved||progress.physicalPullVerified)return;
+  if(!window.confirm('Confirm you physically checked the actual blank item, style, color and quantity for EVERY active order line against the pull sheet? Stock reservation alone is not sufficient.'))return;
+  const required=(detail?.items||[]).filter(i=>i.inventory_required!==false);
+  const signature=required.map(i=>[i.id,i.quantity,i.blank_product_id].join(':')).sort().join('|');
+  setStepBusy(true);setNoteMessage('');
+  try{
+   await addGuidedJobNote({jobId:currentId,kind:'production_note',note:'WorkHub physical pull verified: '+signature});
+   await refreshSelected();setNoteMessage('Physical pull verification recorded for the current exact blank identities and quantities. This does not deduct inventory.');
+  }catch(e){setNoteMessage(e.message||'Could not verify the physical pull.');}
+  finally{setStepBusy(false);}
+ }
  async function setWorkflowType(type){
   if(!canReviewSteps||!currentId||!['blank_only','decorated','mixed'].includes(type))return;
   const message=type==='blank_only'?'Confirm every active order line is an undecorated blank item? This changes Work Hub guidance only; it does not bypass invoice, stock, packing or shipping checks.':'Confirm the selected workflow type for this order?';
@@ -223,6 +235,8 @@ export default function WorkHub(){
        <section className="card" aria-label="Order workflow applicability">
         <h4>Order workflow: {progress.workflow==='blank_only'?'Blank items only':progress.workflow==='decorated'?'Decorated production':progress.workflow==='mixed'?'Mixed blanks and decoration':'Needs classification'}</h4>
         <p>For blank-only orders, artwork, recipes, manufacturing and decoration QC are not needed. Stock reservations, physical pull confirmation, packing and delivery still require their own evidence.</p>
+        {progress.stockReserved&&<p><strong>Stock:</strong> {progress.physicalPullVerified?'Physical pull verified against current ordered quantities.':'Required blanks reserved; physical pull has not been verified in Work Hub.'}</p>}
+        {canReviewSteps&&progress.stockReserved&&!progress.physicalPullVerified&&<button type="button" disabled={stepBusy} onClick={verifyPhysicalPull}>Confirm physical stock pull</button>}
         {canReviewSteps&&<div className="sc-button-row">
          <button type="button" disabled={stepBusy} onClick={()=>setWorkflowType('blank_only')}>Confirm blank-only order</button>
          <button type="button" disabled={stepBusy} onClick={()=>setWorkflowType('decorated')}>Decorated order</button>
