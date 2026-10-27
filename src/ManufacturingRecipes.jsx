@@ -105,6 +105,7 @@ export default function ManufacturingRecipes({embedded=false,initialRecipeId=''}
   function updateStep(i,key,value) {setForm(s=>({...s,process_steps:s.process_steps.map((x,n)=>n===i?{...x,[key]:value}:x)}));}
   function validate() {
     if(form.name.trim().length<2) throw Error('Enter a name for this manufacturing recipe.');
+    if(form.verified_sample && form.production_notes.trim().length<12) throw Error('Document who verified the physical sample and the evidence source in Production notes.');
     if(!form.placements.length) throw Error('Add at least one graphic placement.');
     for(const p of form.placements) {
       for(const key of ['print_width_inches','print_height_inches']) {
@@ -304,7 +305,7 @@ export default function ManufacturingRecipes({embedded=false,initialRecipeId=''}
         </div>)}
         {editor&&<button type="button" onClick={()=>change('placements',[...form.placements,freshPlacement()])}>+ Add graphic location</button>}
         <h3>{form.id?'Save a new revision':'Create a new recipe'}</h3>
-        {editor&&<label className="sc-recipe-check"><input type="checkbox" checked={form.verified_sample} onChange={e=>change('verified_sample',e.target.checked)}/>I physically measured and verified the sample for this revision</label>}
+        {editor&&<label className="sc-recipe-check"><input type="checkbox" checked={form.verified_sample} onChange={e=>change('verified_sample',e.target.checked)}/>A physical sample was measured and verified for this revision; who verified it and the evidence source are documented in Production notes</label>}
         <p>Saved revisions do not change when you edit this form. Create a new revision for all adjustments; previous travelers retain the original approved details.</p>
         {editor&&<button type="button" disabled={busy} onClick={saveVersion}>{busy?'Saving…':form.id?'Save new draft revision':'Create recipe and draft'}</button>}
         <h3>Version history</h3>
