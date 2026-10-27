@@ -133,6 +133,6 @@ export function vectorSilhouette(data,width,height,fill='#000000',maxRuns=12000,
     rects.push('<rect x="'+start+'" y="'+y+'" width="'+(x-start)+'" height="1"/>');
     if(rects.length>maxRuns)throw new Error('This artwork has too much detail for one-color vector tracing. Export the PNG instead.');
   }
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+width+' '+height+'" width="'+(width/300)+'in" height="'+(height/300)+'in"><g fill="'+fill+'">'+rects.join('')+'</g></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+width+' '+height+'" width="'+(width/ppi)+'in" height="'+(height/ppi)+'in"><g fill="'+fill+'">'+rects.join('')+'</g></svg>';
 }
 export { alphaBounds, validatePrintDimensions, DTF_DPI };
