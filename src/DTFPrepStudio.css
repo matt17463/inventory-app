@@ -23,3 +23,8 @@
 .dtf-pick-tip{border-left:3px solid #30b9ce;background:#123a49;color:#e2faff;padding:.75rem;border-radius:6px;font-size:.77rem;line-height:1.5;margin:0}
 .dtf-alpha-result{display:grid;gap:.3rem;background:#103b39;border:1px solid #287e76;color:#c3f9ed;border-radius:9px;padding:.75rem;font-size:.79rem}
 .dtf-alpha-result span{font-variant-numeric:tabular-nums}
+
+.dtf-manual-mask{border:1px solid #38667f;background:#112a3b;padding:.7rem;border-radius:10px;display:grid;gap:.65rem}
+.dtf-manual-mask>strong{color:#9fe8fa;font-size:.77rem}
+.dtf-mask-buttons{display:flex;gap:.5rem;flex-wrap:wrap}.dtf-mask-buttons button{flex:1;white-space:normal}
+.dtf-source-picker{touch-action:none;user-select:none;-webkit-user-drag:none}
