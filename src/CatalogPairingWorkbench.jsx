@@ -80,6 +80,7 @@ export default function CatalogPairingWorkbench({embedded=false,productId=null})
  <label>Approval evidence<textarea rows={2} placeholder="Approval date, customer proof, artwork identity and reviewer details" value={evidence} onChange={e=>setEvidence(e.target.value)}/></label>
  <label className="sc-pairing-confirm"><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)}/> I personally verified this exact approved artwork for this product.</label>
  <button type="button" disabled={!canManage||busy||!assetId||!confirm||evidence.trim().length<12} onClick={saveArtwork}>Save reviewed artwork link</button>
+ {!embedded&&<>
  <hr/><h3>3. Create a missing production recipe</h3><p>Create a reusable starter recipe for this WooCommerce product. Both Adult and Youth are drafts; measured heights, exact placement offsets and application settings must be reviewed in the full recipe editor.</p>
  <label>Recipe name<input value={recipeName} onChange={e=>setRecipeName(e.target.value)}/></label>
  <label>Decoration method<select value={method} onChange={e=>setMethod(e.target.value)}><option value="DTF">DTF</option><option value="HTV">HTV</option><option value="Sublimation">Sublimation</option><option value="UV">UV</option><option value="Laser">Laser</option></select></label>
@@ -91,5 +92,6 @@ export default function CatalogPairingWorkbench({embedded=false,productId=null})
  <button type="button" disabled={!canManage||busy||!recipeId} onClick={saveRecipe}>Assign recipe for review</button>
  <p>Assignment does not approve a draft recipe, enable selection rules, or modify orders. Adult/youth-specific variations require separate checks.</p>
  <p><Link to="/manufacturing-recipes">Review recipe and physical sample</Link> · <Link to="/client-graphics">Graphic family bindings</Link> · <Link to="/catalog-production-readiness">Variation and readiness review</Link></p>
+ </>}
  </>}</section></div></Container>;
 }

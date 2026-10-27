@@ -313,7 +313,7 @@ export async function handler(event){
    case 'seed_expanded_recipes':data=await seedExpanded(db,userId);break;
    case 'reorder_preview':data=await reorderPreview(db);break;
    case 'save_reorder':data=await saveReorder(db,input,userId);break;
-   case 'create_reorder_traveler':data=await createReorderTraveler(db,input,userId);break;
+   case 'create_reorder_traveler':data=await createReorderTraveler(db,input,event);break;
    default:return reject(event,400,'Unsupported modernization action.');
   }
   return result(event,data);
