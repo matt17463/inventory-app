@@ -56,11 +56,12 @@ export function halftoneSpot(x,y,ppi,lpi,angle,dot='circle') {
   const rad=angle*Math.PI/180, ca=Math.cos(rad),sa=Math.sin(rad);
   const u=((x*ca+y*sa)/cell)%1, v=((-x*sa+y*ca)/cell)%1;
   const dx=Math.abs((u+1)%1-.5),dy=Math.abs((v+1)%1-.5);
-  if(dot==='square')return between(2*Math.max(dx,dy),0,1);
-  if(dot==='diamond')return between(dx+dy,0,1);
+  // Spot values are area coverage thresholds: 0% empty, 100% fully solid.
+  if(dot==='square')return between(4*Math.max(dx,dy)**2,0,1);
+  if(dot==='diamond')return between(2*(dx+dy)**2,0,1);
   if(dot==='line')return between(2*dy,0,1);
-  if(dot==='ellipse')return between(Math.sqrt(3*dx*dx+dy*dy),0,1);
-  return between(Math.sqrt(dx*dx+dy*dy)*Math.sqrt(Math.PI),0,1);
+  if(dot==='ellipse')return between(Math.PI*(1.6*dx*dx+.625*dy*dy),0,1);
+  return between(Math.PI*(dx*dx+dy*dy),0,1);
 }
 // Mutates a copy supplied by the caller. Result is full-size print pixels, NOT a mockup.
 export function processDtfPixels(data,width,height,options={},ppi=300) {
@@ -101,7 +102,7 @@ export function processDtfPixels(data,width,height,options={},ppi=300) {
       let coverage=alpha/255;
       if(o.halftone==='full')coverage*=(1-.86*lum);
       const shouldScreen=o.halftone==='full'||(o.halftone==='fades'&&alpha<250)||(o.halftone==='knockout'&&o.knockout==='shirt');
-      if(shouldScreen) alpha=halftoneSpot(x+.5,y+.5,ppi,lpi,angle,o.dot)<=Math.sqrt(coverage)*.89?255:0;
+      if(shouldScreen) alpha=halftoneSpot(x+.5,y+.5,ppi,lpi,angle,o.dot)<=coverage?255:0;
     }
     if(o.alphaMode==='hard' || o.halftone!=='none')alpha=alpha>alphaCut?255:0;
     data[i+3]=alpha;
