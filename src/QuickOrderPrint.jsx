@@ -2,7 +2,8 @@ import {useEffect,useState} from 'react';
 import {supabase} from './supabaseClient';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {canPrintCustomerCopy} from './lib/printModel';
-import {createInvoicePdf,createDistributionLabelsPdf} from './lib/printPacketPdf';
+import {createInvoicePdf,createDistributionLabelsPdf,createProductionPacketPdf} from './lib/printPacketPdf';
+import {signedAssetUrl} from './lib/mockupStudioApi';
 import {LABEL_DESIGN_FIELDS,LABEL_PRESETS,normalizeLabelDesign,presetLabelDesign} from './lib/labelDesigner';
 import businessLogo from './assets/logo.png';
 import './QuickOrderPrint.css';
@@ -48,7 +49,11 @@ export default function QuickOrderPrint({jobId,onClose}){
     const {data,error:trError}=await supabase.from('sc_job_travelers').select('id,job_id,job_item_id,recipe_snapshot,ordered_quantity,superseded_at').eq('job_id',jobId).is('superseded_at',null).limit(500);
     if(trError)throw trError;
     if((data||[]).length===500)throw Error('Traveler count exceeds safe print limit.');
-    if(active){setSource(payload.source);setJob(payload.job);setTravelers(data||[]);}
+    const ids=(data||[]).map(t=>t.id);
+    const lines=ids.length?await supabase.from('sc_job_traveler_lines').select('traveler_id,job_item_id,quantity,item_snapshot').in('traveler_id',ids).is('superseded_at',null).limit(1000):{data:[],error:null};
+    if(lines.error)throw lines.error;
+    if(lines.data?.length===1000)throw Error('Traveler line count exceeds safe print limit.');
+    if(active){setSource(payload.source);setJob(payload.job);setTravelers(data||[]);setTravelerLines(lines.data||[]);}
    }catch(e){if(active)setError(e.message||'Unable to load order.');}
    finally{if(active)setBusy(false);}
   })();
@@ -68,20 +73,41 @@ export default function QuickOrderPrint({jobId,onClose}){
  }
  const prefs={...readSaved(cacheKey,{}),packageCount:Math.max(1,Math.min(100,Number(packages)||1))};
  const invoiceAllowed=source&&canPrintCustomerCopy(source);
- const currentSelected=TYPES.filter(([key])=>selected.includes(key)).map(([key])=>key);
+ const currentSelected=[...TYPES.filter(([key])=>selected.includes(key)).map(([key])=>key),...travelers.filter(t=>selected.includes('traveler:'+t.id)).map(t=>'traveler:'+t.id)];
  const blocked=(key)=>{
   if(key==='customer'&&!invoiceAllowed)return 'Customer invoice needs verified billing totals; shop copy is still available as DRAFT.';
-  if(key==='production'&&!travelers.length)return 'Approved production traveler missing.';
+  if(key.startsWith('traveler:')&&!travelers.some(t=>'traveler:'+t.id===key))return 'Saved traveler unavailable.';
   if(key==='labels'&&prefs.packageCount>1)return null; // PDF explicitly warns when allocation is unknown.
   return null;
  };
  const printerFor=key=>key==='labels'?'thermal':'letter';
  const routeReady=key=>Boolean(capabilities?.enabled&&capabilities?.[printerFor(key)]);
+ async function imageForAsset(id){
+  if(!id)return '';
+  const {data,error}=await supabase.from('mockup_artwork_assets').select('*').eq('id',id).maybeSingle();
+  if(error||!data)throw Error('Approved traveler artwork cannot be retrieved.');
+  const url=await signedAssetUrl(data,300,{preferPreview:true});
+  const response=await fetch(url);
+  if(!response.ok)throw Error('Traveler artwork preview download failed.');
+  const blob=await response.blob();
+  if(!['image/png','image/jpeg'].includes(blob.type)||blob.size>6000000)throw Error('Traveler image must be a PNG/JPEG under 6 MB for PDF printing.');
+  return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Artwork preview conversion failed.'));reader.readAsDataURL(blob);});
+ }
  async function makeDocument(key){
   const args={source,job,travelers,origin:window.location.origin,prefs,labelDesign:design(),labelFields,logoData:await logoData()};
   if(key==='customer')return createInvoicePdf({...args,kind:'customer'});
   if(key==='shop')return createInvoicePdf({...args,kind:'shop'});
   if(key==='labels')return createDistributionLabelsPdf(args);
+  if(key.startsWith('traveler:')){
+    const t=travelers.find(v=>'traveler:'+v.id===key);
+    if(!t)throw Error('Traveler no longer available.');
+    const lines=travelerLines.filter(line=>String(line.traveler_id)===String(t.id));
+    if(!lines.length)throw Error('Cannot print incomplete traveler: grouped order lines missing.');
+    const ids=[t.recipe_snapshot?.artwork_asset_id,...(t.recipe_snapshot?.placements||[]).map(p=>p.artwork_asset_id),...lines.flatMap(l=>(l.item_snapshot?.approved_placement_artwork||[]).map(a=>a.artwork_asset_id))].filter(Boolean);
+    const artworkImages={};
+    for(const id of [...new Set(ids)])artworkImages[String(id)]=await imageForAsset(id);
+    return createProductionPacketPdf({...args,travelers:[{...t,lines}],artworkImages});
+  }
   throw Error('Unknown print document.');
  }
  async function previewSelection(){
@@ -107,7 +133,7 @@ export default function QuickOrderPrint({jobId,onClose}){
    if(unavailable.length)throw Error('Cannot queue: '+unavailable.map(key=>key+(blocked(key)?' — '+blocked(key):' — printer queue unavailable')).join('; ')+'. Use preview or configure printer routing.');
    for(const key of currentSelected){
     const pdf=await makeDocument(key);
-    const documentKind={customer:'customer_invoice',shop:'shop_invoice',labels:'packing_labels',production:'production_packet'}[key];
+    const documentKind=key.startsWith('traveler:')?'production_packet':{customer:'customer_invoice',shop:'shop_invoice',labels:'packing_labels'}[key];
     const response=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{method:'POST',body:JSON.stringify({
      action:'enqueue',jobId:job.id,documentKind,idempotencyKey:crypto.randomUUID(),pdfBase64:pdfBase64(pdf)
     })});
@@ -127,8 +153,8 @@ export default function QuickOrderPrint({jobId,onClose}){
   {message&&<p role="status">{message}</p>}
   {source&&job&&<><section className="sc-quick-print-travelers" aria-label="Print complete production travelers">
     <h4>Complete production travelers</h4>
-    <p>Print each saved traveler from its authoritative detailed view. The old summary-only production packet omitted grouped line details and approved artwork previews and is no longer offered as a substitute.</p>
-    {travelers.map(t=><p key={t.id}><a href={'/production-travelers/'+encodeURIComponent(t.id)} target="_blank" rel="noopener noreferrer">Open and print full traveler {String(t.id).slice(0,8)}…</a></p>)}
+    <p>Print each saved traveler from its authoritative detailed view. Select the travelers to include with your other documents. The print PDF uses each saved recipe snapshot, grouped order lines and approved artwork previews.</p>
+    {travelers.map(t=><label key={t.id} className="sc-quick-print-item" style={{display:'flex',gap:12,alignItems:'center'}}><input type="checkbox" checked={selected.includes('traveler:'+t.id)} onChange={e=>setSelected(v=>e.target.checked?[...v,'traveler:'+t.id]:v.filter(k=>k!=='traveler:'+t.id))}/><span><strong>Production traveler {String(t.id).slice(0,8)}…</strong><small>{travelerLines.filter(l=>String(l.traveler_id)===String(t.id)).length} grouped order lines · Letter · Epson</small><a href={'/production-travelers/'+encodeURIComponent(t.id)} target="_blank" rel="noopener noreferrer">View full traveler</a></span></label>)}
     {!travelers.length&&<p>No saved traveler yet for this order.</p>}
    </section><div className="sc-quick-print-options">
    {TYPES.map(([key,label,printer])=><label key={key} className="sc-quick-print-item">
