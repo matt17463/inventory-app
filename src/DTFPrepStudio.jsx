@@ -30,7 +30,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   sc.drawImage(bitmap,0,0);
   let bounds={x:0,y:0,width:bitmap.width,height:bitmap.height};
   let backgroundResult={removed:0,softened:0,matched:0,originalHadTransparency:false};
-  if(opts.background!=='none'||opts.crop){
+  if(opts.background!=='none'||opts.crop||opts.maskStrokes?.length){
     const original=sc.getImageData(0,0,staged.width,staged.height);
     const originalCopy=opts.maskStrokes?.length?new Uint8ClampedArray(original.data):null;
     const originallyTransparent=inspectPngAlpha(original.data,staged.width,staged.height).hasTransparency;
@@ -100,6 +100,7 @@ export default function DTFPrepStudio(){
   const [garmentScale,setGarmentScale]=useState(45),[garmentTop,setGarmentTop]=useState(38);
   const [sourceMeta,setSourceMeta]=useState(null),[vectorColor,setVectorColor]=useState('#ffffff');
   const imgRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
+  const maskDraggingRef=useRef(false),maskLastRef=useRef(null);
   const change=(k,v)=>{setOpts(o=>({...o,[k]:v}));setSavedPrepared('');};
   const changeChannel=(section,channel,value)=>{
     setOpts(o=>({...o,[section]:{...o[section],[channel]:value}}));
@@ -108,10 +109,10 @@ export default function DTFPrepStudio(){
   const channelWarnings=useMemo(()=>opts.halftone==='multicolor'?screenAngleWarnings(opts):[],[opts]);
   function chooseSource(nextFile) {
     setFile(nextFile);setSavedSource('');setSavedPrepared('');
-    setOpts(o=>({...o,backgroundPoint:null,background:o.background==='pick'?'none':o.background}));
+    setOpts(o=>({...o,backgroundPoint:null,maskStrokes:[],background:o.background==='pick'?'none':o.background}));
   }
   function pickBackground(event) {
-    if(opts.background!=='pick'||!bitmap)return;
+    if(opts.background!=='pick'||opts.maskTool!=='none'||!bitmap)return;
     const rect=event.currentTarget.getBoundingClientRect();
     if(!rect.width||!rect.height)return;
     const x=Math.max(0,Math.min(bitmap.width-1,Math.floor((event.clientX-rect.left)/rect.width*bitmap.width)));
@@ -123,6 +124,26 @@ export default function DTFPrepStudio(){
     setOpts(o=>({...o,backgroundPoint:{x,y},backgroundColor:'#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('')}));
     setSavedPrepared('');
   }
+  function paintMask(event) {
+    if(!bitmap||!['erase','restore'].includes(opts.maskTool))return;
+    const rect=event.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const x=Math.max(0,Math.min(bitmap.width-1,Math.round((event.clientX-rect.left)/rect.width*(bitmap.width-1))));
+    const y=Math.max(0,Math.min(bitmap.height-1,Math.round((event.clientY-rect.top)/rect.height*(bitmap.height-1))));
+    const radius=Math.max(1,Math.min(600,Number(opts.maskBrushSize)||28));
+    const last=maskLastRef.current;
+    if(last&&Math.hypot(last.x-x,last.y-y)<Math.max(2,radius*.27))return;
+    maskLastRef.current={x,y};
+    setOpts(o=>({...o,maskStrokes:[...(o.maskStrokes||[]).slice(-1999),{kind:o.maskTool,x,y,r:radius}]}));
+    setSavedPrepared('');
+  }
+  function startMask(event) {
+    if(!['erase','restore'].includes(opts.maskTool))return;
+    event.preventDefault();maskDraggingRef.current=true;maskLastRef.current=null;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    paintMask(event);
+  }
+  function finishMask(){maskDraggingRef.current=false;maskLastRef.current=null;}
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
