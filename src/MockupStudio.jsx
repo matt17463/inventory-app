@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from './supabaseClient';
 import {
   ActionButton,
   EmptyState,
@@ -44,6 +45,7 @@ import {
   searchMockupBlankCatalog,
   selectMockupOutput,
   signedUrlsForAssets,
+  signedAssetUrl,
   updateMockupOutput,
   updateMockupProject,
 } from './lib/mockupStudioApi';
@@ -590,6 +592,36 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
     finally { setBusy(false); }
   }
 
+  async function rerunPreflight(row) {
+    setBusy(true);
+    try {
+      // Use the original stored bytes, not the small thumbnail (which gives
+      // misleading resolution and transparency checks).
+      const url = await signedAssetUrl(row, 300, {preferPreview:false});
+      if (!url) throw new Error('The original artwork file could not be retrieved.');
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Could not download the original artwork (HTTP '+response.status+').');
+      const blob = await response.blob();
+      if (!String(row.mime_type||blob.type||'').startsWith('image/') || /svg/i.test(row.mime_type||blob.type||''))
+        throw new Error('Automatic preflight supports raster images only. SVG and PDF require manual production-file verification.');
+      const file = new File([blob],row.original_file_name||row.artwork_name||'artwork.png',{type:row.mime_type||blob.type});
+      const inspection = await inspectArtworkFile(file);
+      if (!inspection.width || !inspection.height) throw new Error('Image dimensions could not be verified.');
+      const lowResolution = Math.max(inspection.width,inspection.height)<1000;
+      const possibleMissingWhite = row.metadata?.preserve_white_ink!==false && inspection.hasTransparency===true && inspection.hasOpaqueWhite===false;
+      const notes = [lowResolution?'Artwork is under 1000 pixels. Verify print quality before production.':'',
+        possibleMissingWhite?'Transparent image has no detected opaque white pixels. Verify any required white ink.':''].filter(Boolean).join(' ');
+      const {error} = await supabase.from('mockup_artwork_assets').update({
+        pixel_width:inspection.width,pixel_height:inspection.height,has_transparency:inspection.hasTransparency,
+        preflight_status:lowResolution||possibleMissingWhite?'warning':'passed',preflight_notes:notes||null,
+        metadata:{...row.metadata,has_opaque_white:inspection.hasOpaqueWhite,transparency_ratio:inspection.transparencyRatio}
+      }).eq('id',row.id).eq('project_id',projectId);
+      if(error)throw error;
+      await refresh();setMessage('Technical preflight completed for '+row.artwork_name+'. Review warnings and obtain customer approval separately.');
+    } catch(error){setMessage('Preflight failed for '+row.artwork_name+': '+error.message);}
+    finally{setBusy(false);}
+  }
+
   function chooseArtworkFiles(fileList) {
     const selected = uploadQueueRows(fileList, (nextFile) => ({ artwork_name: displayNameFromFile(nextFile.name) }));
     setUploadRows(selected);
@@ -618,6 +650,7 @@ function ArtworkAssetsTab({ projectId, rows, urls, vault, refresh, setBusy, setM
             {urls[row.id] && !/pdf/i.test(row.mime_type || '') ? <img className="mockup-artwork-image" src={urls[row.id]} alt={row.artwork_name} loading="lazy" decoding="async" /> : <div className="mockup-file-placeholder">{row.mime_type || 'Artwork file'}</div>}
             <h3>{row.artwork_name}</h3><p>{row.exact_artwork_locked ? 'Exact artwork locked' : 'AI edits permitted'} · {row.metadata?.preserve_white_ink !== false ? 'White ink protected' : 'White ink protection off'}</p><StatusBadge status={row.preflight_status} />
             {row.preflight_notes ? <small>{row.preflight_notes}</small> : null}
+            <ActionButton size="sm" onClick={() => rerunPreflight(row)}>Run technical preflight</ActionButton>
             <ActionButton tone="danger" size="sm" onClick={async () => { if (!window.confirm('Remove this artwork and its placements?')) return; setBusy(true); try { await removeMockupAsset('mockup_artwork_assets', row); await refresh(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>Remove</ActionButton>
           </article>
         ))}</div>}
