@@ -49,6 +49,7 @@ export default function ProductionTravelers() {
   const [legacyArtVerified,setLegacyArtVerified]=useState(false);
   const [jobGraphicEvidence,setJobGraphicEvidence]=useState({loading:false,selections:[],error:''});
   const [groupRecipes,setGroupRecipes]=useState({});
+  const [batchResults,setBatchResults]=useState([]);
   const [orderGraphicCheck,setOrderGraphicCheck]=useState({channel:'manual',loading:false,selections:[],unmapped_line_ids:[],error:''});
   const [recipes,setRecipes]=useState([]);
   const [selectedItemIds,setSelectedItemIds]=useState([]);
@@ -274,6 +275,59 @@ export default function ProductionTravelers() {
       navigate('/production-travelers/'+data);
     }catch(e){setMessage(safeError(e));}finally{setBusy(false);}
   }
+  // Batch creation is limited to canonical, resolved client-graphic groups.
+  // Legacy SKU hints require the existing one-group-at-a-time human approval process.
+  async function createVerifiedGroups(){
+    if(busy||!editable)return;
+    setBusy(true);setMessage('');setBatchResults([]);
+    const results=[];
+    try{
+      if(!jobId||closedStatuses.has(String(currentJob?.status||'').toLowerCase()))throw Error('Select an open job.');
+      if(jobGraphicEvidence.loading||jobGraphicEvidence.error)throw Error('Order graphic verification has not completed.');
+      if(!suggestedGroups.length)throw Error('There are no remaining order lines needing travelers.');
+      const groups=suggestedGroups;
+      if(groups.some(g=>!g.canonical))throw Error('One or more groups have only legacy or missing graphic identification. Review these manually first.');
+      if(groups.some(g=>!groupRecipes[g.key]))throw Error('Choose an approved recipe for every proposed group before creating travelers.');
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token)throw Error('Employee sign-in required.');
+      const selectedGroups=groups.map(g=>({...g,version:recipeVersions.find(v=>v.id===groupRecipes[g.key])}));
+      if(selectedGroups.some(g=>!g.version||g.version.status!=='approved'))throw Error('Every group must use an approved recipe revision.');
+      const selectionsById=new Map(jobGraphicEvidence.selections.map(v=>[Number(v.job_item_id),v]));
+      // Validate every group before any write. Backend preflight and database checks remain authoritative.
+      for(const group of selectedGroups){
+        const selections=group.ids.map(id=>selectionsById.get(id));
+        if(selections.some(x=>!x?.family_id||x.capture_status==='managed_failed'||x.resolution_snapshot?.status!=='resolved'||!x.resolution_snapshot?.artworkAssetId))
+          throw Error('Group '+group.label+' lacks a currently resolved customer graphic. No travelers created.');
+        const expectedFamily=group.key.slice('canonical:'.length);
+        if(selections.some(x=>String(x.family_id)!==expectedFamily))throw Error('Mixed customer graphics in '+group.label);
+        const selectedAssets=new Set(selections.map(x=>String(x.resolution_snapshot.artworkAssetId)));
+        if(selectedAssets.size!==1)throw Error('Group '+group.label+' has differing artwork revisions; separate the lines.');
+        const assets=[group.version.artwork_asset_id,...(group.version.placements||[]).map(p=>p.artwork_asset_id)].filter(Boolean).map(String);
+        if(!assets.includes([...selectedAssets][0]))throw Error('Recipe '+group.label+' does not reference its ordered approved artwork.');
+        const response=await fetch('/.netlify/functions/traveler-artwork-preflight',{
+          method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
+          body:JSON.stringify({job_id:Number(jobId),job_item_ids:group.ids,recipe_version_id:group.version.id})
+        });
+        const proof=await response.json().catch(()=>({}));
+        if(!response.ok||proof.verified!==true)throw Error('Group '+group.label+': '+(proof.message||'Artwork file preflight did not pass.'));
+      }
+      for(const group of selectedGroups){
+        const {data,error}=await supabase.rpc('sc_create_grouped_traveler',{
+          p_job_id:Number(jobId),p_job_item_ids:group.ids,p_recipe_version_id:group.version.id
+        });
+        if(error){
+          results.push({label:group.label,ok:false,error:error.message});
+          setBatchResults([...results]);
+          throw Error('Stopped after a failed group. Previously created travelers are preserved; review the results before retrying.');
+        }
+        results.push({label:group.label,ok:true,id:data});
+        setBatchResults([...results]);
+      }
+      await loadForJob(jobId);
+      setMessage('Created '+results.length+' separately certified travelers. Open each traveler to verify final print and production requirements.');
+    }catch(e){setMessage(safeError(e));if(results.length)setBatchResults([...results]);}
+    finally{setBusy(false);}
+  }
   async function revalidateTraveler(){
     setBusy(true);setMessage('');try{const {error}=await supabase.rpc('sc_revalidate_traveler',{p_traveler_id:selected.id});if(error)throw error;await loadTraveler(selected.id);setMessage('Traveler revalidated against current exact evidence.');}catch(e){setMessage(safeError(e));}finally{setBusy(false);}
   }
@@ -341,6 +395,9 @@ export default function ProductionTravelers() {
               <button type="button" disabled={!g.ids.length} onClick={()=>{setSelectedItemIds(g.ids);setVersionId(groupRecipes[g.key]||'');setLegacyArtVerified(false);}}>Review this group's traveler</button></div>
             </div>)}
             {!suggestedGroups.length&&<p>All available lines already have travelers.</p>}
+            {editable&&<button type="button" disabled={busy||jobGraphicEvidence.loading||!!jobGraphicEvidence.error||!suggestedGroups.length||suggestedGroups.some(g=>!g.canonical||!groupRecipes[g.key])} onClick={createVerifiedGroups}>Verify and create all canonical graphic groups</button>}
+            <p><small>Batch creation works only for groups with recorded, resolved canonical graphic identities and approved matching recipe artwork. Unmapped and legacy-logo groups must still be reviewed individually. Each group gets its own independent production traveler.</small></p>
+            {batchResults.length>0&&<div role="status"><strong>Creation results</strong><ul>{batchResults.map((r,i)=><li key={i}>{r.label}: {r.ok?<Link to={'/production-travelers/'+r.id}>Open traveler</Link>:'Failed — '+r.error}</li>)}</ul></div>}
           </section>}
           {items.length>1&&<div className="sc-traveler-line-helper"><p><strong>Different logos or production instructions?</strong> Create one traveler for each compatible group. The displayed legacy logo is inferred from the old SKU and must be verified against the original Woo order; it does not grant artwork approval.</p>
             <button type="button" onClick={()=>setSelectedItemIds([])}>Clear selected lines</button>
