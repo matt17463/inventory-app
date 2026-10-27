@@ -16,6 +16,7 @@ export default function CatalogPairingWorkbench({embedded=false,productId=null})
  const access=useContext(EmployeeAccessContext),canManage=['admin','manager'].includes(access?.role);
  const [catalog,setCatalog]=useState(null),[readiness,setReadiness]=useState(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const [search,setSearch]=useState(''),[selected,setSelected]=useState(''),[assetId,setAssetId]=useState(''),[recipeId,setRecipeId]=useState(''),[evidence,setEvidence]=useState(''),[confirm,setConfirm]=useState(false);
+ const [uploadedOptions,setUploadedOptions]=useState([]),[uploadProjectId,setUploadProjectId]=useState('');
  const [uploadFile,setUploadFile]=useState(null),[uploadName,setUploadName]=useState(''),[recipeName,setRecipeName]=useState(''),[method,setMethod]=useState('DTF'),[garment,setGarment]=useState('hoodie'),[adultWidth,setAdultWidth]=useState('10'),[youthWidth,setYouthWidth]=useState('8');
  const load=useCallback(async()=>{setBusy(true);try{const [a,b]=await Promise.all([api('legacy-catalog-modernization',{action:'dashboard'}),api('catalog-production-readiness',{action:'overview'})]);setCatalog(a);setReadiness(b);setMessage('Catalog refreshed. Suggestions are unverified and require review.');}catch(e){setMessage(e.message)}finally{setBusy(false)}},[]);
  useEffect(()=>{load()},[load]);
@@ -25,15 +26,30 @@ export default function CatalogPairingWorkbench({embedded=false,productId=null})
  const recipes=readiness?.recipes||[];
  const matches=product?suggestions(product,catalog?.assets||[],recipes):{assets:[],recipes:[]};
  const stats={total:catalog?.scores?.length||0,withArtwork:(catalog?.scores||[]).filter(x=>x.flags?.artwork).length,withRecipe:(catalog?.scores||[]).filter(x=>x.flags?.recipe).length,review:(catalog?.scores||[]).filter(x=>!x.flags?.artwork||!x.flags?.recipe).length};
+ const refreshArtworkOptions=useCallback(async()=>{
+  if(!requestedProduct&&!selected)return;
+  const parent=Number(requestedProduct||selected);
+  if(!Number.isSafeInteger(parent)||parent<=0)return;
+  const {data:projects,error:projectError}=await supabase.from('mockup_projects').select('id,project_name,created_at').eq('woo_product_id',parent).order('created_at',{ascending:false}).limit(100);
+  if(projectError)throw projectError;
+  const ids=(projects||[]).map(p=>p.id);
+  if(!ids.length){setUploadProjectId('');setUploadedOptions([]);return;}
+  const {data:artwork,error:artworkError}=await supabase.from('mockup_artwork_assets').select('id,project_id,artwork_name,preflight_status,created_at').in('project_id',ids).order('created_at',{ascending:true}).limit(500);
+  if(artworkError)throw artworkError;
+  setUploadedOptions(artwork||[]);
+  const paired=(projects||[]).find(p=>p.project_name?.startsWith('Catalog pairing · '));
+  setUploadProjectId(paired?.id||'');
+ },[requestedProduct,selected]);
+ useEffect(()=>{refreshArtworkOptions().catch(e=>setMessage('Unable to load product artwork choices: '+e.message));},[refreshArtworkOptions]);
  async function uploadNewArtwork(){
   if(!canManage||!product||!uploadFile)return;
   if(!['image/png','image/jpeg','image/webp','image/svg+xml','application/pdf'].includes(uploadFile.type))return setMessage('Choose a PNG, JPEG, WebP, SVG or PDF artwork file.');
   setBusy(true);setMessage('');
   try{
-   const project=await createMockupProject({project_name:'Catalog pairing · '+product.product_name+' · Woo '+product.woocommerce_product_id,project_type:'store_product',woo_product_id:product.woocommerce_product_id,notes:'Created from the catalog pairing workbench. Artwork requires technical preflight and customer approval.'});
+   const project=uploadProjectId?{id:uploadProjectId}:await createMockupProject({project_name:'Catalog pairing · '+product.product_name+' · Woo '+product.woocommerce_product_id,project_type:'store_product',woo_product_id:product.woocommerce_product_id,notes:'Each selectable logo is stored as a separate artwork asset. Preflight and customer approval are required.'});
    const saved=await addArtworkAsset({projectId:project.id,file:uploadFile,values:{artwork_name:uploadName.trim()||uploadFile.name,exact_artwork_locked:true,preflight_status:'pending'}});
-   setAssetId(saved.id);setUploadFile(null);
-   await load();setMessage('Uploaded artwork into Mockup Studio project '+project.id+'. Technical preflight is PENDING. Complete preflight before pairing; no approval or Woo changes were made.');
+   setUploadProjectId(project.id);setUploadFile(null);setUploadName('');
+   await refreshArtworkOptions();await load();setMessage('Added a separate logo asset '+saved.id+' to Mockup Studio project '+project.id+'. Existing logo assets were not replaced. Technical preflight is PENDING; no approval or Woo changes were made.');
   }catch(e){setMessage('Artwork upload failed: '+e.message)}
   finally{setBusy(false)}
  }
@@ -73,7 +89,10 @@ export default function CatalogPairingWorkbench({embedded=false,productId=null})
  <label>Artwork file<input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf" onChange={e=>setUploadFile(e.target.files?.[0]||null)}/></label>
  <label>Artwork display name<input value={uploadName} onChange={e=>setUploadName(e.target.value)}/></label>
  <button type="button" disabled={!canManage||busy||!uploadFile} onClick={uploadNewArtwork}>Upload artwork to private R2 · draft</button>
- <p><Link to="/mockup-studio">Open Mockup Studio to check technical preflight and file</Link></p>
+ <p><Link to={uploadProjectId?'/mockup-studio?project='+encodeURIComponent(uploadProjectId):'/mockup-studio'}>Open Mockup Studio to review these logo assets and preflight</Link></p>
+ <h4>Artwork files uploaded for this product ({uploadedOptions.length})</h4>
+ {uploadedOptions.length?<ul>{uploadedOptions.map(a=><li key={a.id}><strong>{a.artwork_name}</strong> · Preflight: {a.preflight_status||'pending'} · <code>{a.id}</code></li>)}</ul>:<p>No artwork files linked to this WooCommerce product yet.</p>}
+ <p><small>Uploading another logo creates a new asset, not a replacement or an approved WooCommerce graphic option. The single artwork link below is a separate legacy reference; use Client Graphics for multiple customer-selectable logos.</small></p>
  <h3>2. Review exact artwork link</h3>
  <label>Artwork file (passed technical preflight)<select value={assetId} onChange={e=>{setAssetId(e.target.value);setConfirm(false)}}><option value="">Select verified file</option>{(catalog?.assets||[]).map(a=><option key={a.id} value={a.id}>{a.artwork_name}{matches.assets.some(m=>m.id===a.id)?' · possible name match':''}</option>)}</select></label>
  <p><small>{matches.assets.length?matches.assets.map(a=>a.artwork_name).join(' · '):'No name-based artwork candidates. Search your artwork library and upload the exact file.'} Name similarity is not proof of client approval.</small></p>
