@@ -41,6 +41,7 @@ export default function ProductionTravelers() {
   const access=useContext(EmployeeAccessContext);
   const editable=['admin','manager','operator'].includes(access?.role);
   const [jobs,setJobs]=useState([]);
+  const [showClosedJobs,setShowClosedJobs]=useState(false);
   const [jobId,setJobId]=useState(()=>/^\d+$/.test(params.get('job')||'')?params.get('job'):'');
   const [items,setItems]=useState([]);
   const [travelerList,setTravelerList]=useState([]);
@@ -71,7 +72,7 @@ export default function ProductionTravelers() {
 
   const loadIndex=useCallback(async()=>{
     const [a,b,c]=await Promise.all([
-      supabase.from('jobs').select('id,customer_name,job_name,woocommerce_order_id,due_date,status').order('created_at',{ascending:false}).limit(250),
+      supabase.from('jobs').select('id,customer_name,job_name,woocommerce_order_id,due_date,status').order('created_at',{ascending:false}).limit(700),
       supabase.from('sc_manufacturing_recipes').select('id,name,garment_type,decoration_method').order('created_at',{ascending:false}).limit(250),
       supabase.from('sc_manufacturing_recipe_versions').select('id,recipe_id,revision,status,placements,packaging,artwork_asset_id').eq('status','approved').order('created_at',{ascending:false}).limit(400),
     ]);
@@ -133,6 +134,10 @@ export default function ProductionTravelers() {
   useEffect(()=>{loadIndex().catch(e=>setMessage(safeError(e)));},[loadIndex]);
   useEffect(()=>{if(!jobId||travelerId)return;loadForJob(jobId).catch(e=>setMessage(safeError(e)));},[jobId,travelerId,loadForJob]);
   useEffect(()=>{if(travelerId)loadTraveler(travelerId).catch(e=>setMessage(safeError(e)));else {setSelected(null);setEvents([]);}},[travelerId,loadTraveler]);
+  const closedStatuses=new Set(['completed','production_complete','cancelled','canceled','voided','void','refunded']);
+  const openJobs=jobs.filter(j=>!closedStatuses.has(String(j.status||'').toLowerCase()));
+  const visibleJobs=showClosedJobs?jobs:openJobs;
+  const currentJob=jobs.find(j=>String(j.id)===String(jobId));
   const chosenItems=items.filter(x=>selectedItemIds.includes(Number(x.id)));
   const selectedQuantity=chosenItems.reduce((sum,x)=>sum+Number(x.quantity||0),0);
   const selectableVersions=useMemo(()=>recipeVersions.map(v=>({
@@ -217,6 +222,7 @@ export default function ProductionTravelers() {
     setBusy(true);setMessage('');
     try{
       if(!jobId||!selectedItemIds.length||!versionId)throw Error('Choose at least one job line and an approved recipe version.');
+      if(closedStatuses.has(String(currentJob?.status||'').toLowerCase()))throw Error('This job is closed. New travelers require an open production job.');
       if(graphicsBlocked)throw Error(graphicMode.legacy?'Confirm the legacy order artwork before creating the traveler.':graphicMode.message);
       if(!readiness.ready)throw Error(readiness.blockers.join('; '));
       const {data:auth,error:e}=await supabase.auth.getUser();
@@ -276,9 +282,11 @@ export default function ProductionTravelers() {
     {!travelerId&&<div className="sc-traveler-columns">
       <section className="card elevated-card">
         <h2>Select the existing client job</h2>
+        <p>Only open jobs appear when creating new travelers. Completed, cancelled and voided jobs remain accessible through saved traveler history.</p>
+        <label><input type="checkbox" checked={showClosedJobs} onChange={e=>setShowClosedJobs(e.target.checked)}/> Show closed jobs for historical review</label>
         <label>Production job<select value={jobId} onChange={e=>{setJobId(e.target.value);setSelectedItemIds([]);}}>
           <option value="">Choose job</option>
-          {jobs.map(j=><option key={j.id} value={j.id}>#{j.id} · {j.customer_name} · {j.job_name}</option>)}
+          {visibleJobs.map(j=><option key={j.id} value={j.id}>#{j.id} · {j.customer_name} · {j.job_name}{closedStatuses.has(String(j.status||'').toLowerCase())?' (closed)':''}</option>)}
         </select></label>
         {jobId&&<div><h3>Select order lines for this traveler</h3><div className="sc-traveler-items">
           {items.map(item=><label key={item.id} className="sc-traveler-radio">
@@ -296,6 +304,7 @@ export default function ProductionTravelers() {
             {Array.from(new Set(items.map(legacyGraphicHint).filter(Boolean))).map(hint=><button key={hint} type="button" onClick={()=>setSelectedItemIds(items.filter(i=>legacyGraphicHint(i)===hint&&!claimedItemIds.includes(Number(i.id))).map(i=>Number(i.id)))}>Select legacy group: {hint}</button>)}
           </div>}
         </div></div>}
+        {jobId&&currentJob&&closedStatuses.has(String(currentJob.status||'').toLowerCase())&&<p role="alert">This job is closed. Historical travelers can be viewed; creation of new production travelers is disabled.</p>}
         {jobId&&<div><h3>Existing travelers</h3>
           {travelerList.map(t=><p key={t.id}><Link to={'/production-travelers/'+t.id}>Open traveler (primary line #{t.job_item_id}) →</Link></p>)}
           {!travelerList.length&&<p>No traveler has been created yet.</p>}
@@ -333,7 +342,7 @@ export default function ProductionTravelers() {
             })}
           </div>)}
         </section>}
-        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready||graphicsBlocked||!placementReady}
+        {editable?<button type="button" disabled={busy||!jobId||!selectedItemIds.length||!versionId||!readiness.ready||graphicsBlocked||!placementReady||closedStatuses.has(String(currentJob?.status||'').toLowerCase())}
           onClick={createTraveler}>{busy?'Saving…':'Create grouped traveler'}</button>:<p>Read-only access: an operations user creates travelers.</p>}
         <p><small>Creating a traveler records manufacturing instructions only; it does not move inventory, complete a pull sheet, charge a customer or change WooCommerce status.</small></p>
         <Link to="/manufacturing-recipes">Need a recipe? Create or approve one →</Link>
