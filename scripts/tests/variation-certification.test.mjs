@@ -26,6 +26,7 @@ async function setup(){
  await db.exec(await read('supabase/migrations/20261027003319_variation_certification_enforcement.sql'));
  await db.exec(await read('supabase/migrations/20261027010549_variation_recipe_routing.sql'));
  await db.exec(await read('supabase/migrations/20261027014211_artwork_integrity_registration.sql'));
+ await db.exec(await read('supabase/migrations/20261027023708_external_mockup_approval_evidence.sql'));
  await db.exec(`set test.actor='${actor}'; set test.role='manager';
  insert into blank_products(id) values('${blank}');
  insert into sc_material_recipes(id,status,settings) values('${id(90)}','approved','{"temperature":100}');
@@ -306,5 +307,31 @@ test('registered bytes are immutable, required for certification and cannot be f
    await assert.rejects(s.db.exec("insert into sc_artwork_object_revisions default values"),/permission denied/);
    await s.db.exec('reset role');
   }
+ }finally{await s.db.close();}
+});
+test('external customer approval keeps honest manager provenance, current evidence and withdrawal enforcement',async()=>{
+ const s=await setup();try{
+  await s.db.exec('delete from mockup_reviews');
+  assert.equal((await s.check()).ready,false);
+  const record=()=>s.query('select sc_record_external_mockup_approval($1,$2,$3,$4,$5) id',[output,'Fictional customer','Isolated actual-decision fixture reference','approved','Isolated manager report of externally received customer decision']);
+  await s.db.exec("set test.role='operator'");await assert.rejects(record(),/Manager/);await s.db.exec("set test.role='manager'");
+  const evidence=(await record())[0].id;
+  assert.equal((await s.query('select count(*)::int n from mockup_reviews'))[0].n,0);
+  assert.equal((await s.query('select count(*)::int n from mockup_review_tokens'))[0].n,1);
+  const state=await s.check();assert.equal(state.ready,true);
+  assert.equal(state.snapshot.external_customer_approval_evidence[0].recorded_by,actor);
+  assert.equal(state.snapshot.external_customer_approval_evidence[0].source_kind,'manager_recorded_external_approval');
+  const cert=await s.certify();
+  await assert.rejects(s.query("update sc_external_mockup_approvals set decision='withdrawn' where id=$1",[evidence]),/immutable/);
+  await s.query('select sc_record_external_mockup_approval($1,$2,$3,$4,$5)',[output,'Fictional customer','Isolated withdrawal message','withdrawn','Actual withdrawal reported in this isolated fixture']);
+  assert.equal((await s.check()).ready,false);
+  assert.equal((await s.query('select status from sc_variation_certifications where id=$1',[cert]))[0].status,'revoked');
+  await record();assert.equal((await s.check()).ready,true);
+  await s.db.exec("update mockup_placements set updated_at=clock_timestamp() where id='"+placement+"'");
+  assert.equal((await s.check()).ready,false);
+  await record();assert.equal((await s.check()).ready,true);
+  await s.db.exec("insert into mockup_reviews(project_id,output_id,review_token_id,decision,created_at) values('"+project+"','"+output+"','"+token+"','changes_requested',clock_timestamp())");
+  assert.equal((await s.check()).ready,false);
+  await s.db.exec('set role authenticated');await assert.rejects(s.db.exec('insert into sc_external_mockup_approvals default values'),/permission denied/);
  }finally{await s.db.close();}
 });
