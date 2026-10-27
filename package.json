@@ -66,7 +66,7 @@
     "test:print-center": "node --test scripts/tests/unified-print-center.test.mjs scripts/tests/label-designer.test.mjs scripts/tests/quick-order-print.test.mjs scripts/tests/print-integrations.test.mjs scripts/tests/qbo-oauth-behavior.test.mjs",
     "test:nas-backup": "node --test scripts/tests/nas-backup-report.test.mjs",
     "test:storage-backup-read": "node --test scripts/tests/storage-backup-read.test.mjs",
-    "test:certification": "node --test scripts/tests/variation-certification.test.mjs scripts/tests/reorder-traveler-request.test.mjs scripts/tests/artwork-integrity.test.mjs"
+    "test:certification": "node --test scripts/tests/variation-certification.test.mjs scripts/tests/reorder-traveler-request.test.mjs scripts/tests/artwork-integrity.test.mjs scripts/tests/woo-logo-mapping.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",

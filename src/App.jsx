@@ -46,6 +46,7 @@ const CoordinatorDashboard = lazy(() => import('./CoordinatorDashboard'));
 const ManufacturingRecipes = lazy(() => import('./ManufacturingRecipes'));
 const ProductionTravelers = lazy(() => import('./ProductionTravelers'));
 const CatalogProductionReadiness = lazy(() => import('./CatalogProductionReadiness'));
+const WooArtworkMapping = lazy(() => import('./WooArtworkMapping'));
 const CatalogModernization = lazy(() => import('./CatalogModernization'));
 const CatalogPairingWorkbench = lazy(() => import('./CatalogPairingWorkbench'));
 
@@ -215,6 +216,7 @@ function EmployeeRoutes() {
       <Route path="/quickbooks" element={<QuickBooksConnection />} />
       <Route path="/manufacturing-recipes" element={<ManufacturingRecipes />} />
       <Route path="/client-graphics" element={<ClientGraphics />} />
+      <Route path="/woo-artwork-mapping" element={<WooArtworkMapping />} />
       <Route path="/order-graphics" element={<OrderGraphicAssignment />} />
       <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />

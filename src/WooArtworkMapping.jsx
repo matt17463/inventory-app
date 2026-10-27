@@ -1,0 +1,85 @@
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {Link} from 'react-router-dom';
+import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
+import './WooArtworkMapping.css';
+
+async function request(input){
+ const r=await authenticatedFunctionFetch('/.netlify/functions/woo-logo-mapping',{method:'POST',body:JSON.stringify(input)});
+ const body=await r.json().catch(()=>({}));if(!r.ok||!body.success)throw Error(body.message||'Artwork mapping unavailable');return body.data;
+}
+function download(name,value){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);}
+const empty={families:[],plans:[],library:{families:[],artworks:[],variants:[],projects:[],recipes:[],outputs:[]}};
+export default function WooArtworkMapping({embedded=false,parentId=null}){
+ const [catalog,setCatalog]=useState(empty),[plan,setPlan]=useState(null),[search,setSearch]=useState(''),[filter,setFilter]=useState('all');
+ const [selected,setSelected]=useState([]),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[errors,setErrors]=useState([]);
+ const [dirty,setDirty]=useState(false),[validation,setValidation]=useState(null),[history,setHistory]=useState([]),[template,setTemplate]=useState(''),[allArtwork,setAllArtwork]=useState(false);
+ const stopInspection=useRef(false);
+ const [inspecting,setInspecting]=useState(false);
+ const [newChoice,setNewChoice]=useState('');
+ const load=useCallback(async()=>{const c=await request({action:'catalog'});setCatalog(c);return c;},[]);
+ useEffect(()=>{load().catch(e=>setMessage(e.message));},[load]);
+ const latest=useMemo(()=>new Map(catalog.plans.map(p=>[p.woo_product_id,catalog.plans.find(x=>x.woo_product_id===p.woo_product_id)])),[catalog.plans]);
+ const families=catalog.families.filter(f=>{
+  const p=latest.get(f.woocommerce_product_id),s=p?(p.analysis?.mapping_complete?'mapped':'draft'):'uninspected';
+  return (filter==='all'||s===filter)&&[f.product_name,f.woocommerce_product_id,f.example_sku].join(' ').toLowerCase().includes(search.toLowerCase());
+ });
+ function adopt(p){setPlan(p);setDirty(false);setValidation(null);setHistory([]);setNewChoice('');}
+ async function run(fn){setBusy(true);setErrors([]);try{await fn();}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+ async function inspect(ids){
+  if(dirty)throw Error('Save this draft before inspecting another product.');
+  const problems=[];let completed=0;stopInspection.current=false;setInspecting(true);
+  for(let n=0;n<ids.length;n++){
+   if(stopInspection.current)break;
+   setMessage(`Inspecting ${n+1} of ${ids.length}: Woo #${ids[n]}. Only draft mapping records are saved.`);
+   try{const p=await request({action:'inspect',woo_product_id:ids[n]});if(ids.length===1)adopt(p);completed++;}catch(e){problems.push({parent:ids[n],message:e.message});}
+  }
+  setInspecting(false);await load();setErrors(problems);setMessage(`Inspection ${stopInspection.current?'paused':'finished'}: ${completed} saved drafts, ${problems.length} need attention. Resume by selecting Not inspected. No WooCommerce or approval changes.`);
+ }
+ function change(choice,key,value){setPlan(p=>({...p,mappings:{...p.mappings,[choice]:{...p.mappings[choice],[key]:value,...(key==='family_id'?{variant_id:''}:{}),...(key==='artwork_asset_id'?{variant_id:''}:{})}}}));setDirty(true);setValidation(null);}
+ async function save(){const p=await request({action:'save',plan_id:plan.id,revision:plan.revision,mappings:plan.mappings,canonical:plan.canonical,note:plan.note});adopt(p);await load();setMessage('Draft mapping saved. Artwork may still need approval; storefront and production remain unchanged.');return p;}
+ const lib=catalog.library,projectIds=new Set(lib.projects.filter(p=>p.woo_product_id===plan?.woo_product_id).map(p=>p.id));
+ const assets=allArtwork?lib.artworks:lib.artworks.filter(a=>projectIds.has(a.project_id));
+ const groups=plan?.analysis?.operations||[];
+ const Container=embedded?'section':'main';
+ return <Container className="sc-logo-workspace">
+  {!embedded&&<header><p>Products & artwork</p><h1>Bring WooCommerce artwork into Client Graphics</h1><p>Work across the catalog: capture existing logo choices, map their files and images, save drafts, and review production separately.</p><Link to="/catalog-production-readiness">Return to Product Setup & Readiness</Link></header>}
+  <aside className="sc-logo-boundary"><strong>Mapping is not approval.</strong> Save incomplete mappings and import draft graphics now. Production approval and any later variation consolidation have separate checks. This workspace does not change Woo attributes, stock, prices, orders or live selectors.</aside>
+  {message&&<p role="status">{message}</p>}{errors.length>0&&<ul role="alert">{errors.map(e=><li key={e.parent}>Woo #{e.parent}: {e.message}</li>)}</ul>}
+  {!embedded&&<section className="card"><h2>Catalog mapping queue</h2><div className="sc-logo-totals"><span>{catalog.families.length} product families</span><span>{latest.size} inspected</span><span>{[...latest.values()].filter(p=>p.analysis?.mapping_complete).length} mappings complete</span><span>Production approvals are separate</span></div>
+   <div className="sc-logo-toolbar"><label>Search products<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, SKU or Woo ID"/></label><label>Mapping status<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All products</option><option value="uninspected">Not inspected</option><option value="draft">Draft mappings</option><option value="mapped">Mappings complete</option></select></label><button disabled={busy||dirty} onClick={()=>setSelected(families.map(f=>f.woocommerce_product_id))}>Select shown</button><button disabled={busy||!selected.length||dirty} onClick={()=>run(()=>inspect(selected))}>Inspect selected products ({selected.length})</button><button disabled={busy} onClick={()=>run(load)}>Refresh queue</button></div>
+   <p>Inspection reads WooCommerce and saves a recoverable baseline. Repeating it resumes the same source revision. Each product is independent, so one error does not discard the rest.</p>{inspecting&&<button onClick={()=>{stopInspection.current=true;setMessage('Pausing after the current product; saved drafts will be retained.');}}>Pause inspection after this product</button>}
+   <div className="sc-logo-table"><table><thead><tr><th>Select</th><th>Product</th><th>Synced rows / IDs</th><th>Artwork mapping</th><th>Action</th></tr></thead><tbody>{families.map(f=>{const p=latest.get(f.woocommerce_product_id);return <tr key={f.woocommerce_product_id}><td><input type="checkbox" aria-label={`Select ${f.product_name} ${f.woocommerce_product_id}`} checked={selected.includes(f.woocommerce_product_id)} onChange={e=>setSelected(s=>e.target.checked?[...s,f.woocommerce_product_id]:s.filter(id=>id!==f.woocommerce_product_id))}/></td><td>{f.product_name}<small>Woo #{f.woocommerce_product_id}</small></td><td>{f.row_count} / {f.variation_count}</td><td>{p?(p.analysis?.mapping_complete?'Mapped — approval separate':`${p.analysis?.mapped_choices||0}/${p.analysis?.total_choices||0} choices mapped`):'Not inspected'}</td><td><button disabled={busy||dirty} onClick={()=>run(async()=>{if(p)adopt(await request({action:'load',plan_id:p.id}));else await inspect([f.woocommerce_product_id]);})}>{p?'Open mapping':'Inspect & map'}</button></td></tr>;})}</tbody></table></div>
+  </section>}
+  {embedded&&<button disabled={busy||dirty} onClick={()=>run(()=>inspect([Number(parentId)]))}>Open artwork mapping for this product</button>}
+  {plan&&<section className="card" aria-label="Product artwork mapping">
+   <h2>{plan.baseline.product.name} · Woo #{plan.woo_product_id}</h2>
+   <p>{plan.baseline.variations.length} actual Woo variations · {groups.length} physical size/color combinations · {Object.keys(plan.mappings).length} logo choices · saved revision {plan.revision}{dirty?' · unsaved edits':''}</p>
+   <div className="sc-logo-toolbar"><button disabled={busy||!dirty} onClick={()=>run(save)}>Save draft mapping</button><button disabled={busy||dirty} onClick={()=>download(`woo-${plan.woo_product_id}-artwork-mapping.json`,{...plan,exported_at:new Date().toISOString(),notice:'Mapping evidence only. No approvals or production activation implied.'})}>Export baseline & mapping</button><button disabled={busy||dirty} onClick={()=>run(async()=>{setHistory(await request({action:'history',plan_id:plan.id}));setMessage('Saved mapping history loaded. Baseline remains immutable.');})}>View mapping history</button></div>
+   <details><summary>Reuse another product’s mapping as a draft template</summary><p>Only identical legacy logo terms are copied. Images, physical variation choices and approvals are never copied.</p><label>Template product<select value={template} onChange={e=>setTemplate(e.target.value)}><option value="">Choose saved mapping</option>{catalog.plans.filter(p=>p.id!==plan.id).map(p=><option key={p.id} value={p.id}>Woo #{p.woo_product_id} · revision {p.revision}</option>)}</select></label><button disabled={busy||dirty||!template} onClick={()=>run(async()=>{adopt(await request({action:'template',plan_id:plan.id,template_id:template,revision:plan.revision}));await load();setMessage('Template saved as a proposal. Review every file and product-specific image.');})}>Apply draft template</button></details>
+   <h3>1. Map the existing logo choices</h3><p>Choose exact files yourself. Similar names are not automatically accepted. You can leave missing files blank and return later.</p>
+   <details><summary>Add a fixed or missing artwork choice</summary><p>Products with no legacy logo attribute can still be mapped. Add the intended choice explicitly; it remains a manager-entered draft, not a discovered Woo value or approval.</p><label>New artwork choice label<input value={newChoice} onChange={e=>setNewChoice(e.target.value)}/></label><button disabled={busy||dirty||newChoice.trim().length<2} onClick={()=>run(async()=>{adopt(await request({action:'add_choice',plan_id:plan.id,revision:plan.revision,label:newChoice}));await load();setMessage('Added an explicit draft artwork choice. No Woo attributes or source approvals changed.');})}>Add draft choice</button></details>
+   <label><input type="checkbox" checked={allArtwork} onChange={e=>setAllArtwork(e.target.checked)}/> Show shared artwork from all product projects</label>
+   <div className="sc-logo-choices">{Object.entries(plan.mappings).map(([choice,m])=>{
+    const source=plan.baseline.variations.filter(v=>String(v.attributes.find(a=>/(logo|graphic|design|artwork)/i.test(a.name))?.option||'').trim().toLowerCase().replace(/\s+/g,' ')===choice);
+    const images=[...new Map(source.map(v=>[v.image?.id,v.image])).values()].filter(Boolean);
+    return <article key={choice}><h4>{choice}</h4><p>{source.length} existing variations · {images.length} existing images</p>
+     <label>Customer-facing label<input value={m.label||''} onChange={e=>change(choice,'label',e.target.value)}/></label>
+     <label>Graphic family<select value={m.family_id||''} onChange={e=>change(choice,'family_id',e.target.value)}><option value="">Create a draft family on import</option>{lib.families.map(f=><option key={f.id} value={f.id}>{f.name} · {f.state}</option>)}</select></label>
+     <label>Exact artwork file<select value={m.artwork_asset_id||''} onChange={e=>change(choice,'artwork_asset_id',e.target.value)}><option value="">Not mapped yet</option>{lib.artworks.filter(a=>assets.some(x=>x.id===a.id)||a.id===m.artwork_asset_id).map(a=><option key={a.id} value={a.id}>{a.artwork_name} · {a.preflight_status} · {a.id.slice(0,8)}</option>)}</select></label>
+     <label>Decoration process<select value={m.process||''} onChange={e=>change(choice,'process',e.target.value)}><option value="">Not specified yet</option>{['DTF','HTV','Sublimation','Embroidery','Screen print','Laser','Other'].map(p=><option key={p}>{p}</option>)}</select></label>
+     <div className="sc-logo-images">{images.map(image=><figure key={image.id}><img src={image.src} alt={`${choice} existing Woo image ${image.id}`} loading="lazy"/><figcaption>Existing image #{image.id} — retained as source evidence</figcaption><label>Reviewed mockup output<select value={m.output_by_image?.[image.id]||''} onChange={e=>change(choice,'output_by_image',{...m.output_by_image,[image.id]:e.target.value})}><option value="">Review later — no approval implied</option>{lib.outputs.filter(o=>projectIds.has(o.project_id)||o.id===m.output_by_image?.[image.id]).map(o=><option key={o.id} value={o.id}>{o.output_name} · {o.approval_status}</option>)}</select></label></figure>)}</div>
+     <details><summary>Production details — optional during mapping</summary><label>Production artwork revision<select value={m.variant_id||''} onChange={e=>change(choice,'variant_id',e.target.value)}><option value="">Draft / not selected</option>{lib.variants.filter(v=>v.family_id===m.family_id&&v.artwork_asset_id===m.artwork_asset_id).map(v=><option key={v.id} value={v.id}>{v.label} · revision {v.version} · {v.state}</option>)}</select></label><label>Production recipe revision<select value={m.recipe_version_id||''} onChange={e=>change(choice,'recipe_version_id',e.target.value)}><option value="">Not selected yet</option>{lib.recipes.map(r=><option key={r.id} value={r.id}>{r.recipe_id.slice(0,8)} · revision {r.revision} · {r.status}</option>)}</select></label></details>
+    </article>;
+   })}</div>
+   <button disabled={busy||dirty||!Object.keys(plan.mappings).length} onClick={()=>run(async()=>{adopt(await request({action:'create_draft_families',plan_id:plan.id,revision:plan.revision}));await load();setMessage('Imported draft graphics and disabled product associations. No approvals, measured dimensions or live selector changes were invented.');})}>Import mapped artwork as draft Client Graphics</button>
+   <p>Draft import is repeat-safe. It creates missing draft families and unmeasured draft file revisions, with product associations kept pending. Existing approved families and artwork currently used by certificates are not edited; those file links remain proposals until reviewed.</p>
+   <h3>2. Review physical variation consolidation separately</h3><p>Mapping artwork does not require changing Woo variations. The optional future cutover retains one reviewed variation ID per physical size/color, archives alternatives without deleting them, and preserves the original crosswalk.</p>
+   <details><summary>Retained variation IDs and rollback crosswalk ({groups.length} physical groups)</summary><div className="sc-logo-table"><table><thead><tr><th>Physical combination</th><th>Retain this Woo variation ID</th></tr></thead><tbody>{groups.map(g=><tr key={g.physical_key}><td>{g.physical_attributes.map(a=>`${a.name}: ${a.option}`).join(' · ')}</td><td><select aria-label={`Retained variation for ${g.physical_attributes.map(a=>a.option).join(' ')}`} value={plan.canonical[g.physical_key]||''} onChange={e=>{setPlan(p=>({...p,canonical:{...p.canonical,[g.physical_key]:Number(e.target.value)||null}}));setDirty(true);setValidation(null);}}><option value="">Not reviewed yet</option>{plan.baseline.variations.filter(v=>[g.canonical_id,...g.archive_ids].includes(v.id)).map(v=><option key={v.id} value={v.id}>#{v.id} · {v.sku}</option>)}</select></td></tr>)}</tbody></table></div></details>
+   <label>Mapping review notes<textarea rows={3} value={plan.note} onChange={e=>{setPlan(p=>({...p,note:e.target.value}));setDirty(true);}}/></label>
+   <div className="sc-logo-toolbar"><button disabled={busy||!dirty} onClick={()=>run(save)}>Save mapping and notes</button><button disabled={busy||dirty} onClick={()=>run(async()=>{setValidation(await request({action:'validate',plan_id:plan.id}));setMessage('Checked current Woo source and production evidence. Mapping can remain saved with outstanding approvals.');})}>Check activation readiness</button><Link to="/client-graphics">Review graphics and genuine approvals</Link></div>
+   {validation&&<section aria-label="Mapping activation readiness"><h3>{validation.production_ready?'Source checks passed — cutover still separate':'Mapping saved; activation has outstanding reviews'}</h3><p>{validation.mapped_choices}/{validation.total_choices} artwork choices mapped. No source approval was changed.</p><ul>{[...validation.blockers,...validation.production_blockers].map((b,i)=><li key={i}>{b}</li>)}</ul></section>}
+   {history.length>0&&<details open><summary>Saved mapping history</summary><ol>{history.map(h=><li key={h.id}>Revision {h.revision} · {new Date(h.recorded_at).toLocaleString()} · {h.document.note||'Draft mapping update'}</li>)}</ol></details>}
+  </section>}
+  {lib.possibly_truncated&&<p role="alert">The reference library reached its 1,000-row limit. Do not assume an absent record does not exist; narrow the source library before activation.</p>}
+ </Container>;
+}
