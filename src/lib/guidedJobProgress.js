@@ -55,6 +55,14 @@ export function deriveGuidedProgress(row,evidence={}){
    : !manual || job.payment_received===true;
  const required=items.filter(i=>i.inventory_required!==false);
  const unpaired=required.filter(i=>!i.blank_product_id && clean(i.status)!=='completed'&&clean(i.status)!=='complete');
+ const activeOrderLines=items.filter(i=>!['cancelled','canceled','void','voided','removed'].includes(clean(i.status)));
+ // Explicit fulfillment-only evidence, never infer blank-only from missing artwork.
+ const blankOnly=activeOrderLines.length>0&&activeOrderLines.every(i=>i.fulfillment_only===true||i.decoration_required===false||i.production_required===false);
+ const reservationQty=new Map();
+ for(const r of reservations)if(['active','reserved','confirmed'].includes(clean(r.status))){
+  const id=Number(r.job_item_id);reservationQty.set(id,(reservationQty.get(id)||0)+Number(r.quantity_reserved||0));
+ }
+ const stockReserved=required.length>0&&!unpaired.length&&required.every(i=>(reservationQty.get(Number(i.id))||0)>=Number(i.quantity||0));
  const latestQc=[...qc].sort((a,b)=>new Date(b.qc_completed_at||b.created_at||0)-new Date(a.qc_completed_at||a.created_at||0))[0];
  const qcPassed=latestQc?.passed===true;
  const artworkLinked=artworkLinks.some(x=>Boolean(x.handoff?.approved_file_url)) || handoffs.some(h=>Boolean(h.approved_file_url));
@@ -85,29 +93,29 @@ export function deriveGuidedProgress(row,evidence={}){
     isWoo?'WooCommerce order linked. Confirm billing, variants and the customer deadline.':
     'Existing production job linked. Confirm requirements and agreed completion date.',
     manual?'/client-orders':pull);
- add('artwork',missing.handoffs?'unknown':artworkLinked?'linked':'review',null,
-    missing.handoffs?'Artwork handoff evidence could not be read. Open approval tools.':
+ add('artwork',blankOnly?'not_applicable':missing.handoffs?'unknown':artworkLinked?'linked':'review',null,
+    blankOnly?'Blank-only fulfillment: no artwork required.':missing.handoffs?'Artwork handoff evidence could not be read. Open approval tools.':
     artworkLinked?'An approved-file reference is linked; verify its exact version and customer approval before manufacturing.':
     'No approved artwork file was found linked to this job; confirm approval in the artwork workflow.',
     '/approval-automation');
  add('stock',missing.items||missing.reservations?'unknown':
-    unpaired.length?'attention':!required.length?'not_applicable':'review',null,
+    unpaired.length?'attention':!required.length?'not_applicable':stockReserved?'verified':'review',null,
     missing.items||missing.reservations?'Inventory detail is unavailable; open the Purchasing Report.':
     unpaired.length?unpaired.length+' line(s) have no paired blank product. Correct mapping before pulling stock.':
     !required.length?'No inventory-required blanks in the job.':'Blanks are paired; '+reservations.length+
     ' reservation record(s) exist. Review active shortages, bins and existing supplier orders in Purchasing.',
     unpaired.length?pull:'/purchasing');
- add('recipe',missing.travelers||missing.items?'unknown':allTraveled?'linked':!required.length?'not_applicable':'review',null,
-    missing.travelers||missing.items?'Job traveler details unavailable. Open QR travelers.':
+ add('recipe',blankOnly?'not_applicable':missing.travelers||missing.items?'unknown':allTraveled?'linked':!required.length?'not_applicable':'review',null,
+    blankOnly?'Blank-only fulfillment: production recipe and traveler not required.':missing.travelers||missing.items?'Job traveler details unavailable. Open QR travelers.':
     !required.length?'No blank production lines require a garment traveler.':
     travelers.length+'/'+required.length+' inventory-required line(s) have saved QR travelers. Check approved recipes and placement measurements.',
     traveler);
- add('production',productionStarted?'linked':'review',null,
-    productionStarted?'Production Board indicates work has started or progressed. Inspect actual open line items before completion.':
+ add('production',blankOnly?'not_applicable':productionStarted?'linked':'review',null,
+    blankOnly?'Blank-only fulfillment: no decoration or manufacturing step.':productionStarted?'Production Board indicates work has started or progressed. Inspect actual open line items before completion.':
     'Start manufacturing from the Production Board once artwork and stock are confirmed.',
     '/production-board');
- add('qc',missing.qc?'unknown':qcPassed?'verified':'attention',null,
-    missing.qc?'QC evidence could not be read. Check the QC page.':
+ add('qc',blankOnly?'not_applicable':missing.qc?'unknown':qcPassed?'verified':'attention',null,
+    blankOnly?'No manufactured decoration to inspect. Packing quantity and condition checks remain required.':missing.qc?'QC evidence could not be read. Check the QC page.':
     qcPassed?'A passing QC checklist is recorded. Verify quantities and photos for this fulfillment.':
     'No passing QC record linked to this job. Complete the official inspection before handoff.',
     jobId?'/qc-checklist?job='+jobId:'/qc-checklist');
@@ -118,7 +126,7 @@ export function deriveGuidedProgress(row,evidence={}){
     'No recorded packing or customer handoff. QC and completion alone do not prove delivery.',
     jobId?'/work-hub?job='+jobId:'/production-board');
  if(cancelledJob)return {steps,priority:{title:'Order cancelled / on hold',reason:'Do not produce. Confirm cancellation and reservation release in the Production Board.',href:'/production-board',kind:'blocked'},
-   notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,travelers:travelers.length,activeReservations:reservations.length,qcPassed},isWoo,manual,completed,cancelled:true};
+   notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,travelers:travelers.length,activeReservations:reservations.length,qcPassed},isWoo,manual,completed,cancelled:true,blankOnly};
  const hardBlock=Array.isArray(row?.blocking_issues)?row.blocking_issues:[];
  const blockerMessage=hardBlock.map(x=>typeof x==='string'?x:x?.message||x?.reason).filter(Boolean).slice(0,4);
  let priority;
@@ -128,12 +136,12 @@ export function deriveGuidedProgress(row,evidence={}){
  else if(unpaired.length)priority={title:'Pair '+unpaired.length+' blank line(s)',reason:'Product-to-blank mapping is missing; review the pull sheet before production.',href:pull,kind:'blocked'};
  else if(status==='qc'&&!qcPassed)priority={title:'Record official QC',reason:'The job is at QC without a passing inspection.',href:jobId?'/qc-checklist?job='+jobId:'/qc-checklist',kind:'action'};
  else if(status==='ready_to_ship')priority={title:handedOff?'Close out completed delivery':packingComplete?'Collect pickup signature or record shipment':'Verify every package line',reason:handedOff?'Receipt/delivery is recorded; confirm Production Board closeout.':packingComplete?'Packing counts match the order. Confirm actual pickup/shipment after QC.':'Pack every active job item to the exact ordered count before customer handoff.',href:handedOff?'/production-board':'/work-hub?job='+jobId,kind:'action'};
- else if(!artworkLinked&&!artworkNA)priority={title:'Verify approved artwork',reason:'No linked approved artwork file was found. This may be an unlinked legacy project; review client proof and print-ready file.',href:'/approval-automation',kind:'action'};
- else if(!allTraveled&&required.length)priority={title:'Prepare recipe and QR traveler',reason:'Create approved production instructions for each item as applicable.',href:traveler,kind:'action'};
+ else if(!blankOnly&&!artworkLinked&&!artworkNA)priority={title:'Verify approved artwork',reason:'No linked approved artwork file was found. This may be an unlinked legacy project; review client proof and print-ready file.',href:'/approval-automation',kind:'action'};
+ else if(!blankOnly&&!allTraveled&&required.length)priority={title:'Prepare recipe and QR traveler',reason:'Create approved production instructions for each item as applicable.',href:traveler,kind:'action'};
  else if(status==='needs_attention'||status==='on_hold')priority={title:'Resolve current hold',reason:'Review the Production Board and purchasing exceptions before advancing.',href:'/exception-center',kind:'blocked'};
- else if(status==='ready_to_produce')priority={title:'Start production',reason:'Review the pull sheet and verified materials before decorating.',href:pull,kind:'action'};
+ else if(blankOnly)priority={title:'Verify blank fulfillment and handoff',reason:stockReserved?'All required blank units reserved. Confirm physical pull, pack quantities and delivery.':'Review blank stock reservations and physical pull, then pack and deliver.',href:pull,kind:'action'};\n else if(status==='ready_to_produce')priority={title:'Start production',reason:'Review the pull sheet and verified materials before decorating.',href:pull,kind:'action'};
  else if(status==='in_production')priority={title:'Complete production lines',reason:'Finish the approved instructions, then record QC.',href:traveler,kind:'action'};
  else priority={title:'Review the job',reason:'Check the authoritative production status and confirm the next required step.',href:'/production-board',kind:'action'};
  return {steps:steps.map(s=>manualReviews.has(s.id)?{...s,reviewAnnotation:manualReviews.get(s.id)}:s),priority,notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,
-   travelers:travelers.length,activeReservations:reservations.length,qcPassed},isWoo,manual,completed,cancelled:false};
+   travelers:travelers.length,activeReservations:reservations.length,qcPassed},isWoo,manual,completed,cancelled:false,blankOnly};
 }
