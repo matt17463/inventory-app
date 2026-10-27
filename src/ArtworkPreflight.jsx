@@ -132,7 +132,7 @@ export default function ArtworkPreflight() {
 
   return <main className="page sc-art-preflight">
     <section className="page-header">
-      <div><p className="eyebrow">Artwork workflow · DTF</p><h1>Prepare customer artwork for DTF</h1>
+      <div><p className="eyebrow">Artwork workflow · DTF</p><p><Link to="/dtf-studio">Open the new DTF Prep Studio →</Link></p><h1>Prepare customer artwork for DTF</h1>
         <p>Check image quality, optionally remove connected white background areas, crop transparent margins, and export a correctly sized PNG with 300 DPI metadata.</p></div>
     </section>
     <section className="card elevated-card sc-art-preflight-layout">
