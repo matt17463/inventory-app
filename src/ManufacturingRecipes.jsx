@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
@@ -28,14 +28,16 @@ const allowedPlacement = ['full_front','center_chest','left_chest','right_chest'
 function explainError(error) {
   return error?.message || 'Request failed; check database migration and user permissions.';
 }
-export default function ManufacturingRecipes() {
+export default function ManufacturingRecipes({embedded=false,initialRecipeId=''}) {
+  const Container=embedded?'section':'main';
+  const initialized=useRef(false);
   const access = useContext(EmployeeAccessContext);
   const editor = ['admin','manager','operator'].includes(access?.role);
   const approver = ['admin','manager'].includes(access?.role);
   const [recipes,setRecipes] = useState([]);
   const [folders,setFolders] = useState([]);
   const [recipeSearch,setRecipeSearch] = useState('');
-  const [scopeFilter,setScopeFilter] = useState('master');
+  const [scopeFilter,setScopeFilter] = useState(embedded?'all':'master');
   const [folderFilter,setFolderFilter] = useState('all');
   const [includeArchived,setIncludeArchived] = useState(false);
   const [sortMode,setSortMode] = useState('name');
@@ -67,7 +69,7 @@ export default function ManufacturingRecipes() {
   const ownVersions = useMemo(()=>versions.filter(v=>v.recipe_id===form.id),[versions,form.id]);
   const current = versions.find(v=>v.id===selectedVersion);
   function change(key,value) { setForm(s=>({...s,[key]:value})); }
-  function chooseRecipe(recipeId) {
+  const chooseRecipe=useCallback((recipeId) => {
     const r=recipes.find(x=>x.id===recipeId);
     if(!r) {setForm(newForm());setSelectedVersion('');return;}
     const latest=versions.filter(v=>v.recipe_id===r.id).sort((a,b)=>b.revision-a.revision)[0];
@@ -82,7 +84,8 @@ export default function ManufacturingRecipes() {
       verified_sample:false,
     });
     setSelectedVersion(latest?.id||'');
-  }
+  },[recipes,versions]);
+  useEffect(()=>{if(!initialized.current&&initialRecipeId&&recipes.length){initialized.current=true;chooseRecipe(initialRecipeId);}},[initialRecipeId,recipes,chooseRecipe]);
   function duplicateAsNewRecipe() {
     if(!form.id)return;
     const source=form.name;
@@ -192,7 +195,7 @@ export default function ManufacturingRecipes() {
       setNewFolderName('');await load();setMessage('Folder created.');
     }catch(e){setMessage(explainError(e));}finally{setBusy(false);}
   }
-  return <main className="page sc-recipe-editor">
+  return <Container className={embedded?'sc-recipe-editor':'page sc-recipe-editor'}>
     <div className="page-header"><div><p className="eyebrow">Production · Manufacturing recipes</p>
       <h1>Production Recipe Library</h1>
       <p>Save exact placement measurements, artwork, material settings, process steps and packing instructions. Approve only after checking a physical sample.</p></div>
@@ -317,5 +320,5 @@ export default function ManufacturingRecipes() {
         </div>}
       </section>
     </div>
-  </main>;
+  </Container>;
 }

@@ -56,3 +56,9 @@
  .sc-catalog-readiness .sc-cr-family{padding:12px;min-height:0}
  .sc-catalog-readiness .sc-cr-listline{flex-direction:column}
 }
+/* Reuse specialist editors within the focused wizard column. */
+.sc-cr-detail .sc-pairing-embedded .sc-pairing-layout,
+.sc-cr-detail .sc-recipe-columns { grid-template-columns:minmax(0,1fr); }
+.sc-cr-detail .sc-pairing-embedded .sc-pairing-detail { min-width:0; }
+.sc-cr-detail table { width:100%; overflow-wrap:anywhere; }
+.sc-cr-detail .mockup-studio-page { padding:0; min-width:0; }

@@ -1,3 +1,4 @@
+import {employeeDatabase,createVerifiedTraveler} from './_shared/verifiedTraveler.js';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 import { DTF_STARTER_PRESETS, classifyCatalogFamily } from '../../src/lib/catalogProductionPresets.js';
 
@@ -136,7 +137,7 @@ async function saveAssignment(db,input,userId){
  await rows(query.select('id'),'Save assignment');
  return {woocommerce_product_id:parent,disposition};
 }
-async function openJobs(db){
+async function openJobs(db,event){
  const jobs=await rows(db.from('jobs').select('id,status,customer_name,job_name,due_date')
    .not('status','in','(completed,voided,cancelled,canceled)').order('id',{ascending:false}).limit(300),'Open jobs');
  if(!jobs.length)return [];
@@ -144,7 +145,7 @@ async function openJobs(db){
  const [items,existing,links,assignments,versions]=await Promise.all([
   rows(db.from('job_items').select('id,job_id,quantity,status,woocommerce_product_id,woocommerce_variation_id,order_sku,ordered_product_name,finished_product_id')
    .in('job_id',jobIds).limit(2000),'Open job lines'),
-  rows(db.from('sc_job_travelers').select('job_item_id,job_id,id').in('job_id',jobIds).limit(2000),'Existing job travelers'),
+  rows(db.from('sc_job_travelers').select('job_item_id,job_id,id').is('superseded_at',null).in('job_id',jobIds).limit(2000),'Existing job travelers'),
   rows(db.from('sc_job_artwork_links').select('job_id,handoff_id').in('job_id',jobIds).limit(2000),'Approved-artwork links'),
   rows(db.from('sc_catalog_recipe_assignments').select('woocommerce_product_id,recipe_id,disposition').eq('disposition','assigned').limit(1500),'Recipe assignments'),
   rows(db.from('sc_manufacturing_recipe_versions').select('id,recipe_id,revision,status,artwork_asset_id').eq('status','approved').order('revision',{ascending:false}).limit(1500),'Approved recipes')
@@ -154,74 +155,12 @@ async function openJobs(db){
    .in('woocommerce_variation_id',vars).limit(1500),'Woo variation parents'):[];
  const parentByVariation=new Map(resolved.map(x=>[Number(x.woocommerce_variation_id),Number(x.woocommerce_product_id)]));
 
- // Live, fail-closed evidence is recalculated on BOTH preview and traveler creation.
- // This is intentionally not a cached "certified" flag: artwork changes, review
- // withdrawals and altered recipe versions revoke eligibility on the next request.
- const parents=[...new Set(items.map(i=>Number(i.woocommerce_product_id||parentByVariation.get(Number(i.woocommerce_variation_id))||0)).filter(Boolean))];
- const [productVariants,artworkLinks,mockupProjects]=await Promise.all([
-  parents.length?rows(db.from('products').select('woocommerce_product_id,woocommerce_variation_id,blank_product_id').in('woocommerce_product_id',parents).limit(10000),'Product variation mappings'):[],
-  parents.length?rows(db.from('sc_catalog_artwork_links').select('woocommerce_product_id,artwork_asset_id,review_required,approval_evidence,reviewed_at,updated_at').in('woocommerce_product_id',parents).limit(3000),'Catalog approved artwork'):[],
-  parents.length?rows(db.from('mockup_projects').select('id,woo_product_id').in('woo_product_id',parents).limit(3000),'Explicit Woo mockup projects'):[]
- ]);
- const variantsByParent=new Map();
- for(const v of productVariants){
-  const key=Number(v.woocommerce_product_id);
-  if(!variantsByParent.has(key))variantsByParent.set(key,[]);
-  variantsByParent.get(key).push(v);
- }
- const artworkByParent=new Map(artworkLinks.map(x=>[Number(x.woocommerce_product_id),x]));
- const projectIds=mockupProjects.map(x=>x.id);
- const [outputs,reviews,placements,artAssets]=await Promise.all([
-  projectIds.length?rows(db.from('mockup_outputs').select('id,project_id,placement_id,is_selected,approval_status,approved_at,updated_at').in('project_id',projectIds).limit(5000),'Mockup outputs'):[],
-  projectIds.length?rows(db.from('mockup_reviews').select('output_id,project_id,decision,created_at').in('project_id',projectIds).order('created_at',{ascending:false}).limit(5000),'Customer reviews'):[],
-  projectIds.length?rows(db.from('mockup_placements').select('id,project_id,artwork_asset_id,updated_at').in('project_id',projectIds).limit(5000),'Mockup placements'):[],
-  projectIds.length?rows(db.from('mockup_artwork_assets').select('id,project_id,updated_at').in('project_id',projectIds).limit(5000),'Mockup artwork revisions'):[]
- ]);
- const placementsById=new Map(placements.map(x=>[String(x.id),x]));
- const assetById=new Map(artAssets.map(x=>[String(x.id),x]));
- const reviewsByOutput=new Map();
- for(const r of reviews)if(!reviewsByOutput.has(String(r.output_id)))reviewsByOutput.set(String(r.output_id),r);
- const projectsByParent=new Map();
- for(const project of mockupProjects){
-  const id=Number(project.woo_product_id);
-  if(!projectsByParent.has(id))projectsByParent.set(id,new Set());
-  projectsByParent.get(id).add(String(project.id));
- }
- const outputByParent=new Map();
- for(const [parent,ids] of projectsByParent){
-  outputByParent.set(parent,outputs.filter(o=>ids.has(String(o.project_id))));
- }
- const latestTime=(...values)=>Math.max(0,...values.map(v=>v?Date.parse(v)||0:0));
- const evidenceFor=(parent,item,version)=>{
-  const variants=variantsByParent.get(parent)||[];
-  const varId=Number(item.woocommerce_variation_id||0);
-  const target=varId?variants.filter(x=>Number(x.woocommerce_variation_id)===varId):variants;
-  if(!target.length)return 'Woo product variation not synchronized';
-  if(target.some(v=>!v.blank_product_id))return 'Required blank mapping missing for this variation';
-  const link=artworkByParent.get(parent);
-  if(!link?.artwork_asset_id||link.review_required||!link.reviewed_at||!clean(link.approval_evidence))
-   return 'Product artwork approval missing or revoked';
-  if(String(version?.artwork_asset_id)!==String(link.artwork_asset_id))
-   return 'Approved recipe artwork differs from product artwork';
-  const candidates=outputByParent.get(parent)||[];
-  for(const output of candidates){
-   if(!output.is_selected||output.approval_status!=='internal_approved'||!output.approved_at)continue;
-   const placement=placementsById.get(String(output.placement_id));
-   if(!placement||String(placement.artwork_asset_id)!==String(link.artwork_asset_id))continue;
-   const review=reviewsByOutput.get(String(output.id));
-   if(!review||!['approved','approve','accepted'].includes(clean(review.decision).toLowerCase()))continue;
-   const modified=latestTime(link.updated_at,placement.updated_at,assetById.get(String(placement.artwork_asset_id))?.updated_at,output.updated_at);
-   if(latestTime(review.created_at)<modified||latestTime(output.approved_at)<modified)continue;
-   return null;
-  }
-  return 'Exact mockup/customer approval missing or stale after production changes';
- };
  const byAssignment=new Map(assignments.map(x=>[Number(x.woocommerce_product_id),x]));
  const recipeById=new Map();for(const v of versions)if(!recipeById.has(v.recipe_id))recipeById.set(v.recipe_id,v);
  const done=new Set(existing.map(x=>Number(x.job_item_id)));
  const artworkJobs=new Set(links.map(x=>Number(x.job_id)));
  const jobsById=new Map(jobs.map(x=>[Number(x.id),x]));
- return items.filter(i=>!['cancelled','canceled','voided','removed'].includes(clean(i.status).toLowerCase())).map(item=>{
+ const result=items.filter(i=>!['cancelled','canceled','voided','removed'].includes(clean(i.status).toLowerCase())).map(item=>{
   const parent=Number(item.woocommerce_product_id||parentByVariation.get(Number(item.woocommerce_variation_id))||0);
   const assignment=byAssignment.get(parent);
   const version=recipeById.get(assignment?.recipe_id);
@@ -230,9 +169,8 @@ async function openJobs(db){
   else if(!parent)reason='Missing Woo parent mapping — manual review';
   else if(!assignment)reason='No approved product recipe assignment';
   else if(!version)reason='Recipe awaiting sample verification and approval';
-  else if(!version.artwork_asset_id)reason='Approved recipe missing exact production artwork';
   else if(!artworkJobs.has(Number(item.job_id)))reason='No artwork handoff linked to this job';
-  else reason=evidenceFor(parent,item,version)||'Eligible for controlled traveler generation';
+  else reason='Eligible for controlled traveler generation';
   return {
    job_id:item.job_id,job_item_id:item.id,customer_name:jobsById.get(Number(item.job_id))?.customer_name||'',
    job_name:jobsById.get(Number(item.job_id))?.job_name||'',name:item.ordered_product_name||item.order_sku||'Job line',
@@ -240,10 +178,19 @@ async function openJobs(db){
    status:reason,eligible:reason==='Eligible for controlled traveler generation',
   };
  });
+ const {data:checks,error}=await employeeDatabase(event).rpc('sc_job_line_readiness',{
+  p_job_item_ids:result.map(x=>x.job_item_id),p_recipe_version_ids:result.map(x=>x.recipe_version_id),
+ });
+ if(error)throw error;
+ const byLine=new Map((checks||[]).map(x=>[Number(x.job_item_id),x]));
+ return result.map(row=>{const check=byLine.get(Number(row.job_item_id));
+  if(!check?.ready)return {...row,eligible:false,status:(check?.blockers||['Certification could not be verified']).join('; ')};
+  return row;
+ });
 }
-async function createApprovedTravelers(db,input,userId){
+async function createApprovedTravelers(db,input,event){
  if(input.confirm_artwork_verified!==true)throw new Error('Review and explicitly confirm the artwork/production checklist first.');
- const current=await openJobs(db);
+ const current=await openJobs(db,event);
  const selected=new Set((Array.isArray(input.job_item_ids)?input.job_item_ids:[]).map(Number));
  const ready=current.filter(x=>x.eligible&&selected.has(Number(x.job_item_id)));
  if(selected.size>50)throw new Error('Create no more than 50 travelers per batch.');
@@ -251,13 +198,9 @@ async function createApprovedTravelers(db,input,userId){
  let created=0,conflicts=0;const errors=[];
  for(const row of ready){
   try{
-   const {data,error}=await db.from('sc_job_travelers').insert({
-    job_id:row.job_id,job_item_id:row.job_item_id,recipe_version_id:row.recipe_version_id,created_by:userId,
-   }).select('id');
-   if(error?.code==='23505'){conflicts++;continue;}
-   if(error)throw error;
-   created+=(data||[]).length;
-  }catch(e){errors.push({job_item_id:row.job_item_id,message:e.message});}
+   await createVerifiedTraveler(event,{jobId:row.job_id,itemIds:[row.job_item_id],recipeVersionId:row.recipe_version_id});
+   created++;
+  }catch(e){if(e.code==='23505'||/already have a traveler/.test(e.message)){conflicts++;}else errors.push({job_item_id:row.job_item_id,message:e.message});}
  }
  return {created,conflicts,skipped:selected.size-ready.length,errors,
   notice:'No inventory, invoice, order or production status was modified.'};
@@ -277,8 +220,8 @@ export async function handler(event){
    case 'seed_candidates':data=await seedCandidates(auth.supabase,auth.user.id);break;
    case 'seed_drafts':data=await seedDrafts(auth.supabase,auth.user.id);break;
    case 'assign':data=await saveAssignment(auth.supabase,input,auth.user.id);break;
-   case 'preview_open':data=await openJobs(auth.supabase);break;
-   case 'create_open':data=await createApprovedTravelers(auth.supabase,input,auth.user.id);break;
+   case 'preview_open':data=await openJobs(auth.supabase,event);break;
+   case 'create_open':data=await createApprovedTravelers(auth.supabase,input,event);break;
    default:return fail(400,'Unsupported action.',event);
   }
   return ok(data,event);

@@ -1,3 +1,4 @@
+import {createVerifiedTraveler} from './_shared/verifiedTraveler.js';
 import {authorizeEmployee,jsonResponse} from './_shared/security.js';
 import {EXPANDED_STARTER_PRESETS} from '../../src/lib/expandedProductionPresets.js';
 const allRoles=['admin','manager','marketing','operator','viewer'];
@@ -260,7 +261,7 @@ async function saveReorder(db,input,userId){
  return {job_item_id:itemId,decision:input.decision,notice:'No traveler, invoice or inventory records were changed.'};
 }
 
-async function createReorderTraveler(db,input,userId){
+async function createReorderTraveler(db,input,event){
  const lineId=ensure(id(input.job_item_id),'Select a valid current job line.');
  ensure(input.confirm===true,'Manager must explicitly confirm the reviewed reorder traveler.');
  const reviewed=await one(db.from('sc_catalog_reorder_reviews')
@@ -284,13 +285,8 @@ async function createReorderTraveler(db,input,userId){
   'Shared customer artwork is changed/unapproved. Reconfirm before creating a traveler.');
  const proof=await read(db.from('sc_job_artwork_links').select('id').eq('job_id',row.job_id).limit(1),'Job artwork proof');
  ensure(proof.length,'The new job lacks its own approved artwork handoff. Complete proof approval first.');
- const {data,error}=await db.from('sc_job_travelers').insert({
-  job_id:row.job_id,job_item_id:lineId,
-  recipe_version_id:prior.recipe_version_id,created_by:userId
- }).select('id').single();
- if(error?.code==='23505')throw Error('Traveler already exists; open the original instead.');
- if(error)throw error;
- return {job_item_id:lineId,traveler_id:data.id,
+ const travelerId=await createVerifiedTraveler(event,{jobId:row.job_id,itemIds:[lineId],recipeVersionId:prior.recipe_version_id});
+ return {job_item_id:lineId,traveler_id:travelerId,
   notice:'New immutable traveler uses current order details and the validated approved recipe. No inventory or financial changes.'};
 }
 

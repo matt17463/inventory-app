@@ -1,0 +1,23 @@
+# Variation certification and managed production
+
+Product Setup & Readiness is the primary preparation workflow. It reuses the existing blank mapping, artwork pairing, manufacturing recipe and Mockup Studio editors. Step six saves an explicit configuration for one synchronized product row, one exact recipe revision and one selected output for every recipe placement. It checks and displays blockers before a manager may certify it.
+
+A certificate snapshots variation identity, blank specifications, artwork source revisions, recipe placements and approved settings, selected mockup outputs, customer review records and graphic bindings/rules. Parent product approval never certifies sibling variations. Missing or ambiguous identity, missing or withdrawn approvals, mismatched physical dimensions, unapproved material settings, and superseded recipe revisions fail closed. Only real source approvals can satisfy the checks; configuration review and certification do not create customer approvals.
+
+The private `sc_certification` schema holds the shared database policy. Source changes and release checks take the same transaction advisory lock. Source changes re-evaluate active certificate fingerprints and append revocation audit events. Order changes make saved traveler bindings stale and append affected traveler audit records. Production status transitions, manufacturing events, grouped/single travelers, mockup production packets and artwork handoff release use the shared policy. Catalog, reorder and SKU-profile endpoints now use the existing grouped creator with an employee JWT and trusted storage preflight, including when the request originates in a server function.
+
+Managed scope is explicit and sticky: an assigned catalog manufacturing recipe, verified graphic product binding, exact configuration, original managed checkout metadata, or managed capture/selection identifies managed production. Removing an approval does not turn that order into a legacy order. Unenrolled legacy fulfillment continues through its existing safeguards. A legacy traveler is labeled as such, not presented as variation-certified.
+
+Historical travelers and their recipe/line snapshots are retained. A manager can revalidate unchanged physical instructions after valid approval renewal. Changed artwork or recipe instructions require a reviewed replacement: the existing creator makes a new traveler transactionally after fresh storage verification, and records a supersession link. Only one active traveler claims each line; the historical rows and all evidence remain available.
+
+## Database release
+
+Apply `supabase/migrations/20261027003319_variation_certification_enforcement.sql` atomically before publishing its corresponding frontend/backend. It creates the certificate/configuration/audit/binding/supersession tables, enrolls only existing explicit managed scope, installs enforcement triggers, and records existing travelers for review. It does not manufacture certifications or customer approvals, mutate inventory, update customer orders, or rewrite historical snapshots. Previous graphics and storage-preflight triggers remain active.
+
+The release does not reconcile the repository's historical migration numbering with Supabase's previously applied combined releases. Verify actual function/trigger definitions and the new migration's contents, rather than running a blind push of every old migration.
+
+## Safe verification
+
+`npm run check` runs the application checks, including isolated PGlite PostgreSQL certification tests. The dedicated GitHub workflow runs the same tests against PostgreSQL 17 in a disposable service database and enables separate-connection concurrency checks. No production credentials or customer data enter those fixtures. Coverage includes exact variation isolation, missing evidence, source revocations, customer withdrawal, stale recipe, manual/grouped/reorder-compatible creation, atomic grouped rejection, role denial, immutable snapshots, historical traveler revalidation/replacement, storage receipts and release paths.
+
+Production verification should inspect schema/trigger definitions, counts, privileges, current published commit and read-only UI. Do not create synthetic production approvals, charge customers, send messages, deduct stock or fulfill orders. Real physical sample review, customer sign-off and shop-floor acceptance remain human business actions. Files replaced directly in an external storage provider must still be registered as an artwork revision in the application; the database cannot observe an unreported external object overwrite.

@@ -56,7 +56,7 @@ export async function handler(event) {
     const ids = [...new Set([...recipeIds, ...items.flatMap(item=>[...selectedArtwork(item),...lineArtworkIds(item)])])];
     if (!ids.length || ids.some(id => !isUuid(id))) return jsonResponse(409, { message: 'Recipe is missing valid artwork references' }, event);
     const { data: assets, error } = await auth.supabase.from('mockup_artwork_assets')
-      .select('id,storage_provider,storage_bucket,storage_path,preflight_status').in('id',ids);
+      .select('id,storage_provider,storage_bucket,storage_path,preflight_status,updated_at').in('id',ids);
     if (error) throw error;
     const byId = new Map((assets || []).map(asset => [asset.id, asset]));
     for (const id of ids) {
@@ -95,7 +95,7 @@ export async function handler(event) {
         .sort();
       const fingerprintInput=lineIds.map(id=>{
         const a=byId.get(id);
-        return [a.id,a.storage_provider||'',a.storage_bucket||'',a.storage_path||'',a.preflight_status||''].join(':');
+        return [a.id,a.storage_provider||'',a.storage_bucket||'',a.storage_path||'',a.preflight_status||'',a.updated_at?new Date(a.updated_at).toISOString():''].join(':');
       }).join('|')+(placementEntries.length?'|placements:'+placementEntries.join('|'):'');
       const fingerprint=createHash('md5').update(fingerprintInput).digest('hex');
       const checkedAt=new Date();

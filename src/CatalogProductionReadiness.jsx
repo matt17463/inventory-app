@@ -3,8 +3,12 @@ import {Link} from 'react-router-dom';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {PLACEMENT_SOURCES} from './lib/catalogProductionPresets';
+import VariationCertificationPanel from './VariationCertificationPanel';
+import CatalogPairingWorkbench from './CatalogPairingWorkbench';
+import ManufacturingRecipes from './ManufacturingRecipes';
+import MockupStudio from './MockupStudio';
 import InlineProductBlankMapping from './InlineProductBlankMapping';
-import {listMockupProjects,getMockupProjectBundle,approveMockupOutput,createMockupReviewLink} from './lib/mockupStudioApi';
+import {createMockupProject,listMockupProjects,getMockupProjectBundle,approveMockupOutput,createMockupReviewLink} from './lib/mockupStudioApi';
 import './CatalogProductionReadiness.css';
 
 async function action(payload){
@@ -41,6 +45,7 @@ export default function CatalogProductionReadiness(){
  const [activeOrderDemand,setActiveOrderDemand]=useState([]);
  const [familyId,setFamilyId]=useState(null);
  const [setupStep,setSetupStep]=useState(0);
+ const [embeddedProject,setEmbeddedProject]=useState('');
  const [artworkAudit,setArtworkAudit]=useState(null);
  const [artworkError,setArtworkError]=useState('');
  const [mockupProjects,setMockupProjects]=useState([]);
@@ -88,15 +93,6 @@ export default function CatalogProductionReadiness(){
  if(sortMode==='sales')return (Number(activity[b.woocommerce_product_id]?.units_90d)||0)-(Number(activity[a.woocommerce_product_id]?.units_90d)||0);const urgent=(f)=>Number(blockers.has(Number(f.woocommerce_product_id))&&demand.has(Number(f.woocommerce_product_id)))*100000+(demand.get(Number(f.woocommerce_product_id))||0)*1000+(Number(activity[f.woocommerce_product_id]?.units_90d)||0)*20+Number(f.missing_blank_rows||0);return urgent(b)-urgent(a);}),[families,search,status,sortMode,demand,blockers,activity]);
  const selected=families.find(x=>Number(x.woocommerce_product_id)===Number(familyId));
  const selectedArtwork=selected?artworkByProduct.get(Number(selected.woocommerce_product_id)):null;
- const linkedMockups=selected?mockupProjects.filter(p=>Number(p.woo_product_id)===Number(selected.woocommerce_product_id)):[];
- const readinessEvidence=selected?{
-  mappings:Number(selected.missing_blank_rows)===0,
-  artwork:Boolean(selectedArtwork?.flags?.artwork&&selectedArtwork?.artwork?.artwork_asset_id),
-  recipe:selected.readiness==='approved',
-  mockup:linkedMockups.some(p=>(mockupDetails[p.id]?.outputs||[]).some(o=>o.is_selected&&o.approval_status==='internal_approved')),
-  customer:linkedMockups.some(p=>(mockupDetails[p.id]?.outputs||[]).some(o=>o.is_selected&&o.approval_status==='internal_approved'&&(mockupDetails[p.id]?.reviews||[]).some(r=>String(r.output_id)===String(o.id)&&['approved','approve','accepted'].includes(String(r.decision||'').toLowerCase()))))
- }:null;
- const fullyVerified=Boolean(readinessEvidence&&Object.values(readinessEvidence).every(Boolean));
 
  const ready=(state?.versions||[]).filter(v=>v.status==='approved');
  const approvedRecipeIds=new Set(ready.map(v=>v.recipe_id));
@@ -132,7 +128,7 @@ export default function CatalogProductionReadiness(){
  }
  function choose(f){
   const row=assignments.get(Number(f.woocommerce_product_id));
-  setFamilyId(f.woocommerce_product_id);setSetupStep(0);
+  setFamilyId(f.woocommerce_product_id);setSetupStep(0);setEmbeddedProject('');
   setDisposition(row?.disposition==='fulfillment_only'?'fulfillment_only':'assigned');
   setSelectedRecipe(row?.recipe_id||'');setNotes(row?.notes||'');
  }
@@ -179,7 +175,7 @@ export default function CatalogProductionReadiness(){
      <p><strong>How to use this screen:</strong> 1. Start with products used by open orders. 2. Verify blank-product mapping. 3. Link the right artwork and approved production instructions. 4. Check the result with a real product variation. 5. Review the production work order before releasing production.</p>
      <p><strong>Important:</strong> The 30/90/180-day activity figures are derived from Woo-linked production jobs using application job-creation dates, not complete WooCommerce sales exports. Cancelled/refunded/failed source statuses are excluded when recorded. Missing imports or mappings can undercount activity. Do not interpret an approved recipe alone as fully production ready.</p>
      <p><Link to="/client-graphics">Review client graphics</Link> · <Link to="/manufacturing-recipes">Production instructions</Link> · <Link to="/work-hub">Work Hub</Link></p>
-     <p>Parent-level assignments cover their variations; color, SKU and size remain on the original WooCommerce lines. A family can be flagged for fulfillment only or mapped to a reusable production recipe. No product or inventory record is rewritten.</p>
+     <p>Parent-level recipe routing does not certify individual variations; color, SKU and size remain on the original WooCommerce lines. A family can be flagged for fulfillment only or mapped to a reusable production recipe. No product or inventory record is rewritten.</p>
      {canManage&&<button type="button" disabled={busy} onClick={()=>run({action:'seed_candidates'},r=>`Added ${r.created} review queue records; ${r.existing} already existed.`)}>Generate missing family review assignments</button>}
      <p><small>Classification is inferred from descriptions only. It is not verified decoration-method data.</small></p>
     </section>
@@ -208,9 +204,7 @@ export default function CatalogProductionReadiness(){
       <h2>{titleFor(selected)}</h2>
       <section className="card elevated-card" aria-label="Guided product modernization wizard">
        <h3>Guided product setup</h3>
-       <p role="status"><strong>Read-only readiness audit:</strong> {fullyVerified?'All currently modeled evidence checks passed; verify variation and production traveler before release.':'Not certified for managed production. Missing evidence must be resolved.'}</p>
-       {readinessEvidence&&<ul>{Object.entries(readinessEvidence).map(([name,passed])=><li key={name}>{passed?'✓':'Needs evidence'} — {name==='customer'?'Customer approval of exact selected output':name==='mockup'?'Internally approved selected mockup':name==='mappings'?'Blank mappings':name==='artwork'?'Linked artwork review':'Approved recipe'}</li>)}</ul>}
-       <small>This evidence panel is advisory and never changes production eligibility or writes a certification. Product variations, customer authority, revisions and travelers require independent validation.</small>
+       <p>Authoritative certification and current blockers are available in step six for each individual variation.</p>
 
        <p>Complete these six reviews in order. The wizard remembers the selected product while you move through the steps. A linked recipe alone is not proof that a product is fully ready.</p>
        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
@@ -228,6 +222,7 @@ export default function CatalogProductionReadiness(){
        <h4>{SETUP_STEPS[setupStep].title}</h4>
        <p>{SETUP_STEPS[setupStep].description}</p>
        {setupStep===0&&<p>Woo ID: <strong>{selected.woocommerce_product_id}</strong> · {fmt(selected.variation_count)} variations · Example SKU: {selected.example_sku||'Not recorded'}. Check the WooCommerce source before changing mappings.</p>}
+       {setupStep===0&&<VariationCertificationPanel key={'identity-'+selected.woocommerce_product_id} parentId={selected.woocommerce_product_id} identityOnly/>}
        {setupStep===1&&<div>
         <p><strong>Blank mapping review:</strong> {fmt(selected.missing_blank_rows)} of {fmt(selected.row_count)} synchronized rows lack a blank mapping. Finished products or non-inventory items may legitimately have none; verify before fixing.</p>
         <p><Link to="/product-blank-mappings">Repair specific blank mappings →</Link> · <Link to="/catalog-workbench">Review catalog details →</Link></p>
@@ -243,7 +238,15 @@ export default function CatalogProductionReadiness(){
          </p>}
         <p><Link to={'/catalog-pairing?product='+encodeURIComponent(selected.woocommerce_product_id)}>Review, upload or link artwork for this product →</Link></p>
        </div>}
+       {setupStep===2&&<CatalogPairingWorkbench key={selected.woocommerce_product_id} embedded productId={selected.woocommerce_product_id}/>}
+       {setupStep===3&&<ManufacturingRecipes key={selectedRecipe||'new'} embedded initialRecipeId={selectedRecipe}/>}
        {setupStep===3&&<p>Recipe routing: <strong>{labels[selected.readiness]}</strong>. Only managers may save the linked recipe below. Approved versions still require artwork and variation checks.</p>}
+       {setupStep===4&&<section>
+        <h4>Edit product mockups here</h4>
+        <label>Product project<select value={embeddedProject} onChange={e=>setEmbeddedProject(e.target.value)}><option value="">Choose project</option>{mockupProjects.filter(p=>Number(p.woo_product_id)===Number(selected.woocommerce_product_id)).map(p=><option key={p.id} value={p.id}>{p.project_name}</option>)}</select></label>
+        {canManage&&<button type="button" disabled={busy} onClick={async()=>{setBusy(true);try{const project=await createMockupProject({project_name:selected.product_name+' · Product setup',woo_product_id:Number(selected.woocommerce_product_id)});setMockupProjects(await listMockupProjects());setEmbeddedProject(project.id);}catch(e){setMessage(e.message);}finally{setBusy(false);}}}>Create linked draft mockup project</button>}
+        {embeddedProject&&<MockupStudio key={embeddedProject} embedded initialProjectId={embeddedProject}/>}
+       </section>}
        {setupStep===4&&<div><p><strong>Mockup evidence:</strong> {artworkError?'Not available':!artworkAudit?'Loading…':selectedArtwork?.flags?.mockup?'Reviewed mockup flag is recorded':'No approved mockup flag found'}.</p><p>Customer sign-off and exact placement still require review in the source workflow.</p><p><Link to="/mockup-studio">Open mockup and customer approval →</Link></p></div>}
               {setupStep===4&&<section aria-label="Related mockup projects">
         <h4>Related mockup projects for this WooCommerce product</h4>
@@ -286,6 +289,7 @@ export default function CatalogProductionReadiness(){
        <button disabled={busy} type="submit">Save reviewed assignment</button>
       </form>:<p>Manager role is required to edit routing.</p>}
        </div>}
+       {setupStep===5&&<VariationCertificationPanel key={selected.woocommerce_product_id} parentId={selected.woocommerce_product_id}/>}
        {setupStep===5&&<div>
         <h4>Open production lines for this product</h4>
         <button type="button" disabled={busy} onClick={previewJobs}>Refresh job-line readiness</button>
@@ -305,7 +309,7 @@ export default function CatalogProductionReadiness(){
        </div>
        <small>Review guidance only. Step navigation never approves artwork, changes stock, or marks a product as certified.</small>
       </section>
-      <p><strong>Next steps:</strong> Check mappings → verify exact customer artwork → choose approved production instructions → inspect an open-order traveler. This page only links a recipe, it does not certify all artwork and variations.</p>
+      <p><strong>Next steps:</strong> Check mappings → verify exact customer artwork → choose approved production instructions → inspect an open-order traveler. Use step six to review and certify exact variation evidence. A family recipe assignment alone never certifies its variations.</p>
       <p>Observed Woo-linked production activity: {fmt(activity[selected.woocommerce_product_id]?.units_30d||0)} units / 30 days; {fmt(activity[selected.woocommerce_product_id]?.units_90d||0)} units / 90 days; {fmt(activity[selected.woocommerce_product_id]?.units_180d||0)} units / 180 days. These figures are not authoritative WooCommerce sales totals.</p>
       <p>In catalog: {fmt(selected.row_count)} rows; {fmt(selected.finished_rows)} marked finished; {fmt(selected.missing_blank_rows)} blank mappings missing.</p>
       <p>Suggested garment: <strong>{selected.classification?.garment}</strong>. Decoration method: <strong>{selected.classification?.method}</strong> (unverified).</p>

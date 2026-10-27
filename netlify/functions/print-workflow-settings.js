@@ -1,3 +1,4 @@
+import {createVerifiedTraveler} from './_shared/verifiedTraveler.js';
 // Manager-only shared print layouts and explicit approved SKU → manufacturing recipe mapping.
 import {authorizeEmployee,jsonResponse} from './_shared/security.js';
 import {normalizePrintPrefs} from '../../src/lib/printModel.js';
@@ -51,7 +52,7 @@ export const handler=async event=>{
    if(!Number.isSafeInteger(jobId)||jobId<=0)return jsonResponse(400,{success:false,error:'Valid job required.'},event);
    const [items,existing,profiles]=await Promise.all([
     auth.supabase.from('job_items').select('id,job_id,order_sku,sku,status').eq('job_id',jobId).limit(500),
-    auth.supabase.from('sc_job_travelers').select('job_item_id').eq('job_id',jobId).limit(500),
+    auth.supabase.from('sc_job_travelers').select('job_item_id').is('superseded_at',null).eq('job_id',jobId).limit(500),
     auth.supabase.from('sc_product_production_profiles').select('source_key,recipe_version_id').eq('source_kind','sku').limit(1000),
    ]);
    if(items.error||existing.error||profiles.error)throw Error('Job production profiles cannot be loaded.');
@@ -61,11 +62,8 @@ export const handler=async event=>{
     &&bySku.has(clean(x.order_sku||x.sku)));
    const inserted=[],failed=[];
    for(const item of ready){
-    const {data,error}=await auth.supabase.from('sc_job_travelers').insert({
-      job_id:jobId,job_item_id:item.id,recipe_version_id:bySku.get(clean(item.order_sku||item.sku)),
-      created_by:auth.user.id
-    }).select('id').single();
-    if(error)failed.push({item_id:item.id,reason:error.message});else inserted.push(data.id);
+    try{const travelerId=await createVerifiedTraveler(event,{jobId,itemIds:[item.id],recipeVersionId:bySku.get(clean(item.order_sku||item.sku))});inserted.push(travelerId);}
+    catch(error){failed.push({item_id:item.id,reason:error.message});}
    }
    return jsonResponse(200,{success:true,created:inserted.length,skipped:(items.data||[]).length-ready.length,
     failed,notice:'Only approved mapped recipe revisions were attached. No production status, inventory or accounting changed.'},event);
