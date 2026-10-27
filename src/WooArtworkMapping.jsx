@@ -16,6 +16,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
  const stopInspection=useRef(false);
  const [inspecting,setInspecting]=useState(false);
  const [newChoice,setNewChoice]=useState('');
+ const [syncReview,setSyncReview]=useState(null);
  const load=useCallback(async()=>{const c=await request({action:'catalog'});setCatalog(c);return c;},[]);
  useEffect(()=>{load().catch(e=>setMessage(e.message));},[load]);
  const latest=useMemo(()=>new Map(catalog.plans.map(p=>[p.woo_product_id,catalog.plans.find(x=>x.woo_product_id===p.woo_product_id)])),[catalog.plans]);
@@ -23,7 +24,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
   const p=latest.get(f.woocommerce_product_id),s=p?(p.analysis?.mapping_complete?'mapped':'draft'):'uninspected';
   return (filter==='all'||s===filter)&&[f.product_name,f.woocommerce_product_id,f.example_sku].join(' ').toLowerCase().includes(search.toLowerCase());
  });
- function adopt(p){setPlan(p);setDirty(false);setValidation(null);setHistory([]);setNewChoice('');}
+ function adopt(p){setPlan(p);setDirty(false);setValidation(null);setHistory([]);setNewChoice('');setSyncReview(null);}
  async function run(fn){setBusy(true);setErrors([]);try{await fn();}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  async function inspect(ids){
   if(dirty)throw Error('Save this draft before inspecting another product.');
@@ -31,7 +32,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
   for(let n=0;n<ids.length;n++){
    if(stopInspection.current)break;
    setMessage(`Inspecting ${n+1} of ${ids.length}: Woo #${ids[n]}. Only draft mapping records are saved.`);
-   try{const p=await request({action:'inspect',woo_product_id:ids[n]});if(ids.length===1)adopt(p);completed++;}catch(e){problems.push({parent:ids[n],message:e.message});}
+   try{const p=await request({action:'inspect',woo_product_id:ids[n]});if(ids.length===1)adopt(p);setCatalog(c=>({...c,plans:[{id:p.id,woo_product_id:p.woo_product_id,source_hash:p.source_hash,revision:p.revision,analysis:{mapping_complete:p.analysis.mapping_complete,mapped_choices:p.analysis.mapped_choices,total_choices:p.analysis.total_choices},updated_at:p.updated_at},...c.plans.filter(x=>x.id!==p.id)]}));completed++;}catch(e){problems.push({parent:ids[n],message:e.message});}
   }
   setInspecting(false);await load();setErrors(problems);setMessage(`Inspection ${stopInspection.current?'paused':'finished'}: ${completed} saved drafts, ${problems.length} need attention. Resume by selecting Not inspected. No WooCommerce or approval changes.`);
  }
@@ -54,6 +55,7 @@ export default function WooArtworkMapping({embedded=false,parentId=null}){
   {plan&&<section className="card" aria-label="Product artwork mapping">
    <h2>{plan.baseline.product.name} · Woo #{plan.woo_product_id}</h2>
    <p>{plan.baseline.variations.length} actual Woo variations · {groups.length} physical size/color combinations · {Object.keys(plan.mappings).length} logo choices · saved revision {plan.revision}{dirty?' · unsaved edits':''}</p>
+   <details><summary>Compare duplicated or outdated synchronized product records</summary><p>WooCommerce is the source for this mapping. Existing application rows may include duplicates or old variation IDs. Review the difference without deleting records or changing stock.</p><button disabled={busy} onClick={()=>run(async()=>{setSyncReview(await request({action:'sync_review',plan_id:plan.id}));setMessage('Read-only catalog comparison loaded. No synchronized product record was changed.');})}>Compare synchronized identities</button>{syncReview&&<><p>{syncReview.synced_rows} application rows · {syncReview.distinct_variation_ids} distinct variation IDs · {syncReview.duplicate_variations.length} duplicate identities · {syncReview.stale_app_variations.length} IDs absent from captured Woo source · {syncReview.missing_app_variations.length} Woo IDs absent from the app.</p>{!syncReview.complete&&<p role="alert">Comparison is incomplete after 10,000 rows; do not use it as cutover evidence.</p>}<button onClick={()=>download(`woo-${plan.woo_product_id}-sync-review.json`,syncReview)}>Export identity comparison</button><p>Draft mapping remains available. Inventory reconciliation and production activation are separate reviews.</p></>}</details>
    <div className="sc-logo-toolbar"><button disabled={busy||!dirty} onClick={()=>run(save)}>Save draft mapping</button><button disabled={busy||dirty} onClick={()=>download(`woo-${plan.woo_product_id}-artwork-mapping.json`,{...plan,exported_at:new Date().toISOString(),notice:'Mapping evidence only. No approvals or production activation implied.'})}>Export baseline & mapping</button><button disabled={busy||dirty} onClick={()=>run(async()=>{setHistory(await request({action:'history',plan_id:plan.id}));setMessage('Saved mapping history loaded. Baseline remains immutable.');})}>View mapping history</button></div>
    <details><summary>Reuse another product’s mapping as a draft template</summary><p>Only identical legacy logo terms are copied. Images, physical variation choices and approvals are never copied.</p><label>Template product<select value={template} onChange={e=>setTemplate(e.target.value)}><option value="">Choose saved mapping</option>{catalog.plans.filter(p=>p.id!==plan.id).map(p=><option key={p.id} value={p.id}>Woo #{p.woo_product_id} · revision {p.revision}</option>)}</select></label><button disabled={busy||dirty||!template} onClick={()=>run(async()=>{adopt(await request({action:'template',plan_id:plan.id,template_id:template,revision:plan.revision}));await load();setMessage('Template saved as a proposal. Review every file and product-specific image.');})}>Apply draft template</button></details>
    <h3>1. Map the existing logo choices</h3><p>Choose exact files yourself. Similar names are not automatically accepted. You can leave missing files blank and return later.</p>

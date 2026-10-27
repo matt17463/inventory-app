@@ -1,4 +1,5 @@
 import {authorizeEmployee,jsonResponse} from './_shared/security.js';
+import {productionVariantIssues} from './_shared/graphicApproval.js';
 const TABLES={families:'sc_client_graphic_families',variants:'sc_client_graphic_variants',rules:'sc_client_graphic_rules',bindings:'sc_client_graphic_product_bindings',transfer:'sc_client_graphic_transfer_reviews'};
 const FIELDS={
  families:['customer_id','name','internal_name','storefront_label','storefront_visibility','state','parent_family_id'],
@@ -49,6 +50,10 @@ export async function handler(event){
    if(ve||!familyVariants?.some(v=>v.state==='approved'))return reply(409,{message:'Approve at least one production artwork variant before approving this design'},event);
   }
   if(entity==='variants' && record.state==='approved'){
+   const prior=input.id?(await auth.supabase.from(TABLES.variants).select('*').eq('id',input.id).single()):{data:null,error:null};
+   if(prior.error)return reply(404,{message:'Draft artwork variant not found'},event);
+   const issues=productionVariantIssues({...prior.data,...record});
+   if(issues.length)return reply(409,{message:issues.join(' ')},event);
    const sourceId=record.artwork_asset_id || (input.id?(await auth.supabase.from(TABLES.variants).select('artwork_asset_id').eq('id',input.id).single()).data?.artwork_asset_id:null);
    if(!uuid(sourceId))return reply(409,{message:'Approved variants require a linked source artwork file'},event);
    const {data:source,error:sourceError}=await auth.supabase.from('mockup_artwork_assets').select('id,preflight_status').eq('id',sourceId).single();

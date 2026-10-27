@@ -1,7 +1,7 @@
 import {wordPressAuditChapters} from './wordpressAuditLearning.js';
 import {recentModernizationGuideChapters} from './recentModernizationGuide.js';
 import {certificationGuideChapter} from './certificationOperations.js';
-export const GUIDE_VERSION = '1.8.0';
+export const GUIDE_VERSION = '1.9.0';
 
 const section = (id, title, summary, options = {}) => ({
   id,
