@@ -65,9 +65,9 @@ test('failed evidence reads fail closed rather than treating missing records as 
 test('real SQL keeps drafts independent of production approvals, immutable baseline/history and idempotent imported draft families',async()=>{
  const db=await isolatedDatabase();try{
   await db.exec(`do $$ begin
-   if not exists(select 1 from pg_roles where rolname='anon') then create role anon;end if;
-   if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated;end if;
-   if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role bypassrls;end if;end $$;
+   begin create role anon;exception when duplicate_object or unique_violation then null;end;
+   begin create role authenticated;exception when duplicate_object or unique_violation then null;end;
+   begin create role service_role bypassrls;exception when duplicate_object or unique_violation then null;end;end $$;
    create schema auth;create schema sc_certification;
    create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('test.actor',true),'')::uuid $$;
    create function public.sc_internal_access_allowed(roles text[]) returns boolean language sql as $$ select coalesce(current_setting('test.role',true)=any(roles),false) $$;
