@@ -21,16 +21,31 @@ function qrCode(doc,url,x,y,size){
   }catch{/* Human-readable document reference remains visible. */}
 }
 const moneyOrBlank=(v,c)=>money(v,c);
-function layoutHeader(doc,source,job,kind,prefs,origin){
-  doc.setFillColor(kind==='shop'?26:29,kind==='shop'?55:67,kind==='shop'?69:76);
-  doc.rect(0,0,612,94,'F');
-  text(doc,'SKILLED CRAFTING',39,38,420,prefs.invoiceHeading,{bold:true,color:[255,255,255]});
-  text(doc,kind==='shop'?'SHOP COPY / INTERNAL - NOT FOR CUSTOMER':'CUSTOMER INVOICE COPY',39,59,420,11,{bold:true,color:[255,255,255]});
-  text(doc,'Order / invoice '+source.reference,39,78,410,10,{color:[255,255,255]});
-  if(kind==='shop'){
-    const url=origin+'/work-hub?job='+encodeURIComponent(job.id);
-    qrCode(doc,url,490,9,83);
+function layoutHeader(doc,source,job,kind,prefs,origin,logoData=''){
+ const customer=kind!=='shop';
+ doc.setFillColor(customer?19:26,customer?49:55,customer?64:69);
+ doc.rect(0,0,612,customer?113:94,'F');
+ if(customer){
+  if(logoData){
+   try{
+    const type=logoData.startsWith('data:image/jpeg')?'JPEG':'PNG';
+    const info=doc.getImageProperties(logoData),scale=Math.min(76/info.width,62/info.height);
+    doc.setFillColor(255);doc.roundedRect(35,18,89,77,8,8,'F');
+    doc.addImage(logoData,type,79.5-info.width*scale/2,56-info.height*scale/2,info.width*scale,info.height*scale,undefined,'FAST');
+   }catch{/* Keep the business wordmark visible if the asset is unavailable. */}
   }
+  const headingX=logoData?136:39;
+  text(doc,prefs.businessName||'Skilled Crafting',headingX,43,420,23,{bold:true,color:[255,255,255]});
+  text(doc,'CUSTOMER INVOICE',headingX,66,360,11,{bold:true,color:[163,222,212]});
+  text(doc,'ORDER #'+source.reference,headingX,89,370,11,{color:[255,255,255]});
+  doc.setFillColor(55,179,150);doc.rect(0,109,612,4,'F');
+ }else{
+  text(doc,'SKILLED CRAFTING',39,38,420,prefs.invoiceHeading,{bold:true,color:[255,255,255]});
+  text(doc,'SHOP COPY / INTERNAL - NOT FOR CUSTOMER',39,59,420,11,{bold:true,color:[255,255,255]});
+  text(doc,'Order / invoice '+source.reference,39,78,410,10,{color:[255,255,255]});
+  const url=origin+'/work-hub?job='+encodeURIComponent(job.id);
+  qrCode(doc,url,490,9,83);
+ }
 }
 function footer(doc,source,kind,number){
   doc.setDrawColor(213,222,228);doc.line(39,752,573,752);
@@ -42,14 +57,26 @@ function pageForRows(doc,source,kind,page){
   text(doc,'Order '+source.reference+' - '+(kind==='shop'?'SHOP COPY':'INVOICE CONTINUED'),39,49,520,12,{bold:true});
   return 78;
 }
-function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer',origin=''}){
+function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer',origin='',logoData=''}){
   const config=normalizePrintPrefs(prefs);
   if(kind==='customer'&&!canPrintCustomerCopy(source))throw Error('Customer invoice blocked until the source invoice totals are verified.');
-  layoutHeader(doc,source,job,kind,config,origin);
+  layoutHeader(doc,source,job,kind,config,origin,logoData);
   let page=1;
   footer(doc,source,kind,page);
-  let y=122;
-  y=text(doc,'CUSTOMER: '+source.customerName,39,y,420,12,{bold:true})+4;
+  let y=kind==='customer'?137:122;
+  if(kind==='customer'){
+   const contacts=[config.businessAddress,config.businessPhone,config.businessWebsite].filter(Boolean);
+   if(contacts.length){
+    doc.setFillColor(246,249,250);doc.roundedRect(38,y,536,Math.max(34,contacts.length*13+16),7,7,'F');
+    let cy=y+17;
+    for(const contact of contacts){cy=text(doc,contact,51,cy,509,9,{color:[58,78,84]})+1;}
+    y+=Math.max(34,contacts.length*13+16)+17;
+   }
+   doc.setFillColor(231,244,241);doc.roundedRect(38,y-6,536,33,7,7,'F');
+   text(doc,source.paid?'PAYMENT RECORDED':'PAYMENT STATUS: '+source.status.toUpperCase(),49,y+14,365,10,{bold:true,color:[17,88,75]});
+   y+=48;
+  }
+  y=text(doc,(kind==='customer'?'BILL TO: ':'CUSTOMER: ')+source.customerName,39,y,420,12,{bold:true})+4;
   if(config.showCustomerPhone&&source.customerPhone)y=text(doc,'PHONE: '+source.customerPhone,39,y,420,9)+3;
   if(source.shipName)y=text(doc,'DELIVER TO: '+source.shipName,39,y,465,10)+2;
   if(source.shipAddress)y=text(doc,source.shipAddress,39,y,465,9)+4;
@@ -72,17 +99,29 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
   header();
   for(const line of source.lines){
     const metadata=(config.showPersonalization?line.metadata:[]).map(v=>v.label+': '+v.value);
-    const approx=30+Math.min(5,metadata.length)*18;
+    const approx=(kind==='customer'?58:30)+Math.min(8,metadata.length)*12;
     if(y+approx>685){y=pageForRows(doc,source,kind,++page);header();}
     const firstY=y;
-    y=text(doc,line.name||'Order item',45,y,329,config.invoiceFont,{bold:true});
-    if(config.showSku&&line.sku)y=text(doc,'SKU '+line.sku,45,y+2,328,8)+1;
+    const hasThumbnail=kind==='customer'&&Boolean(line.thumbnailData);
+    if(hasThumbnail){
+     try{
+      const format=line.thumbnailData.startsWith('data:image/jpeg')?'JPEG':'PNG';
+      const info=doc.getImageProperties(line.thumbnailData);
+      const scale=Math.min(46/info.width,46/info.height);
+      doc.setFillColor(248,250,250);doc.roundedRect(44,y-9,52,52,6,6,'F');
+      doc.addImage(line.thumbnailData,format,70-info.width*scale/2,y+17-info.height*scale/2,info.width*scale,info.height*scale,undefined,'FAST');
+     }catch{/* Do not substitute an incorrect product picture. */}
+    }
+    const itemX=hasThumbnail?107:45;
+    y=text(doc,line.name||'Order item',itemX,y,hasThumbnail?261:329,config.invoiceFont,{bold:true});
+    if(config.showSku&&line.sku)y=text(doc,'SKU '+line.sku,itemX,y+2,hasThumbnail?262:328,8)+1;
     for(const meta of metadata.slice(0,8)){
       if(y>685){y=pageForRows(doc,source,kind,++page);header();}
-      y=text(doc,meta,50,y+1,310,8);
+      y=text(doc,meta,hasThumbnail?110:50,y+1,hasThumbnail?253:310,8);
     }
     text(doc,String(line.quantity),400,firstY,50,config.invoiceFont,{bold:true});
     text(doc,moneyOrBlank(line.total,source.currency),470,firstY,97,config.invoiceFont,{bold:true});
+    if(hasThumbnail)y=Math.max(y,firstY+49);
     y+=8;doc.setDrawColor(226,231,235);doc.line(44,y,566,y);y+=13;
   }
   if(y>622){y=pageForRows(doc,source,kind,++page);}
