@@ -24,6 +24,7 @@ async function setup(){
  await db.exec(await read('supabase/migrations/202610250003_traveler_graphics_guard.sql'));
  await db.exec(await read('supabase/migrations/202610250005_traveler_storage_preflight.sql'));
  await db.exec(await read('supabase/migrations/20261027003319_variation_certification_enforcement.sql'));
+ await db.exec(await read('supabase/migrations/20261027010549_variation_recipe_routing.sql'));
  await db.exec(`set test.actor='${actor}'; set test.role='manager';
  insert into blank_products(id) values('${blank}');
  insert into products(id,sku,size,woocommerce_product_id,woocommerce_variation_id,blank_product_id,is_finished) values('${product}','TEST-S','S',100,101,'${blank}',true);
@@ -184,5 +185,24 @@ test('managed capture failure, wrong order size and missing fresh storage receip
   await assert.rejects(s.query('select sc_certification.require_line(1,$1)',[version]),/size differs/);
   await s.db.exec("update job_items set size='S' where id=1;delete from sc_traveler_storage_preflight");
   await assert.rejects(s.query('select sc_create_grouped_traveler(1,array[1::bigint],$1)',[version]),/storage verification/);
+ }finally{await s.db.close();}
+});
+
+test('exact variation recipe overrides parent default and supersedes prior certificate',async()=>{
+ const s=await setup();try{
+  const previous=await s.certify();const customRecipe=id(71),customVersion=id(72);
+  await s.db.exec(`insert into sc_manufacturing_recipes(id,name,decoration_method) values('${customRecipe}','Exact size-specific recipe','DTF');
+   insert into sc_manufacturing_recipe_versions(id,recipe_id,revision,placements,verified_sample,status,approved_by,approved_at,artwork_asset_id)
+   select '${customVersion}','${customRecipe}',1,placements,true,'approved','${actor}',approved_at,artwork_asset_id from sc_manufacturing_recipe_versions where id='${version}';`);
+  const config=(await s.query('select sc_save_variation_configuration($1,$2,$3,$4) id',[product,customVersion,[output],'Exact individual variation production instructions']))[0].id;
+  assert.equal((await s.query('select sc_check_variation_configuration($1) result',[config]))[0].result.ready,true);
+  const current=(await s.query('select sc_certify_variation($1) id',[config]))[0].id;
+  assert.notEqual(previous,current);
+  assert.equal((await s.query('select status from sc_variation_certifications where id=$1',[previous]))[0].status,'revoked');
+  const preview=(await s.query('select sc_job_line_readiness(array[1::bigint],array[$1::uuid]) result',[version]))[0].result;
+  assert.equal(preview[0].ready,true);assert.equal(preview[0].recipe_version_id,customVersion);
+  await assert.rejects(s.query('select sc_certification.require_line(1,$1)',[version]),/certificate/);
+  await s.db.exec(`update sc_catalog_recipe_assignments set disposition='review' where woocommerce_product_id=100`);
+  assert.equal((await s.query('select sc_check_variation_configuration($1) result',[config]))[0].result.ready,false);
  }finally{await s.db.close();}
 });

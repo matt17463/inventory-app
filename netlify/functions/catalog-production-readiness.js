@@ -145,7 +145,7 @@ async function openJobs(db,event){
  const [items,existing,links,assignments,versions]=await Promise.all([
   rows(db.from('job_items').select('id,job_id,quantity,status,woocommerce_product_id,woocommerce_variation_id,order_sku,ordered_product_name,finished_product_id')
    .in('job_id',jobIds).limit(2000),'Open job lines'),
-  rows(db.from('sc_job_travelers').select('job_item_id,job_id,id').is('superseded_at',null).in('job_id',jobIds).limit(2000),'Existing job travelers'),
+  rows(db.from('sc_job_traveler_lines').select('job_item_id,traveler_id,sc_job_travelers!inner(job_id)').is('superseded_at',null).in('sc_job_travelers.job_id',jobIds).limit(2000),'Existing job travelers'),
   rows(db.from('sc_job_artwork_links').select('job_id,handoff_id').in('job_id',jobIds).limit(2000),'Approved-artwork links'),
   rows(db.from('sc_catalog_recipe_assignments').select('woocommerce_product_id,recipe_id,disposition').eq('disposition','assigned').limit(1500),'Recipe assignments'),
   rows(db.from('sc_manufacturing_recipe_versions').select('id,recipe_id,revision,status,artwork_asset_id').eq('status','approved').order('revision',{ascending:false}).limit(1500),'Approved recipes')
@@ -185,6 +185,8 @@ async function openJobs(db,event){
  const byLine=new Map((checks||[]).map(x=>[Number(x.job_item_id),x]));
  return result.map(row=>{const check=byLine.get(Number(row.job_item_id));
   if(!check?.ready)return {...row,eligible:false,status:(check?.blockers||['Certification could not be verified']).join('; ')};
+  if(check.managed&&check.recipe_version_id&&row.status!=='Traveler already exists'&&artworkJobs.has(Number(row.job_id)))
+   return {...row,recipe_version_id:check.recipe_version_id,eligible:true,status:'Eligible for controlled traveler generation'};
   return row;
  });
 }
