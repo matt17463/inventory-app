@@ -182,7 +182,7 @@ export default function WorkHub(){
     <Link to="/marketing"><strong>Prospect / customer</strong><span>Develop the lead, quote and approve artwork</span></Link>
     <Link to="/team-stores"><strong>School or group order</strong><span>Recurring Woo store or QuickBooks invoice request</span></Link>
     <Link to="/client-orders"><strong>Client order form</strong><span>Review one-time orders and prepare invoices</span></Link>
-    <Link to="/artwork-preflight"><strong>Prepare DTF artwork</strong><span>Check print dimensions, transparency and storage</span></Link>
+    <Link to="/dtf-studio"><strong>DTF Prep Studio</strong><span>Live Source / Proof, background cleanup, halftones and R2 artwork handoff</span></Link>
    </div>
   </section>
   <section className="card elevated-card">

@@ -51,6 +51,7 @@ const CatalogModernization = lazy(() => import('./CatalogModernization'));
 const CatalogPairingWorkbench = lazy(() => import('./CatalogPairingWorkbench'));
 
 const ArtworkPreflight = lazy(() => import('./ArtworkPreflight'));
+const DTFPrepStudio = lazy(() => import('./DTFPrepStudio'));
 const InventoryAudit = lazy(() => import('./InventoryAudit'));
 const InventoryImport = lazy(() => import('./InventoryImport'));
 const InventoryValuation = lazy(() => import('./InventoryValuation'));
@@ -140,6 +141,7 @@ function EmployeeRoutes() {
   const access=useContext(EmployeeAccessContext);
   if(access?.role==='marketing') return <Routes>
     <Route path="/marketing" element={<MarketingWorkspace />} />
+    <Route path="/dtf-studio" element={<DTFPrepStudio />} />
     <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
       <Route path="/catalog-pairing" element={<CatalogPairingWorkbench />} />
@@ -225,6 +227,7 @@ function EmployeeRoutes() {
       <Route path="/production-travelers/:travelerId" element={<ProductionTravelers />} />
       <Route path="/team-stores" element={<TeamStoreLaunchpad />} />
       <Route path="/artwork-preflight" element={<ArtworkPreflight />} />
+      <Route path="/dtf-studio" element={<DTFPrepStudio />} />
       <Route path="/supplier-catalog/import" element={<SupplierCatalogImport />} />
       <Route path="/supplier-catalog" element={<SupplierCatalogReview />} />
       <Route path="/labels" element={<BarcodeLabelGenerator />} />
