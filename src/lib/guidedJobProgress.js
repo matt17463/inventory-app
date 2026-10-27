@@ -57,7 +57,9 @@ export function deriveGuidedProgress(row,evidence={}){
  const unpaired=required.filter(i=>!i.blank_product_id && clean(i.status)!=='completed'&&clean(i.status)!=='complete');
  const activeOrderLines=items.filter(i=>!['cancelled','canceled','void','voided','removed'].includes(clean(i.status)));
  // Explicit fulfillment-only evidence, never infer blank-only from missing artwork.
- const blankOnly=activeOrderLines.length>0&&activeOrderLines.every(i=>i.fulfillment_only===true||i.decoration_required===false||i.production_required===false);
+ const classification=[...notes].filter(n=>clean(n.note).startsWith('workhub workflow: ')).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+ const workflow=clean(classification?.note).match(/^workhub workflow: (blank_only|decorated|mixed)/)?.[1]||'unclassified';
+ const blankOnly=workflow==='blank_only'&&activeOrderLines.length>0&&!travelers.length&&!artworkLinks.length&&!handoffs.some(h=>h.approved_file_url);
  const reservationQty=new Map();
  for(const r of reservations)if(['active','reserved','confirmed'].includes(clean(r.status))){
   const id=Number(r.job_item_id);reservationQty.set(id,(reservationQty.get(id)||0)+Number(r.quantity_reserved||0));
@@ -99,7 +101,7 @@ export function deriveGuidedProgress(row,evidence={}){
     'No approved artwork file was found linked to this job; confirm approval in the artwork workflow.',
     '/approval-automation');
  add('stock',missing.items||missing.reservations?'unknown':
-    unpaired.length?'attention':!required.length?'not_applicable':stockReserved?'verified':'review',null,
+    unpaired.length?'attention':!required.length?'not_applicable':stockReserved?'linked':'review',null,
     missing.items||missing.reservations?'Inventory detail is unavailable; open the Purchasing Report.':
     unpaired.length?unpaired.length+' line(s) have no paired blank product. Correct mapping before pulling stock.':
     !required.length?'No inventory-required blanks in the job.':'Blanks are paired; '+reservations.length+
@@ -126,7 +128,7 @@ export function deriveGuidedProgress(row,evidence={}){
     'No recorded packing or customer handoff. QC and completion alone do not prove delivery.',
     jobId?'/work-hub?job='+jobId:'/production-board');
  if(cancelledJob)return {steps,priority:{title:'Order cancelled / on hold',reason:'Do not produce. Confirm cancellation and reservation release in the Production Board.',href:'/production-board',kind:'blocked'},
-   notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,travelers:travelers.length,activeReservations:reservations.length,qcPassed},isWoo,manual,completed,cancelled:true,blankOnly};
+   notesCount:notes.length,indicators:{itemCount:items.length,unpaired:unpaired.length,travelers:travelers.length,activeReservations:reservations.length,qcPassed},workflow,stockReserved,isWoo,manual,completed,cancelled:true,blankOnly};
  const hardBlock=Array.isArray(row?.blocking_issues)?row.blocking_issues:[];
  const blockerMessage=hardBlock.map(x=>typeof x==='string'?x:x?.message||x?.reason).filter(Boolean).slice(0,4);
  let priority;
