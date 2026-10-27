@@ -42,6 +42,7 @@ export function normalizeMappingBlankRow(row) {
   };
 }
 
+export const getProductScopedBlankMappingIssues = (wooProductId) => action({ action: 'product_issues', woo_product_id: wooProductId });
 export const getProductBlankMappingIssues = (search = '', limit = 250) => action({ action: 'issues', search, limit });
 export const searchMappingBlanks = async (search = '', limit = 100) => {
   const rows = await action({ action: 'search_blanks', search, limit });
