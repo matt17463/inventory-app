@@ -55,6 +55,12 @@ test('halftoned pixel output has either zero or full alpha, not hazy intermediat
   assert.ok([...alphas].every(a=>a===0||a===255));
   assert.ok(alphas.has(0)&&alphas.has(255));
 });
+test('fully dense black halftone holds solid with no unintended dot gaps', () => {
+  const p=new Uint8ClampedArray(32*32*4);
+  for(let i=0;i<p.length;i+=4){p[i]=p[i+1]=p[i+2]=0;p[i+3]=255;}
+  processDtfPixels(p,32,32,{halftone:'full',lpi:35,alphaMode:'hard'},300);
+  assert.ok(Array.from({length:1024},(_,i)=>p[i*4+3]).every(v=>v===255));
+});
 test('quality report flags resampling and fine dot density', () => {
   const r=qualityReport(300,300,3600,3600,{partialAlpha:0},{halftone:'full',lpi:55});
   assert.ok(r.warnings.some(s=>s.includes('enlarged')));
