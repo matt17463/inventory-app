@@ -84,7 +84,7 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
   if(visible.has('invoiceDate')&&source.date)y=text(doc,'INVOICE DATE: '+String(source.date).slice(0,10),39,y,520,9)+4;
   if(visible.has('paymentMethod')&&source.paymentMethod)y=text(doc,'PAYMENT METHOD: '+source.paymentMethod,39,y,520,9)+4;
   if(visible.has('billingAddress')&&source.billingAddress)y=text(doc,'BILLING ADDRESS: '+source.billingAddress,39,y,520,9)+4;
-  if(config.showCustomerPhone&&visible.has('customerPhone')&&source.customerPhone)y=text(doc,'PHONE: '+source.customerPhone,39,y,420,9)+3;
+  if(visible.has('customerPhone')&&source.customerPhone)y=text(doc,'PHONE: '+source.customerPhone,39,y,420,9)+3;
   if(visible.has('shippingAddress')&&source.shipName)y=text(doc,'DELIVER TO: '+source.shipName,39,y,465,10)+2;
   if(visible.has('shippingAddress')&&source.shipAddress)y=text(doc,source.shipAddress,39,y,465,9)+4;
   if(visible.has('orderStatus'))y=text(doc,'ORDER SOURCE: '+(source.source==='woocommerce'?'WooCommerce':'QuickBooks / Manual')+
