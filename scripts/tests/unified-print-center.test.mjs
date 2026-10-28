@@ -125,3 +125,13 @@ test('4x6 includes actual previously unknown Woo addon fields and never guesses 
  assert.ok(rows.some(x=>x.field==='teacher'&&x.value==='MULTIPLE - SEE PACKING LIST'));
  assert.ok(rows.some(x=>x.label==='CUSTOM PICKUP CODE'&&x.value==='MULTIPLE - SEE PACKING LIST'));
 });
+
+test('independent customer/shop invoice field selection keeps source billing and payment info',()=>{
+ const prefs=normalizePrintPrefs({customerInvoiceFields:['invoiceDate','paymentMethod'],shopInvoiceFields:['billingAddress','productionInfo'],labelQuestions:'Questions? email@example.com'});
+ assert.deepEqual(prefs.customerInvoiceFields,['invoiceDate','paymentMethod']);
+ assert.deepEqual(prefs.shopInvoiceFields,['billingAddress','productionInfo']);
+ assert.equal(prefs.labelQuestions,'Questions? email@example.com');
+ const source=normalizeWooPrintSource({id:16151,payment_method_title:'Apple Pay',date_created:'2026-10-26T10:00:00',billing:{first_name:'Alex',address_1:'100 Main St',city:'Port Orchard',state:'WA',postcode:'98366'},line_items:[]});
+ assert.equal(source.paymentMethod,'Apple Pay');assert.match(source.billingAddress,/100 Main St/);
+ const pdf=read('src/lib/printPacketPdf.js');assert.match(pdf,/config\.shopInvoiceFields:config\.customerInvoiceFields/);
+});
