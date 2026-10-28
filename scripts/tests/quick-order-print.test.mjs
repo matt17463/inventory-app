@@ -33,12 +33,12 @@ test('selected school label uses customized built-in storage instead of resettin
  assert.match(workHubPrint,/normalizeLabelDesign\(customized\|\|presetLabelDesign\(template\)\)/);
 });
 
-test('school distribution template fields remain visible without Woo metadata',()=>{
+test('4x6 printing shows actual order fields and does not invent missing values',()=>{
  const pdf=read('src/lib/printPacketPdf.js');
  const panel=read('src/QuickOrderPrint.jsx');
- assert.match(pdf,/const rows=fields.slice\(0,7\)/);
- assert.match(pdf,/value\|\|'NOT PROVIDED'/);
- assert.doesNotMatch(pdf,/fields.filter\(\(\[,value\]\)=>value\)/);
+ assert.match(pdf,/distributionLabelRows\(source,labelFields,design\)/);
+ assert.doesNotMatch(pdf,/value\|\|'NOT PROVIDED'/);
+ assert.match(pdf,/No recipient details in order/);
  assert.match(panel,/labelFields,logoData/);
  assert.match(panel,/Student \/ teacher \/ team details/);
 });

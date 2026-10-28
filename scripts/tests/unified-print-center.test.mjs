@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeWooPrintSource,normalizeManualPrintSource,normalizePrintPrefs,canPrintCustomerCopy,printWarnings} from '../../src/lib/printModel.js';
-import {deriveDistributionFields,canonicalDistributionMetaLabel} from '../../src/lib/distributionMetadata.js';
+import {deriveDistributionFields,canonicalDistributionMetaLabel,distributionLabelRows} from '../../src/lib/distributionMetadata.js';
 const read=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8');
 
 test('Woo source preserves original authoritative tax, discount, totals and payment',()=>{
@@ -107,4 +107,21 @@ test('Print Center exposes customer invoice branding on the no-job settings scre
  assert.match(component,/businessAddress/);
  assert.match(component,/businessPhone/);
  assert.match(component,/Save my workstation defaults/);
+});
+
+test('4x6 default General Packing shows actual teacher and grade instead of empty template placeholders',()=>{
+ const order=normalizeWooPrintSource({id:16146,line_items:[{id:1,name:'Sidney Glen ES Hoodie',quantity:1,meta_data:[
+ {display_key:'Student Name::',display_value:'Dean Borseth'},
+ {display_key:'Teacher Name::',display_value:'Mrs. Smith'},
+ {display_key:'Student’s Grade::',display_value:'4th Grade'},
+ {display_key:'Logo Selection:',display_value:'SG Dolphin'}]}]});
+ const rows=distributionLabelRows(order,{}, {visible:['student','team','appliedName'],labels:{student:'Student / Player',teacher:'Teacher',grade:'Grade'}}).rows;
+ assert.deepEqual(rows.slice(0,3).map(x=>x.value),['Dean Borseth','Mrs. Smith','4th Grade']);
+ assert.ok(rows.some(x=>x.label==='LOGO SELECTION'&&x.value==='SG Dolphin'));
+ assert.ok(!rows.some(x=>x.value==='NOT PROVIDED'));
+});
+test('4x6 includes actual previously unknown Woo addon fields and never guesses conflicting per-line values',()=>{
+ const rows=distributionLabelRows({lines:[{metadata:[{label:'Homeroom',value:'A'},{label:'Custom Pickup Code:',value:'X9'}]},{metadata:[{label:'Homeroom',value:'B'},{label:'Custom Pickup Code:',value:'Y8'}]}]}).rows;
+ assert.ok(rows.some(x=>x.field==='teacher'&&x.value==='MULTIPLE - SEE PACKING LIST'));
+ assert.ok(rows.some(x=>x.label==='CUSTOM PICKUP CODE'&&x.value==='MULTIPLE - SEE PACKING LIST'));
 });
