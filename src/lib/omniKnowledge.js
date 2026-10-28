@@ -85,7 +85,7 @@ export const OMNI_OWNER_TIPS = [
 export function searchOmniProducts(query='',category='all') {
  const needle=String(query).trim().toLowerCase();
  return OMNI_PRODUCTS.filter(p=>(category==='all'||p.category===category)&&
- [p.name,p.category,p.material,p.primer,p.ink,p.accessory,p.status,'xTool O1 Omni Dual-UV'].join(' ').toLowerCase().includes(needle));
+ [p.name,p.category,p.material,p.primer,p.ink,p.accessory,p.status,'xTool O1 Omni Dual-UV','xTool Omni'].join(' ').toLowerCase().includes(needle));
 }
 export function daysUntilDue(lastCompletedAt,intervalDays,now=new Date()) {
  if (!intervalDays) return null;
