@@ -36,7 +36,7 @@ test('selected school label uses customized built-in storage instead of resettin
 test('4x6 printing shows actual order fields and does not invent missing values',()=>{
  const pdf=read('src/lib/printPacketPdf.js');
  const panel=read('src/QuickOrderPrint.jsx');
- assert.match(pdf,/distributionLabelRows\(source,labelFields,design\)/);
+ assert.match(pdf,/distributionLabelRows\(group,labelFields,design\)/);
  assert.doesNotMatch(pdf,/value\|\|'NOT PROVIDED'/);
  assert.match(pdf,/No recipient details in order/);
  assert.match(panel,/labelFields,logoData/);
