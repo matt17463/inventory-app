@@ -4,7 +4,7 @@ import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { supabase } from './supabaseClient';
 import { MACHINE_TYPES, machineFor } from './lib/materialSettings';
-import { OMNI_DEVICE, OMNI_SETUP, OMNI_PRODUCTS, OMNI_MAINTENANCE, OMNI_PROBLEMS, daysUntilDue, searchOmniProducts } from './lib/omniKnowledge';
+import { OMNI_DEVICE, OMNI_SETUP, OMNI_PRODUCTS, OMNI_MAINTENANCE, OMNI_PROBLEMS, OMNI_OWNER_TIPS, daysUntilDue, searchOmniProducts } from './lib/omniKnowledge';
 import './DeviceProductLibrary.css';
 
 const categories=['all',...new Set(OMNI_PRODUCTS.map(p=>p.category))];
@@ -154,7 +154,10 @@ export default function DeviceProductLibrary(){
    {OMNI_PROBLEMS.filter(p=>[p.title,p.keywords,...p.checks].join(' ').toLowerCase().includes(search.toLowerCase())).map(p=><article key={p.id} className="sc-device-problem">
     <h3>{p.title}</h3><ol>{p.checks.map((c,i)=><li key={i}>{c}</li>)}</ol><p>{sourceLink(p.source,'Official xTool guidance')}</p>
    </article>)}
-   <p className="sc-device-muted">Community suggestions may be entered as source-linked unverified notes in material recipes, but private-group advice should not be presented as verified manufacturer settings.</p>
+   <h3>Public owner reports — unverified</h3>
+   <p className="sc-device-muted">Community experiences, including model variants, are presented as reports rather than confirmed fixes. Avoid unsafe DIY cleaning and follow official service procedures.</p>
+   {OMNI_OWNER_TIPS.filter(t=>[t.title,t.reported,t.model].join(' ').toLowerCase().includes(search.toLowerCase())).map(t=>
+    <article key={t.id} className="sc-device-problem"><h3>{t.title}</h3><p><strong>Edition context:</strong> {t.model}</p><p>{t.reported}</p><p>{sourceLink(t.url,'Original public discussion')}</p></article>)}
   </section>}
   <footer className="sc-device-footer">xTool Studio is the sole printing controller. No remote printer operation or automatic material approval is performed here.</footer>
  </main>;
