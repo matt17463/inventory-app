@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeWooPrintSource,normalizeManualPrintSource,normalizePrintPrefs,canPrintCustomerCopy,printWarnings} from '../../src/lib/printModel.js';
-import {deriveDistributionFields,canonicalDistributionMetaLabel,distributionLabelRows} from '../../src/lib/distributionMetadata.js';
+import {deriveDistributionFields,canonicalDistributionMetaLabel,distributionLabelRows,distributeOrderLines} from '../../src/lib/distributionMetadata.js';
 const read=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8');
 
 test('Woo source preserves original authoritative tax, discount, totals and payment',()=>{
@@ -134,4 +134,22 @@ test('independent customer/shop invoice field selection keeps source billing and
  const source=normalizeWooPrintSource({id:16151,payment_method_title:'Apple Pay',date_created:'2026-10-26T10:00:00',billing:{first_name:'Alex',address_1:'100 Main St',city:'Port Orchard',state:'WA',postcode:'98366'},line_items:[]});
  assert.equal(source.paymentMethod,'Apple Pay');assert.match(source.billingAddress,/100 Main St/);
  const pdf=read('src/lib/printPacketPdf.js');assert.match(pdf,/config\.shopInvoiceFields:config\.customerInvoiceFields/);
+});
+
+test('Gartin-like multi-item order generates recipient-specific label groups instead of MULTIPLE',()=>{
+ const source={reference:'16151',lines:[
+  {name:'Hoodie',quantity:1,metadata:[{label:'Student Name::',value:'Morgan Gartin'},{label:'Teacher Name::',value:'Ms Lee'},{label:'Student’s Grade::',value:'3rd'}]},
+  {name:'T-shirt',quantity:2,metadata:[{label:'Student Name::',value:'Morgan Gartin'},{label:'Teacher Name::',value:'Ms Lee'},{label:'Student’s Grade::',value:'3rd'}]},
+  {name:'Hat',quantity:1,metadata:[]} ]};
+ const groups=distributeOrderLines(source);
+ assert.equal(groups.length,1);assert.equal(groups[0].lines.length,3);
+ assert.equal(distributionLabelRows(groups[0]).rows.find(r=>r.field==='student').value,'Morgan Gartin');
+});
+test('different students remain separate recipient groups and unassigned items cannot be guessed',()=>{
+ const groups=distributeOrderLines({lines:[
+  {name:'First',metadata:[{label:'Student Name',value:'A'}]},
+  {name:'Second',metadata:[{label:'Student Name',value:'B'}]},
+  {name:'Unassigned',metadata:[]} ]});
+ assert.equal(groups.length,3);
+ assert.equal(groups[2].lines[0].name,'Unassigned');
 });
