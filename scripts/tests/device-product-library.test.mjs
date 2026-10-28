@@ -5,7 +5,7 @@ import { OMNI_DEVICE, OMNI_PRODUCTS, OMNI_OWNER_TIPS, OMNI_SETUP, OMNI_MAINTENAN
 
 test('dual UV edition and product lookup are distinct from fabric edition',()=>{
  assert.match(OMNI_DEVICE.edition,/Dual UV/);
- assert.doesNotMatch(OMNI_DEVICE.edition,/UV \+ DT fabric/i);
+ assert.match(OMNI_DEVICE.edition,/not UV \+ DT fabric/i);
  assert.ok(OMNI_PRODUCTS.length>=10);
  for(const p of OMNI_PRODUCTS){
   assert.ok(p.steps.length>=5);
