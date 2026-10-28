@@ -140,6 +140,7 @@ export const navSections = [
     label: 'Tools & Admin',
     icon: '🧰',
     items: [
+      { label: 'Device & Product Library', path: '/device-product-library', keywords: 'xTool Omni dual UV setup products brass stainless challenge coins patches glass slate golf balls maintenance troubleshooting searchable walkthrough' },
       { label: 'Material & Machine Settings', path: '/material-settings', keywords: 'mopa fiber xtool s1 p2 omni uv settings laser etching engraving color scoring cutting heat press sublimation presets' },
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
       { label: 'Catalog Workbench', path: '/catalog-workbench', keywords: 'data health integrity sync mapping repair color types non inventory workflow' },
