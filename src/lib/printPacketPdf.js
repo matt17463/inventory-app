@@ -1,4 +1,4 @@
-import {deriveDistributionFields,distributionLabelRows} from './distributionMetadata.js';
+import {deriveDistributionFields,distributionLabelRows,distributeOrderLines} from './distributionMetadata.js';
 import {normalizeLabelDesign} from './labelDesigner.js';
 import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
@@ -187,12 +187,15 @@ function cropLine(doc,value,x,y,width,size=10,bold=false){
 export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount,labelFields={},logoData='',labelDesign={}}) {
  const cfg=normalizePrintPrefs({...prefs,packageCount:packageCount??prefs.packageCount});
  const doc=new jsPDF({unit:'pt',format:[288,432],compress:true});
- const info=deriveDistributionFields(source,labelFields);
  const design=normalizeLabelDesign(labelDesign);
- const determined=distributionLabelRows(source,labelFields,design);
- const fields=determined.rows.slice(0,7).map(row=>[row.label,row.value]);
- for(let i=0;i<cfg.packageCount;i++){
-  if(i)doc.addPage([288,432]);
+ const groups=distributeOrderLines(source);
+ const pages=groups.flatMap((group,g)=>Array.from({length:Math.max(1,Math.ceil(group.lines.length/2))},(_,part)=>({group,groupNumber:g+1,part,partCount:Math.max(1,Math.ceil(group.lines.length/2))})));
+ for(let copy=0;copy<cfg.packageCount;copy++)for(let i=0;i<pages.length;i++){
+  const {group,groupNumber,part,partCount}=pages[i];
+  const info=deriveDistributionFields(group,labelFields);
+  const determined=distributionLabelRows(group,labelFields,design);
+  const fields=determined.rows.slice(0,7).map(row=>[row.label,row.value]);
+  if(i||copy)doc.addPage([288,432]);
   doc.setFillColor(255);doc.rect(0,0,288,432,'F');
   doc.setFillColor(21,34,42);doc.rect(0,0,288,76,'F');
   if(logoData&&design.showLogo){
@@ -206,13 +209,14 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
   }
   text(doc,'SKILLED',logoData&&design.showLogo?84:16,31,192,20,{bold:true,color:[255,255,255]});
   text(doc,'CRAFTING',logoData&&design.showLogo?84:16,49,192,20,{bold:true,color:[255,255,255]});
+  if(cfg.businessWebsite)text(doc,cfg.businessWebsite,logoData&&design.showLogo?84:16,64,187,8,{color:[195,231,225]});
   doc.setFillColor(233,238,240);doc.rect(0,76,288,23,'F');
   text(doc,'DISTRIBUTION / PACKING',12,91,183,9,{bold:true});
-  text(doc,'BAG '+(i+1)+' / '+cfg.packageCount,204,91,75,10,{bold:true});
+  text(doc,'SET '+groupNumber+'/'+groups.length+' · '+(part+1)+'/'+partCount,190,91,94,8,{bold:true});
   let y=116;
-  y=cropLine(doc,source.shipName||source.customerName||'Recipient not specified',13,y,261,cfg.labelFont+2,true)+3;
+  y=cropLine(doc,group.shipName||group.customerName||'Recipient not specified',13,y,261,cfg.labelFont+2,true)+3;
   if(info.school&&design.visible.includes('school')&&!design.order.some(key=>key==='school'))y=cropLine(doc,info.school,13,y,262,9);
-  if(cfg.labelShowOrder)y=cropLine(doc,'ORDER '+source.reference+'  |  JOB '+job.id,13,y+1,261,9,true)+3;
+  if(cfg.labelShowOrder)y=cropLine(doc,'ORDER '+group.reference+'  |  JOB '+job.id,13,y+1,261,9,true)+3;
   doc.setDrawColor(185,196,200);doc.line(13,y,275,y);y+=15;
   // Show actual supplied Woo item data, not empty placeholders from a saved template.
   // A 4x6 label has seven detail rows; never silently claim a blank value was supplied.
@@ -234,21 +238,21 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
   doc.setFillColor(245,247,248);doc.roundedRect(10,itemStart,268,82,4,4,'F');
   text(doc,cfg.labelShowItems?'PACKAGE CONTENTS / VERIFICATION':'FULFILLMENT CHECK',18,itemStart+15,249,8,{bold:true});
   let lineY=itemStart+31;
-  if(cfg.labelShowItems&&cfg.packageCount===1){
-   for(const line of (source.lines||[]).slice(0,2)){
+  if(cfg.labelShowItems){
+   for(const line of (group.lines||[]).slice(part*2,part*2+2)){
     cropLine(doc,String(line.quantity)+' x '+line.name,18,lineY,cfg.labelShowQR?182:252,9);
     lineY+=16;
    }
-   if((source.lines||[]).length>2)cropLine(doc,'+ '+(source.lines.length-2)+' more; see packing list',18,lineY,cfg.labelShowQR?180:252,8);
+   if(cfg.packageCount>1)cropLine(doc,'PACKAGE ALLOCATION NOT VERIFIED',18,lineY,cfg.labelShowQR?180:252,7,true);
   }else{
-   cropLine(doc,cfg.packageCount>1?'Contents not allocated. Verify bag.':'Verify against order before handoff.',18,lineY,cfg.labelShowQR?180:252,8);
+   cropLine(doc,'Verify package contents against order.',18,lineY,cfg.labelShowQR?180:252,8);
   }
   if(cfg.labelShowQR){
    qrCode(doc,origin+'/work-hub?job='+encodeURIComponent(job.id),218,itemStart+26,52);
    text(doc,'STAFF QR',222,itemStart+79,49,6,{bold:true});
   }
   doc.setDrawColor(30,46,52);doc.line(11,406,cfg.labelShowQR?210:277,406);
-  text(doc,'INTERNAL DISTRIBUTION LABEL - NOT POSTAGE',12,421,cfg.labelShowQR?200:265,7,{bold:true});
+  text(doc,(cfg.labelQuestions?'QUESTIONS: '+cfg.labelQuestions:'INTERNAL DISTRIBUTION LABEL - NOT POSTAGE'),12,421,cfg.labelShowQR?200:265,7,{bold:true});
  }
  return doc;
 }
