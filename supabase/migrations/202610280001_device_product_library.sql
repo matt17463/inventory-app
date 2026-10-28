@@ -24,15 +24,20 @@ revoke all on public.sc_device_setup_checks,public.sc_device_maintenance_logs fr
 grant select,insert,update on public.sc_device_setup_checks to authenticated;
 grant select,insert on public.sc_device_maintenance_logs to authenticated;
 revoke delete on public.sc_device_setup_checks,public.sc_device_maintenance_logs from authenticated;
+drop policy if exists sc_device_setup_read on public.sc_device_setup_checks;
 create policy sc_device_setup_read on public.sc_device_setup_checks for select to authenticated
  using (public.sc_current_app_role() in ('admin','manager','operator','viewer'));
+drop policy if exists sc_device_setup_insert on public.sc_device_setup_checks;
 create policy sc_device_setup_insert on public.sc_device_setup_checks for insert to authenticated
  with check (updated_by=(select auth.uid()) and public.sc_current_app_role() in ('admin','manager','operator'));
+drop policy if exists sc_device_setup_update on public.sc_device_setup_checks;
 create policy sc_device_setup_update on public.sc_device_setup_checks for update to authenticated
  using (public.sc_current_app_role() in ('admin','manager','operator'))
  with check (updated_by=(select auth.uid()) and public.sc_current_app_role() in ('admin','manager','operator'));
+drop policy if exists sc_device_maintenance_read on public.sc_device_maintenance_logs;
 create policy sc_device_maintenance_read on public.sc_device_maintenance_logs for select to authenticated
  using (public.sc_current_app_role() in ('admin','manager','operator','viewer'));
+drop policy if exists sc_device_maintenance_insert on public.sc_device_maintenance_logs;
 create policy sc_device_maintenance_insert on public.sc_device_maintenance_logs for insert to authenticated
  with check (recorded_by=(select auth.uid()) and public.sc_current_app_role() in ('admin','manager','operator'));
 -- Maintenance history is append-only: no update/delete grants or policies.
