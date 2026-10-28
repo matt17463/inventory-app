@@ -63,26 +63,33 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
   layoutHeader(doc,source,job,kind,config,origin,logoData);
   let page=1;
   footer(doc,source,kind,page);
+  const visible=new Set(kind==='shop'?config.shopInvoiceFields:config.customerInvoiceFields);
   let y=kind==='customer'?137:122;
   if(kind==='customer'){
-   const contacts=[config.businessAddress,config.businessPhone,config.businessWebsite].filter(Boolean);
+   const contacts=[["businessAddress",config.businessAddress],["businessPhone",config.businessPhone],["businessWebsite",config.businessWebsite]].filter(([key,value])=>visible.has(key)&&value).map(([,value])=>value);
    if(contacts.length){
     doc.setFillColor(246,249,250);doc.roundedRect(38,y,536,Math.max(34,contacts.length*13+16),7,7,'F');
     let cy=y+17;
     for(const contact of contacts){cy=text(doc,contact,51,cy,509,9,{color:[58,78,84]})+1;}
     y+=Math.max(34,contacts.length*13+16)+17;
    }
-   doc.setFillColor(231,244,241);doc.roundedRect(38,y-6,536,33,7,7,'F');
-   text(doc,source.paid?'PAYMENT RECORDED':'PAYMENT STATUS: '+source.status.toUpperCase(),49,y+14,365,10,{bold:true,color:[17,88,75]});
-   y+=48;
+   if(visible.has('orderStatus')){doc.setFillColor(231,244,241);doc.roundedRect(38,y-6,536,33,7,7,'F');
+   text(doc,source.paid?'PAYMENT RECORDED':'PAYMENT STATUS: '+source.status.toUpperCase(),49,y+14,365,10,{bold:true,color:[17,88,75]});y+=48;}
+  }else{
+   for(const [key,value] of [['businessAddress',config.businessAddress],['businessPhone',config.businessPhone],['businessWebsite',config.businessWebsite]]){
+    if(visible.has(key)&&value)y=text(doc,value,39,y,520,9)+4;
+   }
   }
   y=text(doc,(kind==='customer'?'BILL TO: ':'CUSTOMER: ')+source.customerName,39,y,420,12,{bold:true})+4;
-  if(config.showCustomerPhone&&source.customerPhone)y=text(doc,'PHONE: '+source.customerPhone,39,y,420,9)+3;
-  if(source.shipName)y=text(doc,'DELIVER TO: '+source.shipName,39,y,465,10)+2;
-  if(source.shipAddress)y=text(doc,source.shipAddress,39,y,465,9)+4;
-  y=text(doc,'ORDER SOURCE: '+(source.source==='woocommerce'?'WooCommerce':'QuickBooks / Manual')+
+  if(visible.has('invoiceDate')&&source.date)y=text(doc,'INVOICE DATE: '+String(source.date).slice(0,10),39,y,520,9)+4;
+  if(visible.has('paymentMethod')&&source.paymentMethod)y=text(doc,'PAYMENT METHOD: '+source.paymentMethod,39,y,520,9)+4;
+  if(visible.has('billingAddress')&&source.billingAddress)y=text(doc,'BILLING ADDRESS: '+source.billingAddress,39,y,520,9)+4;
+  if(config.showCustomerPhone&&visible.has('customerPhone')&&source.customerPhone)y=text(doc,'PHONE: '+source.customerPhone,39,y,420,9)+3;
+  if(visible.has('shippingAddress')&&source.shipName)y=text(doc,'DELIVER TO: '+source.shipName,39,y,465,10)+2;
+  if(visible.has('shippingAddress')&&source.shipAddress)y=text(doc,source.shipAddress,39,y,465,9)+4;
+  if(visible.has('orderStatus'))y=text(doc,'ORDER SOURCE: '+(source.source==='woocommerce'?'WooCommerce':'QuickBooks / Manual')+
     '     STATUS: '+source.status+(source.paid?' / Payment recorded':' / Payment not confirmed'),39,y+3,535,9)+13;
-  if(kind==='shop'){
+  if(kind==='shop'&&visible.has('productionInfo')){
     y=text(doc,'STAFF QR: scan top-right QR to view this job in Work Hub.',39,y,520,9,{bold:true})+4;
     y=text(doc,'Job #'+job.id+' | Due: '+(job.due_date||'Not specified')+' | Travelers: '+travelers.length,39,y,520,9)+10;
   }
@@ -98,7 +105,7 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
   }
   header();
   for(const line of source.lines){
-    const metadata=(config.showPersonalization?line.metadata:[]).map(v=>v.label+': '+v.value);
+    const metadata=(config.showPersonalization&&visible.has('personalization')?line.metadata:[]).map(v=>v.label+': '+v.value);
     const approx=(kind==='customer'?58:30)+Math.min(8,metadata.length)*12;
     if(y+approx>685){y=pageForRows(doc,source,kind,++page);header();}
     const firstY=y;
@@ -114,7 +121,7 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
     }
     const itemX=hasThumbnail?107:45;
     y=text(doc,line.name||'Order item',itemX,y,hasThumbnail?261:329,config.invoiceFont,{bold:true});
-    if(config.showSku&&line.sku)y=text(doc,'SKU '+line.sku,itemX,y+2,hasThumbnail?262:328,8)+1;
+    if(config.showSku&&visible.has('sku')&&line.sku)y=text(doc,'SKU '+line.sku,itemX,y+2,hasThumbnail?262:328,8)+1;
     for(const meta of metadata.slice(0,8)){
       if(y>685){y=pageForRows(doc,source,kind,++page);header();}
       y=text(doc,meta,hasThumbnail?110:50,y+1,hasThumbnail?253:310,8);
@@ -139,7 +146,7 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
       text(doc,moneyOrBlank(value,source.currency),470,y,97,10,{bold:true});y+=19;
     }
   }
-  if(kind==='shop'){
+  if(kind==='shop'&&visible.has('productionInfo')){
     if(y>693){y=pageForRows(doc,source,kind,++page);}
     text(doc,'PRODUCTION REFERENCE - use item-specific approved QR traveler for actual machine settings.',39,y+3,520,9,{bold:true});y+=18;
     for(const traveler of travelers.slice(0,8)){
@@ -150,7 +157,7 @@ function appendInvoicePages(doc,{source,job,travelers=[],prefs={},kind='customer
       y=text(doc,line,43,y,515,8)+2;
     }
     if(travelers.length>8)y=text(doc,'+'+(travelers.length-8)+' more travelers available in Work Hub',43,y,515,8);
-  }else if(source.customerNote){
+  }else if(visible.has('orderNotes')&&source.customerNote){
     if(y>690){y=pageForRows(doc,source,kind,++page);}
     text(doc,'Customer order note: '+source.customerNote,39,y+5,510,8);
   }
