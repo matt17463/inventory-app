@@ -23,7 +23,7 @@ export default function RolandMediaLibrary({onDraft}){
       </button>
       {openId===m.id&&<div className="sc-bn2-details"><p>{m.description}</p>
         <dl><dt>Profile / color quality</dt><dd>{m.profile}</dd><dt>Cut strategy</dt><dd>{m.cut}</dd><dt>Dry / finish</dt><dd>{m.post}</dd>
-          {m.press&&<><dt>Heat press (material sheet)</dt><dd><strong>{m.press.temperatureF}°F</strong> · {m.press.seconds} sec · {m.press.pressure} · {m.press.peel} peel. {m.press.notes}</dd></>}</dl>
+          {m.press&&<><dt>Heat press (material sheet)</dt><dd><strong>{m.press.temperatureF}{typeof m.press.temperatureF==='number'?'°F':''}</strong> · {m.press.seconds} sec · {m.press.pressure} · {m.press.peel} peel. {m.press.notes}</dd></>}</dl>
         <h4>Setup, testing and production checks</h4><ol>{m.notes.map((n,i)=><li key={i}>{n}</li>)}</ol>
         <h4>Source documentation</h4><ul>{m.sources.map(s=><li key={s.url}><a href={s.url} rel="noopener noreferrer" target="_blank">{s.label}</a></li>)}</ul>
         <button type="button" className="primary-button" onClick={()=>onDraft(m)}>Create editable test draft</button>
