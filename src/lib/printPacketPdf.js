@@ -1,4 +1,4 @@
-import {deriveDistributionFields} from './distributionMetadata.js';
+import {deriveDistributionFields,distributionLabelRows} from './distributionMetadata.js';
 import {normalizeLabelDesign} from './labelDesigner.js';
 import {jsPDF} from 'jspdf';
 import {qrcodegen} from '../vendor/qrcodegen';
@@ -182,7 +182,8 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
  const doc=new jsPDF({unit:'pt',format:[288,432],compress:true});
  const info=deriveDistributionFields(source,labelFields);
  const design=normalizeLabelDesign(labelDesign);
- const fields=design.order.filter(key=>design.visible.includes(key)).map(key=>[design.labels[key].toUpperCase(),info[key]]);
+ const determined=distributionLabelRows(source,labelFields,design);
+ const fields=determined.rows.slice(0,7).map(row=>[row.label,row.value]);
  for(let i=0;i<cfg.packageCount;i++){
   if(i)doc.addPage([288,432]);
   doc.setFillColor(255);doc.rect(0,0,288,432,'F');
@@ -206,8 +207,9 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
   if(info.school&&design.visible.includes('school')&&!design.order.some(key=>key==='school'))y=cropLine(doc,info.school,13,y,262,9);
   if(cfg.labelShowOrder)y=cropLine(doc,'ORDER '+source.reference+'  |  JOB '+job.id,13,y+1,261,9,true)+3;
   doc.setDrawColor(185,196,200);doc.line(13,y,275,y);y+=15;
-  // A template controls field visibility; missing order metadata must not hide the field.
-  const rows=fields.slice(0,7);
+  // Show actual supplied Woo item data, not empty placeholders from a saved template.
+  // A 4x6 label has seven detail rows; never silently claim a blank value was supplied.
+  const rows=fields;
   for(const [label,value] of rows){
    if(y>291)break;
    text(doc,label,13,y,103,7,{bold:true,color:[70,78,83]});
@@ -215,7 +217,10 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
    y+=23;
   }
   if(!fields.length){
-   y=cropLine(doc,'Recipient details: verify with packing record',13,y+7,262,9)+8;
+   y=cropLine(doc,'No recipient details in order. Verify before packing.',13,y+7,262,9)+8;
+  }
+  if(determined.totalAvailable>rows.length){
+   y=cropLine(doc,'+'+(determined.totalAvailable-rows.length)+' MORE ORDER FIELDS - SEE INVOICE',13,y+2,260,7,true)+3;
   }
   const itemStart=Math.max(294,Math.min(316,y+5));
   doc.setFillColor(245,247,248);doc.roundedRect(10,itemStart,268,82,4,4,'F');
