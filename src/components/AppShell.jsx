@@ -103,6 +103,7 @@ const SIMPLE_NAV = [
   {id:'admin-simple',title:'Help & Settings',icon:'⚙️',items:[
     {label:'Application Guide',path:'/application-guide'},
     {label:'Equipment & Remote Access',path:'/equipment-center'},
+    {label:'Device & Product Library',path:'/device-product-library'},
     {label:'Menu Manager',path:'/menu-manager'},
     {label:'User Management',path:'/user-management'},
     {label:'Advanced Diagnostics',path:'/deployment-health'},
