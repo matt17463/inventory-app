@@ -64,14 +64,14 @@ entry('greenstar-db13','Greenstar DB-13','Greenstar / USCutter','DB13',null,'Ban
   ['CRITICAL: 30 in × 50 yd 13 oz rolls exceed the BN2-30 12 kg roll-weight limit even before core/packaging; do not load full roll. Use a verified smaller roll or approved cut sheets.','Confirm exact width, length and mass of your DB13 roll; supplier also markets 20 in × 10 yd packs.'],
   [{label:'USCutter DB13 BN/BN2 product',url:'https://uscutter.com/greenstar-db13-printable-banner-material-13oz-single-sided-digital-banner-20-x-10-yd/'},{label:'Greenstar digital banner product guide',url:'https://uscutter.com/content/PDFs/Greenstar-Digital-Banner-Product-Guide-041323.pdf'}]
 ),
-entry('orajet-3551','ORAJET 3551','ORAFOL','3551',20,'Adhesive vinyl','Polymeric PVC · 70 μm',
+entry('orajet-3551','ORAJET 3551','ORAFOL','3551',20,'Adhesive vinyl','High-performance polymeric PVC · 2.75 mil',
   'Polymeric self-adhesive eco-solvent-printable film for longer-term, flatter signage and graphic applications; exact adhesive/finish varies by variant.',
   'Check ORAFOL ICC download for the exact BN2-30 and ECO-SOL MAX ink type; proof glossy/matte correct variant.',
   'Kiss cut after a test. Register crop marks and recalibrate alignment if laminating before contour cutting.',
-  'Allow adequate eco-solvent outgassing before lamination; confirm the specific ORAGUARD laminate recommendation for your 3551 variant.',
+  'ORAFOL Americas: allow at least 24 hours (48–72 preferred) at about 70°F before cutting to the ink or laminating. Check ORAGUARD 215 for flat graphics, or 290/293/297GF variants for the appropriate applications.',
   null,
-  ['3551 polymeric film is not interchangeable with 3165 intermediate PVC; use distinct media/profiles.','Confirm whether the roll is white/clear and matte/gloss before relying on the profile.'],
-  [{label:'ORAFOL ORAJET 3551 technical product',url:'https://www.orafol.com/en/europe/products/orajet-3551'}],0.07
+  ['3551 polymeric film is not interchangeable with 3165 intermediate PVC; use distinct media/profiles. ORAFOL Americas standard widths start at 30 in, so confirm your 20 in roll was supplied as a professionally slit roll with original identification.','Confirm whether the roll is white/clear and matte/gloss before relying on the profile.'],
+  [{label:'ORAFOL ORAJET 3551 technical product',url:'https://www.orafol.com/en/europe/products/orajet-3551'},{label:'ORAFOL Americas 3551 datasheet',url:'https://update.orafol.com/products/americas/en/technical-data-sheet/orajet-3551-id2772-technical-data-sheet-americas-en.pdf'}],0.07
 ),
 entry('orajet-3165','ORAJET 3165','ORAFOL','3165',20,'Adhesive vinyl','White · gloss/matte · 4 mil',
   'Intermediate blended-PVC printable film with grey permanent adhesive, for flat stickers and medium-term signage.',
@@ -113,10 +113,14 @@ export function toBn2Draft(m){
       profile_selection:'Exact confirmed BN2-30 / inkset ICC required; do not use other printer profiles unverified',
       printing_mode:'High Quality first proof; use verified profile modes for production',
       feed_calibration:'measure for each media and laminate condition',
-      cut_force_gf:'Determine with BN2 test cut (not a validated value)',
-      cut_speed_mm_s:'Determine with BN2 test cut',
+      cut_force_gf:'',
+      cut_speed_mm_s:'',
       print_and_cut:m.category!=='Banner',
       press:m.press||null,
+      heat_press_temperature_f:m.press?.temperatureF||'',
+      heat_press_time_s:m.press?.seconds||'',
+      heat_press_pressure:m.press?.pressure||'',
+      heat_press_peel:m.press?.peel||'',
       manufacturer_cut_guidance:m.cut,
       post_print_handling:m.post
     },null,2)
