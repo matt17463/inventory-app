@@ -1,4 +1,5 @@
 export const MACHINE_TYPES = [
+  { id: 'roland_bn2', label: 'Roland BN2-30 eco-solvent printer/cutter', modes: ['print_only','print_cut'], note: 'Confirm actual CMYK/CMYKW ink set and exact VersaWorks profile. Record print/dryer setpoints in °C, feed and crop alignment, media roll specifications, cut-test results, and press/lamination instructions.' },
   { id: 'mopa_fiber', label: 'MOPA fiber laser', modes: ['color_engrave','etch','score','cut','engrave'], note: 'Record exact laser wattage, lens, frequency (kHz), pulse duration (ns), speed, power, hatch and passes.' },
   { id: 'xtool_s1', label: 'xTool S1', modes: ['engrave','score','cut'], note: 'Record installed diode/IR module and wattage, lens, air assist, speed, power and passes.' },
   { id: 'xtool_p2', label: 'xTool P2', modes: ['engrave','score','cut'], note: 'Record CO2 model, material thickness, focus, power, speed and air assist.' },
@@ -7,6 +8,7 @@ export const MACHINE_TYPES = [
   { id: 'sublimation_press', label: 'Sublimation heat press', modes: ['sublimation'], note: 'Record press model, temperature, dwell, pressure, substrate coating, protective paper and peel.' },
 ];
 export const OPERATION_LABELS = {
+  print_only: 'Eco-solvent print only', print_cut: 'Eco-solvent print and contour cut',
   color_engrave: 'Color marking', etch: 'Etching', score: 'Scoring', cut: 'Cutting', engrave: 'Engraving',
   uv_flat: 'UV flat print', uv_texture: 'Raised texture', uv_relief: 'Relief', uv_varnish: 'Spot varnish',
   heat_transfer: 'Heat transfer', sublimation: 'Sublimation',
@@ -38,6 +40,15 @@ export function formatRecipeCSV(rows) {
 
 
 export const SETTING_FIELDS = {
+  roland_bn2:[
+    ['profile_selection','ICC media profile (model + ink set)'],['printing_mode','VersaWorks quality mode'],
+    ['print_heater_c','Print heater setpoint (°C; 30–35)'],['dryer_c','Dryer setpoint (°C; 30–38)'],
+    ['feed_calibration','Media feed calibration result'],['cut_force_gf','Cut force from physical test (gf)'],
+    ['cut_speed_mm_s','Cut speed from physical test (mm/s)'],['cut_offset_mm','Blade offset (mm)'],
+    ['post_print_handling','Ink dry/outgas and finishing instructions'],
+    ['heat_press_temperature_f','Heat transfer temperature (°F)'],['heat_press_time_s','Heat transfer dwell (seconds)'],
+    ['heat_press_pressure','Heat transfer pressure'],['heat_press_peel','Transfer mask peeling']
+  ],
   mopa_fiber:[
     ['power_percent','Power (%)'],['speed_mm_s','Speed (mm/s)'],
     ['frequency_khz','Pulse frequency (kHz)'],['pulse_width_ns','Pulse width (ns)'],

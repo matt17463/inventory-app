@@ -140,7 +140,7 @@ export const navSections = [
     label: 'Tools & Admin',
     icon: '🧰',
     items: [
-      { label: 'Material & Machine Settings', path: '/material-settings', keywords: 'mopa fiber xtool s1 p2 omni uv settings laser etching engraving color scoring cutting heat press sublimation presets' },
+      { label: 'Material & Machine Settings', path: '/material-settings', keywords: 'roland bn2-30 print cut eco solvent siser orajet substance greenstar heat transfer banner mopa fiber xtool s1 p2 omni uv settings laser etching engraving color scoring cutting heat press sublimation presets' },
       { label: 'Barcode Labels', path: '/labels', keywords: 'labels barcode qr print sku bin' },
       { label: 'Catalog Workbench', path: '/catalog-workbench', keywords: 'data health integrity sync mapping repair color types non inventory workflow' },
       { label: 'Color Pairings', path: '/color-pairings', keywords: 'color aliases pairings mapping canonical manufacturer colors woo sync blank products' },

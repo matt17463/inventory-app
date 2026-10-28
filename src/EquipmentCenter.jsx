@@ -197,7 +197,7 @@ export default function EquipmentCenter() {
         <div className="eq-card-body"><span className="eq-maker">{d.maker}</span><h2>{d.name}</h2><p>{d.detail}</p>
           {d.id === 'pi' && mainEntity && <div className="eq-reading"><span>Latest successful backup</span><strong>{new Date(mainEntity.state).toLocaleString()}</strong></div>}
           {connected && entityIds(d).slice(1).map((id) => entities[id] && <div className={`eq-reading ${entityPresentation(entities[id]).kind === 'warn' ? 'eq-reading-warning' : ''}`} key={id}><span>{entities[id].attributes.friendly_name}</span><strong>{entityPresentation(entities[id]).label}</strong></div>)}
-          <div className="eq-card-actions"><External className="eq-text-link" href={d.haPath ? `${consoleUrl}${d.haPath}` : d.url || `${consoleUrl}/config/integrations`}>{d.action || 'Home Assistant'}</External><button onClick={() => setSelected(d)} aria-label={`Configure ${d.name}`}>Details</button></div>
+          <div className="eq-card-actions">{d.id==='roland'&&<Link className="eq-text-link" to="/material-settings?machine=roland_bn2">Media guides (8)</Link>}<External className="eq-text-link" href={d.haPath ? `${consoleUrl}${d.haPath}` : d.url || `${consoleUrl}/config/integrations`}>{d.action || 'Home Assistant'}</External><button onClick={() => setSelected(d)} aria-label={`Configure ${d.name}`}>Details</button></div>
         </div></article>; })}
     </section>
     {!visible.length && <p className="eq-notice">No matching equipment. Try another name or location.</p>}
