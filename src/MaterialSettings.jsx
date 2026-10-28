@@ -5,6 +5,8 @@ import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { MACHINE_TYPES, SETTING_FIELDS, OPERATION_LABELS, formatRecipeCSV, machineFor, materialSafety, normalizeSettingsJson } from './lib/materialSettings';
 import './MaterialSettings.css';
+import { Link } from 'react-router-dom';
+import { OMNI_PRODUCTS, OMNI_DEVICE } from './lib/omniKnowledge';
 
 const blank = () => ({
   id:null, machine_type:'mopa_fiber',machine_model:'',machine_configuration:'',operation:'color_engrave',
@@ -55,7 +57,32 @@ export default function MaterialSettings(){
     if(a.error)throw a.error;
     setRows(a.data||[]);
   },[]);
-  useEffect(()=>{let alive=true;load().catch(e=>{if(alive)setMessage(errorText(e));});return()=>{alive=false;};},[load]);
+  useEffect(()=>{
+    let alive=true;
+    load().catch(e=>{if(alive)setMessage(errorText(e));});
+    const params=new URLSearchParams(window.location.search);
+    const seed=OMNI_PRODUCTS.find(x=>x.id===params.get('seed'));
+    const recipeId=params.get('recipe');
+    if(seed){
+      const officialPreset=seed.id==='slate'?
+        {studio_mode:'UV flatbed / Flat',ink_white_mode:'White+Color',white_layers:2,color_layers:1}:
+        seed.id==='acrylic'?{studio_mode:'UV flatbed / Texture',target_relief_mm:0.6,texture_smoothness:1}:{};
+      setForm({...blank(),machine_type:'xtool_omni',machine_model:OMNI_DEVICE.name,
+        machine_configuration:OMNI_DEVICE.edition,operation:seed.operation,material_name:seed.name,
+        material_notes:seed.steps.join('\\n'),source_type:['slate','acrylic'].includes(seed.id)?'manufacturer':'manual',
+        source_url:seed.source,safety_notes:seed.primer+'; '+seed.accessory,
+        settings:JSON.stringify(officialPreset,null,2)});
+      setCurrentTab('editor');
+      setMessage('Unapproved starter loaded from the device library. Confirm the exact blank and run a physical trial before manager approval.');
+    } else if(recipeId && /^[0-9a-f-]{36}$/i.test(recipeId)){
+      supabase.from('sc_material_recipes').select('*').eq('id',recipeId).single().then(({data,error})=>{
+       if(!alive)return;
+       if(error)setMessage(errorText(error));
+       else{setForm({...data,thickness_mm:data.thickness_mm??'',settings:JSON.stringify(data.settings||{},null,2)});setCurrentTab('editor');loadTrials(data.id);}
+      });
+    }
+    return()=>{alive=false;};
+   },[load]);
   const set=(key,value)=>setForm(p=>({...p,[key]:value}));
   const setMachineSetting=(key,value)=>{try{const settings=normalizeSettingsJson(form.settings);if(value==='')delete settings[key];else settings[key]=value;set('settings',JSON.stringify(settings,null,2));}catch{setMessage('Repair invalid settings JSON before editing individual machine fields.');}};
   const edit=(record)=>{
@@ -168,7 +195,7 @@ export default function MaterialSettings(){
   }
   return <main className="page sc-materials">
     <header className="page-header"><div><p className="eyebrow">SKILLED CRAFTING / WORKSHOP</p><h1>Equipment Settings & Material Recipes</h1>
-      <p>Find settings by material, machine, module and process. AI plans are unverified until tested and approved.</p>
+      <p>Find settings by material, machine, module and process. AI plans are unverified until tested and approved.</p><p><Link to="/device-product-library">Browse product guides, Omni setup, troubleshooting and maintenance →</Link></p>
     </div><div className="sc-material-actions"><button type="button" className="secondary-button" onClick={()=>{load().catch(e=>setMessage(errorText(e)));}}>Refresh</button>
       <button type="button" className="secondary-button" onClick={()=>saveCSV(visible)}>Export CSV</button></div></header>
     {message&&<p className="sc-material-message" role="status">{message}</p>}
