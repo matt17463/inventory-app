@@ -5,6 +5,8 @@ import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { MACHINE_TYPES, SETTING_FIELDS, OPERATION_LABELS, formatRecipeCSV, machineFor, materialSafety, normalizeSettingsJson } from './lib/materialSettings';
 import './MaterialSettings.css';
+import RolandMediaLibrary from './RolandMediaLibrary';
+import { toBn2Draft } from './lib/rolandBn2Media';
 
 const blank = () => ({
   id:null, machine_type:'mopa_fiber',machine_model:'',machine_configuration:'',operation:'color_engrave',
@@ -43,7 +45,7 @@ export default function MaterialSettings(){
   const [research,setResearch]=useState(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
-  const [currentTab,setCurrentTab]=useState('library');
+  const [currentTab,setCurrentTab]=useState(()=>new URLSearchParams(window.location.search).get('machine')==='roland_bn2'?'roland':'library');
   const [sourceLinks,setSourceLinks]=useState('');
   const machine=machineFor(form.machine_type);
   const safety=materialSafety(form.machine_type,form.material_name);
@@ -56,6 +58,11 @@ export default function MaterialSettings(){
     setRows(a.data||[]);
   },[]);
   useEffect(()=>{let alive=true;load().catch(e=>{if(alive)setMessage(errorText(e));});return()=>{alive=false;};},[load]);
+  const loadBn2Draft=(media)=>{
+    setForm(toBn2Draft(media));setTrialRows([]);setAi(null);setResearch(null);setSourceLinks('');
+    setCurrentTab('editor');setMessage('BN2-30 source-linked candidate loaded. Confirm your actual installed ink set and ICC profile before saving, physical testing or approval.');
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
   const set=(key,value)=>setForm(p=>({...p,[key]:value}));
   const setMachineSetting=(key,value)=>{try{const settings=normalizeSettingsJson(form.settings);if(value==='')delete settings[key];else settings[key]=value;set('settings',JSON.stringify(settings,null,2));}catch{setMessage('Repair invalid settings JSON before editing individual machine fields.');}};
   const edit=(record)=>{
@@ -76,6 +83,11 @@ export default function MaterialSettings(){
     setBusy(true);setMessage('');
     try{
       const settings=normalizeSettingsJson(form.settings);
+      if(form.machine_type==='roland_bn2'){
+        const heater=Number(settings.print_heater_c),dryer=Number(settings.dryer_c);
+        if(!Number.isFinite(heater)||heater<30||heater>35||!Number.isFinite(dryer)||dryer<30||dryer>38)
+          throw Error('BN2-30 supports 30–35°C print heater and 30–38°C dryer; enter a value within each range.');
+      }
       const payload={
         machine_type:form.machine_type,machine_model:form.machine_model.trim(),machine_configuration:form.machine_configuration.trim(),
         operation:form.operation,material_name:form.material_name.trim(),material_brand:form.material_brand,material_sku:form.material_sku,
@@ -173,8 +185,9 @@ export default function MaterialSettings(){
       <button type="button" className="secondary-button" onClick={()=>saveCSV(visible)}>Export CSV</button></div></header>
     {message&&<p className="sc-material-message" role="status">{message}</p>}
     <nav className="sc-material-tabs"><button onClick={()=>setCurrentTab('library')} className={currentTab==='library'?'active':''}>Recipe library</button>
+      <button onClick={()=>setCurrentTab('roland')} className={currentTab==='roland'?'active':''}>Roland BN2-30 media ({8})</button>
       <button onClick={()=>{setCurrentTab('editor');setForm(blank());setTrialRows([]);setAi(null);}} className={currentTab==='editor'?'active':''}>New recipe / AI assistant</button></nav>
-    {currentTab==='library'?<section className="card"><div className="sc-material-filter"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search material, SKU, machine or operation" aria-label="Search recipes"/>
+    {currentTab==='roland'?<RolandMediaLibrary onDraft={loadBn2Draft}/>:currentTab==='library'?<section className="card"><div className="sc-material-filter"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search material, SKU, machine or operation" aria-label="Search recipes"/>
       <select value={filterMachine} onChange={e=>setFilterMachine(e.target.value)} aria-label="Filter machine"><option value="all">All machines</option>{MACHINE_TYPES.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
       <div className="sc-material-table"><table><thead><tr><th>Material</th><th>Machine</th><th>Process</th><th>Source</th><th>Validation</th><th>Action</th></tr></thead><tbody>{visible.map(r=><tr key={r.id}>
         <td><strong>{r.material_name}</strong><small>{[r.material_brand,r.material_sku,r.material_finish].filter(Boolean).join(' · ')}</small></td>
