@@ -69,7 +69,7 @@ export default function MaterialSettings(){
         seed.id==='acrylic'?{studio_mode:'UV flatbed / Texture',target_relief_mm:0.6,texture_smoothness:1}:{};
       setForm({...blank(),machine_type:'xtool_omni',machine_model:OMNI_DEVICE.name,
         machine_configuration:OMNI_DEVICE.edition,operation:seed.operation,material_name:seed.name,
-        material_notes:seed.steps.join('\\n'),source_type:['slate','acrylic'].includes(seed.id)?'manufacturer':'manual',
+        material_notes:seed.steps.join('\n'),source_type:['slate','acrylic'].includes(seed.id)?'manufacturer':'manual',
         source_url:seed.source,safety_notes:seed.primer+'; '+seed.accessory,
         settings:JSON.stringify(officialPreset,null,2)});
       setCurrentTab('editor');
