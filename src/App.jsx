@@ -109,6 +109,7 @@ const TestingMode = lazy(() => import('./TestingMode'));
 const ThemeSettings = lazy(() => import('./ThemeSettings'));
 const EquipmentCenter = lazy(() => import('./EquipmentCenter'));
 const MaterialSettings = lazy(() => import('./MaterialSettings'));
+const DeviceProductLibrary = lazy(() => import('./DeviceProductLibrary'));
 const UVStudio = lazy(() => import('./UVStudio'));
 const MenuManager = lazy(() => import('./MenuManager'));
 const UserManagement = lazy(() => import('./UserManagement'));
@@ -165,6 +166,7 @@ function EmployeeRoutes() {
       <Route path="/theme-settings" element={<ThemeSettings />} />
       <Route path="/equipment-center" element={<EquipmentCenter />} />
       <Route path="/material-settings" element={<MaterialSettings />} />
+       <Route path="/device-product-library" element={<DeviceProductLibrary />} />
       <Route path="/uv-studio" element={<UVStudio />} />
       <Route path="/menu-manager" element={<MenuManager />} />
       <Route path="/user-management" element={<UserManagement />} />
