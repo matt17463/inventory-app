@@ -73,6 +73,15 @@ export const OMNI_PRODUCTS = [
  {id:'uvdtf',name:'UV DTF promotional decals',category:'Transfers',material:'xTool-compatible UV DTF A/B film',status:'qualification',accessory:'LM1 laminator; RF1 optional for rolls',operation:'uv_flat',primer:'Not applicable to transfer film; clean destination surface',ink:'Dedicated UV DTF workflow',source:'https://support.xtool.com/article/3666',
  steps:guide('Use only compatible UV DTF film matching the xTool process.','Prepare and size approved graphic; select UV DTF workflow in Studio.','Print A film and use matching B film/lamination instructions.','Trim transfer and apply to compatible cleaned object.','Test edges and small text on a scrap item.','Do not claim general wash/dishwasher durability without proof.')},
 ];
+// Attributed owner reports, not official settings or independently verified fixes.
+// Source links are public and included so operators can assess model/version context.
+export const OMNI_OWNER_TIPS = [
+ {id:'setup-review',title:'Firmware and calibration can be a setup obstacle',model:'O1 Omni (reviewer machine; verify edition)',reported:'A reviewer described Wi-Fi connection problems, firmware update trouble and repeated camera calibration attempts. Check firmware early and preserve calibration screenshots for support.',url:'https://www.makerhacks.com/xtool-o1-omni-review/'},
+ {id:'false-ink',title:'Ink cartridge recognition problems',model:'O1 Omni (reported by owners)',reported:'Owners have reported low/empty cartridge warnings despite remaining ink. Verify seating and software diagnostics; escalate persistent errors instead of bypassing printer protections.',url:'https://www.reddit.com/r/xToolOfficial/comments/1wwd0c8/o1_omni_problem/'},
+ {id:'head2-residue',title:'Residual ink near the second UV capping station',model:'Dual UV',reported:'One Dual UV owner reported visible ink in the UV2 cleaning area; an xTool support account said a small amount can be normal and recommended watching for recurring leakage. Follow the official cleaning process.',url:'https://www.reddit.com/r/xToolOfficial/comments/1x2ygra/o1_omni_help/'},
+ {id:'idle-clean',title:'Frequent manual cleaning and fluid consumption',model:'O1 Omni (community discussion)',reported:'An owner reported channel dropout after idle time and concerns about moisturizing fluid use. Avoid making extra cleaning cycles routine without diagnostic evidence and consult the manufacturer for persistent issues.',url:'https://www.reddit.com/r/xToolOfficial/comments/1xdck4z/omni_1_needs_printhead_cleaning_once_or_more_a_day/'},
+ {id:'patch-warp',title:'Thin or flexible patches warping during a print',model:'O1 Omni (owner discussion)',reported:'A patch-printing owner described warping and unwanted ink transfer. Check fixture flatness, safe clearance and nozzle/ink-pad contamination; do not copy unverified workarounds.',url:'https://www.reddit.com/r/xToolOfficial/comments/1ws1r5j/xtool_omni_o1_dual_uv_printer_problems/'},
+];
 export function searchOmniProducts(query='',category='all') {
  const needle=String(query).trim().toLowerCase();
  return OMNI_PRODUCTS.filter(p=>(category==='all'||p.category===category)&&
