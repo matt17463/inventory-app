@@ -210,17 +210,18 @@ export function createDistributionLabelsPdf({source,job,prefs={},origin='',packa
   // Show actual supplied Woo item data, not empty placeholders from a saved template.
   // A 4x6 label has seven detail rows; never silently claim a blank value was supplied.
   const rows=fields;
+  let renderedCount=0;
   for(const [label,value] of rows){
-   if(y>291)break;
+   if(y>278)break;
    text(doc,label,13,y,103,7,{bold:true,color:[70,78,83]});
-   cropLine(doc,value||'NOT PROVIDED',111,y+1,163,label==='STUDENT / PLAYER'?design.fontSize+1:design.fontSize,true);
-   y+=23;
+   cropLine(doc,value,111,y+1,163,label==='STUDENT / PLAYER'?design.fontSize+1:design.fontSize,true);
+   y+=23;renderedCount++;
   }
   if(!fields.length){
    y=cropLine(doc,'No recipient details in order. Verify before packing.',13,y+7,262,9)+8;
   }
-  if(determined.totalAvailable>rows.length){
-   y=cropLine(doc,'+'+(determined.totalAvailable-rows.length)+' MORE ORDER FIELDS - SEE INVOICE',13,y+2,260,7,true)+3;
+  if(determined.totalAvailable>renderedCount){
+   cropLine(doc,'+'+(determined.totalAvailable-renderedCount)+' MORE ORDER FIELDS - SEE INVOICE',13,Math.min(301,y+2),260,7,true);
   }
   const itemStart=Math.max(294,Math.min(316,y+5));
   doc.setFillColor(245,247,248);doc.roundedRect(10,itemStart,268,82,4,4,'F');
