@@ -152,7 +152,22 @@ export default function PrintCenter(){
      name='SC-'+source.reference+'-Production-Packet.pdf';
    }
    if(!pdf)throw Error('Choose a printable document.');
-   if(sendToPrinter){
+   if(sendToPrinter&&which==='labels'){
+    const pages=pdf.getNumberOfPages();
+    const queued=[];
+    for(let index=0;index<pages;index++){
+     const one=createDistributionLabelsPdf({...base,pageIndex:index});
+     if(one.getNumberOfPages()!==1)throw Error('Thermal page separation failed on label '+(index+1));
+     const result=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{
+      method:'POST',body:JSON.stringify({action:'enqueue',jobId:job.id,documentKind:'packing_labels',
+       idempotencyKey:crypto.randomUUID(),pdfBase64:one.output('datauristring').split(',')[1]})
+     });
+     const response=await result.json().catch(()=>({}));
+     if(!result.ok||!response.success)throw Error('Queued '+queued.length+' of '+pages+' labels. '+(response.error||'Could not submit label '+(index+1))+'. Check queue history before retrying.');
+     queued.push(response.id);
+    }
+    setMessage('Queued all '+queued.length+' separate 4×6 label print jobs. Physical output must still be verified.');
+   }else if(sendToPrinter){
     const idempotencyKey=crypto.randomUUID();
     const documentKind={invoices:'invoice_pair',customer:'customer_invoice',shop:'shop_invoice',
       labels:'packing_labels',production:'production_packet'}[which];
@@ -190,6 +205,20 @@ export default function PrintCenter(){
     docs.push(['production_packet',createProductionPacketPdf({...base,artworkImages})]);
    }
    for(const [documentKind,doc] of docs){
+    if(documentKind==='packing_labels'){
+     const count=doc.getNumberOfPages();
+     for(let index=0;index<count;index++){
+      const one=createDistributionLabelsPdf({...base,labelDesign,pageIndex:index});
+      const result=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{
+       method:'POST',body:JSON.stringify({action:'enqueue',jobId:job.id,documentKind:'packing_labels',
+        idempotencyKey:crypto.randomUUID(),pdfBase64:one.output('datauristring').split(',')[1]})
+      });
+      const response=await result.json().catch(()=>({}));
+      if(!result.ok||!response.success)throw Error('Only '+index+'/'+count+' labels queued; inspect print queue before retrying: '+(response.error||'Thermal queue rejected label'));
+      accepted.push('packing_labels '+(index+1)+'/'+count);
+     }
+     continue;
+    }
     const response=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{
       method:'POST',body:JSON.stringify({action:'enqueue',jobId:job.id,documentKind,
        idempotencyKey:crypto.randomUUID(),pdfBase64:doc.output('datauristring').split(',')[1]})

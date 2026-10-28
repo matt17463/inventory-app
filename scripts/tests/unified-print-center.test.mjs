@@ -153,3 +153,13 @@ test('different students remain separate recipient groups and unassigned items c
  assert.equal(groups.length,3);
  assert.equal(groups[2].lines[0].name,'Unassigned');
 });
+
+test('thermal label dispatch queues every PDF page separately across both print entry points',()=>{
+ const pdf=read('src/lib/printPacketPdf.js');const center=read('src/PrintCenter.jsx');const quick=read('src/QuickOrderPrint.jsx');
+ assert.match(pdf,/pageIndex=null/);assert.match(pdf,/pageIndex!==null/);
+ assert.match(center,/for\(let index=0;index<pages;index\+\+\)/);
+ assert.match(center,/for\(let index=0;index<count;index\+\+\)/);
+ assert.match(quick,/for\(let index=0;index<count;index\+\+\)/);
+ assert.match(center,/pageIndex:index/);assert.match(quick,/pageIndex:index/);
+ assert.match(quick,/documentKind:'packing_labels'/);
+});

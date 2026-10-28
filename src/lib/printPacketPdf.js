@@ -184,18 +184,21 @@ function cropLine(doc,value,x,y,width,size=10,bold=false){
  if(visible!==raw)visible=visible.trimEnd()+'...';
  doc.text(visible,x,y);return y+size+6;
 }
-export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount,labelFields={},logoData='',labelDesign={}}) {
+export function createDistributionLabelsPdf({source,job,prefs={},origin='',packageCount,labelFields={},logoData='',labelDesign={},pageIndex=null}) {
  const cfg=normalizePrintPrefs({...prefs,packageCount:packageCount??prefs.packageCount});
  const doc=new jsPDF({unit:'pt',format:[288,432],compress:true});
  const design=normalizeLabelDesign(labelDesign);
  const groups=distributeOrderLines(source);
  const pages=groups.flatMap((group,g)=>Array.from({length:Math.max(1,Math.ceil(group.lines.length/2))},(_,part)=>({group,groupNumber:g+1,part,partCount:Math.max(1,Math.ceil(group.lines.length/2))})));
+ const totalPages=cfg.packageCount*pages.length;
+ if(pageIndex!==null&&(!Number.isSafeInteger(pageIndex)||pageIndex<0||pageIndex>=totalPages))throw Error('Invalid 4x6 label page index.');
  for(let copy=0;copy<cfg.packageCount;copy++)for(let i=0;i<pages.length;i++){
+  if(pageIndex!==null&&copy*pages.length+i!==pageIndex)continue;
   const {group,groupNumber,part,partCount}=pages[i];
   const info=deriveDistributionFields(group,labelFields);
   const determined=distributionLabelRows(group,labelFields,design);
   const fields=determined.rows.slice(0,7).map(row=>[row.label,row.value]);
-  if(i||copy)doc.addPage([288,432]);
+  if((i||copy)&&pageIndex===null)doc.addPage([288,432]);
   doc.setFillColor(255);doc.rect(0,0,288,432,'F');
   doc.setFillColor(21,34,42);doc.rect(0,0,288,76,'F');
   if(logoData&&design.showLogo){

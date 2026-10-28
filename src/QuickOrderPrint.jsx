@@ -134,6 +134,21 @@ export default function QuickOrderPrint({jobId,onClose}){
    if(unavailable.length)throw Error('Cannot queue: '+unavailable.map(key=>key+(blocked(key)?' — '+blocked(key):' — printer queue unavailable')).join('; ')+'. Use preview or configure printer routing.');
    for(const key of currentSelected){
     const pdf=await makeDocument(key);
+    if(key==='labels'){
+     const count=pdf.getNumberOfPages();
+     const args={source,job,travelers,origin:window.location.origin,prefs,labelDesign:design(),labelFields,logoData:await logoData()};
+     for(let index=0;index<count;index++){
+      const one=createDistributionLabelsPdf({...args,pageIndex:index});
+      if(one.getNumberOfPages()!==1)throw Error('Label page '+(index+1)+' could not be separated.');
+      const response=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{method:'POST',body:JSON.stringify({
+       action:'enqueue',jobId:job.id,documentKind:'packing_labels',idempotencyKey:crypto.randomUUID(),pdfBase64:pdfBase64(one)
+      })});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||!data.success)throw Error('Label '+(index+1)+'/'+count+' not queued: '+(data.error||'Thermal queue rejected label'));
+      sent.push('label '+(index+1)+'/'+count+' (queue '+data.id+')');
+     }
+     continue;
+    }
     const documentKind=key.startsWith('traveler:')?'production_packet':{customer:'customer_invoice',shop:'shop_invoice',labels:'packing_labels'}[key];
     const response=await authenticatedFunctionFetch('/.netlify/functions/print-dispatch',{method:'POST',body:JSON.stringify({
      action:'enqueue',jobId:job.id,documentKind,idempotencyKey:crypto.randomUUID(),pdfBase64:pdfBase64(pdf)
