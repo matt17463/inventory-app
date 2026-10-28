@@ -5,7 +5,9 @@ export const DEFAULT_PRINT_PREFS = Object.freeze({
   showSku: true, showPersonalization: true, showCustomerPhone: false,
   labelShowItems: true, labelShowOrder: true, labelShowQR: false,
   productionPacket: false, packageCount: 1,
-  businessName:'Skilled Crafting',businessWebsite:'skilledcrafting.com',businessPhone:'',businessAddress:'',
+  businessName:'Skilled Crafting',businessWebsite:'skilledcrafting.com',businessPhone:'',businessAddress:'',labelQuestions:'',
+  customerInvoiceFields:['invoiceDate','businessAddress','businessWebsite','businessPhone','billingAddress','shippingAddress','paymentMethod','orderStatus','customerPhone','sku','personalization','orderNotes'],
+  shopInvoiceFields:['invoiceDate','businessAddress','businessWebsite','businessPhone','billingAddress','shippingAddress','paymentMethod','orderStatus','customerPhone','sku','personalization','orderNotes','productionInfo'],
 });
 const str = v => String(v ?? '').replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<')
   .replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#039;/g,"'").trim();
@@ -39,6 +41,7 @@ export function normalizeWooPrintSource(order){
     source:'woocommerce',sourceId:String(order.id),reference:str(order.number||order.id),
     date:str(order.date_created),customerName:nameFromAddress(order.billing)||nameFromAddress(shippedTo)||'Customer',
     customerEmail:str(order.billing?.email),customerPhone:str(order.billing?.phone),
+    billingAddress:formatAddress(order.billing||{}),paymentMethod:str(order.payment_method_title||order.payment_method),
     shipName:nameFromAddress(shippedTo)||nameFromAddress(order.billing)||'',
     shipAddress:formatAddress(Object.values(shippedTo).some(Boolean)?shippedTo:order.billing),
     currency:str(order.currency)||'USD',status:str(order.status),
@@ -69,6 +72,7 @@ export function normalizeManualPrintSource(order,items){
     date:str(order.created_at),customerName:str(order.customer_name||order.organization)||'Customer',
     customerEmail:str(order.customer_email),customerPhone:str(order.customer_phone),
     shipName:str(order.customer_name||order.organization),shipAddress:str(order.shipping_address||order.delivery_address),
+    billingAddress:str(order.billing_address||order.customer_address||''),paymentMethod:str(order.payment_method||''),
     currency:'USD',status:str(order.status||'manual invoice'),
     paid:order.payment_received===true,financialVerified:false,
     subtotal,discount:amount(order.discount_amount),shipping:amount(order.shipping_amount),
@@ -78,6 +82,8 @@ export function normalizeManualPrintSource(order,items){
     warnings:['Financial amounts and payment have NOT been reconciled against QuickBooks. Print copies are DRAFT until source invoice and balances are verified.'],
   };
 }
+export const INVOICE_FIELDS=[['invoiceDate','Invoice date'],['businessAddress','Business address'],['businessWebsite','Business website'],['businessPhone','Business phone'],['billingAddress','Billing address'],['shippingAddress','Shipping address'],['paymentMethod','Payment method'],['orderStatus','Order / payment status'],['customerPhone','Customer phone'],['sku','Product SKUs'],['personalization','Item personalization'],['orderNotes','Customer order notes'],['productionInfo','Internal production notes / QR']];
+const normalizeInvoiceFields=(input,fallback)=>Array.isArray(input)?[...new Set(input.filter(v=>INVOICE_FIELDS.some(([key])=>key===v)))]:[...fallback];
 export function normalizePrintPrefs(v={}){
   const clamp=(value,fallback,min,max)=>{
     const n=Number(value);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):fallback;
@@ -96,6 +102,9 @@ export function normalizePrintPrefs(v={}){
     businessWebsite:str(v.businessWebsite||defaults.businessWebsite).slice(0,120),
     businessPhone:str(v.businessPhone||'').slice(0,65),
     businessAddress:str(v.businessAddress||'').slice(0,260),
+    labelQuestions:str(v.labelQuestions||'').slice(0,160),
+    customerInvoiceFields:normalizeInvoiceFields(v.customerInvoiceFields,defaults.customerInvoiceFields),
+    shopInvoiceFields:normalizeInvoiceFields(v.shopInvoiceFields,defaults.shopInvoiceFields),
   };
 }
 export function printWarnings(source,job={},travelers=[]){

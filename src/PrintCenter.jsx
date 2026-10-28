@@ -4,7 +4,7 @@ import {supabase} from './supabaseClient';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {signedAssetUrl} from './lib/mockupStudioApi';
-import {DEFAULT_PRINT_PREFS,normalizePrintPrefs,printWarnings,canPrintCustomerCopy} from './lib/printModel';
+import {DEFAULT_PRINT_PREFS,INVOICE_FIELDS,normalizePrintPrefs,printWarnings,canPrintCustomerCopy} from './lib/printModel';
 import {createInvoicePdf,createInvoicePairPdf,createDistributionLabelsPdf,createProductionPacketPdf} from './lib/printPacketPdf';
 import PrintIntegrations from './PrintIntegrations';
 import QuickBooksConnection from './QuickBooksConnection';
@@ -213,6 +213,8 @@ export default function PrintCenter(){
      <label>Business address (street, city, state and ZIP)<input type="text" maxLength={260} value={prefs.businessAddress} onChange={e=>setPref("businessAddress",e.target.value)} placeholder="Enter verified business mailing address"/></label>
      <label>Business phone<input type="tel" maxLength={65} value={prefs.businessPhone} onChange={e=>setPref("businessPhone",e.target.value)} placeholder="Enter published shop phone"/></label>
      <label>Business website<input type="text" maxLength={120} value={prefs.businessWebsite} onChange={e=>setPref("businessWebsite",e.target.value)}/></label>
+     <label>4×6 questions contact (phone, email or website)<input type="text" maxLength={160} value={prefs.labelQuestions} placeholder="e.g. Questions? 253-432-0505" onChange={e=>setPref('labelQuestions',e.target.value)}/></label>
+     {[['customerInvoiceFields','Customer invoice'],['shopInvoiceFields','Internal shop invoice']].map(([field,title])=><fieldset key={field} style={{display:'flex',gap:12,flexWrap:'wrap',gridColumn:'1 / -1',padding:12,border:'1px solid #c9d6df',borderRadius:8}}><legend><strong>{title} — fields to show</strong></legend>{INVOICE_FIELDS.filter(([key])=>field==='shopInvoiceFields'||key!=='productionInfo').map(([key,label])=><label key={key} className="sc-print-check"><input type="checkbox" checked={prefs[field].includes(key)} onChange={e=>setPref(field,e.target.checked?[...prefs[field],key]:prefs[field].filter(x=>x!==key))}/>{label}</label>)}</fieldset>)}
      <label>Invoice heading size (pt)<input type="number" min="13" max="28" step="1" value={prefs.invoiceHeading} onChange={e=>setPref('invoiceHeading',e.target.value)}/></label>
      <label>Thermal label recipient font (pt)<input type="number" min="9" max="22" step="1" value={prefs.labelFont} onChange={e=>setPref('labelFont',e.target.value)}/></label>
      <label>Number of packages (1–100)<input type="number" min="1" max="100" step="1" value={prefs.packageCount} onChange={e=>setPref('packageCount',e.target.value)}/></label>

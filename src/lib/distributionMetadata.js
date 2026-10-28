@@ -61,3 +61,22 @@ export function distributionLabelRows(source,overrides={},design={}){
  });
  return {rows:[...entries,...extras],totalAvailable:entries.length+extras.length};
 }
+
+export function distributeOrderLines(source){
+ const lines=source?.lines||[];
+ if(!lines.length)return [{...source,lines:[]}];
+ const identity=line=>deriveDistributionFields({lines:[line]});
+ const groups=new Map();
+ const unassigned=[];
+ for(const line of lines){
+  const f=identity(line);
+  const key=[f.student,f.teacher,f.grade].filter(Boolean).join('|').toLowerCase();
+  if(!key){unassigned.push(line);continue;}
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(line);
+ }
+ if(groups.size===0)return [{...source,lines}];
+ if(groups.size===1){groups.values().next().value.push(...unassigned)}
+ else if(unassigned.length)groups.set('unassigned',unassigned);
+ return [...groups.values()].map(groupLines=>({...source,lines:groupLines}));
+}
