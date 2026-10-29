@@ -4,6 +4,16 @@ import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { supabase } from './supabaseClient';
 
 const TABLE='sc_creative_knowledge_documents';
+const STARTER_SOURCES=[
+  {title:'Application guide and workflow training',url:'/application-guide',terms:'training application guide workflows orders printing production'},
+  {title:'Device and product recipe library',url:'/device-product-library',terms:'xtool omni uv laser engraving golf balls glass slate coins hat patches'},
+  {title:'Material settings',url:'/material-settings',terms:'roland bn2 media dtf htv sublimation heat press settings'},
+  {title:'Equipment and maintenance center',url:'/equipment-center',terms:'maintenance printers raspberry pi home assistant workshop equipment'},
+  {title:'DTF Prep Studio',url:'/dtf-studio',terms:'artwork transparency background white halo halftone print export'},
+  {title:'Mockup Studio',url:'/mockup-studio',terms:'approved proofs mockups garment decoration customer revisions'},
+  {title:'Product and Event Center',url:'/product-event-center',terms:'wedding coach recognition proposal packages corporate gifts'}
+];
+
 const STAFF_UPLOAD=['admin','manager'];
 const CATEGORIES=['general','machine manual','artwork','material recipe','operations','business policy','training'];
 function safeLink(url){try{const x=new URL(url);return ['https:','http:'].includes(x.protocol)?x.href:null;}catch{return null;}}
@@ -18,6 +28,7 @@ export default function CreativeKnowledgeHub(){
   const [rows,setRows]=useState([]),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
   const [error,setError]=useState(''),[notice,setNotice]=useState('');
   const [selected,setSelected]=useState(null);
+  const starterMatches=STARTER_SOURCES.filter(x=>!query.trim()||query.toLowerCase().trim().split(/\s+/).some(term=>(x.title+' '+x.terms).toLowerCase().includes(term)));
   const load=useCallback(async(q='')=>{
     setLoading(true);setError('');
     try{
@@ -57,6 +68,7 @@ export default function CreativeKnowledgeHub(){
       <button type="submit" disabled={loading}>{loading?'Searching…':'Search library'}</button>
     </form>
     {error&&<p className="cos-warning" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+    <h4>Saved knowledge documents</h4>
     <div className="cos-results">{rows.map(item=><article key={item.id} className="cos-result">
       <strong>{item.title}</strong><small>{item.category} · Updated {new Date(item.updated_at).toLocaleDateString()}</small>
       <span>{excerpt(item.body,query)}</span>
@@ -65,7 +77,9 @@ export default function CreativeKnowledgeHub(){
     </article>)}
       {!loading&&!error&&!rows.length&&<p>No indexed documents found. An admin or manager can add the first approved document below.</p>}
     </div>
-    <div className="cos-links"><Link to="/application-guide">Application guide →</Link><Link to="/device-product-library">Device recipe library →</Link><Link to="/material-settings">Material settings →</Link></div>
+    <h4>Existing application sources</h4>
+    <p>These entries point to existing live workspaces; they are not indexed document text or AI-generated answers.</p>
+    <div className="cos-results">{starterMatches.map(item=><Link key={item.url} className="cos-result" to={item.url}><strong>{item.title}</strong><span>Open verified source within Skilled Crafting</span><small>Open workspace →</small></Link>)}{starterMatches.length===0&&<p>No matching existing workspaces. Try a different term or add a reference document.</p>}</div>
     {canUpload&&<form className="cos-knowledge-editor" onSubmit={save}>
       <h3>Add approved reference</h3><p>Only upload information appropriate for all authorized staff. Do not add confidential probation, personal, or restricted client documents to this shared business library.</p>
       <label className="cos-field">Import text or Markdown file<input type="file" accept=".txt,.md,text/plain,text/markdown" onChange={attachFile}/></label>
