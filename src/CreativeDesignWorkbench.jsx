@@ -58,7 +58,7 @@ function draw(ctx,bitmap,values){
 export default function CreativeDesignWorkbench(){
   const canvas=useRef(null),fileRef=useRef(null),bitmapRef=useRef(null),imageUrl=useRef('');
   const [values,setValues]=useState({item:'tee',color:'#1c222b',scale:1,x:.5,y:.49,caption:''});
-  const [fileName,setFileName]=useState(''),[error,setError]=useState(''),[pointer,setPointer]=useState(false);
+  const [fileName,setFileName]=useState(''),[file,setFile]=useState(null),[error,setError]=useState(''),[pointer,setPointer]=useState(false);
   const [projectName,setProjectName]=useState(''),[customerName,setCustomerName]=useState('');
   const [saving,setSaving]=useState(false),[savedProject,setSavedProject]=useState('');
   useEffect(()=>{const ctx=canvas.current?.getContext('2d');if(ctx)draw(ctx,bitmapRef.current,values);},[values,fileName]);
@@ -68,7 +68,7 @@ export default function CreativeDesignWorkbench(){
     const file=event.target.files?.[0];if(!file)return;
     setError('');
     if(!['image/png','image/webp','image/jpeg'].includes(file.type)||file.size>12*1024*1024){setError('Choose a PNG, JPEG or WebP image under 12 MB.');return;}
-    setSavedProject('');
+    setSavedProject('');setFile(file);
     const next=URL.createObjectURL(file);
     try{const img=new Image();img.src=next;await img.decode();
       if(img.width*img.height>24000000)throw Error('Maximum source resolution is 24 megapixels.');
