@@ -1,4 +1,5 @@
 import { authorizeEmployee, jsonResponse, auditFunctionSecurity } from './_shared/security.js';
+import {aiFailure} from './_shared/aiDiagnostics.js';
 
 const EQUIPMENT = new Set(['mopa_fiber','xtool_s1','xtool_p2','xtool_omni','sawgrass_sg500','heat_press','sublimation_press']);
 const OPERATIONS = new Set(['color_engrave','etch','score','cut','engrave','uv_flat','uv_texture','uv_relief','uv_varnish','heat_transfer','sublimation']);
@@ -63,7 +64,7 @@ export async function handler(event) {
           input:task,max_output_tokens:1800
         }),signal:AbortSignal.timeout(95000)
       });
-      if(!response.ok)return bodyResponse(502,{message:'Live manufacturer research is unavailable. Refer to saved approved recipes.'},event);
+      if(!response.ok)return bodyResponse(502,{message:await aiFailure(response,'Manufacturer research')},event);
       const data=await response.json();
       const messages=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]);
       const report=messages.map(x=>x.text||'').join('\n').slice(0,14000);
@@ -103,7 +104,7 @@ export async function handler(event) {
       }),
       signal:AbortSignal.timeout(40000)
     });
-    if(!response.ok)return bodyResponse(502,{message:'Settings AI is temporarily unavailable.'},event);
+    if(!response.ok)return bodyResponse(502,{message:await aiFailure(response,'Settings AI')},event);
     const result=await response.json();
     const suggestion=JSON.parse(result?.choices?.[0]?.message?.content||'{}');
     if(!suggestion||typeof suggestion!=='object'||Array.isArray(suggestion))throw Error('Malformed model output');
