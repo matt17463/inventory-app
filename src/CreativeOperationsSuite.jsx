@@ -16,16 +16,6 @@ const MODULES = [
   { id: 'packages', name: 'AI Product & Package Creator', eyebrow: '04 · Proposals', summary: 'Build and price event packages with transparent local math, then continue in Product Development.', links: [['Product & Event Center', '/product-event-center'], ['Production Estimator', '/production-estimator'], ['Quote Builder', '/quote-builder'], ['Manufacturing Recipes', '/manufacturing-recipes']] },
   { id: 'knowledge', name: 'Knowledge Assistant', eyebrow: '05 · Searchable resources', summary: 'Search the curated starting index of existing manuals and workspaces. Answers link to sources.', links: [['Application Guide', '/application-guide'], ['Device Product Library', '/device-product-library'], ['Material Settings', '/material-settings'], ['Equipment Center', '/equipment-center'], ['Manufacturing Recipes', '/manufacturing-recipes']] },
 ];
-const KNOWLEDGE = [
-  { title: 'Application workflows and training', tags: 'onboarding work hub orders documentation printing', url: '/application-guide', description: 'Official in-app guide and training material.' },
-  { title: 'Equipment and printer setup', tags: 'xtool omni uv s1 p2 roland printer maintenance home assistant pi', url: '/equipment-center', description: 'Equipment records, integrations, and settings.' },
-  { title: 'Material settings and recipes', tags: 'dtf htv uv sublimation laser media temperature heat pressure dpi', url: '/material-settings', description: 'Production parameters; verify approved test results before use.' },
-  { title: 'Device and product recipes', tags: 'challenge coins stainless brass glass golf balls hat patch slate', url: '/device-product-library', description: 'Search production procedures by product or equipment.' },
-  { title: 'Artwork preparation and transparency', tags: 'remove background white halo alpha halftone cmyk 300 dpi', url: '/dtf-studio', description: 'DTF preparation, proofing, and exports.' },
-  { title: 'Customer artwork and mockups', tags: 'client graphics approvals revisions art mockup garment', url: '/mockup-studio', description: 'Existing graphic assets and proof projects.' },
-  { title: 'Event packages and product development', tags: 'wedding coach appreciation corporate recognition event packages price', url: '/product-event-center', description: 'Product testing, economics, event packages, and approvals.' },
-  { title: 'Daily production and blockers', tags: 'orders print travelers shortages priority jobs', url: '/command-center', description: 'Live operational summaries and quick links.' },
-];
 const CATALOG = {
   wedding: [{name:'Personalized glassware',qty:50,cost:5,price:14},{name:'Table markers',qty:10,cost:4,price:16},{name:'Keepsake sign',qty:1,cost:19,price:65}],
   coach: [{name:'Engraved plaque',qty:1,cost:16,price:55},{name:'Custom hoodie',qty:1,cost:22,price:52},{name:'Team keychains',qty:15,cost:2.5,price:8}],
