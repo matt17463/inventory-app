@@ -238,6 +238,7 @@ export default function DTFPrepStudio(){
   }
   async function prepareFull(){
     if(!bitmap)throw Error('Upload an image first.');
+    if(aiState==='Analyzing')throw Error('Wait for image analysis or switch to local editing before exporting.');
     // Preview-only channel isolation must never leak into an exported or saved file.
     return renderArtwork(bitmap,{...opts,channelView:'composite'});
   }
@@ -299,7 +300,7 @@ export default function DTFPrepStudio(){
         <p>Non-destructive production preparation · original artwork stays unchanged</p></div>
       <div className="dtf-head-actions">
         <Link to="/artwork-preflight">Basic preflight</Link><Link to="/client-graphics">Client graphics</Link>
-        <button onClick={downloadPng} disabled={!bitmap||busy}>↓ Export 300 PPI PNG</button>
+        <button onClick={downloadPng} disabled={!bitmap||busy||aiState==='Analyzing'}>↓ Export 300 PPI PNG</button>
       </div>
     </header>
     <div className="dtf-workspace">
@@ -459,10 +460,10 @@ export default function DTFPrepStudio(){
           </>}
         </Tuning>
         <Tuning title="Export and save revision">
-          <button onClick={downloadPng} disabled={!bitmap||busy}>Export transparent 300 PPI PNG</button>
+          <button onClick={downloadPng} disabled={!bitmap||busy||aiState==='Analyzing'}>Export transparent 300 PPI PNG</button>
           {field('Single-color silhouette vector fill',<input type="color" value={vectorColor} onChange={e=>setVectorColor(e.target.value)}/>)}
-          <button className="dtf-secondary" onClick={downloadVector} disabled={!bitmap||busy}>Export one-color SVG silhouette</button>
-          <button className="dtf-secondary" onClick={saveR2} disabled={!bitmap||!projectId||busy||Boolean(savedPrepared)}>{savedPrepared?'Revision saved in R2':'Save source + new derivative to R2'}</button>
+          <button className="dtf-secondary" onClick={downloadVector} disabled={!bitmap||busy||aiState==='Analyzing'}>Export one-color SVG silhouette</button>
+          <button className="dtf-secondary" onClick={saveR2} disabled={!bitmap||!projectId||busy||aiState==='Analyzing'||Boolean(savedPrepared)}>{savedPrepared?'Revision saved in R2':'Save source + new derivative to R2'}</button>
           <p className="dtf-note">Saving never replaces an approved production asset. Derived files are marked for review. PNG is RGB/RGBA; true ICC CMYK conversion and white-channel separation require RIP-specific workflows.</p>
           {savedPrepared&&<p className="dtf-good">Saved artwork revision <code>{savedPrepared.slice(0,8)}</code> · <Link to="/mockup-studio">Open project</Link></p>}
         </Tuning>

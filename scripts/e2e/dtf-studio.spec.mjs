@@ -27,6 +27,7 @@ test('source picks, protected regions, async review and faithful RGBA export',as
  await page.getByRole('button',{name:'Clear region points',exact:true}).click();await expect(page.getByLabel('Removal method',{exact:true})).toHaveValue('none');
  await page.getByLabel('Source interaction',{exact:true}).selectOption('remove');await page.getByLabel('AI intent',{exact:true}).selectOption('all');
  await page.getByRole('button',{name:'AI Remove Background',exact:true}).click();
+ await expect(page.getByRole('button',{name:'↓ Export 300 PPI PNG',exact:true})).toBeDisabled();
  await page.getByLabel('AI intent',{exact:true}).selectOption('keep');
  await expect(page.getByText('Settings changed while analysis ran. Keep editing locally or request a new preview.',{exact:true})).toBeVisible();
  await expect(page.getByLabel('Removal method',{exact:true})).toHaveValue('none');
