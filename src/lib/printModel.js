@@ -70,6 +70,7 @@ export function normalizeManualPrintSource(order,items){
   return {
     source:'quickbooks_manual',sourceId:String(order.id),reference:str(order.invoice_number||order.external_invoice_number)||'UNLINKED',
     date:str(order.created_at),customerName:str(order.customer_name||order.organization)||'Customer',
+    organizationName:str(order.organization),
     customerEmail:str(order.customer_email),customerPhone:str(order.customer_phone),
     shipName:str(order.customer_name||order.organization),shipAddress:str(order.shipping_address||order.delivery_address),
     billingAddress:str(order.billing_address||order.customer_address||''),paymentMethod:str(order.payment_method||''),

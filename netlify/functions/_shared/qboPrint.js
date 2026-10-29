@@ -134,8 +134,9 @@ export function reconcileQboInvoice(manual,invoice){
   .reduce((n,x)=>n+(amount(x.Amount)??0),0);
  const total=amount(invoice.TotalAmt),manualTotal=amount(manual.total),balance=amount(invoice.Balance);
  if(!doc||doc!==clean(manual.reference))warnings.push('QuickBooks invoice number does not match the linked manual order.');
- if(!customerId||!customerName||!nameKey(manual.customerName)||nameKey(customerName)!==nameKey(manual.customerName))
-  warnings.push('QuickBooks customer does not match the linked manual order. Reconcile the customer before printing.');
+ const expectedCustomers=[manual.customerName,manual.organizationName].map(nameKey).filter(Boolean);
+ if(!customerId||!customerName||!expectedCustomers.length||!expectedCustomers.includes(nameKey(customerName)))
+  warnings.push('QuickBooks customer does not match the linked manual order customer or organization. Reconcile the customer before printing.');
  if(total===null||manualTotal===null||Math.abs(total-manualTotal)>0.02)
   warnings.push('QuickBooks source total ('+(total===null?'missing':total.toFixed(2))+') differs from linked manual order total ('+
    (manualTotal===null?'missing':manualTotal.toFixed(2))+'). Reconcile the order before printing a customer copy.');
