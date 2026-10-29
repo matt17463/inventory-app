@@ -9,7 +9,7 @@ export const DISCOVERY_MACHINE_IDS=[
  'xtool_s1','xtool_p2','xtool_omni','roland_bn2','mopa_fiber','sawgrass_sg500','heat_press','sublimation_press'
 ];
 export const DISCOVERY_CATEGORIES=['Weddings & Events','Sports & Coaches','Business Branding','Personalized Gifts','Other'];
-export const cleanLeadText=(v,n=250)=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,n);
+export const cleanLeadText=(v,n=250)=>String(v??'').split('').map(ch=>ch.charCodeAt(0)<32||ch.charCodeAt(0)===127?' ':ch).join('').trim().slice(0,n);
 export const clamp100=(v)=>Math.round(Math.max(0,Math.min(100,Number.isFinite(Number(v))?Number(v):0)));
 export const normalizeLeadKey=(name)=>cleanLeadText(name,180).normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export function evidenceUrl(raw){
