@@ -70,6 +70,7 @@ export function readyForProduction(item,recipes){
  const recipe=(recipes||[]).find(r=>r.id===item.recipe_id);
  if(!recipe||recipe.status!=='approved')return {ok:false,reason:'Recipe has not been production approved.'};
  if(item.proof_status!=='approved')return {ok:false,reason:'Customer proof is not approved.'};
+ if(!String(item.approved_artwork_revision||'').trim())return {ok:false,reason:'Approved artwork revision is missing.'};
  return {ok:true,reason:'Recipe and proof are approved; verify materials, quantities and job link.'};
 }
 export function normalizeSourceUrl(value){
@@ -77,7 +78,7 @@ export function normalizeSourceUrl(value){
 }
 export function normalizeGuestNames(text,max=500){
  // Name import is local-only until explicitly attached to an event item; never assume comma = multiple people.
- return [...new Set(String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x.length>0&&x.length<=120))].slice(0,max);
+ return String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x.length>0&&x.length<=120).slice(0,max);
 }
 export function packageTemplate(id,guests=50,tables=10){
  const t=PACKAGE_TEMPLATES.find(p=>p.id===id);
