@@ -5,8 +5,9 @@ import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 import { MACHINE_TYPES, OPERATION_LABELS, machineFor, materialSafety, normalizeSettingsJson, formatRecipeCSV } from '../../src/lib/materialSettings.js';
 
-test('all seven equipment categories map to supported operations',()=>{
- assert.equal(MACHINE_TYPES.length,7);
+test('all eight equipment categories map to supported operations',()=>{
+ assert.equal(MACHINE_TYPES.length,8);
+ assert.ok(MACHINE_TYPES.some(x=>x.id==='sawgrass_sg500'));
  for (const machine of MACHINE_TYPES){
    assert.ok(machine.modes.length);
    assert.equal(machineFor(machine.id).id,machine.id);
