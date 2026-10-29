@@ -5,6 +5,7 @@ import { shouldSimulateWrites } from './lib/testingMode';
 import { supabase } from './supabaseClient';
 import { MACHINE_TYPES, machineFor } from './lib/materialSettings';
 import { OMNI_DEVICE, OMNI_SETUP, OMNI_PRODUCTS, OMNI_MAINTENANCE, OMNI_PROBLEMS, OMNI_OWNER_TIPS, daysUntilDue, searchOmniProducts } from './lib/omniKnowledge';
+import { omniStudioProfileFor, OMNI_STUDIO_SOURCES } from './lib/omniStudioProfiles';
 import './DeviceProductLibrary.css';
 
 const categories=['all',...new Set(OMNI_PRODUCTS.map(p=>p.category))];
@@ -46,6 +47,7 @@ export default function DeviceProductLibrary(){
  const products=useMemo(()=>machine!=='all'&&machine!=='xtool_omni'?[]:searchOmniProducts(search,category),[machine,search,category]);
  const matchingSaved=useMemo(()=>saved.filter(r=>(machine==='all'||r.machine_type===machine)&&[r.material_name,r.material_brand,r.material_sku,r.machine_model,r.machine_type,r.operation].join(' ').toLowerCase().includes(search.toLowerCase())),[saved,machine,search]);
  const product=OMNI_PRODUCTS.find(p=>p.id===selected)||OMNI_PRODUCTS[0];
+ const studio=omniStudioProfileFor(product.id);
  const lastMaintenance=Object.fromEntries(OMNI_MAINTENANCE.map(t=>[t.id,logs.find(x=>x.task_key===t.id)?.performed_at]));
  async function toggleSetup(key,checked){
   if(!cloudReady||!canWrite||busy)return;
@@ -126,9 +128,25 @@ export default function DeviceProductLibrary(){
      <dt>Fixture / accessory</dt><dd>{product.accessory}</dd><dt>Surface preparation</dt><dd>{product.primer}</dd>
      <dt>Print / ink strategy</dt><dd>{product.ink}</dd><dt>Evidence status</dt><dd>{product.status.replaceAll('-',' ')} — not production approved</dd>
     </dl>
+    {studio&&<section className="sc-studio-settings" aria-label="xTool Studio print parameters">
+     <h3>xTool Studio settings — {studio.title}</h3>
+     <p>{studio.summary}</p>
+     <p className="sc-device-warning"><strong>Verification:</strong> individual parameters are marked by evidence type below. A manufacturer example on another material is not a production-approved recipe for this product.</p>
+     <div className="sc-studio-table"><table><thead><tr><th>Studio parameter</th><th>Setting or starting trial</th><th>Evidence / source</th></tr></thead><tbody>
+      {studio.fields.map((f,i)=><tr key={i}>
+       <th scope="row">{f.label}</th>
+       <td><strong>{f.value}</strong>{f.detail&&<small>{f.detail}</small>}</td>
+       <td><span className={'sc-studio-evidence '+(f.evidence==='official example'?'sc-studio-official':'')}>{f.evidence}</span> {sourceLink(f.source,'Reference')}</td>
+      </tr>)}
+     </tbody></table></div>
+     <h4>Calibration and validation plan</h4>
+     <ol>{studio.matrix.map((s,i)=><li key={i}>{s}</li>)}</ol>
+     <p className="sc-device-muted">{studio.note}</p>
+     <p className="sc-device-muted">More owner parameters: in xTool Studio 1.8+, open <strong>Material setting → Community</strong>, filter for O1 Omni, print mode, material and process, inspect the owner's sample and click Apply only when the machine and blank match. {sourceLink(OMNI_STUDIO_SOURCES.studio,'Official xTool instructions')}</p>
+    </section>}
     <h3>Step-by-step process</h3><ol>{product.steps.map((step,i)=><li key={i}>{step}</li>)}</ol>
     <p>{sourceLink(product.source,'View original xTool reference')}</p>
-    <div className="sc-device-actions"><Link className="primary-button" to={'/material-settings?seed='+encodeURIComponent(product.id)}>Create unapproved test recipe</Link><button onClick={()=>{setSearch('');setCategory('all');setMachine('xtool_omni');setTab('troubleshooting');}}>Troubleshooting</button></div>
+    <div className="sc-device-actions">{studio?.settings?<Link className="primary-button" to={'/material-settings?seed='+encodeURIComponent(product.id)}>Load sourced settings into a draft</Link>:<p className="sc-device-warning">No automatic draft: an approved fixture and physical compatibility check are required first.</p>}<button onClick={()=>{setSearch('');setCategory('all');setMachine('xtool_omni');setTab('troubleshooting');}}>Troubleshooting</button></div>
    </section>}
   </div>}
   {tab==='setup'&&<section className="card sc-device-guide">
