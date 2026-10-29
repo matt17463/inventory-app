@@ -105,6 +105,39 @@ async function sales(db,body){
  return {status:'verified',qbo_invoice_id:result.qboInvoiceId,invoice_number:invoice,total:result.total,
   amount_paid:result.amountPaid,balance:result.balance};
 }
+
+async function importActualSales(db,body){
+ const {event:pkg,items}=await orderGates(db,body.event_id);
+ const op=String(body.opportunity_id||'');
+ const eligible=items.filter(x=>x.opportunity_id===op);
+ if(!eligible.length)throw Error('Link this saved product opportunity to event lines before importing actual sales.');
+ const invoice=String(body.invoice_number||'').trim();
+ const expectedTotal=Number(body.expected_total);
+ if(!invoice||!Number.isFinite(expectedTotal)||expectedTotal<0)throw Error('The exact linked invoice number and expected total are required.');
+ const reconciled=await verifiedQuickBooksInvoice(db,{reference:invoice,customerName:pkg.client_name,total:expectedTotal,currency:'USD'});
+ if(!reconciled.financialVerified)throw Error('QuickBooks reconciliation failed: '+reconciled.warnings.join('; '));
+ const sourceAmount=eligible.reduce((n,x)=>n+Number(x.quantity)*Number(x.unit_price),0);
+ if(sourceAmount<0||sourceAmount>reconciled.total+.02)throw Error('Event line subtotal exceeds verified invoice.');
+ const units=eligible.reduce((n,x)=>n+Number(x.quantity),0);
+ const existing=await db.from('sc_pdc_sales_imports').select('id').eq('source','quickbooks')
+  .eq('external_invoice_id',reconciled.qboInvoiceId).eq('opportunity_id',op).maybeSingle();
+ if(existing.error)throw Error(existing.error.message);
+ if(existing.data)return {status:'already_imported',id:existing.data.id,invoice_number:invoice};
+ if(!body.commit)return {status:'preview',invoice_number:invoice,opportunity_id:op,units,
+  gross_sales:sourceAmount,verified_invoice_total:reconciled.total,
+  notice:'Only explicitly mapped package revenue will be imported, never the whole invoice twice.'};
+ const invoiceDate=/^\d{4}-\d{2}-\d{2}$/.test(reconciled.date||'')?reconciled.date:new Date().toISOString().slice(0,10);
+ const row={opportunity_id:op,event_id:pkg.id,external_invoice_id:reconciled.qboInvoiceId,
+ invoice_number:invoice,invoice_date:invoiceDate,units,gross_sales:Number(sourceAmount.toFixed(2)),
+ verified_invoice_total:reconciled.total,verified_invoice_balance:reconciled.balance,
+ variable_cost:Number(eligible.reduce((n,x)=>n+Number(x.unit_cost)*Number(x.quantity),0).toFixed(2)),
+ snapshot:{status:reconciled.status,invoice_total:reconciled.total,paid:reconciled.amountPaid,
+   note:'Verified via read-only QBO invoice reconciliation and explicit event opportunity mapping.'}};
+ const write=await db.from('sc_pdc_sales_imports').insert(row).select('id').single();
+ if(write.error)throw Error('Import failed or already exists: '+write.error.message);
+ return {status:'imported',id:write.data.id,invoice_number:invoice,units,gross_sales:row.gross_sales};
+}
+
 export async function handler(event){
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);
  if(event.httpMethod!=='POST')return fail(405,'Use POST',event);
@@ -115,6 +148,7 @@ export async function handler(event){
   const action=String(body.action||'');
   if(action==='publish_existing_woo_product')return jsonResponse(200,{success:true,...await storefront(auth.supabase,body,event)},event);
   if(action==='create_verified_traveler')return jsonResponse(200,{success:true,...await traveler(auth.supabase,body,event)},event);
+  if(action==='import_verified_qbo_sales')return jsonResponse(200,{success:true,...await importActualSales(auth.supabase,body)},event);
   if(action==='create_qbo_event_invoice')return jsonResponse(200,{success:true,...await createInvoice(auth.supabase,body)},event);
   if(action==='verify_qbo_event_invoice')return jsonResponse(200,{success:true,...await sales(auth.supabase,body)},event);
   return fail(400,'Unsupported action',event);
