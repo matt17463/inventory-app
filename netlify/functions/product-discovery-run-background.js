@@ -1,6 +1,7 @@
 // Netlify Background Function: on-demand AI product discovery, no live orders or product publishing.
 // Netlify acknowledges 202 immediately; progress/results live in sc_pdc_discovery_runs.
 import {authorizeEmployee,auditFunctionSecurity} from './_shared/security.js';
+import {assertAIProvider,freeAIEnabled,freeUsageGuard,requireFreeKeys,freeResearch,retainRetrievedSources} from './_shared/freeResearch.js';
 import {aiFailure,saveDiscoverySources} from './_shared/aiDiagnostics.js';
 import {candidateScore,normalizeLeadKey,sanitizeDiscoveryLead,discoveryScore} from '../../src/lib/productDiscoveryScoring.js';
 
@@ -59,8 +60,9 @@ function parseCandidates(data){
  if(!Array.isArray(parsed.candidates))throw Error('AI returned no candidate list.');
  return parsed.candidates;
 }
-async function discover({focus,count,signals}){
- if(!process.env.OPENAI_API_KEY)throw Error('OPENAI_API_KEY is not configured on Netlify; connect a server-side key to enable live discovery.');
+async function discover({focus,count}){
+ if(freeAIEnabled())requireFreeKeys(true);
+ if(!freeAIEnabled()&&!process.env.OPENAI_API_KEY)throw Error('OPENAI_API_KEY is not configured on Netlify; connect a server-side key to enable live discovery.');
  const scopes={all:'sports recognition, weddings, events, business branding and gift products',
   weddings:'wedding signage, guest keepsakes and venue personalization',
   coaches:'coach appreciation, sports awards and team packages',
@@ -80,13 +82,16 @@ async function discover({focus,count,signals}){
   'Ideas must be unique and distinguishable; provide safe material caveats for food contact, UV adhesion,',
   'laser processing of unknown plastics/PVC, engraving coatings and rotary glassware.',
   'Be realistic about small-batch unit production and personalization, with an attainable supplier route.',
-  'Current internal CRM has '+JSON.stringify(signals.crmSegments.slice(0,12))+' customer segments (counts only).',
-  'Current open CRM pipeline categories: '+JSON.stringify(signals.activeOpportunities.slice(0,20))+'.',
-  'Imported local supplier catalog contains '+signals.supplierItems.length+' items. '+
-    (signals.supplierItems.length===0?'DO NOT CLAIM confirmed in-account supplier pricing or availability.':'Do not quote any confidential account unit cost.'),
-  'Known approved material recipe machine types: '+JSON.stringify([...new Set(signals.approvedRecipeTypes)])+'.',
+  'Do not claim confirmed in-account supplier pricing, stock, CRM demand or approved recipes. Internal matching is performed separately.',
   'No existing products or customers are being automatically sold to; this is a prospective research shortlist.'
  ].join('\n');
+ if(freeAIEnabled()){
+  const result=await freeResearch({prompt:instructions.replace('Use web_search','Use the supplied public search results'),
+   queries:[scopes[focus]+' personalized maker products manufacturer supplier blanks',scopes[focus]+' personalized product ideas marketplace community'],
+   schema:responseSchema,maxOutputTokens:Math.min(9000,count*1300+1000),timeoutMs:140000});
+  const parsed=parseCandidates({output_text:result.text});
+  return retainRetrievedSources(parsed,result.references);
+ }
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);
  try{
   const api=await fetch('https://api.openai.com/v1/responses',{method:'POST',signal:controller.signal,
@@ -113,6 +118,7 @@ export async function handler(event){
  const db=auth.supabase;
  let id,acquired=false,saved=0,skipped=0,found=0;
  try{
+  assertAIProvider();
   const body=JSON.parse(event.body||'{}');id=String(body.run_id||'');
   if(!/^[a-f0-9-]{36}$/i.test(id))throw Error('Valid discovery run ID required.');
   const read=await db.from('sc_pdc_discovery_runs').select('*').eq('id',id).eq('created_by',auth.user.id).single();
@@ -128,10 +134,11 @@ export async function handler(event){
     message:'Researching public sources and matching internal CRM/supplier signals…'}).eq('id',id).eq('status','queued').select('id').maybeSingle();
   if(lock.error||!lock.data)return {statusCode:200};
   acquired=true;
+  if(freeAIEnabled())await freeUsageGuard(db,auth.user.id);
   const signals=await loadSignals(db);
   await update(db,id,{crm_signals:{segments:signals.crmSegments,opportunities_considered:signals.activeOpportunities.length},
    supplier_signals:{imported_rows:signals.supplierItems.length,approved_recipe_machine_types:[...new Set(signals.approvedRecipeTypes)]}});
-  const raw=await discover({focus:run.focus,count:run.requested_count,signals});
+  const raw=await discover({focus:run.focus,count:run.requested_count});
   found=raw.length;
   const seen=new Set(signals.existingKeys);
   for(const candidate of raw.slice(0,run.requested_count)){

@@ -15,8 +15,8 @@ The Discover and save products action is an asynchronous, employee-authenticated
 
 ## Grounding and privacy
 
-- The research request sends only **CRM segment names and aggregate account counts**, plus generic active opportunity titles/stages, to the AI model. It does **not** send customer contact information, accounts' individual names, customer order details, confidential supplier costs, or QuickBooks records.
-- Product research uses public web_search references and the configured OpenAI Responses API model; references are stored as **unverified**.
+- CRM segments, pipeline titles, supplier costs and approved-recipe details stay server-side for matching. They are not sent to either AI provider. Free-provider material requests also omit free-form notes and user reference links; keep product/material identity fields public and generic.
+- Free mode uses Tavily basic public searches, then Gemini structured generation. Discovery accepts only source URLs actually returned by search, with search-result titles. Legacy OpenAI mode remains an explicit configuration choice. References are always **unverified**.
 - Supplier comparisons use already imported `supplier_catalog_items`; existing catalog entries are matched against candidate keywords and styles, with actual shop unit costs included only in the protected app dashboard.
 - If there are no imported supplier items or CRM opportunities, the interface clearly reports missing evidence. It never invents wholesale prices or direct customer demand.
 - A run with missing citations, unsupported machines, or duplicate names will not save invalid suggestions.
@@ -34,7 +34,14 @@ The Discover and save products action is an asynchronous, employee-authenticated
 
 ## Hosting requirements
 
-Netlify must have:
+For free mode, use a free-tier Google AI project and Tavily Researcher plan with billing/automatic recharge disabled. Netlify must have:
+- `SC_AI_PROVIDER=gemini_tavily`: explicit activation, no automatic fallback to OpenAI.
+- `GEMINI_API_KEY` and `TAVILY_API_KEY`: secret server-only Production variables including Functions scope.
+- `GEMINI_RESEARCH_MODEL` (optional): defaults to `gemini-3.5-flash-lite`. Gemini 2.5 models are allowed only if the account has legacy access; no paid-only models or Google Search grounding tools are requested.
+
+Free mode makes at most two basic Tavily searches per research call (one for manufacturer research), and one bounded Gemini generation. It has a best-effort 20-request/employee/hour guard based on server-side authorization records; provider quotas remain authoritative. A quota error stops without retries or fallback. An API key from a paid project can still incur provider charges: only use free-tier projects for a no-charge deployment. Tavily search results are untrusted evidence, not instructions. Gemini truncation/blocked output is rejected.
+
+Legacy mode (`SC_AI_PROVIDER` unset or `openai`) uses:
 - `OPENAI_API_KEY`: server-only OpenAI API credential with Responses API and web search access.
 - `OPENAI_PRODUCT_RESEARCH_MODEL` (optional): defaults to `gpt-4.1`.
 - `SUPABASE_URL` / `VITE_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` used by existing server-side employee authorization. Never expose service role keys in Vite/browser environment.
@@ -44,11 +51,11 @@ Netlify must have:
 
 ## Known operational considerations
 
-Netlify background worker responses mean **job accepted**, not research finished. Check the saved run's status and error message. The structured model response depends on OpenAI model web-search support; failed/partial runs are visible but should not be represented as complete results. If no candidates are saved, inspect missing citations, duplicates and errors, then retry with a narrower focus.
+Netlify background worker responses mean **job accepted**, not research finished. Check the saved run's status and error message. The structured model response depends on the selected provider/model access; failed/partial runs are visible but should not be represented as complete results. If no candidates are saved, inspect missing citations, duplicates and errors, then retry with a narrower focus.
 
 ## Quality gates
 
 - `npm run test:product-center` covers opportunities, math, source validation, scoring, RLS and component wiring.
 - Existing manufacturing, material studio, customer-order, security and integration suites run under Product & Event Center Regression CI.
 - Lint and production build must pass before merge and Netlify production deployment.
-- Test a **non-billing discovery run** in an authenticated app account after production publication; confirm candidate sources, score readouts, and backend OpenAI key in Netlify logs.
+- Test a **non-billing discovery run** in an authenticated app account after production publication; confirm candidate sources, score readouts, and successful server-side provider access without printing keys in logs.
