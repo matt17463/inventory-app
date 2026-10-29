@@ -7,12 +7,13 @@ import {shouldSimulateWrites} from './lib/testingMode';
 import {STARTER_PRODUCTS,PACKAGE_TEMPLATES,EQUIPMENT,STAGES,
  opportunityScore,productEconomics,packageTotals,packageTemplate,readyForProduction,
  normalizeGuestNames,normalizeSourceUrl,currency} from './lib/productDevelopment';
+import ProductDiscoveryDashboard from './ProductDiscoveryDashboard';
 import './ProductDevelopmentCenter.css';
 
 const initialModel={units:24,sell_price:32,blank_cost:8,consumables:1,packaging:2,labor_minutes:10,labor_hourly_rate:24,machine_minutes:7,machine_hourly_rate:8,other_variable_cost:1,spoilage_rate_percent:5,channel_fee_percent:0,setup_cost:0};
 const clean=o=>String(o??'').trim();
 const month=()=>new Date().toISOString().slice(0,7)+'-01';
-const tabs=[['radar','01 · Opportunity Radar'],['recipes','02 · Recipe & Test Lab'],['economics','03 · Economics'],['events','04 · Event Packages'],['launch','05 · Launch & Performance']];
+const tabs=[['discovery','00 · AI Discovery'],['radar','01 · Opportunity Radar'],['recipes','02 · Recipe & Test Lab'],['economics','03 · Economics'],['events','04 · Event Packages'],['launch','05 · Launch & Performance']];
 function Field({label,value,onChange,type='text',min,step,choices,required=false,rows}) {
  return <label>{label}{choices?
   <select value={value??''} onChange={e=>onChange(e.target.value)}>{choices.map(o=>Array.isArray(o)?<option key={o[0]} value={o[0]}>{o[1]}</option>:<option key={o} value={o}>{o}</option>)}</select>:
@@ -26,7 +27,7 @@ export default function ProductDevelopmentCenter(){
  const canEdit=['admin','manager','marketing'].includes(role);
  const canTest=['admin','manager','operator'].includes(role);
  const canApprove=['admin','manager'].includes(role);
- const [tab,setTab]=useState('radar');
+ const [tab,setTab]=useState('discovery');
  const [opportunities,setOpportunities]=useState([]);
  const [recipes,setRecipes]=useState([]);
  const [sources,setSources]=useState([]);
@@ -276,7 +277,8 @@ export default function ProductDevelopmentCenter(){
    <button key={id} type="button" aria-selected={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</nav>
   {error&&<div className="pdc-error" role="alert">{error}</div>}
   {message&&<div className="pdc-success" role="status">{message}</div>}
-  {tab!=='events'&&<div className="pdc-layout">
+  {tab==='discovery'&&<ProductDiscoveryDashboard opportunities={opportunities} canDiscover={canEdit} onReload={load} onReview={id=>{setSelectedId(id);setTab('radar');}}/>}
+  {tab!=='events'&&tab!=='discovery'&&<div className="pdc-layout">
    <aside className="pdc-panel"><h2>Product opportunities</h2>
     <div className="pdc-toolbar"><input aria-label="Search products, equipment and audiences" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Search product or device"/></div>
     <div className="pdc-list">{filtered.map(p=><button key={p.id} type="button" aria-current={selectedId===p.id} onClick={()=>setSelectedId(p.id)}>

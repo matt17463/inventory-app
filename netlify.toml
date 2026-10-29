@@ -33,3 +33,8 @@ background = true
 
 [functions."supplier-confirmation-parse"]
   included_files = ["netlify/functions/_vendor/pdfjs/pdf.worker.mjs", "netlify/functions/_vendor/pdfjs/LICENSE"]
+
+# Web research runs can exceed normal function execution; Netlify acknowledges a job
+# while clients read RLS-protected progress from Supabase.
+[functions."product-discovery-run-background"]
+  background = true

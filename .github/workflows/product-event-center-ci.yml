@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'src/ProductDevelopmentCenter*'
+      - 'src/ProductDiscoveryDashboard*'
+      - 'src/lib/productDiscoveryScoring.js'
+      - 'scripts/tests/product-discovery-dashboard.test.mjs'
+      - 'netlify.toml'
       - 'src/lib/productDevelopment.js'
       - 'netlify/functions/product-event-*'
       - 'netlify/functions/_shared/qboPrint.js'

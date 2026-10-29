@@ -1,0 +1,29 @@
+.pdc-page .pdc-discovery{display:grid;gap:18px}
+.pdc-page .pdc-discovery-heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px}
+.pdc-page .pdc-discovery-heading>div{flex:1 1 220px;min-width:0}
+.pdc-page .pdc-discovery-heading h2{font-size:clamp(23px,2.5vw,30px);margin:8px 0}
+.pdc-page .pdc-discovery-heading h3{margin:8px 0;font-size:18px}
+.pdc-page .pdc-discovery-heading p{margin:6px 0;color:var(--pdc-muted);max-width:780px}
+.pdc-page .pdc-discovery-heading select{width:auto;max-width:100%;min-width:min(100%,190px)}
+.pdc-page .pdc-discovery-grid{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.5fr);align-items:start;gap:16px}
+.pdc-page .pdc-discovery-grid>.pdc-panel{min-width:0}
+.pdc-page .pdc-discovery-grid h3{margin:0 0 12px}
+.pdc-page .pdc-discovery-results{min-width:0}
+.pdc-page .pdc-discovery-candidates{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:14px;margin-top:16px}
+.pdc-page .pdc-discovery-candidate{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--pdc-surface-2);border:1px solid var(--pdc-border);border-radius:14px;min-width:0}
+.pdc-page .pdc-discovery-candidate>p{margin:0;line-height:1.55}
+.pdc-page .pdc-discovery-score{border-radius:12px;padding:8px 12px;background:var(--pdc-accent-soft);text-align:center;color:var(--pdc-text);min-width:92px}
+.pdc-page .pdc-discovery-score strong{display:block;font-size:26px}
+.pdc-page .pdc-discovery-score strong span{font-size:12px}
+.pdc-page .pdc-discovery-score small{font-size:11px}
+.pdc-page .pdc-discovery-breakdown{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.pdc-page .pdc-discovery-breakdown>div{border:1px solid var(--pdc-border);padding:7px;border-radius:8px;background:var(--pdc-surface);min-width:0}
+.pdc-page .pdc-discovery-breakdown span{display:block;font-size:11px;color:var(--pdc-muted);overflow-wrap:anywhere}
+.pdc-page .pdc-discovery-breakdown strong{font-size:16px}
+.pdc-page .pdc-discovery-evidence{font-size:12px}
+.pdc-page .pdc-discovery-evidence p{margin:4px 0;overflow-wrap:anywhere}
+.pdc-page .pdc-discovery-actions{margin-top:auto;display:flex;align-items:center;flex-wrap:wrap;gap:9px}
+.pdc-page .pdc-discovery-actions a{color:var(--pdc-link);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+.pdc-page .pdc-discovery-actions a:focus-visible{outline:3px solid var(--pdc-focus);outline-offset:3px}
+@media(max-width:860px){.pdc-page .pdc-discovery-grid{grid-template-columns:1fr}}
+@media(max-width:480px){.pdc-page .pdc-discovery-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}}
