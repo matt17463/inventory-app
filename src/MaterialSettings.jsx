@@ -6,7 +6,8 @@ import { shouldSimulateWrites } from './lib/testingMode';
 import { MACHINE_TYPES, SETTING_FIELDS, OPERATION_LABELS, formatRecipeCSV, machineFor, materialSafety, normalizeSettingsJson } from './lib/materialSettings';
 import './MaterialSettings.css';
 import { Link } from 'react-router-dom';
-import { OMNI_PRODUCTS, OMNI_DEVICE } from './lib/omniKnowledge';
+import { OMNI_PRODUCTS } from './lib/omniKnowledge';
+import { omniStudioDraftFor } from './lib/omniStudioProfiles';
 import RolandMediaLibrary from './RolandMediaLibrary';
 import { toBn2Draft } from './lib/rolandBn2Media';
 
@@ -66,16 +67,15 @@ export default function MaterialSettings(){
     const seed=OMNI_PRODUCTS.find(x=>x.id===params.get('seed'));
     const recipeId=params.get('recipe');
     if(seed){
-      const officialPreset=seed.id==='slate'?
-        {studio_mode:'UV flatbed / Flat',ink_white_mode:'White+Color',white_layers:2,color_layers:1}:
-        seed.id==='acrylic'?{studio_mode:'UV flatbed / Texture',target_relief_mm:0.6,texture_smoothness:1}:{};
-      setForm({...blank(),machine_type:'xtool_omni',machine_model:OMNI_DEVICE.name,
-        machine_configuration:OMNI_DEVICE.edition,operation:seed.operation,material_name:seed.name,
-        material_notes:seed.steps.join('\n'),source_type:['slate','acrylic'].includes(seed.id)?'manufacturer':'manual',
-        source_url:seed.source,safety_notes:seed.primer+'; '+seed.accessory,
-        settings:JSON.stringify(officialPreset,null,2)});
-      setCurrentTab('editor');
-      setMessage('Unapproved starter loaded from the device library. Confirm the exact blank and run a physical trial before manager approval.');
+      const seedDraft=omniStudioDraftFor(seed);
+      if(!seedDraft){
+        setMessage('This product has no supported xTool Studio printing recipe. Verify its fixture and substrate before creating a new manual experimental recipe.');
+        setCurrentTab('library');
+      }else{
+        setForm({...blank(),...seedDraft,settings:JSON.stringify(seedDraft.settings,null,2)});
+        setCurrentTab('editor');
+        setMessage('Manufacturer examples and proposed trials loaded into a draft, not a certified setting. Inspect each field evidence in the Device & Product Library; physical material testing and manager approval are mandatory.');
+      }
     } else if(recipeId && /^[0-9a-f-]{36}$/i.test(recipeId)){
       supabase.from('sc_material_recipes').select('*').eq('id',recipeId).single().then(({data,error})=>{
        if(!alive)return;
