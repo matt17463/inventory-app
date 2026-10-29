@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './CreativeOperationsSuite.css';
+import CreativeKnowledgeHub from './CreativeKnowledgeHub';
+import CreativeDesignWorkbench from './CreativeDesignWorkbench';
 
 const MODULES = [
   { id: 'command', name: 'Command Center', eyebrow: '01 · Operations', summary: 'Prioritize active work from existing production, purchasing, and equipment data.', links: [['Daily Command Center', '/command-center'], ['Work Hub', '/work-hub'], ['Equipment Center', '/equipment-center'], ['Order Risks', '/order-risk'], ['Print Center', '/print-center']] },
@@ -90,16 +92,6 @@ function PackageBuilder() {
     <button type="button" onClick={()=>{const text=['Draft '+type+' package',...items.map(x=>x.qty+' × '+x.name+' @ '+money(x.price)), 'Sales: '+money(revenue), 'Estimated costs: '+money(totals.cost),'Estimated contribution: '+money(profit),'DRAFT — verify labor, taxes, stock, waste, and customer approval.'].join('\n');navigator.clipboard?.writeText(text);}}>Copy draft package summary</button>
   </section>;
 }
-function KnowledgeSearch() {
-  const [query,setQuery]=useState('');
-  const entries=KNOWLEDGE.map(item=>({...item,score:query.toLowerCase().trim().split(/\s+/).filter(Boolean).reduce((n,t)=>n+((item.title+' '+item.tags+' '+item.description).toLowerCase().includes(t)?1:0),0)})).filter(e=>!query.trim()||e.score>0).sort((a,b)=>b.score-a.score);
-  return <section className="cos-card">
-    <h3>Source-linked knowledge finder</h3>
-    <p>This first-stage index searches verified application locations, not document contents. Full private-document indexing and local model answers are separate integrations.</p>
-    <label className="cos-field">Search topics<input type="search" placeholder="e.g. Omni UV, wedding packages, DTF background" value={query} onChange={e=>setQuery(e.target.value)}/></label>
-    <div className="cos-results">{entries.map(item=><Link key={item.url} className="cos-result" to={item.url}><strong>{item.title}</strong><span>{item.description}</span><small>Open source →</small></Link>)}{!entries.length&&<p>No matching topic. Try a device, workflow, or product name.</p>}</div>
-  </section>;
-}
 export default function CreativeOperationsSuite() {
   const [active,setActive]=useState('command');
   const module=MODULES.find(m=>m.id===active)||MODULES[0];
@@ -109,8 +101,8 @@ export default function CreativeOperationsSuite() {
     <section className="cos-card"><p className="eyebrow">{module.eyebrow}</p><h2>{module.name}</h2><p>{module.summary}</p><div className="cos-links">{module.links.map(([label,path])=><Link key={path} to={path}>{label} →</Link>)}</div></section>
     {active==='command'&&<section className="cos-card"><h3>Today's work, without duplicate dashboards</h3><p>Use the existing live Command Center for urgent jobs, blockers, QC and purchasing. The Equipment Center already holds machine records. This suite does not manufacture machine telemetry or pretend a disconnected device is online.</p></section>}
     {active==='artwork'&&<ArtworkInspect/>}
-    {active==='design'&&<section className="cos-card"><h3>Approval-first customer journey</h3><ol><li>Capture requirements through the existing customer order or artwork request.</li><li>Create a garment or product mockup in Mockup Studio.</li><li>Share proof through the existing customer-facing approval workflow.</li><li>Convert only approved specifications through quotes and order readiness checks.</li></ol><p>Public editing and live checkout remain within their existing controlled workflows; this hub does not bypass them.</p></section>}
+    {active==='design'&&<CreativeDesignWorkbench/>}
     {active==='packages'&&<PackageBuilder/>}
-    {active==='knowledge'&&<KnowledgeSearch/>}
+    {active==='knowledge'&&<CreativeKnowledgeHub/>}
   </main>;
 }
