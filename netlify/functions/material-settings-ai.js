@@ -94,19 +94,22 @@ export async function handler(event) {
       'Never suggest defeating interlocks, running unattended, unsafe coatings, or treating an AI output as verified.',
       'Close with instruction to print a small test coupon, inspect result, record material lot and physically approve.',
     ].join('\n');
-    const response=await fetch('https://api.openai.com/v1/chat/completions',{
+    // Use the same Responses endpoint as the working live research paths.
+    const response=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
       body:JSON.stringify({
         model:process.env.OPENAI_MATERIAL_SETTINGS_MODEL||'gpt-4.1-mini',
-        messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(requestContext)}],
-        response_format:{type:'json_object'},max_completion_tokens:1300
+        input:[{role:'system',content:system},{role:'user',content:JSON.stringify(requestContext)}],
+        text:{format:{type:'json_object'}},max_output_tokens:1300
       }),
       signal:AbortSignal.timeout(40000)
     });
     if(!response.ok)return bodyResponse(502,{message:await aiFailure(response,'Settings AI')},event);
     const result=await response.json();
-    const suggestion=JSON.parse(result?.choices?.[0]?.message?.content||'{}');
+    if(result.status==='incomplete')return bodyResponse(502,{message:'AI test plan was incomplete. Narrow the material/process request and retry.'},event);
+    const blocks=(result.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]);
+    const suggestion=JSON.parse(result.output_text||blocks.map(x=>x.text||'').join('\n')||'{}');
     if(!suggestion||typeof suggestion!=='object'||Array.isArray(suggestion))throw Error('Malformed model output');
     const output={
       summary:clip(suggestion.summary,1200),
