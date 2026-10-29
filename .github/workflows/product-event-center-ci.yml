@@ -1,0 +1,35 @@
+name: Product & Event Center Regression
+on:
+  pull_request:
+    paths:
+      - 'src/ProductDevelopmentCenter*'
+      - 'src/lib/productDevelopment.js'
+      - 'netlify/functions/product-event-*'
+      - 'netlify/functions/_shared/qboPrint.js'
+      - 'supabase/migrations/*product_event*'
+      - 'scripts/tests/product-event-center.test.mjs'
+      - 'package.json'
+      - '.github/workflows/product-event-center-ci.yml'
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Product Center unit tests
+        run: npm run test:product-center
+      - name: Existing manufacturing, material and order workflow suites
+        run: npm run test:material-studio && npm run test:workflow-first && npm run test:print-center && npm run test:marketing
+      - name: Existing security and integration checks
+        run: npm run test:security && npm run test:integrity && npm run test:certification
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build

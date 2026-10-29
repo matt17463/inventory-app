@@ -97,6 +97,7 @@ const SIMPLE_NAV = [
   ]},
   {id:'growth-simple',title:'Customers & Growth',icon:'👥',items:[
     {label:'Marketing & Customers',path:'/marketing'},
+    {label:'Product & Event Center',path:'/product-event-center'},
     {label:'Quotes',path:'/quote-builder'},
     {label:'Team Stores',path:'/team-stores'},
   ]},

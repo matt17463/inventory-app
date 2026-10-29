@@ -110,6 +110,7 @@ const ThemeSettings = lazy(() => import('./ThemeSettings'));
 const EquipmentCenter = lazy(() => import('./EquipmentCenter'));
 const MaterialSettings = lazy(() => import('./MaterialSettings'));
 const DeviceProductLibrary = lazy(() => import('./DeviceProductLibrary'));
+const ProductDevelopmentCenter = lazy(() => import('./ProductDevelopmentCenter'));
 const UVStudio = lazy(() => import('./UVStudio'));
 const MenuManager = lazy(() => import('./MenuManager'));
 const UserManagement = lazy(() => import('./UserManagement'));
@@ -142,6 +143,7 @@ function EmployeeRoutes() {
   const access=useContext(EmployeeAccessContext);
   if(access?.role==='marketing') return <Routes>
     <Route path="/marketing" element={<MarketingWorkspace />} />
+    <Route path="/product-event-center" element={<ProductDevelopmentCenter />} />
     <Route path="/dtf-studio" element={<DTFPrepStudio />} />
     <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
@@ -167,6 +169,7 @@ function EmployeeRoutes() {
       <Route path="/equipment-center" element={<EquipmentCenter />} />
       <Route path="/material-settings" element={<MaterialSettings />} />
        <Route path="/device-product-library" element={<DeviceProductLibrary />} />
+      <Route path="/product-event-center" element={<ProductDevelopmentCenter />} />
       <Route path="/uv-studio" element={<UVStudio />} />
       <Route path="/menu-manager" element={<MenuManager />} />
       <Route path="/user-management" element={<UserManagement />} />
