@@ -1,7 +1,7 @@
 import {authorizeEmployee,jsonResponse} from './_shared/security.js';
 import {wooRequest} from './_shared/mockupUtils.js';
 import {createVerifiedTraveler} from './_shared/verifiedTraveler.js';
-import {verifiedQuickBooksInvoice} from './_shared/qboPrint.js';
+import {verifiedQuickBooksInvoice,qboEventRequest} from './_shared/qboPrint.js';
 const id=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const fail=(code,message,event)=>jsonResponse(code,{success:false,message},event);
 async function requireEvent(db,eventId){
@@ -62,6 +62,37 @@ async function traveler(db,body,event){
  const travelerId=await createVerifiedTraveler(event,{jobId:job,itemIds,recipeVersionId:version});
  return {status:'created',traveler_id:travelerId,job_id:job};
 }
+
+async function createInvoice(db,body){
+ const {event:pkg,items}=await orderGates(db,body.event_id);
+ const customerId=id(body.qbo_customer_id);
+ if(!customerId)throw Error('Select the exact existing QuickBooks customer ID; no customer is guessed.');
+ if(!items.every(x=>Number(x.unit_price)>0))throw Error('Every package item must have a reviewed, nonzero unit price.');
+ const mappings=body.qbo_item_ids||{};
+ const lines=items.map(x=>{
+  const itemId=id(mappings[x.id]);
+  if(!itemId)throw Error('Map each package line to an existing QuickBooks service/product item.');
+  return {Description:(x.label+' — event '+pkg.name).slice(0,4000),Amount:Number((Number(x.quantity)*Number(x.unit_price)).toFixed(2)),
+   DetailType:'SalesItemLineDetail',SalesItemLineDetail:{ItemRef:{value:String(itemId)},Qty:x.quantity,UnitPrice:Number(x.unit_price)}};
+ });
+ const doc='SCE-'+pkg.id.replaceAll('-','').slice(0,16).toUpperCase();
+ const query="select * from Invoice where DocNumber = '"+doc+"' maxresults 2";
+ const found=await qboEventRequest(db,{path:'/query?query='+encodeURIComponent(query)+'&minorversion=75'});
+ const matches=found.QueryResponse?.Invoice||[];
+ if(matches.length>1)throw Error('Duplicate QuickBooks invoice numbers; review the account.');
+ if(matches.length===1)return {status:'already_exists',invoice_id:matches[0].Id,invoice_number:doc,total:matches[0].TotalAmt};
+ const amount=lines.reduce((n,x)=>n+x.Amount,0);
+ if(!body.commit)return {status:'preview',invoice_number:doc,customer_id:customerId,lines:lines.length,subtotal:amount,
+  notice:'QuickBooks sales tax must be calculated and verified using the configured QBO tax settings; preview is not an invoice.'};
+ const payload={DocNumber:doc,CustomerRef:{value:String(customerId)},Line:lines,
+  PrivateNote:('Skilled Crafting event package '+pkg.id+'; review taxes and payment terms before sending.').slice(0,4000)};
+ if(pkg.event_date)payload.DueDate=pkg.event_date;
+ const created=await qboEventRequest(db,{method:'POST',path:'/invoice?minorversion=75',body:payload});
+ if(!created.Invoice?.Id)throw Error('QuickBooks did not return an invoice ID; check QBO before retrying.');
+ return {status:'created_unsent',invoice_id:created.Invoice.Id,invoice_number:doc,total:created.Invoice.TotalAmt,
+  notice:'Invoice saved but not emailed. Verify tax treatment, customer and line amounts in QuickBooks before sending.'};
+}
+
 async function sales(db,body){
  // Imports only from an exact, linked QuickBooks invoice; never guesses which customer/record matches.
  const {event:pkg}=await orderGates(db,body.event_id);
@@ -84,6 +115,7 @@ export async function handler(event){
   const action=String(body.action||'');
   if(action==='publish_existing_woo_product')return jsonResponse(200,{success:true,...await storefront(auth.supabase,body,event)},event);
   if(action==='create_verified_traveler')return jsonResponse(200,{success:true,...await traveler(auth.supabase,body,event)},event);
+  if(action==='create_qbo_event_invoice')return jsonResponse(200,{success:true,...await createInvoice(auth.supabase,body)},event);
   if(action==='verify_qbo_event_invoice')return jsonResponse(200,{success:true,...await sales(auth.supabase,body)},event);
   return fail(400,'Unsupported action',event);
  }catch(e){return fail(422,e.message||'Automation failed',event);}
