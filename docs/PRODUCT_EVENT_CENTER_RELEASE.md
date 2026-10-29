@@ -54,3 +54,18 @@
 ## Known dependency
 
 The built-in on-demand research button requires \`OPENAI_API_KEY\` in Netlify server environment and a suitable approved model. Lack of key returns a clear message; source management, packages and economics still work. Search-provider responses can be slow or incomplete and must not be treated as manufacturer certifications.
+
+
+## Automation addendum — 2026-10-28
+The following Supabase migrations are applied: product_event_center_phases_1_5 and product_event_sales_imports. Anonymous access to sc_pdc_events was explicitly denied in a role test.
+Admin/manager operations are exposed through the employee-authenticated product-event-automation Netlify function.
+- publish_existing_woo_product publishes a validated, name-matched existing WooCommerce draft; the original mockup publisher still creates full products and variations.
+- create_qbo_event_invoice creates an unsent QBO invoice using explicit customer and item IDs, duplicate DocNumber query and approved event/proof/recipe gates. Verify QuickBooks taxes and payment terms before sending.
+- create_verified_traveler uses the linked open job, exact line IDs, approved manufacturing recipe and the existing traveler-artwork-preflight/verifiedTraveler path.
+- verify_qbo_event_invoice reconciles exact invoice number, customer, total and tax via the existing read-only helper.
+- import_verified_qbo_sales appends idempotent per-opportunity actual-sales records after QuickBooks reconciliation and event-line attribution.
+These are guarded user-initiated operations, not recurring background jobs. No automatic Woo catalog creation, QuickBooks customer lookup/matching, invoice emailing, Woo sales ingestion or automatic source-of-truth job linking is claimed.
+Existing material recipe approvals are currently zero: production gates must remain closed until physical tests are recorded and approved.
+Both Netlify preview builds showed success on the integrated branch. The separate GitHub Actions product regression, manufacturing/order suites, security tests, lint and build must be checked for completion.
+Existing Supabase security/performance advisors contain historical warnings; this release does not remediate unrelated database functions or policies.
+No live paid order or customer invoice was created during development. Production release should follow staged order, printer and finance acceptance.
