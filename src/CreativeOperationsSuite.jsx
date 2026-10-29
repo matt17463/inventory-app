@@ -4,6 +4,7 @@ import './CreativeOperationsSuite.css';
 import CreativeKnowledgeHub from './CreativeKnowledgeHub';
 import CreativeDesignWorkbench from './CreativeDesignWorkbench';
 import CreativeLocalAi from './CreativeLocalAi';
+import { computeDraftPackage } from './lib/creativePackageMath';
 
 const MODULES = [
   { id: 'command', name: 'Command Center', eyebrow: '01 · Operations', summary: 'Prioritize active work from existing production, purchasing, and equipment data.', links: [['Daily Command Center', '/command-center'], ['Work Hub', '/work-hub'], ['Equipment Center', '/equipment-center'], ['Order Risks', '/order-risk'], ['Print Center', '/print-center']] },
@@ -79,8 +80,8 @@ function PackageBuilder() {
   const [items,setItems]=useState(CATALOG.wedding);
   const [setup,setSetup]=useState(30);
   const [margin,setMargin]=useState(0);
-  const totals=useMemo(()=>items.reduce((a,v)=>({cost:a.cost+clamp(v.qty)*clamp(v.cost),revenue:a.revenue+clamp(v.qty)*clamp(v.price)}),{cost:clamp(setup),revenue:0}),[items,setup]);
-  const revenue=totals.revenue+clamp(margin),profit=revenue-totals.cost;
+  const totals=useMemo(()=>computeDraftPackage(items,setup,margin),[items,setup,margin]);
+  const revenue=totals.revenue,profit=totals.contribution;
   function switchType(v){setType(v);setItems(CATALOG[v].map(x=>({...x})));setMargin(0);}
   function update(i,key,value){setItems(current=>current.map((v,index)=>index===i?{...v,[key]:clamp(value)}:v));}
   return <section className="cos-card">
@@ -89,7 +90,7 @@ function PackageBuilder() {
     <label className="cos-field">Package template<select value={type} onChange={e=>switchType(e.target.value)}><option value="wedding">Wedding & event</option><option value="coach">Coach recognition</option><option value="business">Corporate gifts</option></select></label>
     <div className="cos-table-scroll"><table><thead><tr><th>Item</th><th>Quantity</th><th>Unit cost ($)</th><th>Unit price ($)</th></tr></thead><tbody>{items.map((v,i)=><tr key={v.name}><td>{v.name}</td>{['qty','cost','price'].map(key=><td key={key}><input aria-label={v.name+' '+key} type="number" min="0" step={key==='qty'?'1':'0.01'} value={v[key]} onChange={e=>update(i,key,e.target.value)}/></td>)}</tr>)}</tbody></table></div>
     <div className="cos-input-row"><label className="cos-field">Setup / overhead cost ($)<input type="number" min="0" value={setup} onChange={e=>setSetup(clamp(e.target.value))}/></label><label className="cos-field">Additional customer charge ($)<input type="number" min="0" value={margin} onChange={e=>setMargin(clamp(e.target.value))}/></label></div>
-    <div className="cos-metrics"><div><small>Projected sales</small><strong>{money(revenue)}</strong></div><div><small>Estimated direct + setup cost</small><strong>{money(totals.cost)}</strong></div><div><small>Estimated gross contribution</small><strong>{money(profit)}</strong></div><div><small>Estimated contribution margin</small><strong>{revenue?((100*profit/revenue).toFixed(1)+'%'):'—'}</strong></div></div>
+    <div className="cos-metrics"><div><small>Projected sales</small><strong>{money(revenue)}</strong></div><div><small>Estimated direct + setup cost</small><strong>{money(totals.cost)}</strong></div><div><small>Estimated gross contribution</small><strong>{money(profit)}</strong></div><div><small>Estimated contribution margin</small><strong>{revenue?(totals.contributionMargin.toFixed(1)+'%'):'—'}</strong></div></div>
     <button type="button" onClick={()=>{const text=['Draft '+type+' package',...items.map(x=>x.qty+' × '+x.name+' @ '+money(x.price)), 'Sales: '+money(revenue), 'Estimated costs: '+money(totals.cost),'Estimated contribution: '+money(profit),'DRAFT — verify labor, taxes, stock, waste, and customer approval.'].join('\n');navigator.clipboard?.writeText(text);}}>Copy draft package summary</button>
   </section>;
 }
