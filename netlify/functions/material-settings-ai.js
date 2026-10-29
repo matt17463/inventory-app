@@ -1,6 +1,6 @@
 import { authorizeEmployee, jsonResponse, auditFunctionSecurity } from './_shared/security.js';
 
-const EQUIPMENT = new Set(['mopa_fiber','xtool_s1','xtool_p2','xtool_omni','heat_press','sublimation_press']);
+const EQUIPMENT = new Set(['mopa_fiber','xtool_s1','xtool_p2','xtool_omni','sawgrass_sg500','heat_press','sublimation_press']);
 const OPERATIONS = new Set(['color_engrave','etch','score','cut','engrave','uv_flat','uv_texture','uv_relief','uv_varnish','heat_transfer','sublimation']);
 const LASERS = new Set(['mopa_fiber','xtool_s1','xtool_p2']);
 const DANGEROUS = /(?:^|\W)(?:pvc|polyvinyl chloride|vinyl|vinyl chloride|chlorinated plastic|unknown plastic|unidentified plastic)(?:$|\W)/i;
