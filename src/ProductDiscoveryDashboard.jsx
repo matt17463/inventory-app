@@ -86,7 +86,7 @@ export default function ProductDiscoveryDashboard({opportunities=[],onReview,onR
      <select value={focus} onChange={e=>setFocus(e.target.value)}>{DISCOVERY_FOCUSES.map(([id,label])=><option value={id} key={id}>{label}</option>)}</select>
     </label>
     <label>Number of candidates
-     <select value={quantity} onChange={e=>setQuantity(e.target.value)}>{[4,8,12,16].map(x=><option key={x} value={x}>{x} products</option>)}</select>
+     <select value={quantity} onChange={e=>setQuantity(e.target.value)}>{[4,8,12,16,20].map(x=><option key={x} value={x}>{x} products</option>)}</select>
     </label>
     <button className="pdc-primary" type="button" onClick={start} disabled={busy||inProgress||!canDiscover}>
      {inProgress?'Research in progress…':busy?'Submitting…':'Discover and save products'}
