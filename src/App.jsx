@@ -31,6 +31,7 @@ const CustomerPortalAdmin = lazy(() => import('./CustomerPortalAdmin'));
 const CustomerPortalPreview = lazy(() => import('./CustomerPortalPreview'));
 const CustomerReorderIntelligence = lazy(() => import('./CustomerReorderIntelligence'));
 const DailyCommandCenter = lazy(() => import('./DailyCommandCenter'));
+const CreativeOperationsSuite = lazy(() => import('./CreativeOperationsSuite'));
 const DeploymentHealth = lazy(() => import('./DeploymentHealth'));
 const EditBlankItems = lazy(() => import('./EditBlankItems'));
 const EmployeeTasks = lazy(() => import('./EmployeeTasks'));
@@ -144,6 +145,7 @@ function EmployeeRoutes() {
   if(access?.role==='marketing') return <Routes>
     <Route path="/marketing" element={<MarketingWorkspace />} />
     <Route path="/product-event-center" element={<ProductDevelopmentCenter />} />
+    <Route path="/creative-operations" element={<CreativeOperationsSuite />} />
     <Route path="/dtf-studio" element={<DTFPrepStudio />} />
     <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
@@ -170,6 +172,7 @@ function EmployeeRoutes() {
       <Route path="/material-settings" element={<MaterialSettings />} />
        <Route path="/device-product-library" element={<DeviceProductLibrary />} />
       <Route path="/product-event-center" element={<ProductDevelopmentCenter />} />
+      <Route path="/creative-operations" element={<CreativeOperationsSuite />} />
       <Route path="/uv-studio" element={<UVStudio />} />
       <Route path="/menu-manager" element={<MenuManager />} />
       <Route path="/user-management" element={<UserManagement />} />
