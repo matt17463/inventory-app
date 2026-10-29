@@ -350,7 +350,8 @@ export default function DTFPrepStudio(){
         </Tuning>
         <Tuning title="Remove background → Transparent PNG">
           <p className="dtf-note"><Link to="/creative-operations?tab=artwork">Use free on-device AI background removal →</Link> (no paid inference API; export the PNG and open it here for edge cleanup)</p>
-          <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>Optional Gemini cloud guidance (may incur API costs)</button>
+          <p className="dtf-note">Optional cloud method below: <strong>Google Gemini may incur API charges.</strong> Choose the free on-device link above to avoid paid AI inference.</p>
+          <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>AI Remove Background</button>
           {field('AI intent',<select value={aiIntent} onChange={e=>{revisionRef.current++;setAiIntent(e.target.value);}}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
           <p className="dtf-note">AI sends a thumbnail to Google Gemini for analysis when invoked. Google free-tier content may be used to improve its products. AI suggests regions; color-based masking keeps original artwork pixels. Photos and ambiguous white details may need correction. Review mask before apply is always enabled.</p>
           <p role="status">{aiState}</p>{aiState==='Analyzing'&&<p className="dtf-note">Detailed logos can take up to three minutes. Local editing stays available; changing the mask prevents an older AI result from replacing your edits.</p>}{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
