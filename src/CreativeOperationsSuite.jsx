@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import './CreativeOperationsSuite.css';
 import CreativeKnowledgeHub from './CreativeKnowledgeHub';
 import CreativeDesignWorkbench from './CreativeDesignWorkbench';
+import CreativeLocalAi from './CreativeLocalAi';
 
 const MODULES = [
   { id: 'command', name: 'Command Center', eyebrow: '01 · Operations', summary: 'Prioritize active work from existing production, purchasing, and equipment data.', links: [['Daily Command Center', '/command-center'], ['Work Hub', '/work-hub'], ['Equipment Center', '/equipment-center'], ['Order Risks', '/order-risk'], ['Print Center', '/print-center']] },
@@ -100,7 +101,7 @@ export default function CreativeOperationsSuite() {
     <nav className="cos-tabs" aria-label="Creative operations modules">{MODULES.map(m=><button type="button" key={m.id} className={active===m.id?'active':''} aria-pressed={active===m.id} onClick={()=>setActive(m.id)}>{m.name}</button>)}</nav>
     <section className="cos-card"><p className="eyebrow">{module.eyebrow}</p><h2>{module.name}</h2><p>{module.summary}</p><div className="cos-links">{module.links.map(([label,path])=><Link key={path} to={path}>{label} →</Link>)}</div></section>
     {active==='command'&&<section className="cos-card"><h3>Today's work, without duplicate dashboards</h3><p>Use the existing live Command Center for urgent jobs, blockers, QC and purchasing. The Equipment Center already holds machine records. This suite does not manufacture machine telemetry or pretend a disconnected device is online.</p></section>}
-    {active==='artwork'&&<ArtworkInspect/>}
+    {active==='artwork'&&<><CreativeLocalAi/><ArtworkInspect/></>}
     {active==='design'&&<CreativeDesignWorkbench/>}
     {active==='packages'&&<PackageBuilder/>}
     {active==='knowledge'&&<CreativeKnowledgeHub/>}
