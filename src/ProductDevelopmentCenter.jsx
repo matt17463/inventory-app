@@ -27,7 +27,7 @@ export default function ProductDevelopmentCenter(){
  const canEdit=['admin','manager','marketing'].includes(role);
  const canTest=['admin','manager','operator'].includes(role);
  const canApprove=['admin','manager'].includes(role);
- const [tab,setTab]=useState('discovery');
+ const [tab,setTab]=useState(()=>new URLSearchParams(window.location.search).has('event')?'events':'discovery');
  const [opportunities,setOpportunities]=useState([]);
  const [recipes,setRecipes]=useState([]);
  const [sources,setSources]=useState([]);
@@ -37,7 +37,7 @@ export default function ProductDevelopmentCenter(){
  const [launches,setLaunches]=useState([]);
  const [metrics,setMetrics]=useState([]);
  const [selectedId,setSelectedId]=useState(null);
- const [eventId,setEventId]=useState(null);
+ const [eventId,setEventId]=useState(()=>new URLSearchParams(window.location.search).get('event')||null);
  const [filter,setFilter]=useState('');
  const [message,setMessage]=useState('');
  const [error,setError]=useState('');
