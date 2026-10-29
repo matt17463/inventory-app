@@ -123,7 +123,7 @@ function PackageBuilder() {
 }
 export default function CreativeOperationsSuite() {
   const access=useContext(EmployeeAccessContext);
-  const [active,setActive]=useState('command');
+  const [active,setActive]=useState(()=>{const initial=new URLSearchParams(window.location.search).get('tab');return MODULES.some(item=>item.id===initial)?initial:'command';});
   const module=MODULES.find(m=>m.id===active)||MODULES[0];
   return <main className="page cos-page">
     <header className="cos-hero"><p className="eyebrow">Skilled Crafting · Unified Development Suite</p><h1>Creative Operations</h1><p>Five connected workspaces built around your current application. Existing workflow approvals, billing verification and production safety checks remain authoritative.</p><div className="cos-hero-pills"><span>Existing data & workflows</span><span>Local-first artwork</span><span>No paid AI required</span></div></header>
