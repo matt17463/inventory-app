@@ -53,6 +53,7 @@ export default function ProductDevelopmentCenter(){
  const [listingRef,setListingRef]=useState('');
  const [automate,setAutomate]=useState({woo_product_id:'',qbo_customer_id:'',qbo_item_ids:'',invoice_number:'',expected_total:'',opportunity_id:'',job_item_ids:'',recipe_version_id:''});
  const [automationResult,setAutomationResult]=useState(null);
+ const [existingJob,setExistingJob]=useState('');
  const [imports,setImports]=useState([]);
  const [performance,setPerformance]=useState({period_month:month(),units_sold:0,sales_revenue:0,total_variable_cost:0,scrapped_units:0,active_labor_minutes:0,machine_minutes:0,notes:''});
  const [costDraft,setCostDraft]=useState(initialModel);
@@ -174,7 +175,7 @@ export default function ProductDevelopmentCenter(){
    if(!canEdit)throw Error('Read-only role.');
    if(['production','fulfilled'].includes(currentEvent?.status))throw Error('Cannot edit items in an active production package.');
    const fields={label:clean(item.label),quantity:Number(item.quantity),unit_price:Number(item.unit_price)||0,
-     unit_cost:Number(item.unit_cost)||0,material_recipe_id:item.material_recipe_id||null,
+     unit_cost:Number(item.unit_cost)||0,opportunity_id:item.opportunity_id||null,material_recipe_id:item.material_recipe_id||null,
      proof_status:item.proof_status,approved_artwork_revision:clean(item.approved_artwork_revision),notes:item.notes||'',
      job_reference:item.job_reference||''};
    if(fields.proof_status==='approved'&&(!fields.approved_artwork_revision||!fields.material_recipe_id))
@@ -193,6 +194,19 @@ export default function ProductDevelopmentCenter(){
     personalization:values.map(name=>({name})),proof_status:'draft',approved_artwork_revision:''
    }).eq('id',item.id);
    if(dbError)throw dbError;await load();setNames('');setMessage(values.length+' names assigned to draft personalization. Request new customer proof.');
+  });
+ }
+
+ async function linkExistingJob(){
+  await run(async()=>{
+   if(!canApprove||!currentEvent)throw Error('Admin/manager and a saved event are required.');
+   const job=Number(existingJob);
+   if(!Number.isSafeInteger(job)||job<=0)throw Error('Enter an existing positive numeric job ID.');
+   const {data,error:jobError}=await supabase.from('jobs').select('id,status,customer_name').eq('id',job).single();
+   if(jobError||!data)throw Error('Job not found.');
+   if(['completed','closed','cancelled','delivered'].includes(String(data.status).toLowerCase()))throw Error('Cannot link a closed job.');
+   const {error:dbError}=await supabase.from('sc_pdc_events').update({production_job_id:job}).eq('id',currentEvent.id);
+   if(dbError)throw dbError;await load();setMessage('Existing production job linked after verifying job ID. Confirm customer and line mappings before traveler creation.');
   });
  }
  async function changeEventStatus(status){
@@ -450,12 +464,14 @@ export default function ProductDevelopmentCenter(){
       <Link className="pdc-link" to="/quote-builder">Prepare quote</Link><Link className="pdc-link" to="/work-hub">Work Hub</Link>
      </div>
      <div className="pdc-section pdc-table-wrap"><h3>Items / proofs / recipes</h3>
-       <table className="pdc-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit cost</th><th>Unit price</th><th>Recipe</th><th>Proof</th><th>Artwork revision</th><th>Action</th></tr></thead><tbody>
+       <table className="pdc-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit cost</th><th>Unit price</th><th>Product opportunity</th><th>Recipe</th><th>Proof</th><th>Artwork revision</th><th>Action</th></tr></thead><tbody>
         {currentItems.map(i=><tr key={i.id}>
          <td><input aria-label="Product label" value={i.label} onChange={e=>localItem(i.id,'label',e.target.value)}/><small>{(i.personalization||[]).length} personalized names</small></td>
          <td><input type="number" min="1" aria-label="Quantity" value={i.quantity} onChange={e=>localItem(i.id,'quantity',e.target.value)}/></td>
          <td><input type="number" min="0" step="0.01" aria-label="Unit cost" value={i.unit_cost} onChange={e=>localItem(i.id,'unit_cost',e.target.value)}/></td>
          <td><input type="number" min="0" step="0.01" aria-label="Unit price" value={i.unit_price} onChange={e=>localItem(i.id,'unit_price',e.target.value)}/></td>
+         <td><select aria-label="Linked product opportunity" value={i.opportunity_id||''} onChange={e=>localItem(i.id,'opportunity_id',e.target.value)}>
+          <option value="">No product attribution</option>{opportunities.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
          <td><select aria-label="Production material recipe" value={i.material_recipe_id||''} onChange={e=>localItem(i.id,'material_recipe_id',e.target.value)}>
           <option value="">Select approved</option>{recipes.filter(r=>r.status==='approved').map(r=><option key={r.id} value={r.id}>{r.material_name} · {r.machine_model}</option>)}</select></td>
          <td><select aria-label="Proof status" value={i.proof_status} onChange={e=>localItem(i.id,'proof_status',e.target.value)}>{['draft','pending','revision_requested','approved'].map(s=><option key={s}>{s}</option>)}</select></td>
@@ -486,6 +502,10 @@ export default function ProductDevelopmentCenter(){
        </div>
        {actionButtons('create_qbo_event_invoice',{event_id:currentEvent.id,qbo_customer_id:automate.qbo_customer_id,
         qbo_item_ids:(()=>{try{return JSON.parse(automate.qbo_item_ids||'{}');}catch{return {};}})()})}
+       <h3>Link existing production job</h3>
+       <p className="pdc-muted">Current linked job: {currentEvent.production_job_id||'none'}</p>
+       <input aria-label="Existing production job ID" value={existingJob} onChange={e=>setExistingJob(e.target.value)} placeholder="Existing job number"/>
+       <button disabled={busy} onClick={linkExistingJob}>Link verified existing job</button>
        <h3>Create certified production traveler</h3>
        <p className="pdc-muted">Link a real job to the event via the existing Work Hub before attempting traveler generation. Use the job's existing item IDs and an approved manufacturing recipe revision.</p>
        <div className="pdc-grid">{automationField('job_item_ids','Existing job item IDs','123,124')}
