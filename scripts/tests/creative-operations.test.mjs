@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {computeDraftPackage} from '../../src/lib/creativePackageMath.js';
+import {applyLocalSegmentationAlpha} from '../../src/lib/creativeLocalMask.js';
 const read=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8');
 test('packages use integer cent math and explicit uncertainty',()=>{
   const result=computeDraftPackage([{qty:3,cost:.1,price:.3},{qty:2,cost:.2,price:.5}],.3,.1);
@@ -41,4 +42,19 @@ test('user-generated artwork is analyzed locally and customer workflow gates rem
   assert.match(js,/toDataURL\('image\/png'\)/);
   assert.match(js,/not a scale-calibrated production mockup/i);
   assert.match(read('src/CreativeOperationsSuite.jsx'),/Approval|approval/i);
+});
+
+test('local segmentation preserves alpha masks rather than deriving opacity from color',()=>{
+  const source=new Uint8ClampedArray([255,30,0,255, 0,0,0,0, 120,120,120,128]);
+  const out=applyLocalSegmentationAlpha(source);
+  assert.deepEqual(Array.from(out.data.filter((_,i)=>i%4===3)),[255,0,128]);
+  assert.equal(out.source,'alpha');
+  assert.equal(out.foreground,2);
+  assert.equal(out.partial,1);
+});
+test('local segmentation supports opaque grayscale masks',()=>{
+  const out=applyLocalSegmentationAlpha(new Uint8ClampedArray([255,255,255,255,0,0,0,255,50,50,50,255]));
+  assert.equal(out.source,'grayscale');
+  assert.deepEqual(Array.from(out.data.filter((_,i)=>i%4===3)),[255,0,50]);
+  assert.throws(()=>applyLocalSegmentationAlpha(new Uint8ClampedArray([0,0,0,255])),/empty/);
 });
