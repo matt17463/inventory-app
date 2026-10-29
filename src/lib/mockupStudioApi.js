@@ -406,6 +406,7 @@ export async function addArtworkAsset({ projectId, file, values = {} }) {
     pixel_width: values.pixel_width || null,
     pixel_height: values.pixel_height || null,
     has_transparency: values.has_transparency ?? null,
+    ...(typeof values.background_removed === 'boolean' ? { background_removed: values.background_removed } : {}),
     exact_artwork_locked: values.exact_artwork_locked !== false,
     preflight_status: values.preflight_status || 'pending',
     preflight_notes: values.preflight_notes || null,
