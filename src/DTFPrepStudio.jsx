@@ -82,7 +82,7 @@ export default function DTFPrepStudio(){
   const [history,setHistory]=useState([]),[future,setFuture]=useState([]);
   const revisionRef=useRef(0),panRef=useRef(null);
   function record(){setHistory(h=>[...h.slice(-49),opts]);setFuture([]);}
-  function maskChange(k,v){record();change(k,v);}
+  function maskChange(k,v){change(k,v);}
   function undo(){if(!history.length)return;revisionRef.current++;setFuture(f=>[opts,...f]);setOpts(history.at(-1));setHistory(h=>h.slice(0,-1));setSavedPrepared('');}
   function redo(){if(!future.length)return;revisionRef.current++;setHistory(h=>[...h,opts]);setOpts(future[0]);setFuture(f=>f.slice(1));setSavedPrepared('');}
   const [file,setFile]=useState(null),[bitmap,setBitmap]=useState(null);
@@ -98,7 +98,7 @@ export default function DTFPrepStudio(){
   const [sourceMeta,setSourceMeta]=useState(null),[vectorColor,setVectorColor]=useState('#ffffff');
   const imgRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
   const maskDraggingRef=useRef(false),maskLastRef=useRef(null);
-  const change=(k,v)=>{revisionRef.current++;setOpts(o=>({...o,[k]:v,maskReviewed:false}));setSavedPrepared('');};
+  const change=(k,v)=>{if(!['maskTool','maskBrushSize'].includes(k)){setHistory(h=>[...h.slice(-49),opts]);setFuture([]);}revisionRef.current++;setOpts(o=>({...o,[k]:v,maskReviewed:false}));setSavedPrepared('');};
   const changeChannel=(section,channel,value)=>{
     setOpts(o=>({...o,[section]:{...o[section],[channel]:value}}));
     setSavedPrepared('');
@@ -139,13 +139,14 @@ export default function DTFPrepStudio(){
     if(!bitmap||!['erase','restore'].includes(opts.maskTool))return;
     const point=sourcePoint(event.currentTarget.getBoundingClientRect(),bitmap.width,bitmap.height,event.clientX,event.clientY);
     if(!point)return;const {x,y}=point;
+    if((opts.maskStrokes||[]).length>=2000){setMessage('Brush limit reached. Save a revision or clear the mask; earlier edits have been retained.');return;}
     const radius=Math.max(1,Math.min(600,Number(opts.maskBrushSize)||28));
     const last=maskLastRef.current;
     if(last&&Math.hypot(last.x-x,last.y-y)<Math.max(2,radius*.27))return;
     maskLastRef.current={x,y};
     const distance=last?Math.hypot(last.x-x,last.y-y):0,steps=Math.max(1,Math.ceil(distance/Math.max(1,radius*.5)));
     const marks=Array.from({length:steps},(_,i)=>({kind:opts.maskTool,x:last?last.x+(x-last.x)*(i+1)/steps:x,y:last?last.y+(y-last.y)*(i+1)/steps:y,r:radius}));
-    revisionRef.current++;setOpts(o=>({...o,maskReviewed:false,maskStrokes:[...(o.maskStrokes||[]),...marks].slice(-2000)}));
+    revisionRef.current++;setOpts(o=>({...o,maskReviewed:false,maskStrokes:[...(o.maskStrokes||[]),...marks.slice(0,2000-(o.maskStrokes||[]).length)]}));
     setSavedPrepared('');
   }
   function startMask(event) {
@@ -330,7 +331,7 @@ export default function DTFPrepStudio(){
           <p role="status">{aiState}</p>{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
           {maskNeedsReview&&<p className="dtf-channel-warning">The mask may remove meaningful artwork. Inspect red removal points, green keep points and the proof; restore details before applying.</p>}
           {(opts.requireMaskReview||maskNeedsReview)&&<button type="button" disabled={!proofUrl||opts.maskReviewed||renderedOpts!==opts} onClick={()=>{setOpts(o=>({...o,maskReviewed:true}));setSavedPrepared('');setAiState('Applied');}}>Apply reviewed mask</button>}
-          <div className="dtf-mask-buttons"><button type="button" disabled={!history.length} onClick={undo}>Undo mask edit</button><button type="button" disabled={!future.length} onClick={redo}>Redo mask edit</button><button type="button" onClick={()=>{record();change('regionPoints',[]);}}>Clear region points</button></div>
+          <div className="dtf-mask-buttons"><button type="button" disabled={!history.length} onClick={undo}>Undo mask edit</button><button type="button" disabled={!future.length} onClick={redo}>Redo mask edit</button><button type="button" onClick={()=>change('regionPoints',[])}>Clear region points</button></div>
           <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:'auto',aiGuidance:null,requireMaskReview:false,maskReviewed:false}));setAiState('Local-method fallback');setSavedPrepared('');}}>Use local edge/color removal</button>
           <button type="button" className="dtf-remove-action" disabled={!bitmap}
             onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:'auto',backgroundPoint:null,backgroundScope:'connected',backgroundFeather:12,requireMaskReview:false,maskReviewed:false}));setSavedPrepared('');}}>
