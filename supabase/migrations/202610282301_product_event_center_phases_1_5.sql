@@ -229,7 +229,7 @@ alter table public.sc_material_recipes add constraint sc_material_recipes_machin
 
 -- A production/fulfilled package cannot have item specifications changed without reopening it.
 create or replace function public.sc_pdc_freeze_event_item()
-returns trigger language plpgsql set search_path = pg_catalog,public as $
+returns trigger language plpgsql set search_path = pg_catalog,public as $$
 declare current_state text;
 begin
  select status into current_state from public.sc_pdc_events where id=old.event_id;
@@ -243,7 +243,7 @@ begin
     new.approved_artwork_revision='';
  end if;
  return new;
-end $;
+end $$;
 drop trigger if exists sc_pdc_event_item_freeze on public.sc_pdc_event_items;
 create trigger sc_pdc_event_item_freeze before update on public.sc_pdc_event_items
  for each row execute function public.sc_pdc_freeze_event_item();
