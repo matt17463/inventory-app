@@ -37,7 +37,7 @@
     "test": "npm run test:certification && npm run test:client-graphics && npm run test:workflow-first && npm run test:marketing && npm run test:sync-reliability && npm run test:shop-workflow && npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:mockup-downloads && npm run test:supplier-receiving && npm run test:production-board && npm run test:purchasing-demand && npm run test:imports && npm run test:integrity && npm run test:r2-egress && npm run test:product-blank-mappings && npm run test:new-product-line && npm run test:onsite-sales && npm run test:artwork-r2 && npm run test:product-types && npm run test:pullsheet-purchasing-integrity && npm run test:product-color-replacement && npm run test:artwork-notifications && npm run test:artwork-downloads && npm run test:operations-client-orders && npm run test:client-order-pricing-conversion && npm run test:client-order-test-mode && npm run test:client-order-quote-summary && npm run test:qbo-invoice-export-sales-tax && npm run test:public-order-view-modes && npm run test:client-order-confirmation-invoice-details && npm run test:client-order-persistence-delete && npm run test:employee-training-guide && npm run test:interactive-guided-training && npm run test:graphical-themes && npm run test:contractor-navigation-theme && npm run test:equipment && npm run test:material-studio && npm run test:nas-backup && npm run test:storage-backup-read && npm run test:dtf-studio",
     "functions:esm": "node scripts/validate_netlify_esm.mjs",
     "validate:steps6-14": "node scripts/validate_steps6_14.mjs",
-    "check": "npm run functions:esm && npm run test && npm run lint && npm run build",
+    "check": "npm run functions:esm && npm run test && npm run lint && npm run build && npm run test:product-center",
     "build:vite": "node scripts/build_vite.mjs",
     "build:verify": "node scripts/verify_build_features.mjs",
     "test:artwork-r2": "node --test scripts/tests/artwork-r2-storage.test.mjs",
@@ -67,7 +67,8 @@
     "test:nas-backup": "node --test scripts/tests/nas-backup-report.test.mjs",
     "test:storage-backup-read": "node --test scripts/tests/storage-backup-read.test.mjs",
     "test:certification": "node --test scripts/tests/variation-certification.test.mjs scripts/tests/reorder-traveler-request.test.mjs scripts/tests/artwork-integrity.test.mjs scripts/tests/woo-logo-mapping.test.mjs",
-    "test:dtf-studio": "node --test scripts/tests/dtf-prep-studio.test.mjs scripts/tests/dtf-background-removal.test.mjs"
+    "test:dtf-studio": "node --test scripts/tests/dtf-prep-studio.test.mjs scripts/tests/dtf-background-removal.test.mjs",
+    "test:product-center": "node --test scripts/tests/product-event-center.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
