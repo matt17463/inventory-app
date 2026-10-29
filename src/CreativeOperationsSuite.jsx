@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './CreativeOperationsSuite.css';
 import CreativeKnowledgeHub from './CreativeKnowledgeHub';
 import CreativeDesignWorkbench from './CreativeDesignWorkbench';
 import CreativeLocalAi from './CreativeLocalAi';
 import { computeDraftPackage } from './lib/creativePackageMath';
+import { EmployeeAccessContext } from './lib/employeeAccessContext';
+import { supabase } from './supabaseClient';
+import { shouldSimulateWrites } from './lib/testingMode';
 
 const MODULES = [
   { id: 'command', name: 'Command Center', eyebrow: '01 · Operations', summary: 'Prioritize active work from existing production, purchasing, and equipment data.', links: [['Daily Command Center', '/command-center'], ['Work Hub', '/work-hub'], ['Equipment Center', '/equipment-center'], ['Order Risks', '/order-risk'], ['Print Center', '/print-center']] },
@@ -76,6 +79,10 @@ function ArtworkInspect() {
   </section>;
 }
 function PackageBuilder() {
+  const access=useContext(EmployeeAccessContext);
+  const maySave=['admin','manager','marketing'].includes(access?.role);
+  const [packageName,setPackageName]=useState(''),[customerName,setCustomerName]=useState('');
+  const [saving,setSaving]=useState(false),[saveError,setSaveError]=useState(''),[savedId,setSavedId]=useState('');
   const [type,setType]=useState('wedding');
   const [items,setItems]=useState(CATALOG.wedding);
   const [setup,setSetup]=useState(30);
@@ -84,13 +91,42 @@ function PackageBuilder() {
   const revenue=totals.revenue,profit=totals.contribution;
   function switchType(v){setType(v);setItems(CATALOG[v].map(x=>({...x})));setMargin(0);}
   function update(i,key,value){setItems(current=>current.map((v,index)=>index===i?{...v,[key]:clamp(value)}:v));}
+  async function saveEventDraft(){
+    setSaveError('');setSavedId('');
+    if(!maySave){setSaveError('An admin, manager, or marketing role is required to save a package.');return;}
+    if(shouldSimulateWrites()){setSaveError('Training mode is active. Switch out of testing mode before saving live draft records.');return;}
+    const name=packageName.trim();
+    if(name.length<3||name.length>180){setSaveError('Give the event or package a name of 3–180 characters.');return;}
+    if(!items.length||items.some(x=>!x.name||Math.trunc(Number(x.qty))<1)){setSaveError('Each package item must have a quantity of at least one.');return;}
+    setSaving(true);let saved=null;
+    try{
+      const types={wedding:'wedding',coach:'coach_recognition',business:'corporate'};
+      const event={name,event_type:types[type],client_name:customerName.trim().slice(0,250),
+        status:'draft',instructions:'CREATIVE OPERATIONS DRAFT · Estimated costs only. Validate stock, labor, material tests, taxes, proofs and customer approvals before quoting or manufacturing.',
+        theme:{origin:'creative_operations_suite',template:type}};
+      const created=await supabase.from('sc_pdc_events').insert(event).select('id').single();
+      if(created.error)throw created.error;saved=created.data.id;
+      const payload=items.map(x=>({event_id:saved,label:x.name,quantity:Math.trunc(clamp(x.qty)),unit_cost:clamp(x.cost),unit_price:clamp(x.price),proof_status:'draft',notes:'Template estimate. Verify exact materials and approved artwork before production.'}));
+      if(clamp(setup)||clamp(margin))payload.push({event_id:saved,label:'Setup and customization allowance',quantity:1,unit_cost:clamp(setup),unit_price:clamp(margin),proof_status:'draft',notes:'Estimated setup cost and customer charge. Review for actual quote.'});
+      const result=await supabase.from('sc_pdc_event_items').insert(payload);
+      if(result.error)throw result.error;
+      setSavedId(saved);
+    }catch(err){
+      setSaveError('Save incomplete: '+(err.message||'Database error')+(saved?' The draft event exists; open Product & Event Center to repair its items.':''));
+      if(saved)setSavedId(saved);
+    }finally{setSaving(false);}
+  }
   return <section className="cos-card">
     <h3>Local package economics</h3>
     <p>Starter assumptions only. Adjust quantities, unit costs, and selling prices before creating a quote. No invoice or order is generated here.</p>
     <label className="cos-field">Package template<select value={type} onChange={e=>switchType(e.target.value)}><option value="wedding">Wedding & event</option><option value="coach">Coach recognition</option><option value="business">Corporate gifts</option></select></label>
     <div className="cos-table-scroll"><table><thead><tr><th>Item</th><th>Quantity</th><th>Unit cost ($)</th><th>Unit price ($)</th></tr></thead><tbody>{items.map((v,i)=><tr key={v.name}><td>{v.name}</td>{['qty','cost','price'].map(key=><td key={key}><input aria-label={v.name+' '+key} type="number" min="0" step={key==='qty'?'1':'0.01'} value={v[key]} onChange={e=>update(i,key,e.target.value)}/></td>)}</tr>)}</tbody></table></div>
     <div className="cos-input-row"><label className="cos-field">Setup / overhead cost ($)<input type="number" min="0" value={setup} onChange={e=>setSetup(clamp(e.target.value))}/></label><label className="cos-field">Additional customer charge ($)<input type="number" min="0" value={margin} onChange={e=>setMargin(clamp(e.target.value))}/></label></div>
+    <div className="cos-input-row"><label className="cos-field">Package / event name<input value={packageName} maxLength={180} onChange={e=>setPackageName(e.target.value)} placeholder="e.g. Smith wedding favors"/></label><label className="cos-field">Customer or organization<input value={customerName} maxLength={250} onChange={e=>setCustomerName(e.target.value)} placeholder="Customer name"/></label></div>
     <div className="cos-metrics"><div><small>Projected sales</small><strong>{money(revenue)}</strong></div><div><small>Estimated direct + setup cost</small><strong>{money(totals.cost)}</strong></div><div><small>Estimated gross contribution</small><strong>{money(profit)}</strong></div><div><small>Estimated contribution margin</small><strong>{revenue?(totals.contributionMargin.toFixed(1)+'%'):'—'}</strong></div></div>
+    {maySave&&<button type="button" disabled={saving} onClick={saveEventDraft}>{saving?'Saving draft…':'Save draft to Product & Event Center'}</button>}
+    {savedId&&<p role="status">Draft record created. <Link to={'/product-event-center?event='+encodeURIComponent(savedId)}>Open saved event package →</Link></p>}
+    {saveError&&<p role="alert" className="cos-warning">{saveError}</p>}
     <button type="button" onClick={()=>{const text=['Draft '+type+' package',...items.map(x=>x.qty+' × '+x.name+' @ '+money(x.price)), 'Sales: '+money(revenue), 'Estimated costs: '+money(totals.cost),'Estimated contribution: '+money(profit),'DRAFT — verify labor, taxes, stock, waste, and customer approval.'].join('\n');navigator.clipboard?.writeText(text);}}>Copy draft package summary</button>
   </section>;
 }
