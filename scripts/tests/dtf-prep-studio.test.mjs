@@ -156,7 +156,7 @@ test('original-color halftone preserves RGB color and has binary alpha',()=>{
 });
 test('multicolor proof channel selection is isolated from PNG and R2 exports',()=>{
   const studio=readFileSync(new URL('../../src/DTFPrepStudio.jsx',import.meta.url),'utf8');
-  assert.match(studio,/renderArtwork\(bitmap,\{\.\.\.opts,channelView\},950\)/);
+  assert.match(studio,/renderArtwork\(bitmap,\{\.\.\.opts,channelView,previewMask:true\},950\)/);
   assert.match(studio,/return renderArtwork\(bitmap,\{\.\.\.opts,channelView:'composite'\}\)/);
   assert.match(studio,/screenEnabled/);
   assert.match(studio,/CMYK multicolor rosette/);

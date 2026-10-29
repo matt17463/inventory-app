@@ -4,9 +4,12 @@ import {
   DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds,
   processDtfPixels, qualityReport, exportDtfPng, vectorSilhouette, cmykToRgb,
 } from './lib/dtfStudioEngine';
-import { removeDtfBackground, inspectPngAlpha, validateDtfTransparency, applyDtfMaskStrokes } from './lib/dtfBackgroundRemoval.js';
+import { inspectPngAlpha, validateDtfTransparency } from './lib/dtfBackgroundRemoval.js';
 import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtfMulticolor.js';
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
+import { sourcePoint, validateGuidance } from './lib/dtfMaskGuidance.js';
+import { preparedMask } from './lib/dtfMaskClient.js';
+import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient.js';
 import './DTFPrepStudio.css';
 
 const PRESETS = {
@@ -21,7 +24,7 @@ const PRESETS = {
 function makeCanvas(width,height) {
   const c=document.createElement('canvas');c.width=width;c.height=height;return c;
 }
-function renderArtwork(bitmap,opts,maxEdge=0) {
+async function renderArtwork(bitmap,opts,maxEdge=0) {
   const target=validatePrintDimensions(opts.width,opts.height);
   const ratio=maxEdge?Math.min(1,maxEdge/Math.max(target.width,target.height)):1;
   const outW=Math.max(1,Math.round(target.width*ratio)),outH=Math.max(1,Math.round(target.height*ratio));
@@ -30,45 +33,16 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   sc.drawImage(bitmap,0,0);
   let bounds={x:0,y:0,width:bitmap.width,height:bitmap.height};
   let backgroundResult={removed:0,softened:0,matched:0,originalHadTransparency:false};
-  if(opts.background!=='none'||opts.removeInteriorWhite||opts.crop||opts.maskStrokes?.length){
+  if(opts.background!=='none'||opts.removeInteriorWhite||opts.crop||opts.maskStrokes?.length||opts.regionPoints?.length){
     const original=sc.getImageData(0,0,staged.width,staged.height);
-    const originalCopy=opts.maskStrokes?.length?new Uint8ClampedArray(original.data):null;
-    const originallyTransparent=inspectPngAlpha(original.data,staged.width,staged.height).hasTransparency;
-    backgroundResult.originalHadTransparency=originallyTransparent;
-    if(opts.background!=='none'){
-      const mode=opts.background;
-      const result=removeDtfBackground(original.data,staged.width,staged.height,{
-        mode,
-        tolerance:mode==='white'?255-Number(opts.threshold):Number(opts.removalTolerance),
-        feather:Number(opts.backgroundFeather??12),
-        color:opts.backgroundColor,
-        point:opts.backgroundPoint,
-        scope:opts.backgroundScope||'connected',
-        decontaminate:opts.backgroundDecontaminate!==false,
-      });
-      backgroundResult={...result,originalHadTransparency:originallyTransparent};
-    }
-    if(opts.removeInteriorWhite){
-      // A separate optional pass removes enclosed white regions even when the
-      // exterior is another color. Keep it OFF by default to protect white ink.
-      const holes=removeDtfBackground(original.data,staged.width,staged.height,{
-        mode:'white',scope:'all',tolerance:255-Number(opts.interiorWhiteThreshold??245),
-        feather:Number(opts.interiorWhiteFeather??4),decontaminate:true,
-      });
-      backgroundResult.removed+=holes.removed;
-      backgroundResult.softened+=holes.softened;
-      backgroundResult.interiorRemoved=holes.removed;
-    }
-    if(originalCopy){
-      const manual=applyDtfMaskStrokes(original.data,originalCopy,staged.width,staged.height,opts.maskStrokes);
-      backgroundResult.manualErased=manual.erased;
-      backgroundResult.manualRestored=manual.restored;
-      backgroundResult.removed+=manual.erased;
-    }
-    sc.putImageData(original,0,0);
-    if(opts.crop)bounds=alphaBounds(original.data,staged.width,staged.height);
-    if(!bounds)throw Error('All visible artwork was removed. Reduce the tolerance or use a different background region.');
+    const masked=await preparedMask(bitmap,original.data,opts);
+    backgroundResult=masked.report;
+    sc.putImageData(new ImageData(new Uint8ClampedArray(masked.data),staged.width,staged.height),0,0);
+    if(opts.crop)bounds=alphaBounds(masked.data,staged.width,staged.height);
+    if(!bounds)throw Error('All visible artwork was removed. Restore details or reduce sensitivity.');
+    if((opts.requireMaskReview||backgroundResult.reviewRequired)&&!opts.maskReviewed&&!opts.previewMask)throw Error('Review the working mask and choose Apply reviewed mask before export.');
   }
+  if(opts.reviewBounds)bounds=opts.reviewBounds;
   const output=makeCanvas(outW,outH),ctx=output.getContext('2d',{willReadFrequently:true});
   const drawRatio=Math.min(outW*.96/bounds.width,outH*.96/bounds.height);
   const dw=Math.max(1,Math.round(bounds.width*drawRatio)),dh=Math.max(1,Math.round(bounds.height*drawRatio));
@@ -85,7 +59,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   stats.softenedBackground=backgroundResult.softened;
   ctx.putImageData(pixels,0,0);
   return {canvas:output,pixels,stats,backgroundResult,finalAlpha,
-    sourceWidth:bounds.width,sourceHeight:bounds.height,dimensions:target};
+    sourceWidth:bounds.width,sourceHeight:bounds.height,dimensions:target,bounds};
 }
 function download(blob,name){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
@@ -99,7 +73,18 @@ function Slider({label,value,onChange,min=0,max=100,step=1}) {
 }
 const baseName=s=>String(s||'artwork').replace(/\.[^.]*$/,'').replace(/[^\w-]+/g,'-').slice(0,68);
 export default function DTFPrepStudio(){
-  const [opts,setOpts]=useState({...DTF_DEFAULTS});
+  const [opts,setOpts]=useState({...DTF_DEFAULTS,regionPoints:[]});
+  const [aiState,setAiState]=useState('Ready'),[aiError,setAiError]=useState('');
+  const [renderedOpts,setRenderedOpts]=useState(null),[maskNeedsReview,setMaskNeedsReview]=useState(false);
+  const [aiIntent,setAiIntent]=useState('keep');
+  const [regionTool,setRegionTool]=useState('remove'),[zoom,setZoom]=useState(1);
+  const [compare,setCompare]=useState(false),[beforeUrl,setBeforeUrl]=useState(''),[split,setSplit]=useState(50);
+  const [history,setHistory]=useState([]),[future,setFuture]=useState([]);
+  const revisionRef=useRef(0),panRef=useRef(null);
+  function record(){setHistory(h=>[...h.slice(-49),opts]);setFuture([]);}
+  function maskChange(k,v){record();change(k,v);}
+  function undo(){if(!history.length)return;revisionRef.current++;setFuture(f=>[opts,...f]);setOpts(history.at(-1));setHistory(h=>h.slice(0,-1));setSavedPrepared('');}
+  function redo(){if(!future.length)return;revisionRef.current++;setHistory(h=>[...h,opts]);setOpts(future[0]);setFuture(f=>f.slice(1));setSavedPrepared('');}
   const [file,setFile]=useState(null),[bitmap,setBitmap]=useState(null);
   const [sourceUrl,setSourceUrl]=useState(''),[proofUrl,setProofUrl]=useState('');
   const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[report,setReport]=useState(null);
@@ -113,49 +98,64 @@ export default function DTFPrepStudio(){
   const [sourceMeta,setSourceMeta]=useState(null),[vectorColor,setVectorColor]=useState('#ffffff');
   const imgRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
   const maskDraggingRef=useRef(false),maskLastRef=useRef(null);
-  const change=(k,v)=>{setOpts(o=>({...o,[k]:v}));setSavedPrepared('');};
+  const change=(k,v)=>{revisionRef.current++;setOpts(o=>({...o,[k]:v,maskReviewed:false}));setSavedPrepared('');};
   const changeChannel=(section,channel,value)=>{
     setOpts(o=>({...o,[section]:{...o[section],[channel]:value}}));
     setSavedPrepared('');
   };
   const channelWarnings=useMemo(()=>opts.halftone==='multicolor'?screenAngleWarnings(opts):[],[opts]);
   function chooseSource(nextFile) {
-    setFile(nextFile);setSavedSource('');setSavedPrepared('');
-    setOpts(o=>({...o,backgroundPoint:null,maskStrokes:[],removeInteriorWhite:false,background:o.background==='pick'?'none':o.background}));
+    if(nextFile&&(!['image/png','image/jpeg','image/webp'].includes(nextFile.type)||nextFile.size>20*1024*1024)){setMessage('Choose a PNG, JPEG or WebP up to 20 MB.');return;}
+    revisionRef.current++;setBitmap(null);setFile(nextFile);setSavedSource('');setSavedPrepared('');setHistory([]);setFuture([]);setAiState('Ready');setAiError('');setZoom(1);
+    setOpts(o=>({...o,backgroundPoint:null,regionPoints:[],aiGuidance:null,requireMaskReview:false,maskReviewed:false,maskStrokes:[],removeInteriorWhite:false,background:['pick','ai'].includes(o.background)?'none':o.background}));
   }
   function pickBackground(event) {
-    if(opts.background!=='pick'||opts.maskTool!=='none'||!bitmap)return;
-    const rect=event.currentTarget.getBoundingClientRect();
-    if(!rect.width||!rect.height)return;
-    const x=Math.max(0,Math.min(bitmap.width-1,Math.floor((event.clientX-rect.left)/rect.width*bitmap.width)));
-    const y=Math.max(0,Math.min(bitmap.height-1,Math.floor((event.clientY-rect.top)/rect.height*bitmap.height)));
-    // The 1x1 canvas extracts the real source color, not a proof backdrop.
-    const canvas=makeCanvas(1,1),ctx=canvas.getContext('2d',{willReadFrequently:true});
-    ctx.drawImage(bitmap,x,y,1,1,0,0,1,1);
-    const rgb=Array.from(ctx.getImageData(0,0,1,1).data.slice(0,3));
-    setOpts(o=>({...o,backgroundPoint:{x,y},backgroundColor:'#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('')}));
+    if(regionTool==='pan'||opts.maskTool!=='none'||!bitmap)return;
+    const point=sourcePoint(event.currentTarget.getBoundingClientRect(),bitmap.width,bitmap.height,event.clientX,event.clientY);
+    if(!point)return;
+    if((opts.regionPoints||[]).length>=96){setMessage('Maximum 96 region selections. Clear points or save a revision.');return;}
+    record();revisionRef.current++;
+    setOpts(o=>({...o,background:o.background==='none'&&regionTool==='remove'?'pick':o.background,backgroundPoint:point,regionPoints:[...(o.regionPoints||[]),{...point,kind:regionTool}],maskReviewed:false}));
     setSavedPrepared('');
+  }
+  async function requestAi(){
+    const revision=revisionRef.current,source=bitmap;
+    setAiState('Analyzing');setAiError('');
+    try{
+      const ratio=Math.min(1,768/Math.max(source.width,source.height)),c=makeCanvas(Math.max(1,Math.round(source.width*ratio)),Math.max(1,Math.round(source.height*ratio)));
+      c.getContext('2d').drawImage(source,0,0,c.width,c.height);
+      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image:c.toDataURL('image/png').split(',')[1],mimeType:'image/png'}),signal:AbortSignal.timeout(30000)});
+      const data=await response.json();if(!response.ok)throw Error(data.message||'Gemini unavailable. Use local removal.');
+      if(revisionRef.current!==revision){setAiState('Correction needed');setAiError('Source or settings changed during analysis. Request a new preview.');return;}
+      const guidance={...validateGuidance(data),provenance:data.provenance};
+      // Conservative intent offers only exterior candidates; all-background includes interior proposals.
+      if(aiIntent==='keep')guidance.points=guidance.points.filter(p=>p.kind==='keep'||p.x<.06||p.x>.94||p.y<.06||p.y>.94);
+      validateGuidance(guidance);
+      record();setAiState('Generating mask');
+      setOpts(o=>({...o,background:'ai',aiGuidance:guidance,removeInteriorWhite:false,requireMaskReview:true,maskReviewed:false}));setSavedPrepared('');
+    }catch(e){setAiState(/quota/i.test(e.message)?'Quota reached':'Provider unavailable');setAiError(e.message+' Manual and local methods remain available.');}
   }
   function paintMask(event) {
     if(!bitmap||!['erase','restore'].includes(opts.maskTool))return;
-    const rect=event.currentTarget.getBoundingClientRect();
-    if(!rect.width||!rect.height)return;
-    const x=Math.max(0,Math.min(bitmap.width-1,Math.round((event.clientX-rect.left)/rect.width*(bitmap.width-1))));
-    const y=Math.max(0,Math.min(bitmap.height-1,Math.round((event.clientY-rect.top)/rect.height*(bitmap.height-1))));
+    const point=sourcePoint(event.currentTarget.getBoundingClientRect(),bitmap.width,bitmap.height,event.clientX,event.clientY);
+    if(!point)return;const {x,y}=point;
     const radius=Math.max(1,Math.min(600,Number(opts.maskBrushSize)||28));
     const last=maskLastRef.current;
     if(last&&Math.hypot(last.x-x,last.y-y)<Math.max(2,radius*.27))return;
     maskLastRef.current={x,y};
-    setOpts(o=>({...o,maskStrokes:[...(o.maskStrokes||[]).slice(-1999),{kind:o.maskTool,x,y,r:radius}]}));
+    const distance=last?Math.hypot(last.x-x,last.y-y):0,steps=Math.max(1,Math.ceil(distance/Math.max(1,radius*.5)));
+    const marks=Array.from({length:steps},(_,i)=>({kind:opts.maskTool,x:last?last.x+(x-last.x)*(i+1)/steps:x,y:last?last.y+(y-last.y)*(i+1)/steps:y,r:radius}));
+    revisionRef.current++;setOpts(o=>({...o,maskReviewed:false,maskStrokes:[...(o.maskStrokes||[]),...marks].slice(-2000)}));
     setSavedPrepared('');
   }
   function startMask(event) {
+    if(regionTool==='pan'){event.preventDefault();panRef.current={x:event.clientX,y:event.clientY,left:event.currentTarget.parentElement.scrollLeft,top:event.currentTarget.parentElement.scrollTop};event.currentTarget.setPointerCapture?.(event.pointerId);return;}
     if(!['erase','restore'].includes(opts.maskTool))return;
-    event.preventDefault();maskDraggingRef.current=true;maskLastRef.current=null;
+    record();event.preventDefault();maskDraggingRef.current=true;maskLastRef.current=null;
     event.currentTarget.setPointerCapture?.(event.pointerId);
     paintMask(event);
   }
-  function finishMask(){maskDraggingRef.current=false;maskLastRef.current=null;}
+  function finishMask(){maskDraggingRef.current=false;maskLastRef.current=null;panRef.current=null;}
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
@@ -174,7 +174,7 @@ export default function DTFPrepStudio(){
   useEffect(()=>{
     if(!file){setBitmap(null);setSourceUrl('');setSourceMeta(null);return;}
     let active=true;const url=URL.createObjectURL(file);setSourceUrl(url);
-    createImageBitmap(file).then(b=>{if(active){setBitmap(b);setSourceMeta({width:b.width,height:b.height});}else b.close();})
+    createImageBitmap(file).then(b=>{if(b.width*b.height>24000000){b.close();throw Error('Source exceeds the 24-megapixel processing limit.');}if(active){setBitmap(b);setSourceMeta({width:b.width,height:b.height});}else b.close();})
       .catch(e=>{if(active)setMessage('Could not decode image: '+e.message);});
     return ()=>{active=false;URL.revokeObjectURL(url);};
   },[file]);
@@ -182,22 +182,26 @@ export default function DTFPrepStudio(){
   useEffect(()=>{
     if(!bitmap){setProofUrl('');setReport(null);return;}
     const number=++currentRef.current;
-    const timeout=setTimeout(()=>{
+    const timeout=setTimeout(async()=>{
       try{
-        const render=renderArtwork(bitmap,{...opts,channelView},950);
+        const render=await renderArtwork(bitmap,{...opts,channelView,previewMask:true},950);
         if(number!==currentRef.current)return;
         const url=render.canvas.toDataURL('image/png');
-        setProofUrl(url);
+        setProofUrl(url);setRenderedOpts(opts);setMaskNeedsReview(render.backgroundResult.reviewRequired);
+        if(compare){const before=await renderArtwork(bitmap,{...opts,background:'none',removeInteriorWhite:false,regionPoints:[],maskStrokes:[],requireMaskReview:false,reviewBounds:render.bounds,channelView},950);if(number!==currentRef.current)return;setBeforeUrl(before.canvas.toDataURL('image/png'));}
         setReport(qualityReport(render.sourceWidth,render.sourceHeight,render.dimensions.width,render.dimensions.height,render.stats,opts));
         reportRef.current=render.stats;
+        if(opts.background==='ai')setAiState(opts.maskReviewed?'Applied':render.backgroundResult.reviewRequired?'Correction needed':'Preview ready');
         setMessage('');
-      }catch(e){if(number===currentRef.current){setProofUrl('');setReport(null);setMessage(e.message);}}
+      }catch(e){if(number===currentRef.current){setRenderedOpts(null);if(opts.background==='ai')setAiState('Correction needed');setProofUrl('');setReport(null);setMessage(e.message);}}
     },140);
-    return ()=>{clearTimeout(timeout);currentRef.current++;};
-  },[bitmap,opts,channelView]);
+    return ()=>{clearTimeout(timeout);if(currentRef.current===number)currentRef.current=number+1;};
+  },[bitmap,opts,channelView,compare]);
   async function loadR2(){
-    const row=bundle?.artwork?.find(r=>r.id===assetId);
-    if(!row)return;
+    const selected=bundle?.artwork?.find(r=>r.id===assetId);
+    if(!selected)return;
+    const row=selected.metadata?.role==='derived'?bundle.artwork.find(r=>r.id===selected.metadata.source_artwork_asset_id):selected;
+    if(!row){setMessage('The immutable source for this derivative is unavailable. Load its original before replaying the mask.');return;}
     setBusy(true);
     try{
       const url=await signedAssetUrl(row,3600,{preferPreview:false})||row.source_url;
@@ -209,7 +213,7 @@ export default function DTFPrepStudio(){
         throw Error('Choose a PNG, JPEG or WebP artwork asset.');
       chooseSource(new File([blob],row.original_file_name||row.artwork_name||'r2-artwork.png',{type:blob.type}));
       setSavedSource(row.id);setSavedPrepared('');
-      if(row.metadata?.recipe && typeof row.metadata.recipe==='object')setOpts(o=>({...o,...row.metadata.recipe}));
+      if(selected.metadata?.recipe && typeof selected.metadata.recipe==='object')setOpts(o=>({...o,...selected.metadata.recipe,maskReviewed:false}));
     }catch(e){setMessage('R2 artwork: '+e.message);}finally{setBusy(false);}
   }
   async function prepareFull(){
@@ -228,7 +232,7 @@ export default function DTFPrepStudio(){
   async function downloadVector(){
     setBusy(true);
     try{
-      const render=renderArtwork(bitmap,{...opts,channelView:'composite'},850),svg=vectorSilhouette(render.pixels.data,render.canvas.width,render.canvas.height,vectorColor,12000,DTF_DPI*render.canvas.width/render.dimensions.width);
+      const render=await renderArtwork(bitmap,{...opts,channelView:'composite'},850),svg=vectorSilhouette(render.pixels.data,render.canvas.width,render.canvas.height,vectorColor,12000,DTF_DPI*render.canvas.width/render.dimensions.width);
       download(new Blob([svg],{type:'image/svg+xml'}),baseName(file.name)+'-one-color-outline.svg');
       setMessage('One-color silhouette SVG exported for limited solid artwork. This is not a faithful full-color vectorization.');
     }catch(e){setMessage(e.message);}finally{setBusy(false);}
@@ -277,15 +281,23 @@ export default function DTFPrepStudio(){
     <div className="dtf-workspace">
       <section className="dtf-viewer">
         <div className="dtf-canvasbar"><strong>01 / ORIGINAL SOURCE</strong><span>{sourceMeta?sourceMeta.width+' × '+sourceMeta.height+' px':'No source'}</span></div>
-        <div className="dtf-canvas dtf-source">
-          {sourceUrl?<img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} draggable={false} className={opts.background==='pick'||opts.maskTool!=='none'?'dtf-source-picker':''} title={opts.maskTool!=='none'?'Drag on Source to paint the working mask':opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground} onPointerDown={startMask} onPointerMove={e=>{if(maskDraggingRef.current&&(e.buttons||e.pointerType==='touch'))paintMask(e);}} onPointerUp={finishMask} onPointerCancel={finishMask} onLostPointerCapture={finishMask}/>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
+        <div className="dtf-canvas dtf-source" style={{overflow:'auto',display:'block'}}>
+          {sourceUrl?<><img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} style={{maxWidth:'none',maxHeight:'none',width:zoom*100+'%',height:zoom*100+'%',flexShrink:0}} draggable={false} className={opts.background==='pick'||opts.maskTool!=='none'?'dtf-source-picker':''} title={opts.maskTool!=='none'?'Drag on Source to paint the working mask':opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground} onPointerDown={startMask} onPointerMove={e=>{if(panRef.current){const p=panRef.current;e.currentTarget.parentElement.scrollLeft=p.left+p.x-e.clientX;e.currentTarget.parentElement.scrollTop=p.top+p.y-e.clientY;}if(maskDraggingRef.current&&(e.buttons||e.pointerType==='touch'))paintMask(e);}} onPointerUp={finishMask} onPointerCancel={finishMask} onLostPointerCapture={finishMask}/><svg className="dtf-point-overlay" style={{width:zoom*100+'%',height:zoom*100+'%'}} viewBox={'0 0 '+(sourceMeta?.width||1)+' '+(sourceMeta?.height||1)} aria-label="Red points remove regions; green points protect regions">{[...(opts.background==='ai'?(opts.aiGuidance?.points||[]).map(p=>({...p,x:p.x*(sourceMeta?.width||1),y:p.y*(sourceMeta?.height||1)})):[]),...(opts.regionPoints||[])].map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={Math.max(sourceMeta?.width||1,sourceMeta?.height||1)/80} fill={p.kind==='keep'?'#20df99':'#ff4155'} stroke="white" strokeWidth={Math.max(sourceMeta?.width||1,sourceMeta?.height||1)/400}/>)}</svg></>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
         </div>
         <div className="dtf-canvasbar"><strong>02 / LIVE PROOF</strong><span>{target?target.width+' × '+target.height+' px':'No canvas'} · 300 PPI</span></div>
         <div className={'dtf-canvas dtf-proof '+(proofMode==='checker'?'dtf-checker':'')}
           style={proofMode==='color'?{background:bgValue}:{}}>
           {proofMode==='garment'&&garmentUrls[garmentId]&&<img className="dtf-garment" src={garmentUrls[garmentId]} alt={garment?.asset_name||'Garment blank'}/>}
           {proofUrl&&<img className={proofMode==='garment'?'dtf-garment-art':'dtf-proof-art'} style={proofMode==='garment'?{width:garmentScale+'%',top:garmentTop+'%'}:{}} src={proofUrl} alt="Processed artwork proof; not a production approval"/>}
+          {compare&&beforeUrl&&proofMode!=='garment'&&<img className="dtf-before-overlay" style={{clipPath:'inset(0 '+(100-split)+'% 0 0)'}} src={beforeUrl} alt="Before mask; left side of comparison"/>}
           {!proofUrl&&<p>Processed proof appears here automatically.</p>}
+        </div>
+        <div className="dtf-review-tools">
+          <Slider label="Source zoom" min={1} max={5} step={.25} value={zoom} onChange={setZoom}/>
+          {field('Source interaction',<select value={regionTool} onChange={e=>{setRegionTool(e.target.value);change('maskTool','none');}}><option value="remove">Click to remove region</option><option value="keep">Click to keep / restore region</option><option value="pan">Drag to pan</option></select>)}
+          <label className="dtf-check"><input type="checkbox" checked={compare} onChange={e=>setCompare(e.target.checked)}/> Before / after split</label>
+          {compare&&<Slider label="Comparison split" value={split} onChange={setSplit}/>}
+          <p className="dtf-note">{(opts.regionPoints||[]).filter(p=>p.kind==='remove').length} removed region selections · {(opts.regionPoints||[]).filter(p=>p.kind==='keep').length} protected region selections. Points accumulate; keep restores connected source pixels.</p>
         </div>
         <div className="dtf-metrics">
           <span><b>OUTPUT</b> {target?target.width+' × '+target.height+' px':'—'}</span>
@@ -312,18 +324,27 @@ export default function DTFPrepStudio(){
           <p className="dtf-note">Output is resampled to true pixel dimensions. Upscaling does not recreate missing source detail.</p>
         </Tuning>
         <Tuning title="Remove background → Transparent PNG">
+          <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>AI Remove Background</button>
+          {field('AI intent',<select value={aiIntent} onChange={e=>setAiIntent(e.target.value)}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
+          <p className="dtf-note">AI sends a thumbnail to Google Gemini for analysis when invoked. Google free-tier content may be used to improve its products. AI suggests regions; color-based masking keeps original artwork pixels. Photos and ambiguous white details may need correction. Review mask before apply is always enabled.</p>
+          <p role="status">{aiState}</p>{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
+          {maskNeedsReview&&<p className="dtf-channel-warning">The mask may remove meaningful artwork. Inspect red removal points, green keep points and the proof; restore details before applying.</p>}
+          {(opts.requireMaskReview||maskNeedsReview)&&<button type="button" disabled={!proofUrl||opts.maskReviewed||renderedOpts!==opts} onClick={()=>{setOpts(o=>({...o,maskReviewed:true}));setSavedPrepared('');setAiState('Applied');}}>Apply reviewed mask</button>}
+          <div className="dtf-mask-buttons"><button type="button" disabled={!history.length} onClick={undo}>Undo mask edit</button><button type="button" disabled={!future.length} onClick={redo}>Redo mask edit</button><button type="button" onClick={()=>{record();change('regionPoints',[]);}}>Clear region points</button></div>
+          <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:'auto',aiGuidance:null,requireMaskReview:false,maskReviewed:false}));setAiState('Local-method fallback');setSavedPrepared('');}}>Use local edge/color removal</button>
           <button type="button" className="dtf-remove-action" disabled={!bitmap}
-            onClick={()=>{setOpts(o=>({...o,background:'auto',backgroundPoint:null,backgroundScope:'connected',backgroundFeather:12}));setSavedPrepared('');}}>
+            onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:'auto',backgroundPoint:null,backgroundScope:'connected',backgroundFeather:12,requireMaskReview:false,maskReviewed:false}));setSavedPrepared('');}}>
             Remove background automatically
           </button>
           {field('Removal method',<select value={opts.background} onChange={e=>{change('background',e.target.value);}}>
             <option value="none">Keep original background</option>
+            <option value="ai">AI Subject/Logo Mask — review required</option>
             <option value="auto">Automatic — dominant edge color</option>
             <option value="white">Remove white / off-white</option>
             <option value="sampled">Remove chosen background color</option>
             <option value="pick">Click a region in Source to remove</option>
           </select>)}
-          {opts.background==='pick'&&<p className="dtf-pick-tip"><strong>Click the unwanted background in SOURCE.</strong> The selected connected region becomes truly transparent. {opts.backgroundPoint?'Selected point: '+opts.backgroundPoint.x+', '+opts.backgroundPoint.y+'. Click again to change it.':'Choose a background pixel to continue.'}</p>}
+          {opts.background==='pick'&&<p className="dtf-pick-tip"><strong>Click unwanted regions in SOURCE to accumulate removals.</strong> The selected connected region becomes truly transparent. {opts.backgroundPoint?'Selected point: '+opts.backgroundPoint.x+', '+opts.backgroundPoint.y+'. Click another region to add it; use Keep to restore intentional details.':'Choose a background pixel to continue.'}</p>}
           {opts.background==='white'&&<Slider label="White threshold" value={opts.threshold} min={200} max={255} onChange={v=>change('threshold',v)}/>}
           {opts.background==='sampled'&&field('Background RGB color',<input type="color" value={opts.backgroundColor} onChange={e=>change('backgroundColor',e.target.value)}/>)}
           {opts.background!=='none'&&<>
@@ -349,15 +370,15 @@ export default function DTFPrepStudio(){
           </div>
           <div className="dtf-manual-mask">
             <strong>Manual background cleanup</strong>
-            {field('Paint on original Source image',<select value={opts.maskTool||'none'} onChange={e=>change('maskTool',e.target.value)}>
+            {field('Paint on original Source image',<select value={opts.maskTool||'none'} onChange={e=>{setRegionTool('remove');change('maskTool',e.target.value);}}>
               <option value="none">No brush — select region</option>
               <option value="erase">Erase to transparency</option>
               <option value="restore">Restore original design pixels</option>
             </select>)}
             {opts.maskTool!=='none'&&<Slider label="Brush radius (source pixels)" min={2} max={180} value={opts.maskBrushSize||28} onChange={v=>change('maskBrushSize',v)}/>}
             <div className="dtf-mask-buttons">
-              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>change('maskStrokes',(opts.maskStrokes||[]).slice(0,-1))}>Undo brush stroke</button>
-              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>change('maskStrokes',[])}>Clear manual mask</button>
+              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={undo}>Undo brush stroke</button>
+              <button type="button" className="dtf-secondary" disabled={!opts.maskStrokes?.length} onClick={()=>maskChange('maskStrokes',[])}>Clear manual mask</button>
             </div>
             <p className="dtf-note">{(opts.maskStrokes||[]).length} brush marks. Drag on the Source image to modify the working transparency mask; the original source file remains unchanged. Changes appear in Proof.</p>
           </div>
@@ -421,7 +442,7 @@ export default function DTFPrepStudio(){
           <p className="dtf-note">Saving never replaces an approved production asset. Derived files are marked for review. PNG is RGB/RGBA; true ICC CMYK conversion and white-channel separation require RIP-specific workflows.</p>
           {savedPrepared&&<p className="dtf-good">Saved artwork revision <code>{savedPrepared.slice(0,8)}</code> · <Link to="/mockup-studio">Open project</Link></p>}
         </Tuning>
-        <button className="dtf-reset" onClick={()=>{setOpts({...DTF_DEFAULTS});setSavedPrepared('');}}>Reset adjustments</button>
+        <button className="dtf-reset" onClick={()=>{record();revisionRef.current++;setOpts({...DTF_DEFAULTS,regionPoints:[]});setAiState('Ready');setAiError('');setSavedPrepared('');}}>Reset adjustments</button>
       </aside>
     </div>
     {busy&&<div role="status" className="dtf-progress">Preparing full-resolution artwork or transferring R2 asset…</div>}

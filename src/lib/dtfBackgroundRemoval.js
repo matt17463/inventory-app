@@ -107,11 +107,12 @@ export function inspectPngAlpha(data,width,height){
   return {transparent,opaque,partial,hasTransparency:transparent+partial>0,allTransparent:opaque+partial===0};
 }
 export function validateDtfTransparency({settings,report,finalAlpha}){
+  const requested=(settings.background&&settings.background!=='none')||settings.removeInteriorWhite||settings.regionPoints?.some(p=>p.kind==='remove')||settings.maskStrokes?.some(p=>p.kind==='erase');
   if(finalAlpha.allTransparent)throw Error('Background removal erased all artwork. Adjust tolerance or restore the source.');
-  if(settings.background&&settings.background!=='none'&&!finalAlpha.hasTransparency)
+  if(requested&&!finalAlpha.hasTransparency)
     throw Error('The exported image would still have an opaque background. Select a background region and retry.');
   // Transparent padding added during sizing does NOT count as background removal.
-  if(settings.background&&settings.background!=='none'&&report.removed===0&&report.softened===0&&!report.originalHadTransparency)
+  if(requested&&report.removed===0&&report.softened===0&&!report.originalHadTransparency)
     throw Error('No source-background pixels were removed. Try another tolerance or click a background region in Source.');
   return true;
 }

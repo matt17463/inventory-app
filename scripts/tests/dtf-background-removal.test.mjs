@@ -111,10 +111,10 @@ test('final PNG contains true RGBA alpha 0 on background and alpha 255 on origin
 });
 test('the studio uses original-source background cleanup and presents click-to-pick controls',()=>{
   const jsx=readFileSync(new URL('../../src/DTFPrepStudio.jsx',import.meta.url),'utf8');
-  assert.match(jsx,/removeDtfBackground\(original\.data/);
+  assert.match(jsx,/preparedMask\(bitmap,original\.data/);
   assert.match(jsx,/validateDtfTransparency/);
   assert.match(jsx,/Remove background automatically/);
-  assert.match(jsx,/Click the unwanted background in SOURCE/);
+  assert.match(jsx,/Click unwanted regions in SOURCE/);
   assert.match(jsx,/background_removed:render\.backgroundResult\.removed>0/);
 });
 
@@ -146,7 +146,7 @@ test('manual mask replay is deterministic and clearing strokes recovers original
 });
 test('UI provides non-destructive mask editing and stores mask recipe for reproducible R2 revisions',()=>{
   const jsx=readFileSync(new URL('../../src/DTFPrepStudio.jsx',import.meta.url),'utf8');
-  assert.match(jsx,/applyDtfMaskStrokes/);
+  assert.match(readFileSync(new URL('../../src/lib/dtfMaskGuidance.js',import.meta.url),'utf8'),/applyDtfMaskStrokes/);
   assert.match(jsx,/Erase to transparency/);
   assert.match(jsx,/Restore original design pixels/);
   assert.match(jsx,/maskStrokes/);
@@ -169,5 +169,5 @@ test('studio offers separate optional enclosed white knockout controls',()=>{
   const jsx=readFileSync(new URL('../../src/DTFPrepStudio.jsx',import.meta.url),'utf8');
   assert.match(jsx,/removeInteriorWhite/);
   assert.match(jsx,/Clean exterior \+ enclosed white/);
-  assert.match(jsx,/interiorRemoved/);
+  assert.match(readFileSync(new URL('../../src/lib/dtfMaskGuidance.js',import.meta.url),'utf8'),/interiorRemoved/);
 });
