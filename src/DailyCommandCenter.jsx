@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getPhase5CommandCenter, getPhase5RiskDashboard, getPhase5Tasks } from './lib/inventoryApi';
 
-export default function DailyCommandCenter() {
+export default function DailyCommandCenter({ embedded = false } = {}) {
   const [summary, setSummary] = useState({});
   const [riskRows, setRiskRows] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -26,8 +26,9 @@ export default function DailyCommandCenter() {
 
   useEffect(() => { load(); }, []);
 
+  const Container = embedded ? 'section' : 'main';
   return (
-    <main className="page">
+    <Container className="page">
       <section className="page-header">
         <div>
           <p className="eyebrow">Daily Operations</p>
@@ -67,6 +68,6 @@ export default function DailyCommandCenter() {
           </tbody></table></div>
         </section>
       </section>
-    </main>
+    </Container>
   );
 }

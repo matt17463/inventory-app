@@ -1,6 +1,7 @@
 export const quickActions = [
   { label: 'Work Hub', path: '/work-hub', icon: '🧭' },
   { label: 'Command', path: '/command-center', icon: '🧭' },
+  { label: 'Creative Operations', path: '/creative-operations', icon: '✨' },
   { label: 'Exceptions', path: '/exception-center', icon: '🚨' },
   { label: 'Scan', path: '/scan', icon: '📷' },
   { label: 'Receive', path: '/add-item', icon: '📦' },
@@ -19,6 +20,7 @@ export const navSections = [
       { label: 'Home', path: '/', keywords: 'dashboard home overview' },
       { label: 'Work Hub — Start Here', path: '/work-hub', keywords: 'guided workflow client project next steps simple order production overview family' },
       { label: 'Daily Command Center', path: '/command-center', keywords: 'today manager command center critical jobs' },
+      { label: 'Creative Operations Suite', path: '/creative-operations', keywords: 'AI artwork customer design package creator knowledge assistant local tools dashboard' },
       { label: 'Equipment TV / Touch', path: '/shop-equipment', keywords: 'equipment monitoring controls remote access television kiosk' },
       { label: 'Equipment & Remote Access', path: '/equipment-center', keywords: 'home assistant tailscale pi macbook screen sharing roland xtool devices workshop diana windows laptop nas synology thecus files' },
       { label: 'Exception Center', path: '/exception-center', keywords: 'exceptions problems alerts missing data blocked jobs errors' },

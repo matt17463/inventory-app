@@ -34,7 +34,7 @@
     "migrate:r2-assets": "node scripts/migrate-operational-assets-to-r2.mjs",
     "test:shop-workflow": "node --test scripts/tests/shop-workflow-review.test.mjs",
     "test:workflow-first": "node --test scripts/tests/workflow-first.test.mjs scripts/tests/manufacturing-workflow.test.mjs scripts/tests/team-store-commerce.test.mjs scripts/tests/wordpress-storefronts.test.mjs scripts/tests/guided-job-workspace.test.mjs scripts/tests/guided-workhub-phase-two.test.mjs scripts/tests/personalized-pdf-packing.test.mjs scripts/tests/job-closeout-package.test.mjs scripts/tests/carrier-labels.test.mjs scripts/tests/documentation-audit.test.mjs scripts/tests/wordpress-commerce-integrity.test.mjs scripts/tests/wordpress-audit-integration.test.mjs scripts/tests/isolated-staging-safety.test.mjs scripts/tests/commerce-remediation-plan.test.mjs scripts/tests/guide-training-certifications.test.mjs && npm run test:print-center && node --test scripts/tests/catalog-production-readiness.test.mjs && node --test scripts/tests/legacy-catalog-modernization.test.mjs",
-    "test": "npm run test:certification && npm run test:client-graphics && npm run test:workflow-first && npm run test:marketing && npm run test:sync-reliability && npm run test:shop-workflow && npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:mockup-downloads && npm run test:supplier-receiving && npm run test:production-board && npm run test:purchasing-demand && npm run test:imports && npm run test:integrity && npm run test:r2-egress && npm run test:product-blank-mappings && npm run test:new-product-line && npm run test:onsite-sales && npm run test:artwork-r2 && npm run test:product-types && npm run test:pullsheet-purchasing-integrity && npm run test:product-color-replacement && npm run test:artwork-notifications && npm run test:artwork-downloads && npm run test:operations-client-orders && npm run test:client-order-pricing-conversion && npm run test:client-order-test-mode && npm run test:client-order-quote-summary && npm run test:qbo-invoice-export-sales-tax && npm run test:public-order-view-modes && npm run test:client-order-confirmation-invoice-details && npm run test:client-order-persistence-delete && npm run test:employee-training-guide && npm run test:interactive-guided-training && npm run test:graphical-themes && npm run test:contractor-navigation-theme && npm run test:equipment && npm run test:material-studio && npm run test:nas-backup && npm run test:storage-backup-read && npm run test:dtf-studio",
+    "test": "npm run test:certification && npm run test:client-graphics && npm run test:workflow-first && npm run test:marketing && npm run test:sync-reliability && npm run test:shop-workflow && npm run test:static && npm run test:security && npm run test:calendar && npm run test:mockups && npm run test:mockup-downloads && npm run test:supplier-receiving && npm run test:production-board && npm run test:purchasing-demand && npm run test:imports && npm run test:integrity && npm run test:r2-egress && npm run test:product-blank-mappings && npm run test:new-product-line && npm run test:onsite-sales && npm run test:artwork-r2 && npm run test:product-types && npm run test:pullsheet-purchasing-integrity && npm run test:product-color-replacement && npm run test:artwork-notifications && npm run test:artwork-downloads && npm run test:operations-client-orders && npm run test:client-order-pricing-conversion && npm run test:client-order-test-mode && npm run test:client-order-quote-summary && npm run test:qbo-invoice-export-sales-tax && npm run test:public-order-view-modes && npm run test:client-order-confirmation-invoice-details && npm run test:client-order-persistence-delete && npm run test:employee-training-guide && npm run test:interactive-guided-training && npm run test:graphical-themes && npm run test:contractor-navigation-theme && npm run test:equipment && npm run test:material-studio && npm run test:nas-backup && npm run test:storage-backup-read && npm run test:dtf-studio && npm run test:creative-operations",
     "functions:esm": "node scripts/validate_netlify_esm.mjs",
     "validate:steps6-14": "node scripts/validate_steps6_14.mjs",
     "check": "npm run functions:esm && npm run test && npm run lint && npm run build && npm run test:product-center",
@@ -69,7 +69,8 @@
     "test:certification": "node --test scripts/tests/variation-certification.test.mjs scripts/tests/reorder-traveler-request.test.mjs scripts/tests/artwork-integrity.test.mjs scripts/tests/woo-logo-mapping.test.mjs",
     "test:dtf-studio": "node --test scripts/tests/dtf-prep-studio.test.mjs scripts/tests/dtf-background-removal.test.mjs scripts/tests/dtf-ai-guidance.test.mjs scripts/tests/dtf-ai-jobs.test.mjs && node scripts/run-dtf-browser-ci.mjs",
     "test:product-center": "node --test scripts/tests/product-event-center.test.mjs scripts/tests/product-event-center-accessibility.test.mjs scripts/tests/product-discovery-dashboard.test.mjs",
-    "test:dtf-browser": "playwright test --config playwright.dtf.config.mjs"
+    "test:dtf-browser": "playwright test --config playwright.dtf.config.mjs",
+    "test:creative-operations": "node --test scripts/tests/creative-operations.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
@@ -83,7 +84,8 @@
     "react-router-dom": "^7.18.2",
     "read-excel-file": "^9.3.10",
     "sharp": "0.35.5",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "@huggingface/transformers": "4.3.2"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",

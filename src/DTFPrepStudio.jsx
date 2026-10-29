@@ -349,6 +349,8 @@ export default function DTFPrepStudio(){
           <p className="dtf-note">Output is resampled to true pixel dimensions. Upscaling does not recreate missing source detail.</p>
         </Tuning>
         <Tuning title="Remove background → Transparent PNG">
+          <p className="dtf-note"><Link to="/creative-operations?tab=artwork">Use free on-device AI background removal →</Link> (no paid inference API; export the PNG and open it here for edge cleanup)</p>
+          <p className="dtf-note">Optional cloud method below: <strong>Google Gemini may incur API charges.</strong> Choose the free on-device link above to avoid paid AI inference.</p>
           <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>AI Remove Background</button>
           {field('AI intent',<select value={aiIntent} onChange={e=>{revisionRef.current++;setAiIntent(e.target.value);}}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
           <p className="dtf-note">AI sends a thumbnail to Google Gemini for analysis when invoked. Google free-tier content may be used to improve its products. AI suggests regions; color-based masking keeps original artwork pixels. Photos and ambiguous white details may need correction. Review mask before apply is always enabled.</p>
