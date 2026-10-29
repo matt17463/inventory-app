@@ -1,0 +1,30 @@
+name: Creative Operations local inference smoke
+on:
+  push:
+    branches: [feature/unified-creative-operations-suite-20261029]
+    paths:
+      - 'src/CreativeLocalAi.jsx'
+      - 'src/lib/creativeLocalMask.js'
+      - 'scripts/smoke-creative-local-model.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/creative-operations-model-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-model-inference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify free local ORMBG inference
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          DO_NOT_TRACK: '1'
+        run: node scripts/smoke-creative-local-model.mjs
