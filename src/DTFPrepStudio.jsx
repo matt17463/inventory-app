@@ -30,7 +30,7 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
   sc.drawImage(bitmap,0,0);
   let bounds={x:0,y:0,width:bitmap.width,height:bitmap.height};
   let backgroundResult={removed:0,softened:0,matched:0,originalHadTransparency:false};
-  if(opts.background!=='none'||opts.crop||opts.maskStrokes?.length){
+  if(opts.background!=='none'||opts.removeInteriorWhite||opts.crop||opts.maskStrokes?.length){
     const original=sc.getImageData(0,0,staged.width,staged.height);
     const originalCopy=opts.maskStrokes?.length?new Uint8ClampedArray(original.data):null;
     const originallyTransparent=inspectPngAlpha(original.data,staged.width,staged.height).hasTransparency;
@@ -47,6 +47,17 @@ function renderArtwork(bitmap,opts,maxEdge=0) {
         decontaminate:opts.backgroundDecontaminate!==false,
       });
       backgroundResult={...result,originalHadTransparency:originallyTransparent};
+    }
+    if(opts.removeInteriorWhite){
+      // A separate optional pass removes enclosed white regions even when the
+      // exterior is another color. Keep it OFF by default to protect white ink.
+      const holes=removeDtfBackground(original.data,staged.width,staged.height,{
+        mode:'white',scope:'all',tolerance:255-Number(opts.interiorWhiteThreshold??245),
+        feather:Number(opts.interiorWhiteFeather??4),decontaminate:true,
+      });
+      backgroundResult.removed+=holes.removed;
+      backgroundResult.softened+=holes.softened;
+      backgroundResult.interiorRemoved=holes.removed;
     }
     if(originalCopy){
       const manual=applyDtfMaskStrokes(original.data,originalCopy,staged.width,staged.height,opts.maskStrokes);
@@ -110,7 +121,7 @@ export default function DTFPrepStudio(){
   const channelWarnings=useMemo(()=>opts.halftone==='multicolor'?screenAngleWarnings(opts):[],[opts]);
   function chooseSource(nextFile) {
     setFile(nextFile);setSavedSource('');setSavedPrepared('');
-    setOpts(o=>({...o,backgroundPoint:null,maskStrokes:[],background:o.background==='pick'?'none':o.background}));
+    setOpts(o=>({...o,backgroundPoint:null,maskStrokes:[],removeInteriorWhite:false,background:o.background==='pick'?'none':o.background}));
   }
   function pickBackground(event) {
     if(opts.background!=='pick'||opts.maskTool!=='none'||!bitmap)return;
@@ -326,6 +337,16 @@ export default function DTFPrepStudio(){
             <label className="dtf-check"><input type="checkbox" checked={opts.backgroundDecontaminate!==false} onChange={e=>change('backgroundDecontaminate',e.target.checked)}/> Decontaminate edge colors</label>
             {report?.stats&&<div className="dtf-alpha-result"><strong>Real background removal</strong><span>{(report.stats.removedBackground||0).toLocaleString()} source pixels transparent · {(report.stats.softenedBackground||0).toLocaleString()} softened</span></div>}
           </>}
+          <div className="dtf-manual-mask">
+            <strong>Enclosed background and white holes</strong>
+            <label className="dtf-check"><input type="checkbox" checked={!!opts.removeInteriorWhite} onChange={e=>change('removeInteriorWhite',e.target.checked)}/> Remove enclosed white/off-white areas too</label>
+            {opts.removeInteriorWhite&&<>
+              <Slider label="Interior white minimum brightness" min={205} max={255} value={opts.interiorWhiteThreshold??245} onChange={v=>change('interiorWhiteThreshold',v)}/>
+              <Slider label="Interior edge softness" min={0} max={20} value={opts.interiorWhiteFeather??4} onChange={v=>change('interiorWhiteFeather',v)}/>
+              <p className="dtf-channel-warning">This removes matching white pixels anywhere, including intentional white text or logos. Inspect the Proof closely and use Restore original design pixels to recover white details.</p>
+            </>}
+            <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{setOpts(o=>({...o,background:o.background==='none'?'auto':o.background,removeInteriorWhite:true,interiorWhiteThreshold:245,interiorWhiteFeather:4}));setSavedPrepared('');}}>Clean exterior + enclosed white</button>
+          </div>
           <div className="dtf-manual-mask">
             <strong>Manual background cleanup</strong>
             {field('Paint on original Source image',<select value={opts.maskTool||'none'} onChange={e=>change('maskTool',e.target.value)}>
