@@ -123,3 +123,71 @@ test('OpenAI diagnostics distinguish quota/auth/request failures without echoing
  assert.match(await aiFailure(response(503,'unknown')),/service error/);
  assert.doesNotMatch(await aiFailure(response(400,'SECRET')),/SECRET/);
 });
+
+test('material test plans use Responses JSON mode and preserve safety gates',async()=>{
+ const helper=new URL('../../netlify/functions/_shared/aiDiagnostics.js',import.meta.url).href;
+ const source=fs.readFileSync('netlify/functions/material-settings-ai.js','utf8')
+  .replace(/import \{ authorizeEmployee, jsonResponse, auditFunctionSecurity \} from '.\/_shared\/security.js';/,
+   `const authorizeEmployee=async()=>({ok:true,user:{id:'test'},role:'admin'});
+    const jsonResponse=(statusCode,data)=>({statusCode,body:JSON.stringify(data)});
+    const auditFunctionSecurity=async()=>{};`)
+  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(helper));
+ const {handler}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const originalFetch=globalThis.fetch,originalKey=process.env.OPENAI_API_KEY;
+ let calls=0;
+ try{
+  process.env.OPENAI_API_KEY='test-only-placeholder';
+  globalThis.fetch=async(url,options)=>{
+   calls++;
+   assert.equal(url,'https://api.openai.com/v1/responses');
+   const body=JSON.parse(options.body);
+   assert.equal(body.text.format.type,'json_object');
+   assert.equal(body.max_output_tokens,1300);
+   assert.equal(body.input[0].role,'system');
+   return {ok:true,json:async()=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({summary:'Test coupon first',candidate_settings:{power:'80%'},test_steps:['Confirm exact material'],warnings:['Ventilation required'],questions:[]})}]}]})};
+  };
+  const payload={machine_type:'xtool_p2',operation:'engrave',machine_model:'xTool P2',machine_configuration:'55W CO2',material_name:'clear cast acrylic'};
+  const response=await handler({httpMethod:'POST',body:JSON.stringify(payload)});
+  const data=JSON.parse(response.body);
+  assert.equal(response.statusCode,200);
+  assert.equal(data.review_required,true);
+  assert.equal(data.confidence,'unverified');
+  assert.match(data.candidate_settings.power,/verify exact numeric setting/);
+  assert.match(data.evidence_note,/Not approved for production/);
+  const blocked=await handler({httpMethod:'POST',body:JSON.stringify({...payload,material_name:'PVC'})});
+  assert.equal(blocked.statusCode,422);
+  assert.equal(calls,1,'unsafe laser inputs must not call OpenAI');
+ }finally{
+  globalThis.fetch=originalFetch;
+  if(originalKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=originalKey;
+ }
+});
+
+test('discovery daily and active-run limits stop requests before OpenAI is called',async()=>{
+ const scoring=new URL('../../src/lib/productDiscoveryScoring.js',import.meta.url).href;
+ const helper=new URL('../../netlify/functions/_shared/aiDiagnostics.js',import.meta.url).href;
+ const source=fs.readFileSync('netlify/functions/product-discovery-run-background.js','utf8')
+  .replace(/import \{authorizeEmployee,auditFunctionSecurity\} from '.\/_shared\/security.js';/,
+   `let testDb; export const setDb=db=>{testDb=db;};
+    const authorizeEmployee=async()=>({ok:true,user:{id:'test'},role:'admin',supabase:testDb});
+    const auditFunctionSecurity=async()=>{};`)
+  .replace("'../../src/lib/productDiscoveryScoring.js'",JSON.stringify(scoring))
+  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(helper));
+ const {handler,setDb}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const originalFetch=globalThis.fetch;
+ let calls=0;
+ try{
+  globalThis.fetch=async()=>{calls++;throw Error('Should not reach OpenAI');};
+  for(const [recent,active,expected] of [[5,0,/Daily research limit/],[4,2,/already active/]]){
+   const updates=[];
+   setDb({from:()=>({recent:false,select(){return this;},eq(){return this;},gte(){this.recent=true;return this;},
+    limit(){return Promise.resolve({data:Array(this.recent?recent:active).fill({id:'test'}),error:null});},
+    single(){return Promise.resolve({data:{status:'queued'},error:null});},
+    update(fields){updates.push(fields);return this;},then(resolve){resolve({error:null});}})});
+   await handler({httpMethod:'POST',body:JSON.stringify({run_id:'00000000-0000-0000-0000-000000000001'})});
+   assert.equal(updates.at(-1).status,'failed');
+   assert.match(updates.at(-1).message,expected);
+  }
+  assert.equal(calls,0);
+ }finally{globalThis.fetch=originalFetch;}
+});
