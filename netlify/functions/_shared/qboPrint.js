@@ -197,3 +197,22 @@ export async function verifiedQuickBooksInvoice(supabase,manual){
   throw Error(matches.length?'QuickBooks invoice number is ambiguous.':'This invoice number was not found in QuickBooks.');
  return reconcileQboInvoice(manual,matches[0]);
 }
+
+
+// Write-capable endpoint used exclusively by the admin-guarded Product & Event Center.
+// OAuth tokens remain encrypted and server-side; POST must never be retried automatically.
+export async function qboEventRequest(supabase,{method='GET',path,body}={}){
+ if(!['production','sandbox'].includes(process.env.SC_QBO_ENVIRONMENT))throw Error('Explicit QuickBooks environment required.');
+ if(!/^\/(?:invoice|query)(?:[/?]|$)/i.test(path||''))throw Error('Unsupported QuickBooks resource.');
+ let {token,realm}=await bearer(supabase);
+ const host=process.env.SC_QBO_ENVIRONMENT==='sandbox'?'https://sandbox-quickbooks.api.intuit.com':'https://quickbooks.api.intuit.com';
+ const url=host+'/v3/company/'+encodeURIComponent(realm)+path;
+ const perform=()=>fetch(url,{method,redirect:'error',headers:{Authorization:'Bearer '+token,
+  'Content-Type':'application/json',Accept:'application/json'},body:body==null?undefined:JSON.stringify(body),
+  signal:AbortSignal.timeout(15000)});
+ let response=await perform();
+ if(response.status===401&&method==='GET'){({token,realm}=await bearer(supabase,{forceRefresh:true}));response=await perform();}
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error('QuickBooks request rejected (HTTP '+response.status+'). Check account configuration and invoice fields.');
+ return result;
+}
