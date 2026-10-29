@@ -63,7 +63,7 @@ test('device library route links to existing approved material workflow and pres
  assert.match(ui,/shouldSimulateWrites/);
  assert.match(ui,/not production approved/);
  assert.match(material,/OMNI_PRODUCTS/);
- assert.match(material,/source_type:.*manufacturer/);
+ assert.match(material,/omniStudioDraftFor/);
  assert.match(material,/status:'draft'/);
  for(const t of ['sc_device_setup_checks','sc_device_maintenance_logs']){
   assert.match(sql,new RegExp('alter table public\\.'+t+' enable row level security'));
