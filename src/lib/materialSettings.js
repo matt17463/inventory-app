@@ -68,8 +68,12 @@ export const SETTING_FIELDS = {
     ['bed_or_riser','Bed/riser configuration']
   ],
   xtool_omni:[
-    ['studio_mode','xTool Studio printing mode'],['target_relief_mm','Target relief height (mm)'],
-    ['ink_white_mode','White ink mode'],['varnish','Varnish setting'],
+    ['studio_mode','xTool Studio machine / process mode'],['material_preset','Studio material selection'],
+    ['rotary_modeling_shape','Rotary geometry / modeling mode'],['print_effect','Print effect: Flat / Texture / Relief'],
+    ['ink_mode','Studio ink mode and order'],['white_ink_type','Rigid vs flexible white'],
+    ['white_layers','White ink passes / layers'],['color_layers','Color ink passes / layers'],
+    ['varnish_layers','Varnish passes'],['target_relief_mm','Target texture / relief height (mm)'],
+    ['ink_white_mode','Legacy white mode'],['varnish','Varnish setting'],
     ['texture_smoothness','Texture smoothness'],['primer','Surface primer'],
     ['printed_height_mm','Measured printed height (mm)'],['cure_or_dry','Cure / dry notes']
   ],
