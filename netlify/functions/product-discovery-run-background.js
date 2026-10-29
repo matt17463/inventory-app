@@ -93,7 +93,7 @@ async function discover({focus,count,signals}){
    body:JSON.stringify({model:process.env.OPENAI_PRODUCT_RESEARCH_MODEL||'gpt-4.1',
      tools:[{type:'web_search',search_context_size:'high'}],tool_choice:'required',
      input:instructions,text:{format:{type:'json_schema',name:'sc_product_discovery',strict:true,schema:responseSchema}},
-     max_output_tokens:9500})
+     max_output_tokens:14000})
   });
   if(!api.ok)throw Error('AI discovery request failed (HTTP '+api.status+'). Check server-side model and web-search access.');
   return parseCandidates(await api.json());
