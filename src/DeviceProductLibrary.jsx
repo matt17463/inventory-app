@@ -46,7 +46,7 @@ export default function DeviceProductLibrary(){
  useEffect(()=>{reload().catch(e=>setNotice(e.message));},[reload]);
  const products=useMemo(()=>machine!=='all'&&machine!=='xtool_omni'?[]:searchOmniProducts(search,category),[machine,search,category]);
  const matchingSaved=useMemo(()=>saved.filter(r=>(machine==='all'||r.machine_type===machine)&&[r.material_name,r.material_brand,r.material_sku,r.machine_model,r.machine_type,r.operation].join(' ').toLowerCase().includes(search.toLowerCase())),[saved,machine,search]);
- const product=OMNI_PRODUCTS.find(p=>p.id===selected)||OMNI_PRODUCTS[0];
+ const product=products.find(p=>p.id===selected)||products[0]||OMNI_PRODUCTS[0];
  const studio=omniStudioProfileFor(product.id);
  const lastMaintenance=Object.fromEntries(OMNI_MAINTENANCE.map(t=>[t.id,logs.find(x=>x.task_key===t.id)?.performed_at]));
  async function toggleSetup(key,checked){
@@ -120,7 +120,7 @@ export default function DeviceProductLibrary(){
       <strong>{r.material_name}</strong> · {machineFor(r.machine_type).label}<span className={'sc-recipe-status '+r.status}>{r.status}</span><Link to={'/material-settings?recipe='+encodeURIComponent(r.id)}>Open recipe</Link>
     </article>)}</div>
    </section>
-   {(machine==='all'||machine==='xtool_omni')&&<section className="card sc-device-guide">
+   {(machine==='all'||machine==='xtool_omni')&&products.length>0&&<section className="card sc-device-guide">
     <p className="eyebrow">PRODUCT / {product.category.toUpperCase()}</p><h2>{product.name}</h2>
     {product.status==='not-supported-or1'&&<p className="sc-device-warning" role="alert">Not supported by the standard OR1 spherical-size specification. No approved golf-ball printing profile is provided.</p>}
     <dl>
