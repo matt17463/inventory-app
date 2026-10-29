@@ -1,4 +1,5 @@
 import { authorizeEmployee, jsonResponse, auditFunctionSecurity } from './_shared/security.js';
+import {assertAIProvider,freeAIEnabled,freeUsageGuard,requireFreeKeys,freeResearch,freeGenerate} from './_shared/freeResearch.js';
 import {aiFailure} from './_shared/aiDiagnostics.js';
 
 const EQUIPMENT = new Set(['mopa_fiber','xtool_s1','xtool_p2','xtool_omni','sawgrass_sg500','heat_press','sublimation_press']);
@@ -29,6 +30,7 @@ export async function handler(event) {
   const auth=await authorizeEmployee(event,{functionName:'material-settings-ai',allowedRoles:['admin','manager','operator']});
   if(!auth.ok)return bodyResponse(auth.statusCode,{message:auth.message},event);
   try {
+    assertAIProvider();
     const body=JSON.parse(event.body||'{}');
     const machine=clip(body.machine_type,40), operation=clip(body.operation,40),
       material=clip(body.material_name,180), model=clip(body.machine_model,160),
@@ -44,17 +46,23 @@ export async function handler(event) {
     const unverifiedLinks=cleanSources(body.sources).map(s=>({...s,verified:false}));
     const vetted=[];
     const key=process.env.OPENAI_API_KEY;
+    if(freeAIEnabled()){requireFreeKeys(body.mode==='research');await freeUsageGuard(auth.supabase,auth.user.id);}
 
     if(body.mode==='research'){
-      if(!key)return bodyResponse(503,{message:'Configure the server-only OPENAI_API_KEY for live manufacturer research.'},event);
+      if(!freeAIEnabled()&&!key)return bodyResponse(503,{message:'Configure the server-only OPENAI_API_KEY for live manufacturer research.'},event);
       const request={machine_type:machine,machine_model:model,machine_configuration:configuration,
-        operation,material_name:material,brand,finish,thickness,notes};
+        operation,material_name:material,brand,finish,thickness,...(freeAIEnabled()?{}:{notes})};
       const task='Find manufacturer or supplier operating recommendations for the EXACT machine module and EXACT identified material, not a generic material family. '+
         'Prefer xTool official support for S1/P2/Omni, the laser OEM/controller for MOPA, and heat-transfer/substrate makers for presses. '+
         'Document source URLs and critical conditions. If sources do not establish numerical values, say insufficient evidence. '+
         'Do not give a ready-to-run recipe when the exact variant is not confirmed. Never encourage laser processing PVC or unknown plastics. '+
         'Mention ventilation, PPE, fire precautions, substrate coatings and test coupons. '+
         'Return concise plain English with direct source links and indicate if a value is manufacturer or community-provided. Input: '+JSON.stringify(request);
+      if(freeAIEnabled()){
+       const result=await freeResearch({prompt:task,queries:[model+' '+material+' '+operation+' manufacturer instructions'],maxOutputTokens:2000,timeoutMs:90000});
+       await auditFunctionSecurity({functionName:'material-settings-ai',action:'research',outcome:'success',userId:auth.user.id,role:auth.role,event,metadata:{machine,operation,provider:'gemini_tavily'}});
+       return bodyResponse(200,{research:result.text,references:result.references,review_required:true,confidence:'unverified',evidence_note:'Public search findings are unverified and are not production-approved settings.'},event);
+      }
       const response=await fetch('https://api.openai.com/v1/responses',{
         method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
         body:JSON.stringify({
@@ -77,10 +85,10 @@ export async function handler(event) {
         evidence_note:'Live web findings are suggestions, not verified manufacturer matches or production-approved settings. Compare cited manuals and test a coupon.'},event);
     }
 
-    if(!key)return bodyResponse(503,{message:'AI suggestions are not configured. Existing verified recipes remain available.'},event);
+    if(!freeAIEnabled()&&!key)return bodyResponse(503,{message:'AI suggestions are not configured. Existing verified recipes remain available.'},event);
     const requestContext={
       machine_type:machine,machine_model:model,machine_configuration:configuration,
-      operation,material_name:material,material_brand:brand,material_finish:finish,thickness_mm:thickness,notes,known_reference_links:vetted,user_reference_links_unverified:unverifiedLinks
+      operation,material_name:material,material_brand:brand,material_finish:finish,thickness_mm:thickness,...(freeAIEnabled()?{}:{notes}),known_reference_links:vetted,user_reference_links_unverified:freeAIEnabled()?[]:unverifiedLinks
     };
     const system=[
       'You are a manufacturing prepress assistant for Skilled Crafting. Your answer is a cautious TEST PLAN, never a production guarantee.',
@@ -94,6 +102,10 @@ export async function handler(event) {
       'Never suggest defeating interlocks, running unattended, unsafe coatings, or treating an AI output as verified.',
       'Close with instruction to print a small test coupon, inspect result, record material lot and physically approve.',
     ].join('\n');
+    let suggestion;
+    if(freeAIEnabled()){
+     suggestion=JSON.parse(await freeGenerate({system,prompt:JSON.stringify(requestContext),json:true,maxOutputTokens:1800,signal:AbortSignal.timeout(35000)}));
+    }else{
     // Use the same Responses endpoint as the working live research paths.
     const response=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
@@ -109,7 +121,8 @@ export async function handler(event) {
     const result=await response.json();
     if(result.status==='incomplete')return bodyResponse(502,{message:'AI test plan was incomplete. Narrow the material/process request and retry.'},event);
     const blocks=(result.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]);
-    const suggestion=JSON.parse(result.output_text||blocks.map(x=>x.text||'').join('\n')||'{}');
+    suggestion=JSON.parse(result.output_text||blocks.map(x=>x.text||'').join('\n')||'{}');
+    }
     if(!suggestion||typeof suggestion!=='object'||Array.isArray(suggestion))throw Error('Malformed model output');
     const output={
       summary:clip(suggestion.summary,1200),
@@ -122,7 +135,7 @@ export async function handler(event) {
     };
     await auditFunctionSecurity({functionName:'material-settings-ai',action:'suggest',outcome:'success',userId:auth.user.id,role:auth.role,event,metadata:{machine,operation}});
     return bodyResponse(200,output,event);
-  } catch {
-    return bodyResponse(500,{message:'Unable to prepare the settings test plan.'},event);
+  } catch(error) {
+    return bodyResponse(error.statusCode||500,{message:freeAIEnabled()?error.message:'Unable to prepare the settings test plan.'},event);
   }
 }

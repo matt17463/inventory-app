@@ -91,7 +91,7 @@ export default function ProductDiscoveryDashboard({opportunities=[],onReview,onR
     <button className="pdc-primary" type="button" onClick={start} disabled={busy||inProgress||!canDiscover}>
      {inProgress?'Research in progress…':busy?'Submitting…':'Discover and save products'}
     </button>
-    <p className="pdc-muted">Research runs use the configured server-side OpenAI web-search service, store source links and preliminary scores, and save only new candidates. Maximum four discovery runs per account user per day.</p>
+    <p className="pdc-muted">Research runs use the configured server-side AI and public-search services, store source links and preliminary scores, and save only new candidates. Maximum four discovery runs per account user per day.</p>
     {latest&&<div className="pdc-source">
      <strong>Most recent run</strong>
      <p><span className="pdc-tag">{name(latest.status)}</span> {new Date(latest.requested_at).toLocaleString()}</p>

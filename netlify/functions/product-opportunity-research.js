@@ -1,6 +1,7 @@
 // On-demand, employee-authenticated product research. No invented citations or settings.
 // This uses the same server-only OpenAI key pattern as material-settings-ai.
 import {authorizeEmployee,jsonResponse,auditFunctionSecurity} from './_shared/security.js';
+import {assertAIProvider,freeAIEnabled,freeUsageGuard,requireFreeKeys,freeResearch} from './_shared/freeResearch.js';
 import {aiFailure} from './_shared/aiDiagnostics.js';
 const safe=(value,n)=>String(value??'').trim().slice(0,n);
 export async function handler(event){
@@ -9,11 +10,13 @@ export async function handler(event){
  const auth=await authorizeEmployee(event,{functionName:'product-opportunity-research',allowedRoles:['admin','manager','marketing','operator']});
  if(!auth.ok)return jsonResponse(auth.statusCode,{message:auth.message},event);
  try{
+  assertAIProvider();
   const raw=JSON.parse(event.body||'{}');
   const name=safe(raw.name,180),category=safe(raw.category,100),audience=safe(raw.audience,250);
   const equipment=Array.isArray(raw.equipment)?raw.equipment.map(x=>safe(x,35)).slice(0,10):[];
   if(name.length<3)return jsonResponse(400,{message:'Enter a specific product name before researching.'},event);
-  if(!process.env.OPENAI_API_KEY)return jsonResponse(503,{message:'Server-side OPENAI_API_KEY is not configured. Add manufacturer/community sources manually.'},event);
+  if(freeAIEnabled()){requireFreeKeys(true);await freeUsageGuard(auth.supabase,auth.user.id);}
+  if(!freeAIEnabled()&&!process.env.OPENAI_API_KEY)return jsonResponse(503,{message:'Server-side OPENAI_API_KEY is not configured. Add manufacturer/community sources manually.'},event);
   const prompt=[
    'Research a possible customized-product offering for Skilled Crafting, a small fabrication/printing business.',
    'Find recent primary supplier/manufacturer pages and independently available public community evidence for demand, blanks, durability, compatibility and competitive pricing.',
@@ -24,8 +27,13 @@ export async function handler(event){
    'For lasers, never recommend processing PVC or unknown plastics; flag fire, fumes and ventilation. Golf balls require specific fixture qualification.',
    'Provide 3–6 useful, testable product directions; give steps to validate with a physical blank and unit-cost data.',
    'Return readable plain English under 1500 words, not JSON.',
-   JSON.stringify({product:name,category,audience,equipment})
+   JSON.stringify({product:name,category,audience:freeAIEnabled()?'general prospective buyers':audience,equipment})
   ].join('\n');
+  if(freeAIEnabled()){
+   const result=await freeResearch({prompt,queries:[name+' manufacturer supplier blanks',name+' personalized product reviews community'],maxOutputTokens:2000,timeoutMs:23000});
+   await auditFunctionSecurity({functionName:'product-opportunity-research',action:'web-research',outcome:'success',userId:auth.user.id,role:auth.role,event,metadata:{provider:'gemini_tavily'}});
+   return jsonResponse(200,{research:result.text,references:result.references,review_required:true,confidence:'unverified',evidence_note:'Public search findings and AI suggestions require independent verification.'},event);
+  }
   const response=await fetch('https://api.openai.com/v1/responses',{
    method:'POST',headers:{'Authorization':'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
    body:JSON.stringify({model:process.env.OPENAI_PRODUCT_RESEARCH_MODEL||'gpt-4.1',
@@ -43,5 +51,5 @@ export async function handler(event){
   await auditFunctionSecurity({functionName:'product-opportunity-research',action:'web-research',outcome:'success',userId:auth.user.id,role:auth.role,event,metadata:{product:name.slice(0,60)}});
   return jsonResponse(200,{research:report,references,review_required:true,confidence:'unverified',
    evidence_note:'Search results are research leads, not validated supplier availability, market demand, or approved manufacturing settings.'},event);
- }catch{return jsonResponse(500,{message:'Unable to conduct product research. Try a narrower item.'},event);}
+ }catch(error){return jsonResponse(error.statusCode||500,{message:freeAIEnabled()?error.message:'Unable to conduct product research. Try a narrower item.'},event);}
 }

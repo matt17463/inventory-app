@@ -131,7 +131,8 @@ test('material test plans use Responses JSON mode and preserve safety gates',asy
    `const authorizeEmployee=async()=>({ok:true,user:{id:'test'},role:'admin'});
     const jsonResponse=(statusCode,data)=>({statusCode,body:JSON.stringify(data)});
     const auditFunctionSecurity=async()=>{};`)
-  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(helper));
+  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(helper))
+  .replace("'./_shared/freeResearch.js'",JSON.stringify(new URL('../../netlify/functions/_shared/freeResearch.js',import.meta.url).href));
  const {handler}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
  const originalFetch=globalThis.fetch,originalKey=process.env.OPENAI_API_KEY;
  let calls=0;
@@ -172,7 +173,8 @@ test('discovery daily and active-run limits stop requests before OpenAI is calle
     const authorizeEmployee=async()=>({ok:true,user:{id:'test'},role:'admin',supabase:testDb});
     const auditFunctionSecurity=async()=>{};`)
   .replace("'../../src/lib/productDiscoveryScoring.js'",JSON.stringify(scoring))
-  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(helper));
+  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(helper))
+  .replace("'./_shared/freeResearch.js'",JSON.stringify(new URL('../../netlify/functions/_shared/freeResearch.js',import.meta.url).href));
  const {handler,setDb}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
  const originalFetch=globalThis.fetch;
  let calls=0;
@@ -189,5 +191,85 @@ test('discovery daily and active-run limits stop requests before OpenAI is calle
    assert.match(updates.at(-1).message,expected);
   }
   assert.equal(calls,0);
+  let unauthorizedUpdates=0;
+  setDb({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:null,error:{message:'not owned'}}),update(){unauthorizedUpdates++;return this;}})});
+  await handler({httpMethod:'POST',body:JSON.stringify({run_id:'00000000-0000-0000-0000-000000000002'})});
+  assert.equal(unauthorizedUpdates,0,'a failed ownership check must never update another employee run');
  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('free research uses basic search and Gemini JSON without paid fallback or invented citations',async()=>{
+ const {freeResearch,retainRetrievedSources,freeGenerate}=await import('../../netlify/functions/_shared/freeResearch.js');
+ const fetchOriginal=globalThis.fetch;
+ const old={GEMINI_API_KEY:process.env.GEMINI_API_KEY,TAVILY_API_KEY:process.env.TAVILY_API_KEY,GEMINI_RESEARCH_MODEL:process.env.GEMINI_RESEARCH_MODEL};
+ const requests=[];
+ try{
+  process.env.GEMINI_API_KEY='test-gemini';process.env.TAVILY_API_KEY='test-tavily';delete process.env.GEMINI_RESEARCH_MODEL;
+  globalThis.fetch=async(url,options)=>{
+   const body=JSON.parse(options.body);requests.push({url,body});
+   if(url==='https://api.tavily.com/search'){
+    assert.equal(body.search_depth,'basic');assert.equal(body.auto_parameters,false);
+    return {ok:true,json:async()=>({results:[{url:'https://example.org/blank',title:'Blank manufacturer',content:'Public manufacturer evidence'},{url:'https://127.0.0.1/private',title:'Unsafe'}]})};
+   }
+   assert.match(url,/gemini-3\.5-flash-lite:generateContent$/);
+   assert.equal(body.tools,undefined,'Google paid grounding must never be requested');
+   assert.equal(body.generationConfig.responseMimeType,'application/json');
+   assert.ok(options.headers['x-goog-api-key']);assert.ok(!url.includes('test-gemini'));
+   assert.match(body.contents[0].parts[0].text,/Public manufacturer evidence/);
+   return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"candidates":[]}'}]}}]})};
+  };
+  const result=await freeResearch({prompt:'Research public wedding blanks',queries:['public wedding blanks'],schema:{type:'object'}});
+  assert.equal(requests.length,2);assert.equal(result.references.length,1);
+  const kept=retainRetrievedSources([{sources:[{url:'https://invented.org/item',title:'Fake'},{url:'https://example.org/blank',title:'Invented title'}]}],result.references);
+  assert.equal(kept[0].sources.length,1);assert.equal(kept[0].sources[0].title,'Blank manufacturer');
+  requests.length=0;
+  globalThis.fetch=async(url)=>{requests.push(url);return {ok:false,status:429};};
+  await assert.rejects(freeResearch({prompt:'x',queries:['x']}),/free usage limit/);
+  assert.deepEqual(requests,['https://api.tavily.com/search']);
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'partial'}]}}]})});
+  await assert.rejects(freeGenerate({prompt:'x'}),/complete answer/);
+ }finally{
+  globalThis.fetch=fetchOriginal;
+  for(const [name,value] of Object.entries(old)){if(value===undefined)delete process.env[name];else process.env[name]=value;}
+ }
+});
+
+test('free provider hourly usage guard fails closed and checks before API calls',async()=>{
+ const {freeUsageGuard}=await import('../../netlify/functions/_shared/freeResearch.js');
+ const db=(count,error=null)=>({from:()=>({select(){return this;},eq(){return this;},in(){return this;},gte:async()=>({count,error})})});
+ await freeUsageGuard(db(20),'employee');
+ await assert.rejects(freeUsageGuard(db(21),'employee'),/Hourly AI research limit/);
+ await assert.rejects(freeUsageGuard(db(null,{message:'unavailable'}),'employee'),/unavailable/);
+});
+
+test('free material suggestions omit private notes and retain numeric/safety filtering',async()=>{
+ const root=new URL('../../netlify/functions/_shared/',import.meta.url);
+ const source=fs.readFileSync('netlify/functions/material-settings-ai.js','utf8')
+  .replace(/import \{ authorizeEmployee, jsonResponse, auditFunctionSecurity \} from '.\/_shared\/security.js';/,
+   `const db={from:()=>({select(){return this;},eq(){return this;},in(){return this;},gte:async()=>({count:1,error:null})})};
+    const authorizeEmployee=async()=>({ok:true,user:{id:'test'},role:'admin',supabase:db});
+    const jsonResponse=(statusCode,data)=>({statusCode,body:JSON.stringify(data)});const auditFunctionSecurity=async()=>{};`)
+  .replace("'./_shared/aiDiagnostics.js'",JSON.stringify(new URL('aiDiagnostics.js',root).href))
+  .replace("'./_shared/freeResearch.js'",JSON.stringify(new URL('freeResearch.js',root).href));
+ const {handler}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const oldFetch=globalThis.fetch,oldProvider=process.env.SC_AI_PROVIDER,oldKey=process.env.GEMINI_API_KEY;
+ let calls=0;
+ try{
+  process.env.SC_AI_PROVIDER='gemini_tavily';process.env.GEMINI_API_KEY='test';
+  globalThis.fetch=async(url,options)=>{
+   calls++;assert.match(url,/generativelanguage\.googleapis\.com/);
+   assert.doesNotMatch(options.body,/PRIVATE_CUSTOMER_NOTE|private-account-reference/);
+   return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({summary:'Verify exact substrate',candidate_settings:{power:'50%'},test_steps:['Test a coupon'],warnings:[],questions:[]})}]}}]})};
+  };
+  const payload={machine_type:'xtool_p2',operation:'engrave',machine_model:'P2',machine_configuration:'55W CO2',material_name:'cast acrylic',notes:'PRIVATE_CUSTOMER_NOTE',sources:[{label:'Private reference',url:'https://example.org/private-account-reference'}]};
+  const result=await handler({httpMethod:'POST',body:JSON.stringify(payload)});
+  assert.equal(result.statusCode,200);const plan=JSON.parse(result.body);
+  assert.match(plan.candidate_settings.power,/verify exact numeric/);assert.equal(plan.review_required,true);
+  const blocked=await handler({httpMethod:'POST',body:JSON.stringify({...payload,material_name:'PVC'})});
+  assert.equal(blocked.statusCode,422);assert.equal(calls,1);
+ }finally{
+  globalThis.fetch=oldFetch;
+  if(oldProvider===undefined)delete process.env.SC_AI_PROVIDER;else process.env.SC_AI_PROVIDER=oldProvider;
+  if(oldKey===undefined)delete process.env.GEMINI_API_KEY;else process.env.GEMINI_API_KEY=oldKey;
+ }
 });
