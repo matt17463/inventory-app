@@ -51,6 +51,9 @@ export default function ProductDevelopmentCenter(){
  const [sourceBusy,setSourceBusy]=useState(false);
  const [launchChannel,setLaunchChannel]=useState('woocommerce');
  const [listingRef,setListingRef]=useState('');
+ const [automate,setAutomate]=useState({woo_product_id:'',qbo_customer_id:'',qbo_item_ids:'',invoice_number:'',expected_total:'',opportunity_id:'',job_item_ids:'',recipe_version_id:''});
+ const [automationResult,setAutomationResult]=useState(null);
+ const [imports,setImports]=useState([]);
  const [performance,setPerformance]=useState({period_month:month(),units_sold:0,sales_revenue:0,total_variable_cost:0,scrapped_units:0,active_labor_minutes:0,machine_minutes:0,notes:''});
  const [costDraft,setCostDraft]=useState(initialModel);
 
@@ -74,7 +77,7 @@ export default function ProductDevelopmentCenter(){
    const specs=[
     ['sc_pdc_opportunities',setOpportunities],['sc_pdc_sources',setSources],['sc_pdc_trials',setTrials],
     ['sc_pdc_events',setEvents],['sc_pdc_event_items',setEventItems],['sc_pdc_launches',setLaunches],
-    ['sc_pdc_performance',setMetrics],['sc_material_recipes',setRecipes]
+    ['sc_pdc_performance',setMetrics],['sc_pdc_sales_imports',setImports],['sc_material_recipes',setRecipes]
    ];
    const out=await Promise.all(specs.map(async ([table,setter])=>{
      const result=await supabase.from(table).select('*').limit(1000);
@@ -204,6 +207,27 @@ export default function ProductDevelopmentCenter(){
     state,listing_reference:clean(listingRef)}, {onConflict:'opportunity_id,channel'});
    if(dbError)throw dbError;await load();setMessage(state==='published'?'External listing reference saved (not automatically published).':'Launch stage saved. No external storefront changes were made.');
   });
+ }
+
+ async function callAutomation(action,commit=false,extra={}){
+  if(!canApprove){setError('Admin or manager authorization is required.');return;}
+  setBusy(true);setError('');setMessage('');
+  try{
+   const body={action,commit,...extra};
+   const response=await authenticatedFunctionFetch('/.netlify/functions/product-event-automation',{method:'POST',body:JSON.stringify(body)});
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok||!result.success)throw Error(result.message||'Automation failed.');
+   setAutomationResult(result);
+   setMessage((commit?'Action completed: ':'Validated: ')+(result.status||action)+'. Review the result below.');
+   if(commit)await load();
+  }catch(e){setError(e.message);}finally{setBusy(false);}
+ }
+ function automationField(key,label,placeholder=''){
+  return <label>{label}<input value={automate[key]||''} placeholder={placeholder} onChange={e=>setAutomate(o=>({...o,[key]:e.target.value}))}/></label>;
+ }
+ function actionButtons(action,values){
+  return <div className="pdc-actions"><button disabled={busy||!canApprove} onClick={()=>callAutomation(action,false,values)}>Check without changes</button>
+   <button className="pdc-primary" disabled={busy||!canApprove} onClick={()=>callAutomation(action,true,values)}>Execute verified action</button></div>;
  }
  async function savePerformance(){
    await run(async()=>{if(!canApprove||!selected)throw Error('Admin or manager only.');
@@ -351,6 +375,25 @@ export default function ProductDevelopmentCenter(){
          <Link className="pdc-link" to="/work-hub">Work Hub</Link><Link className="pdc-link" to="/production-travelers">Travelers</Link>
         </div>
        </div>
+
+       {canApprove&&<div className="pdc-section pdc-form">
+        <h3>Publish an existing configured WooCommerce product</h3>
+        <p className="pdc-note">Requires a validated launch and an existing complete WooCommerce draft with images, shipping class, and product category. No product, variation or blank SKU is fabricated.</p>
+        {automationField('woo_product_id','Existing WooCommerce draft product ID')}
+        <div className="pdc-actions"><button disabled={busy||!currentLaunches.find(x=>x.channel==='woocommerce')} onClick={()=>callAutomation('publish_existing_woo_product',false,{launch_id:currentLaunches.find(x=>x.channel==='woocommerce')?.id,woo_product_id:automate.woo_product_id})}>Preview publish</button>
+        <button className="pdc-primary" disabled={busy||!currentLaunches.find(x=>x.channel==='woocommerce')} onClick={()=>callAutomation('publish_existing_woo_product',true,{launch_id:currentLaunches.find(x=>x.channel==='woocommerce')?.id,woo_product_id:automate.woo_product_id})}>Publish approved WooCommerce draft</button></div>
+       </div>}
+       {canApprove&&<div className="pdc-section pdc-form"><h3>Import actual sales from verified QuickBooks invoices</h3>
+        <p className="pdc-note">Only event package lines explicitly associated with this product can be attributed. Import is deduplicated by QuickBooks invoice ID and product ID.</p>
+        {automationField('invoice_number','Exact QBO invoice number')}
+        {automationField('expected_total','Verified QBO invoice total')}
+        <label>Event associated with this product<select value={automate.opportunity_id} onChange={e=>setAutomate(o=>({...o,opportunity_id:e.target.value}))}>
+         <option value="">Select event</option>{events.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
+        {actionButtons('import_verified_qbo_sales',{event_id:automate.opportunity_id,opportunity_id:selected.id,
+          invoice_number:automate.invoice_number,expected_total:automate.expected_total})}
+        <h3>Imported, verified sales</h3>
+        {imports.filter(x=>x.opportunity_id===selected.id).map(x=><p key={x.id}>{x.invoice_number} · {x.invoice_date} · {x.units} units · {currency(x.gross_sales)}</p>)}
+       </div>}
        <div className="pdc-section"><h3>Actual monthly results</h3><div className="pdc-form pdc-grid">
         {[['period_month','Month'],['units_sold','Units sold'],['sales_revenue','Revenue'],['total_variable_cost','Variable costs'],
          ['scrapped_units','Spoiled units'],['active_labor_minutes','Labor minutes'],['machine_minutes','Machine minutes']].map(([key,label])=>
@@ -433,6 +476,27 @@ export default function ProductDevelopmentCenter(){
         const item=currentItems.find(i=>i.id===id);if(item)applyNames(item);else setError('Choose an item for personalization.');}}>Attach draft personalization (reset proof)</button>
       </div>
      </div>
+
+     {canApprove&&<div className="pdc-section pdc-form">
+       <h3>Event production & QuickBooks automation</h3>
+       <p className="pdc-note">All operations require exact mapped identifiers. Preview first. No invoice emails are sent automatically. Travelers use the existing production-artwork verification endpoint.</p>
+       <h3>Create unsent QuickBooks invoice</h3>
+       <div className="pdc-grid">{automationField('qbo_customer_id','Existing QuickBooks customer ID')}
+        {automationField('qbo_item_ids','QuickBooks item mapping JSON','{"event-item-uuid": 123}')}
+       </div>
+       {actionButtons('create_qbo_event_invoice',{event_id:currentEvent.id,qbo_customer_id:automate.qbo_customer_id,
+        qbo_item_ids:(()=>{try{return JSON.parse(automate.qbo_item_ids||'{}');}catch{return {};}})()})}
+       <h3>Create certified production traveler</h3>
+       <p className="pdc-muted">Link a real job to the event via the existing Work Hub before attempting traveler generation. Use the job's existing item IDs and an approved manufacturing recipe revision.</p>
+       <div className="pdc-grid">{automationField('job_item_ids','Existing job item IDs','123,124')}
+        {automationField('recipe_version_id','Approved manufacturing recipe version UUID')}</div>
+       {actionButtons('create_verified_traveler',{event_id:currentEvent.id,job_item_ids:automate.job_item_ids.split(',').map(x=>Number(x.trim())),
+        recipe_version_id:automate.recipe_version_id})}
+       <h3>Verify existing QuickBooks invoice</h3>
+       <div className="pdc-grid">{automationField('invoice_number','Exact invoice number')}{automationField('expected_total','Expected invoice total')}</div>
+       <button disabled={busy} onClick={()=>callAutomation('verify_qbo_event_invoice',false,{event_id:currentEvent.id,
+        invoice_number:automate.invoice_number,expected_total:automate.expected_total})}>Verify exact invoice in QuickBooks</button>
+      </div>}
      <div className="pdc-section"><h3>Production readiness checks</h3>{currentItems.map(i=>{
       const result=readyForProduction({recipe_id:i.material_recipe_id,proof_status:i.proof_status},recipes);
       return <p key={i.id}><Badge>{result.ok?'Ready':'Blocked'}</Badge> {i.label}: {result.reason} {!i.approved_artwork_revision&&'Artwork revision missing.'}</p>;
@@ -440,6 +504,7 @@ export default function ProductDevelopmentCenter(){
     </>}
    </div>
   </div>}
+  {automationResult&&<div className="pdc-panel pdc-section"><h3>Latest verified operation</h3><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(automationResult,null,2)}</pre></div>}
   <p className="pdc-muted" style={{marginTop:22}}>All research and example product templates are candidates only. Publishing, billing, and manufacturing remain gated by exact-material testing, customer approval and your existing work processes. No automatic external sale or printer operation occurs in this workspace.</p>
  </main>;
 }
