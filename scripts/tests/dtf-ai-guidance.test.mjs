@@ -104,3 +104,8 @@ test('detailed-image requests use bounded structured guidance and minimal model 
  assert.equal(request.generationConfig.thinkingConfig.thinkingLevel,'minimal');
  assert.ok(!request.tools);assert.ok(!JSON.stringify(request).includes('tavily'));
 });
+test('large accepted thumbnails are reduced to 384 pixels before reaching Gemini',async()=>{
+ const large=await sharp({create:{width:768,height:768,channels:4,background:'#fff'}}).png().toBuffer();let dimensions;
+ const res=await make({generate:async bytes=>{const m=await sharp(bytes).metadata();dimensions=[m.width,m.height];return points;}})({...event,body:JSON.stringify({mimeType:'image/png',image:large.toString('base64')})});
+ assert.equal(res.statusCode,200);assert.deepEqual(dimensions,[384,384]);
+});

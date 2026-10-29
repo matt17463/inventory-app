@@ -52,7 +52,7 @@ export function createHandler({authorize=authorizeEmployee,audit=auditFunctionSe
     if(!metadata.width||!metadata.height||Math.max(metadata.width,metadata.height)>1024||metadata.pages>1||!['png','jpeg','webp'].includes(metadata.format)||'image/'+metadata.format!==body.mimeType)throw failure('Image must be a still thumbnail of at most 1024 pixels.',400);
     await guard(auth.supabase,auth.user.id);
     // Re-encode to strip metadata and constrain external disclosure to visible image content.
-    const thumbnail=await sharp(bytes,{limitInputPixels:1048576}).rotate().resize({width:768,height:768,fit:'inside',withoutEnlargement:true}).png().toBuffer();
+    const thumbnail=await sharp(bytes,{limitInputPixels:1048576}).rotate().resize({width:384,height:384,fit:'inside',withoutEnlargement:true}).png().toBuffer();
     const guidance=validateGuidance(await generate(thumbnail,'image/png',{key:env.GEMINI_API_KEY,model:env.GEMINI_IMAGE_MODEL}));
     const provenance={provider:'gemini',model:env.GEMINI_IMAGE_MODEL,method:'semantic-points-connected-color-v1',createdAt:new Date().toISOString()};
     await audit({functionName:FUNCTION,action:'image_guidance',outcome:'success',userId:auth.user.id,role:auth.role,event:{headers:event.headers},metadata:{model:env.GEMINI_IMAGE_MODEL,points:guidance.points.length}});
