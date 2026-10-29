@@ -25,5 +25,5 @@ export async function verifyDtfGeminiLive({env=process.env,fetcher=fetch,generat
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{const result=await verifyDtfGeminiLive();console.log('DTF provider release verification: '+JSON.stringify(result));}
- catch{console.error('DTF provider release verification FAILED. Check model access, image support and quota. No fallback or publish permitted.');process.exitCode=1;}
+ catch(error){console.error('DTF provider release verification FAILED: '+JSON.stringify({providerStatus:error.providerStatus||error.statusCode||0,reason:['TimeoutError','AbortError'].includes(error.name)?'provider_timeout':error.name==='SyntaxError'?'invalid_provider_json':'verification_failed'})+'. No fallback or publish permitted.');process.exitCode=1;}
 }

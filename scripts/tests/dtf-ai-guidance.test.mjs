@@ -96,12 +96,15 @@ test('dark exterior removal protects isolated black lines and intentional white 
  const {data}=prepareSourceMask(source,9,9,{...options,background:'auto'});
  assert.equal(a(data,0,0),0);assert.equal(a(data,4,4),255);assert.equal(a(data,4,2),255);
 });
-test('detailed-image requests use bounded structured guidance and minimal model reasoning',async()=>{
+test('detailed-image requests use bounded JSON guidance without optional provider-specific fields',async()=>{
  let request;
  await generateImageGuidance(png,'image/png',{key:'test',model:'gemini-3.5-flash-lite',fetcher:async(_url,options)=>{request=JSON.parse(options.body);return mockProvider(points)();}});
- assert.equal(request.generationConfig.responseJsonSchema.properties.points.maxItems,24);
+ assert.equal(request.generationConfig.responseMimeType,'application/json');
+ assert.ok(!request.generationConfig.responseJsonSchema);
  assert.equal(request.generationConfig.maxOutputTokens,1800);
- assert.equal(request.generationConfig.thinkingConfig.thinkingLevel,'minimal');
+ assert.ok(!request.generationConfig.thinkingConfig);
+ const tooMany={confidence:.9,points:Array.from({length:25},()=>points.points[0])};
+ await assert.rejects(()=>generateImageGuidance(png,'image/png',{key:'test',model:'gemini-3.5-flash-lite',fetcher:mockProvider(tooMany)}),/too many/);
  assert.ok(!request.tools);assert.ok(!JSON.stringify(request).includes('tavily'));
 });
 test('large accepted thumbnails are reduced to 384 pixels before reaching Gemini',async()=>{
