@@ -23,12 +23,15 @@ async function orderGates(db,eventId){
  return {event,items};
 }
 async function storefront(db,body,event){
- const {data,error}=await db.from('sc_pdc_launches').select('*,sc_pdc_opportunities(status,material_recipe_id)').eq('id',body.launch_id).single();
+ const {data,error}=await db.from('sc_pdc_launches').select('*,sc_pdc_opportunities(name,status,material_recipe_id)').eq('id',body.launch_id).single();
  if(error||!data||data.channel!=='woocommerce'||!['ready','published'].includes(data.state))
   throw Error('Select a WooCommerce launch that passed the product validation gate.');
  const productId=id(body.woo_product_id);if(!productId)throw Error('An existing WooCommerce product ID must be linked.');
  const product=await wooRequest('products/'+productId);
  if(product.id!==productId)throw Error('WooCommerce product mismatch.');
+ const expected=String(data.sc_pdc_opportunities?.name||'').normalize('NFKC').trim().toLowerCase();
+ if(!expected||String(product.name||'').normalize('NFKC').trim().toLowerCase()!==expected)
+  throw Error('WooCommerce product name must exactly match the approved opportunity; do not publish an unrelated product.');
  if(product.status==='publish')return {status:'already_published',product_id:productId,url:product.permalink};
  if(!['draft','pending','private'].includes(product.status))throw Error('Product status not supported for publishing.');
  if(!Array.isArray(product.categories)||!product.categories.length||!product.shipping_class_id)
@@ -86,7 +89,8 @@ async function createInvoice(db,body){
   notice:'QuickBooks sales tax must be calculated and verified using the configured QBO tax settings; preview is not an invoice.'};
  const payload={DocNumber:doc,CustomerRef:{value:String(customerId)},Line:lines,
   PrivateNote:('Skilled Crafting event package '+pkg.id+'; review taxes and payment terms before sending.').slice(0,4000)};
- if(pkg.event_date)payload.DueDate=pkg.event_date;
+
+ // Event date is not a valid default invoice due date; leave QBO terms unchanged.
  const created=await qboEventRequest(db,{method:'POST',path:'/invoice?minorversion=75',body:payload});
  if(!created.Invoice?.Id)throw Error('QuickBooks did not return an invoice ID; check QBO before retrying.');
  return {status:'created_unsent',invoice_id:created.Invoice.Id,invoice_number:doc,total:created.Invoice.TotalAmt,
