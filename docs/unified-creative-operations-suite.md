@@ -74,3 +74,13 @@ Never require a paid model provider for features in this package. Default pathwa
 ## Current known limitations
 
 This is an **integrated usable foundation**, not a finished five-module automation deployment. There is no connected local inference worker, no public interactive customer configurator, no indexed private document corpus, and no new data migration yet. Nothing here claims a verified production deploy.
+
+## Second implementation pass (October 29, 2026)
+
+- Interactive product concept workbench: local artwork drag/scale/color/product preview, export, copy specifications, and save *original source artwork* as a new draft Mockup Studio project. This does not create a physical verified placement.
+- Product costing: integer-cent deterministic totals and ability to save an unapproved event draft and its line items to existing `sc_pdc_events` and `sc_pdc_event_items`.
+- Knowledge Hub: searchable staff-only RLS document library with authenticated uploader, source links, full-text index, text/Markdown import and source expansion. The additive migration has been applied to the connected production database; **zero documents** were present at verification.
+- Local AI: opt-in browser ONNX segmentation using `onnx-community/ormbg-ONNX` through Transformers.js, with a human-reviewed transparent PNG and no paid inference API calls.
+- Added automated tests and CI checks. **Do not consider browser runtime model compatibility verified until exercised in a real browser.**
+- Existing order, printing and WooCommerce APIs remain untouched; no customer-facing anonymous configurator is deployed.
+- No private employee documents are automatically imported; admins should curate approved business documents.
