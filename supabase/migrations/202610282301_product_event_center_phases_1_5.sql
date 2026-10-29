@@ -221,4 +221,32 @@ create policy pdc_performance_insert on public.sc_pdc_performance for insert to 
 create policy pdc_performance_update on public.sc_pdc_performance for update to authenticated
  using(public.sc_current_app_role() in ('admin','manager'))
  with check(recorded_by=(select auth.uid()) and public.sc_current_app_role() in ('admin','manager'));
+
+-- Machine registry extension: printer-side sublimation recipe is distinct from heat-press recipe.
+alter table public.sc_material_recipes drop constraint if exists sc_material_recipes_machine_type_check;
+alter table public.sc_material_recipes add constraint sc_material_recipes_machine_type_check
+ check(machine_type in ('mopa_fiber','xtool_s1','xtool_p2','xtool_omni','heat_press','sublimation_press','roland_bn2','sawgrass_sg500'));
+
+-- A production/fulfilled package cannot have item specifications changed without reopening it.
+create or replace function public.sc_pdc_freeze_event_item()
+returns trigger language plpgsql set search_path = pg_catalog,public as $
+declare current_state text;
+begin
+ select status into current_state from public.sc_pdc_events where id=old.event_id;
+ if current_state in ('production','fulfilled') then
+   raise exception 'Reopen the event to draft and re-approve proofs before altering production items';
+ end if;
+ if (new.quantity,new.material_recipe_id,new.personalization,new.label,new.unit_price)
+    is distinct from (old.quantity,old.material_recipe_id,old.personalization,old.label,old.unit_price)
+    and old.proof_status='approved' then
+    new.proof_status='draft';
+    new.approved_artwork_revision='';
+ end if;
+ return new;
+end $;
+drop trigger if exists sc_pdc_event_item_freeze on public.sc_pdc_event_items;
+create trigger sc_pdc_event_item_freeze before update on public.sc_pdc_event_items
+ for each row execute function public.sc_pdc_freeze_event_item();
+
+
 -- Append-only sources and trials, no DELETE privilege for staff.
