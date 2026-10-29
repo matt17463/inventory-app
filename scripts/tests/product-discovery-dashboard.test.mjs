@@ -191,6 +191,10 @@ test('discovery daily and active-run limits stop requests before OpenAI is calle
    assert.match(updates.at(-1).message,expected);
   }
   assert.equal(calls,0);
+  let unauthorizedUpdates=0;
+  setDb({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:null,error:{message:'not owned'}}),update(){unauthorizedUpdates++;return this;}})});
+  await handler({httpMethod:'POST',body:JSON.stringify({run_id:'00000000-0000-0000-0000-000000000002'})});
+  assert.equal(unauthorizedUpdates,0,'a failed ownership check must never update another employee run');
  }finally{globalThis.fetch=originalFetch;}
 });
 

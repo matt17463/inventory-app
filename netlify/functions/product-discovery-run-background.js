@@ -116,13 +116,13 @@ export async function handler(event){
  const auth=await authorizeEmployee(event,{functionName:handlerName,allowedRoles:['admin','manager','marketing']});
  if(!auth.ok)return {statusCode:auth.statusCode};
  const db=auth.supabase;
- let id,acquired=false,saved=0,skipped=0,found=0;
+ let id,owned=false,saved=0,skipped=0,found=0;
  try{
-  assertAIProvider();
   const body=JSON.parse(event.body||'{}');id=String(body.run_id||'');
   if(!/^[a-f0-9-]{36}$/i.test(id))throw Error('Valid discovery run ID required.');
   const read=await db.from('sc_pdc_discovery_runs').select('*').eq('id',id).eq('created_by',auth.user.id).single();
   if(read.error||!read.data)throw Error('Discovery run not found for your user.');
+  owned=true;assertAIProvider();
   const run=read.data;
   if(run.status!=='queued')return {statusCode:200};
   const recent=await db.from('sc_pdc_discovery_runs').select('id')
@@ -133,7 +133,6 @@ export async function handler(event){
   const lock=await db.from('sc_pdc_discovery_runs').update({status:'running',started_at:new Date().toISOString(),
     message:'Researching public sources and matching internal CRM/supplier signals…'}).eq('id',id).eq('status','queued').select('id').maybeSingle();
   if(lock.error||!lock.data)return {statusCode:200};
-  acquired=true;
   if(freeAIEnabled())await freeUsageGuard(db,auth.user.id);
   const signals=await loadSignals(db);
   await update(db,id,{crm_signals:{segments:signals.crmSegments,opportunities_considered:signals.activeOpportunities.length},
@@ -176,7 +175,7 @@ export async function handler(event){
    userId:auth.user.id,role:auth.role,event,metadata:{run_id:id,found,saved,skipped}});
  }catch(error){
   console.error('Product discovery failed',error?.message||error);
-  if(id&&/^[a-f0-9-]{36}$/i.test(id)){
+  if(owned&&id&&/^[a-f0-9-]{36}$/i.test(id)){
    await update(db,id,{status:saved?'partial':'failed',finished_at:new Date().toISOString(),
      total_found:found,saved_count:saved,duplicate_count:skipped,
      message:text(error?.message||'Discovery could not finish',700)}).catch(()=>{});
