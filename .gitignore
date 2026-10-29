@@ -30,3 +30,7 @@ supabase/backups/
 .env
 .env.*
 !.env.example
+
+# Isolated browser acceptance artifacts
+test-results/
+playwright-report/

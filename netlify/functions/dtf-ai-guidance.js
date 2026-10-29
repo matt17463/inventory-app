@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import {startImageJob} from './_shared/dtfAiJobs.js';
 import { authorizeEmployee, jsonResponse, auditFunctionSecurity } from './_shared/security.js';
 import { validateGuidance } from '../../src/lib/dtfMaskGuidance.js';
 
@@ -33,6 +34,19 @@ export async function generateImageGuidance(bytes,mimeType,{key,model,fetcher=fe
   if(guidance.points.length>24)throw failure('Gemini returned too many regions. Use local removal.');
   return guidance;
 }
+export async function decodeImageEvent(event){
+    if(event.isBase64Encoded||typeof event.body!=='string'||event.body.length>1500000)throw failure('Image request exceeds limits.',413);
+    let body;try{body=JSON.parse(event.body);}catch{throw failure('Invalid image request.',400);}
+    if(!['image/png','image/jpeg','image/webp'].includes(body.mimeType)||typeof body.image!=='string'||body.image.length>1400000||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.image))throw failure('Use a PNG, JPEG or WebP thumbnail.',400);
+    const bytes=Buffer.from(body.image,'base64');
+    const signature=body.mimeType==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):body.mimeType==='image/jpeg'?bytes.subarray(0,3).equals(Buffer.from([255,216,255])):bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';
+    if(!signature)throw failure('Image bytes do not match the selected MIME type.',400);
+    let metadata;try{metadata=await sharp(bytes,{limitInputPixels:1048576,animated:false}).metadata();}catch{throw failure('Invalid or oversized image.',400);}
+    if(!metadata.width||!metadata.height||Math.max(metadata.width,metadata.height)>1024||metadata.pages>1||!['png','jpeg','webp'].includes(metadata.format)||'image/'+metadata.format!==body.mimeType)throw failure('Image must be a still thumbnail of at most 1024 pixels.',400);
+    // Re-encode to strip metadata and constrain external disclosure to visible image content.
+    const thumbnail=await sharp(bytes,{limitInputPixels:1048576}).rotate().resize({width:384,height:384,fit:'inside',withoutEnlargement:true}).png().toBuffer();
+    return {body,bytes,thumbnail};
+}
 export function createHandler({authorize=authorizeEmployee,audit=auditFunctionSecurity,guard=imageUsageGuard,generate=generateImageGuidance,env=process.env}={}){
  return async event=>{
   const respond=(status,payload)=>{const r=jsonResponse(status,payload,event);r.headers['Cache-Control']='no-store';return r;};
@@ -42,17 +56,13 @@ export function createHandler({authorize=authorizeEmployee,audit=auditFunctionSe
   if(!auth.ok)return respond(auth.statusCode,{message:auth.message});
   try{
     if(!env.GEMINI_API_KEY||!IMAGE_MODELS.has(env.GEMINI_IMAGE_MODEL)||env.DTF_GEMINI_ENABLED!=='true')throw failure('Gemini image analysis is not enabled. Use local removal.',503);
-    if(event.isBase64Encoded||typeof event.body!=='string'||event.body.length>1500000)throw failure('Image request exceeds limits.',413);
-    let body;try{body=JSON.parse(event.body);}catch{throw failure('Invalid image request.',400);}
-    if(!['image/png','image/jpeg','image/webp'].includes(body.mimeType)||typeof body.image!=='string'||body.image.length>1400000||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.image))throw failure('Use a PNG, JPEG or WebP thumbnail.',400);
-    const bytes=Buffer.from(body.image,'base64');
-    const signature=body.mimeType==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):body.mimeType==='image/jpeg'?bytes.subarray(0,3).equals(Buffer.from([255,216,255])):bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';
-    if(!signature)throw failure('Image bytes do not match the selected MIME type.',400);
-    let metadata;try{metadata=await sharp(bytes,{limitInputPixels:1048576,animated:false}).metadata();}catch{throw failure('Invalid or oversized image.',400);}
-    if(!metadata.width||!metadata.height||Math.max(metadata.width,metadata.height)>1024||metadata.pages>1||!['png','jpeg','webp'].includes(metadata.format)||'image/'+metadata.format!==body.mimeType)throw failure('Image must be a still thumbnail of at most 1024 pixels.',400);
+    const {body,bytes,thumbnail}=await decodeImageEvent(event);
+    if(body.mode==='start'){
+      if(event.body.length>240000)throw failure('Use a smaller analysis thumbnail.',413);
+      const job=await startImageJob(auth.supabase,auth.user.id,env.GEMINI_IMAGE_MODEL,bytes,()=>guard(auth.supabase,auth.user.id));
+      return respond(job.cached?200:202,job);
+    }
     await guard(auth.supabase,auth.user.id);
-    // Re-encode to strip metadata and constrain external disclosure to visible image content.
-    const thumbnail=await sharp(bytes,{limitInputPixels:1048576}).rotate().resize({width:384,height:384,fit:'inside',withoutEnlargement:true}).png().toBuffer();
     const guidance=validateGuidance(await generate(thumbnail,'image/png',{key:env.GEMINI_API_KEY,model:env.GEMINI_IMAGE_MODEL}));
     const provenance={provider:'gemini',model:env.GEMINI_IMAGE_MODEL,method:'semantic-points-connected-color-v1',createdAt:new Date().toISOString()};
     await audit({functionName:FUNCTION,action:'image_guidance',outcome:'success',userId:auth.user.id,role:auth.role,event:{headers:event.headers},metadata:{model:env.GEMINI_IMAGE_MODEL,points:guidance.points.length}});

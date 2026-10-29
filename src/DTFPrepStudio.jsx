@@ -9,6 +9,7 @@ import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtf
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
 import { sourcePoint, validateGuidance } from './lib/dtfMaskGuidance.js';
 import { preparedMask } from './lib/dtfMaskClient.js';
+import { supabase } from './supabaseClient.js';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient.js';
 import './DTFPrepStudio.css';
 
@@ -125,9 +126,24 @@ export default function DTFPrepStudio(){
       const ratio=Math.min(1,384/Math.max(source.width,source.height)),c=makeCanvas(Math.max(1,Math.round(source.width*ratio)),Math.max(1,Math.round(source.height*ratio)));
       c.getContext('2d').drawImage(source,0,0,c.width,c.height);
       let image=c.toDataURL('image/png').split(',')[1];
-      if(image.length>1300000){const small=makeCanvas(Math.max(1,Math.round(c.width/2)),Math.max(1,Math.round(c.height/2)));small.getContext('2d').drawImage(c,0,0,small.width,small.height);image=small.toDataURL('image/png').split(',')[1];}
-      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image,mimeType:'image/png'}),signal:AbortSignal.timeout(55000)});
-      const data=await response.json();if(!response.ok)throw Error(data.message||'Gemini unavailable. Use local removal.');
+      if(image.length>200000){const small=makeCanvas(Math.max(1,Math.round(c.width/2)),Math.max(1,Math.round(c.height/2)));small.getContext('2d').drawImage(c,0,0,small.width,small.height);image=small.toDataURL('image/png').split(',')[1];}
+      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image,mimeType:'image/png',mode:'start'}),signal:AbortSignal.timeout(55000)});
+      let data=await response.json();if(!response.ok)throw Error(data.message||'Gemini unavailable. Use local removal.');
+      if(data.job_id){
+        const queued=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance-background',{method:'POST',body:JSON.stringify({job_id:data.job_id,image,mimeType:'image/png'}),signal:AbortSignal.timeout(15000)});
+        if(!queued.ok)throw Error('Could not start image analysis. Use local removal.');
+        const jobId=data.job_id,deadline=Date.now()+200000;
+        let completed=false;
+        while(Date.now()<deadline){
+          if(revisionRef.current!==revision){setAiState('Correction needed');setAiError('Settings changed while analysis ran. Keep editing locally or request a new preview.');return;}
+          const job=await supabase.from('sc_dtf_ai_jobs').select('status,guidance,provenance,error_code').eq('id',jobId).maybeSingle();
+          if(job.error||!job.data)throw Error('Image analysis status is unavailable. Use local removal.');
+          if(job.data.status==='failed')throw Error(job.data.error_code==='quota'?'Gemini quota reached. Use local removal.':job.data.error_code==='timeout'?'Gemini analysis timed out. Use local removal.':'Gemini could not analyze this image. Use local removal.');
+          if(job.data.status==='complete'){data={...job.data.guidance,provenance:job.data.provenance};completed=true;break;}
+          await new Promise(resolve=>setTimeout(resolve,2500));
+        }
+        if(!completed)throw Error('Image analysis took too long. Use local removal.');
+      }
       if(revisionRef.current!==revision){setAiState('Correction needed');setAiError('Source or settings changed during analysis. Request a new preview.');return;}
       const guidance={...validateGuidance(data),provenance:data.provenance};
       // Conservative intent offers only exterior candidates; all-background includes interior proposals.
@@ -159,6 +175,7 @@ export default function DTFPrepStudio(){
     paintMask(event);
   }
   function finishMask(){maskDraggingRef.current=false;maskLastRef.current=null;panRef.current=null;}
+  useEffect(()=>()=>{revisionRef.current++;},[]);
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
@@ -221,6 +238,7 @@ export default function DTFPrepStudio(){
   }
   async function prepareFull(){
     if(!bitmap)throw Error('Upload an image first.');
+    if(aiState==='Analyzing')throw Error('Wait for image analysis or switch to local editing before exporting.');
     // Preview-only channel isolation must never leak into an exported or saved file.
     return renderArtwork(bitmap,{...opts,channelView:'composite'});
   }
@@ -247,9 +265,13 @@ export default function DTFPrepStudio(){
       const render=await prepareFull(),blob=await exportDtfPng(render.canvas);
       let sourceId=savedSource;
       if(!sourceId){
+        const sourceCanvas=makeCanvas(bitmap.width,bitmap.height),sourceContext=sourceCanvas.getContext('2d',{willReadFrequently:true});
+        sourceContext.drawImage(bitmap,0,0);
+        const sourceHasTransparency=inspectPngAlpha(sourceContext.getImageData(0,0,bitmap.width,bitmap.height).data,bitmap.width,bitmap.height).hasTransparency;
+        sourceCanvas.width=sourceCanvas.height=1;
         const s=await addArtworkAsset({projectId,file,values:{
           artwork_name:baseName(file.name)+' — original (DTF Studio)',pixel_width:sourceMeta.width,
-          pixel_height:sourceMeta.height,has_transparency:file.type==='image/png',preflight_status:'pending',
+          pixel_height:sourceMeta.height,has_transparency:sourceHasTransparency,preflight_status:'pending',
           exact_artwork_locked:true,metadata:{dtf_studio:'v1',role:'immutable_source'} }});
         sourceId=s.id;setSavedSource(sourceId);
       }
@@ -278,7 +300,7 @@ export default function DTFPrepStudio(){
         <p>Non-destructive production preparation · original artwork stays unchanged</p></div>
       <div className="dtf-head-actions">
         <Link to="/artwork-preflight">Basic preflight</Link><Link to="/client-graphics">Client graphics</Link>
-        <button onClick={downloadPng} disabled={!bitmap||busy}>↓ Export 300 PPI PNG</button>
+        <button onClick={downloadPng} disabled={!bitmap||busy||aiState==='Analyzing'}>↓ Export 300 PPI PNG</button>
       </div>
     </header>
     <div className="dtf-workspace">
@@ -328,12 +350,12 @@ export default function DTFPrepStudio(){
         </Tuning>
         <Tuning title="Remove background → Transparent PNG">
           <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>AI Remove Background</button>
-          {field('AI intent',<select value={aiIntent} onChange={e=>setAiIntent(e.target.value)}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
+          {field('AI intent',<select value={aiIntent} onChange={e=>{revisionRef.current++;setAiIntent(e.target.value);}}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
           <p className="dtf-note">AI sends a thumbnail to Google Gemini for analysis when invoked. Google free-tier content may be used to improve its products. AI suggests regions; color-based masking keeps original artwork pixels. Photos and ambiguous white details may need correction. Review mask before apply is always enabled.</p>
-          <p role="status">{aiState}</p>{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
+          <p role="status">{aiState}</p>{aiState==='Analyzing'&&<p className="dtf-note">Detailed logos can take up to three minutes. Local editing stays available; changing the mask prevents an older AI result from replacing your edits.</p>}{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
           {maskNeedsReview&&<p className="dtf-channel-warning">The mask may remove meaningful artwork. Inspect red removal points, green keep points and the proof; restore details before applying.</p>}
           {(opts.requireMaskReview||maskNeedsReview)&&<button type="button" disabled={!proofUrl||opts.maskReviewed||renderedOpts!==opts} onClick={()=>{setOpts(o=>({...o,maskReviewed:true}));setSavedPrepared('');setAiState('Applied');}}>Apply reviewed mask</button>}
-          <div className="dtf-mask-buttons"><button type="button" disabled={!history.length} onClick={undo}>Undo mask edit</button><button type="button" disabled={!future.length} onClick={redo}>Redo mask edit</button><button type="button" onClick={()=>change('regionPoints',[])}>Clear region points</button></div>
+          <div className="dtf-mask-buttons"><button type="button" disabled={!history.length} onClick={undo}>Undo mask edit</button><button type="button" disabled={!future.length} onClick={redo}>Redo mask edit</button><button type="button" onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,regionPoints:[],backgroundPoint:null,background:o.background==='pick'?'none':o.background,maskReviewed:false}));setSavedPrepared('');}}>Clear region points</button></div>
           <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:'auto',aiGuidance:null,requireMaskReview:false,maskReviewed:false}));setAiState('Local-method fallback');setSavedPrepared('');}}>Use local edge/color removal</button>
           <button type="button" className="dtf-remove-action" disabled={!bitmap}
             onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:'auto',backgroundPoint:null,backgroundScope:'connected',backgroundFeather:12,requireMaskReview:false,maskReviewed:false}));setSavedPrepared('');}}>
@@ -369,7 +391,7 @@ export default function DTFPrepStudio(){
               <Slider label="Interior edge softness" min={0} max={20} value={opts.interiorWhiteFeather??4} onChange={v=>change('interiorWhiteFeather',v)}/>
               <p className="dtf-channel-warning">This removes matching white pixels anywhere, including intentional white text or logos. Inspect the Proof closely and use Restore original design pixels to recover white details.</p>
             </>}
-            <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{setOpts(o=>({...o,background:o.background==='none'?'auto':o.background,removeInteriorWhite:true,interiorWhiteThreshold:245,interiorWhiteFeather:4}));setSavedPrepared('');}}>Clean exterior + enclosed white</button>
+            <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:o.background==='none'?'auto':o.background,removeInteriorWhite:true,interiorWhiteThreshold:245,interiorWhiteFeather:4}));setSavedPrepared('');}}>Clean exterior + enclosed white</button>
           </div>
           <div className="dtf-manual-mask">
             <strong>Manual background cleanup</strong>
@@ -394,7 +416,7 @@ export default function DTFPrepStudio(){
           <p className="dtf-note">Transparency is written to the PNG alpha channel before the 300 PPI export. Checkerboard and garment colors are preview-only. Automatic color selection works best with solid backgrounds; detailed photographic backgrounds may require a manually refined mask.</p>
         </Tuning>
         <Tuning title="Halftones & garment knockout">
-          {field('Quick preset',<select value="" onChange={e=>{setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
+          {field('Quick preset',<select value="" onChange={e=>{record();revisionRef.current++;setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
           {field('Halftone style',<select value={opts.halftone} onChange={e=>change('halftone',e.target.value)}><option value="none">Off</option><option value="fades">Transparent gradients only</option><option value="knockout">Shirt-color knockout</option><option value="full">Full halftone (vintage)</option><option value="multicolor">CMYK multicolor rosette (4 channels)</option><option value="color-dots">Original-color dots (RGB)</option></select>)}
           {field('Knockout',<select value={opts.knockout} onChange={e=>change('knockout',e.target.value)}><option value="none">Do not knock out</option><option value="shirt">Remove shirt-matched color</option></select>)}
           {field('Shirt RGB',<input type="color" value={opts.shirtColor} onChange={e=>change('shirtColor',e.target.value)}/>)}
@@ -438,10 +460,10 @@ export default function DTFPrepStudio(){
           </>}
         </Tuning>
         <Tuning title="Export and save revision">
-          <button onClick={downloadPng} disabled={!bitmap||busy}>Export transparent 300 PPI PNG</button>
+          <button onClick={downloadPng} disabled={!bitmap||busy||aiState==='Analyzing'}>Export transparent 300 PPI PNG</button>
           {field('Single-color silhouette vector fill',<input type="color" value={vectorColor} onChange={e=>setVectorColor(e.target.value)}/>)}
-          <button className="dtf-secondary" onClick={downloadVector} disabled={!bitmap||busy}>Export one-color SVG silhouette</button>
-          <button className="dtf-secondary" onClick={saveR2} disabled={!bitmap||!projectId||busy||Boolean(savedPrepared)}>{savedPrepared?'Revision saved in R2':'Save source + new derivative to R2'}</button>
+          <button className="dtf-secondary" onClick={downloadVector} disabled={!bitmap||busy||aiState==='Analyzing'}>Export one-color SVG silhouette</button>
+          <button className="dtf-secondary" onClick={saveR2} disabled={!bitmap||!projectId||busy||aiState==='Analyzing'||Boolean(savedPrepared)}>{savedPrepared?'Revision saved in R2':'Save source + new derivative to R2'}</button>
           <p className="dtf-note">Saving never replaces an approved production asset. Derived files are marked for review. PNG is RGB/RGBA; true ICC CMYK conversion and white-channel separation require RIP-specific workflows.</p>
           {savedPrepared&&<p className="dtf-good">Saved artwork revision <code>{savedPrepared.slice(0,8)}</code> · <Link to="/mockup-studio">Open project</Link></p>}
         </Tuning>

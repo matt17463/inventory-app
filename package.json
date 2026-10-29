@@ -67,8 +67,9 @@
     "test:nas-backup": "node --test scripts/tests/nas-backup-report.test.mjs",
     "test:storage-backup-read": "node --test scripts/tests/storage-backup-read.test.mjs",
     "test:certification": "node --test scripts/tests/variation-certification.test.mjs scripts/tests/reorder-traveler-request.test.mjs scripts/tests/artwork-integrity.test.mjs scripts/tests/woo-logo-mapping.test.mjs",
-    "test:dtf-studio": "node --test scripts/tests/dtf-prep-studio.test.mjs scripts/tests/dtf-background-removal.test.mjs scripts/tests/dtf-ai-guidance.test.mjs",
-    "test:product-center": "node --test scripts/tests/product-event-center.test.mjs scripts/tests/product-event-center-accessibility.test.mjs scripts/tests/product-discovery-dashboard.test.mjs"
+    "test:dtf-studio": "node --test scripts/tests/dtf-prep-studio.test.mjs scripts/tests/dtf-background-removal.test.mjs scripts/tests/dtf-ai-guidance.test.mjs scripts/tests/dtf-ai-jobs.test.mjs && node scripts/run-dtf-browser-ci.mjs",
+    "test:product-center": "node --test scripts/tests/product-event-center.test.mjs scripts/tests/product-event-center-accessibility.test.mjs scripts/tests/product-discovery-dashboard.test.mjs",
+    "test:dtf-browser": "playwright test --config playwright.dtf.config.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
@@ -87,6 +88,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.64.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

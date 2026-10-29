@@ -86,9 +86,9 @@ test('hosted production gate verifies model access before a real image call; loc
  const fetcher=async()=>{calls++;return new Response(JSON.stringify({name:'models/gemini-2.5-flash',supportedGenerationMethods:['generateContent']}));};
  assert.deepEqual(await verifyDtfGeminiLive({env,fetcher}),{skipped:true});assert.equal(calls,0);
  const hosted={...env,NETLIFY:'true',CONTEXT:'production'};
- const result=await verifyDtfGeminiLive({env:hosted,fetcher,generate:async()=>points});assert.equal(calls,1);assert.equal(result.foregroundPreserved,true);
- await assert.rejects(()=>verifyDtfGeminiLive({env:hosted,fetcher:async()=>new Response('',{status:403}),generate:async()=>{throw Error('must not call');}}),/model access failed/);
- await assert.rejects(()=>verifyDtfGeminiLive({env:hosted,fetcher,generate:async()=>({confidence:1,points:[{kind:'remove',x:.5,y:.5}]})}),/foreground/);
+ const result=await verifyDtfGeminiLive({env:hosted,checkJobs:async()=>{},fetcher,generate:async()=>points});assert.equal(calls,1);assert.equal(result.foregroundPreserved,true);
+ await assert.rejects(()=>verifyDtfGeminiLive({env:hosted,checkJobs:async()=>{},fetcher:async()=>new Response('',{status:403}),generate:async()=>{throw Error('must not call');}}),/model access failed/);
+ await assert.rejects(()=>verifyDtfGeminiLive({env:hosted,checkJobs:async()=>{},fetcher,generate:async()=>({confidence:1,points:[{kind:'remove',x:.5,y:.5}]})}),/foreground/);
 });
 test('dark exterior removal protects isolated black lines and intentional white lettering',()=>{
  const source=logo();for(let i=0;i<source.length;i+=4)if(source[i]===255)source.set([8,8,8,255],i);
