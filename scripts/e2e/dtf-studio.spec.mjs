@@ -8,6 +8,7 @@ test('source picks, protected regions, async review and faithful RGBA export',as
  await page.route('**/.netlify/functions/dtf-ai-guidance',route=>route.fulfill({status:202,json:{job_id:'00000000-0000-4000-8000-000000000001'}}));
  await page.route('**/.netlify/functions/dtf-ai-guidance-background',route=>route.fulfill({status:202,body:''}));
  await page.goto('/__dtf-test');
+ await expect(page.getByRole('heading',{name:'DTF Prep Studio',exact:true})).toBeVisible({timeout:10000});
  const source=Buffer.alloc(300*300*4,255);for(let y=60;y<240;y++)for(let x=60;x<240;x++)source.set([120,50,10,255],(y*300+x)*4);
  for(const[cx,cy]of[[110,110],[190,190]])for(let y=cy-15;y<cy+15;y++)for(let x=cx-15;x<cx+15;x++)source.set([255,255,255,255],(y*300+x)*4);
  const png=await sharp(source,{raw:{width:300,height:300,channels:4}}).png().toBuffer();
