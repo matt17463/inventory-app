@@ -4,7 +4,7 @@ import {supabase} from './supabaseClient';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import {shouldSimulateWrites} from './lib/testingMode';
-import {STARTER_PRODUCTS,PACKAGE_TEMPLATES,EQUIPMENT,EVENT_TYPES,STAGES,
+import {STARTER_PRODUCTS,PACKAGE_TEMPLATES,EQUIPMENT,STAGES,
  opportunityScore,productEconomics,packageTotals,packageTemplate,readyForProduction,
  normalizeGuestNames,normalizeSourceUrl,currency} from './lib/productDevelopment';
 import './ProductDevelopmentCenter.css';
@@ -20,7 +20,6 @@ function Field({label,value,onChange,type='text',min,step,choices,required=false
   <input type={type} value={value??''} min={min} step={step} required={required} onChange={e=>onChange(e.target.value)}/>}</label>;
 }
 function Badge({children}){return <span className="pdc-tag">{children}</span>;}
-function Dollars({value}){return <strong>{currency(value)}</strong>;}
 export default function ProductDevelopmentCenter(){
  const access=useContext(EmployeeAccessContext);
  const role=access?.role;
@@ -214,7 +213,7 @@ export default function ProductDevelopmentCenter(){
  }
  function downloadPackage(){
   if(!currentEvent)return;
-  const data={event:currentEvent,items:currentItems.map(i=>({...i,readiness:readyForProduction({recipe_id:i.material_recipe_id,proof_status:i.proof_status},recipes)})),
+  const data={event:currentEvent,items:currentItems.map(i=>({...i,readiness:readyForProduction({recipe_id:i.material_recipe_id,proof_status:i.proof_status,approved_artwork_revision:i.approved_artwork_revision},recipes)})),
     totals:total,exported_at:new Date().toISOString(),notice:'Planning packet only; production job/travelers not created automatically.'};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
