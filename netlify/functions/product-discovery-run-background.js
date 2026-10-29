@@ -1,6 +1,7 @@
 // Netlify Background Function: on-demand AI product discovery, no live orders or product publishing.
 // Netlify acknowledges 202 immediately; progress/results live in sc_pdc_discovery_runs.
 import {authorizeEmployee,auditFunctionSecurity} from './_shared/security.js';
+import {aiFailure,saveDiscoverySources} from './_shared/aiDiagnostics.js';
 import {candidateScore,normalizeLeadKey,sanitizeDiscoveryLead,discoveryScore} from '../../src/lib/productDiscoveryScoring.js';
 
 const handlerName='product-discovery-run-background';
@@ -95,8 +96,10 @@ async function discover({focus,count,signals}){
      input:instructions,text:{format:{type:'json_schema',name:'sc_product_discovery',strict:true,schema:responseSchema}},
      max_output_tokens:14000})
   });
-  if(!api.ok)throw Error('AI discovery request failed (HTTP '+api.status+'). Check server-side model and web-search access.');
-  return parseCandidates(await api.json());
+  if(!api.ok)throw Error(await aiFailure(api,'AI discovery'));
+  const data=await api.json();
+  if(data.status==='incomplete')throw Error('AI discovery output was incomplete. Request fewer candidates.');
+  return parseCandidates(data);
  }finally{clearTimeout(timeout);}
 }
 async function update(db,runId,fields){
@@ -153,11 +156,10 @@ export async function handler(event){
      notes:'AI-discovered candidate. Provisional scores; validate customer demand, pricing, supplier compatibility and exact physical recipe.'
    }).select('id').single();
    if(result.error){console.warn('AI discovery candidate insert failed',result.error.message);continue;}
-   saved++;
    const refs=lead.sources.map(s=>({opportunity_id:result.data.id,title:s.title,source_url:s.url,
      source_type:s.source_type,summary:s.summary,verified:false,recorded_by:auth.user.id}));
-   const savedRefs=await db.from('sc_pdc_sources').insert(refs);
-   if(savedRefs.error)console.warn('Discovery reference insert issue',savedRefs.error.message);
+   await saveDiscoverySources(db,refs);
+   saved++;
   }
   if(!saved)throw Error('No new source-linked candidates were saved. Results were missing evidence or duplicated the existing catalog.');
   await update(db,id,{status:'completed',finished_at:new Date().toISOString(),total_found:found,

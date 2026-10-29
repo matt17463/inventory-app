@@ -1,6 +1,7 @@
 // On-demand, employee-authenticated product research. No invented citations or settings.
 // This uses the same server-only OpenAI key pattern as material-settings-ai.
 import {authorizeEmployee,jsonResponse,auditFunctionSecurity} from './_shared/security.js';
+import {aiFailure} from './_shared/aiDiagnostics.js';
 const safe=(value,n)=>String(value??'').trim().slice(0,n);
 export async function handler(event){
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);
@@ -31,7 +32,7 @@ export async function handler(event){
     tools:[{type:'web_search',search_context_size:'medium'}],tool_choice:'required',
     input:prompt,max_output_tokens:1750}),signal:AbortSignal.timeout(24000)
   });
-  if(!response.ok)return jsonResponse(502,{message:'Live product research unavailable; try again or record sources manually.'},event);
+  if(!response.ok)return jsonResponse(502,{message:await aiFailure(response,'Product research')},event);
   const data=await response.json();
   const blocks=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]);
   const report=blocks.map(x=>x.text||'').join('\n').slice(0,15000);

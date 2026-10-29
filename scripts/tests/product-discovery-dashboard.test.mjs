@@ -84,3 +84,42 @@ test('discovery UI presents automatic ranked candidates and review workflow with
  assert.match(ui,/sc_pdc_discovery_runs/);
  assert.match(ui,/product-discovery-run-background/);
 });
+
+test('source and photo URL constraints execute in PostgreSQL and reject unsafe URLs',async()=>{
+ const {PGlite}=await import('@electric-sql/pglite');
+ const db=new PGlite();
+ try{
+  await db.exec(`create table sc_pdc_sources(source_url text constraint sc_pdc_sources_source_url_check check(source_url ~ '^https://[^ ]{5,1000}$'));
+   create table sc_pdc_trials(photo_url text constraint sc_pdc_trials_photo_url_check check(photo_url is null or photo_url ~ '^https://[^ ]{5,1000}$'));`);
+  await assert.rejects(db.query('insert into sc_pdc_sources values ($1)',['https://example.org/evidence']),/invalid repetition/);
+  await db.exec(fs.readFileSync('supabase/migrations/20261029023702_product_event_source_url_validation.sql','utf8'));
+  for(const url of ['https://example.org/evidence','https://example.org/'+ 'x'.repeat(600)]){
+   await db.query('insert into sc_pdc_sources values ($1)',[url]);
+   await db.query('insert into sc_pdc_trials values ($1)',[url]);
+  }
+  for(const url of ['http://example.org/x','https://example.org/a b','https://example.org/a\nb','https://example.org/'+'x'.repeat(1000)]){
+   await assert.rejects(db.query('insert into sc_pdc_sources values ($1)',[url]),/check constraint/);
+  }
+  await db.exec('insert into sc_pdc_trials values (null)');
+ }finally{await db.close();}
+});
+
+test('failed source inserts cannot count as a source-linked saved candidate',async()=>{
+ const {saveDiscoverySources}=await import('../../netlify/functions/_shared/aiDiagnostics.js');
+ const db={from:()=>({insert:async()=>({error:{message:'constraint failure'}})})};
+ await assert.rejects(saveDiscoverySources(db,[{source_url:'https://example.org'}]),/could not be saved/);
+ await assert.rejects(saveDiscoverySources(db,[]),/no research source/);
+ await saveDiscoverySources({from:()=>({insert:async()=>({error:null})})},[{source_url:'https://example.org'}]);
+});
+
+test('OpenAI diagnostics distinguish quota/auth/request failures without echoing secrets',async()=>{
+ const {aiFailure}=await import('../../netlify/functions/_shared/aiDiagnostics.js');
+ const response=(status,code)=>({status,json:async()=>({error:{code,message:'SECRET must not be relayed'}})});
+ assert.match(await aiFailure(response(429,'insufficient_quota')),/billing and available credit/);
+ assert.match(await aiFailure(response(429,'rate_limit_exceeded')),/retry later/);
+ assert.match(await aiFailure(response(401,'invalid_api_key')),/credential/);
+ assert.match(await aiFailure(response(403,'permission_denied')),/permissions/);
+ assert.match(await aiFailure(response(400,'unsupported_parameter')),/request format/);
+ assert.match(await aiFailure(response(503,'unknown')),/service error/);
+ assert.doesNotMatch(await aiFailure(response(400,'SECRET')),/SECRET/);
+});
