@@ -349,7 +349,7 @@ export default function DTFPrepStudio(){
         </Tuning>
         <Tuning title="Remove background → Transparent PNG">
           <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>AI Remove Background</button>
-          {field('AI intent',<select value={aiIntent} onChange={e=>setAiIntent(e.target.value)}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
+          {field('AI intent',<select value={aiIntent} onChange={e=>{revisionRef.current++;setAiIntent(e.target.value);}}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
           <p className="dtf-note">AI sends a thumbnail to Google Gemini for analysis when invoked. Google free-tier content may be used to improve its products. AI suggests regions; color-based masking keeps original artwork pixels. Photos and ambiguous white details may need correction. Review mask before apply is always enabled.</p>
           <p role="status">{aiState}</p>{aiState==='Analyzing'&&<p className="dtf-note">Detailed logos can take up to three minutes. Local editing stays available; changing the mask prevents an older AI result from replacing your edits.</p>}{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
           {maskNeedsReview&&<p className="dtf-channel-warning">The mask may remove meaningful artwork. Inspect red removal points, green keep points and the proof; restore details before applying.</p>}
@@ -390,7 +390,7 @@ export default function DTFPrepStudio(){
               <Slider label="Interior edge softness" min={0} max={20} value={opts.interiorWhiteFeather??4} onChange={v=>change('interiorWhiteFeather',v)}/>
               <p className="dtf-channel-warning">This removes matching white pixels anywhere, including intentional white text or logos. Inspect the Proof closely and use Restore original design pixels to recover white details.</p>
             </>}
-            <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{setOpts(o=>({...o,background:o.background==='none'?'auto':o.background,removeInteriorWhite:true,interiorWhiteThreshold:245,interiorWhiteFeather:4}));setSavedPrepared('');}}>Clean exterior + enclosed white</button>
+            <button type="button" className="dtf-secondary" disabled={!bitmap} onClick={()=>{record();revisionRef.current++;setOpts(o=>({...o,background:o.background==='none'?'auto':o.background,removeInteriorWhite:true,interiorWhiteThreshold:245,interiorWhiteFeather:4}));setSavedPrepared('');}}>Clean exterior + enclosed white</button>
           </div>
           <div className="dtf-manual-mask">
             <strong>Manual background cleanup</strong>
@@ -415,7 +415,7 @@ export default function DTFPrepStudio(){
           <p className="dtf-note">Transparency is written to the PNG alpha channel before the 300 PPI export. Checkerboard and garment colors are preview-only. Automatic color selection works best with solid backgrounds; detailed photographic backgrounds may require a manually refined mask.</p>
         </Tuning>
         <Tuning title="Halftones & garment knockout">
-          {field('Quick preset',<select value="" onChange={e=>{setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
+          {field('Quick preset',<select value="" onChange={e=>{record();revisionRef.current++;setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
           {field('Halftone style',<select value={opts.halftone} onChange={e=>change('halftone',e.target.value)}><option value="none">Off</option><option value="fades">Transparent gradients only</option><option value="knockout">Shirt-color knockout</option><option value="full">Full halftone (vintage)</option><option value="multicolor">CMYK multicolor rosette (4 channels)</option><option value="color-dots">Original-color dots (RGB)</option></select>)}
           {field('Knockout',<select value={opts.knockout} onChange={e=>change('knockout',e.target.value)}><option value="none">Do not knock out</option><option value="shirt">Remove shirt-matched color</option></select>)}
           {field('Shirt RGB',<input type="color" value={opts.shirtColor} onChange={e=>change('shirtColor',e.target.value)}/>)}

@@ -3,8 +3,8 @@ import sharp from 'sharp';
 import {readFile} from 'node:fs/promises';
 const guidance={confidence:.65,points:[{kind:'remove',x:.01,y:.01},{kind:'remove',x:110/300,y:110/300},{kind:'keep',x:190/300,y:190/300}]};
 test('source picks, protected regions, async review and faithful RGBA export',async({page,isMobile},testInfo)=>{
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.route('https://dtf-test.invalid/**',route=>route.fulfill({json:route.request().url().includes('sc_dtf_ai_jobs')?[{status:'complete',guidance,provenance:{provider:'gemini',model:'browser-mock'}}]:[]}));
+ let polls=0;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://dtf-test.invalid/**',route=>route.fulfill({json:route.request().url().includes('sc_dtf_ai_jobs')?[{status:polls++===0?'processing':'complete',guidance,provenance:{provider:'gemini',model:'browser-mock'}}]:[]}));
  await page.route('**/.netlify/functions/dtf-ai-guidance',route=>route.fulfill({status:202,json:{job_id:'00000000-0000-4000-8000-000000000001'}}));
  await page.route('**/.netlify/functions/dtf-ai-guidance-background',route=>route.fulfill({status:202,body:''}));
  await page.goto('/__dtf-test');
@@ -27,6 +27,10 @@ test('source picks, protected regions, async review and faithful RGBA export',as
  await page.getByRole('button',{name:'Clear region points',exact:true}).click();await expect(page.getByLabel('Removal method',{exact:true})).toHaveValue('none');
  await page.getByLabel('Source interaction',{exact:true}).selectOption('remove');await page.getByLabel('AI intent',{exact:true}).selectOption('all');
  await page.getByRole('button',{name:'AI Remove Background',exact:true}).click();
+ await page.getByLabel('AI intent',{exact:true}).selectOption('keep');
+ await expect(page.getByText('Settings changed while analysis ran. Keep editing locally or request a new preview.',{exact:true})).toBeVisible();
+ await expect(page.getByLabel('Removal method',{exact:true})).toHaveValue('none');
+ await page.getByLabel('AI intent',{exact:true}).selectOption('all');await page.getByRole('button',{name:'AI Remove Background',exact:true}).click();
  const apply=page.getByRole('button',{name:'Apply reviewed mask',exact:true});await expect(apply).toBeEnabled();await expect(page.getByText('Correction needed',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'↓ Export 300 PPI PNG',exact:true}).click();await expect(page.getByText('Review the working mask and choose Apply reviewed mask before export.',{exact:true})).toBeVisible();
  await apply.click();const pending=page.waitForEvent('download');await page.getByRole('button',{name:'↓ Export 300 PPI PNG',exact:true}).click();const download=await pending,path=testInfo.outputPath('dtf-3600.png');await download.saveAs(path);
