@@ -122,11 +122,11 @@ export default function DTFPrepStudio(){
     const revision=revisionRef.current,source=bitmap;
     setAiState('Analyzing');setAiError('');
     try{
-      const ratio=Math.min(1,768/Math.max(source.width,source.height)),c=makeCanvas(Math.max(1,Math.round(source.width*ratio)),Math.max(1,Math.round(source.height*ratio)));
+      const ratio=Math.min(1,384/Math.max(source.width,source.height)),c=makeCanvas(Math.max(1,Math.round(source.width*ratio)),Math.max(1,Math.round(source.height*ratio)));
       c.getContext('2d').drawImage(source,0,0,c.width,c.height);
       let image=c.toDataURL('image/png').split(',')[1];
       if(image.length>1300000){const small=makeCanvas(Math.max(1,Math.round(c.width/2)),Math.max(1,Math.round(c.height/2)));small.getContext('2d').drawImage(c,0,0,small.width,small.height);image=small.toDataURL('image/png').split(',')[1];}
-      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image,mimeType:'image/png'}),signal:AbortSignal.timeout(30000)});
+      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image,mimeType:'image/png'}),signal:AbortSignal.timeout(55000)});
       const data=await response.json();if(!response.ok)throw Error(data.message||'Gemini unavailable. Use local removal.');
       if(revisionRef.current!==revision){setAiState('Correction needed');setAiError('Source or settings changed during analysis. Request a new preview.');return;}
       const guidance={...validateGuidance(data),provenance:data.provenance};
