@@ -4,6 +4,7 @@ export const MACHINE_TYPES = [
   { id: 'xtool_s1', label: 'xTool S1', modes: ['engrave','score','cut'], note: 'Record installed diode/IR module and wattage, lens, air assist, speed, power and passes.' },
   { id: 'xtool_p2', label: 'xTool P2', modes: ['engrave','score','cut'], note: 'Record CO2 model, material thickness, focus, power, speed and air assist.' },
   { id: 'xtool_omni', label: 'xTool Omni Dual UV', modes: ['uv_flat','uv_texture','uv_relief','uv_varnish'], note: 'Record substrate, primer, ink mode, texture height, smoothness and cure/adhesion results. xTool Studio executes the print.' },
+  { id: 'sawgrass_sg500', label: 'Sawgrass SG500 sublimation printer', modes: ['sublimation'], note: 'Record ink system, print manager, color profile, paper, mirror setting and print quality. Heat transfer occurs on a compatible press and blank-specific recipe.' },
   { id: 'heat_press', label: 'Heat press', modes: ['heat_transfer'], note: 'Record press model, platen, temperature, dwell time, pressure, carrier, peel and garment type.' },
   { id: 'sublimation_press', label: 'Sublimation heat press', modes: ['sublimation'], note: 'Record press model, temperature, dwell, pressure, substrate coating, protective paper and peel.' },
 ];
@@ -76,6 +77,12 @@ export const SETTING_FIELDS = {
     ['ink_white_mode','Legacy white mode'],['varnish','Varnish setting'],
     ['texture_smoothness','Texture smoothness'],['primer','Surface primer'],
     ['printed_height_mm','Measured printed height (mm)'],['cure_or_dry','Cure / dry notes']
+  ],
+  sawgrass_sg500:[
+    ['ink_set','Installed Sawgrass ink set'],['print_manager','Sawgrass Print Utility version'],
+    ['color_profile','Exact substrate/profile selection'],['print_quality','Print quality selection'],
+    ['paper_brand','Sublimation paper brand/type'],['mirror_print','Image mirroring'],
+    ['artwork_color_space','Artwork color space'],['design_notes','Press recipe ID and fabric/blank notes']
   ],
   heat_press:[
     ['temperature_f','Temperature (°F)'],['dwell_seconds','Press time (seconds)'],
