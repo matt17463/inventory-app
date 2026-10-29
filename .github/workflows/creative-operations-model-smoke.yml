@@ -1,5 +1,14 @@
 name: Creative Operations local inference smoke
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/CreativeLocalAi.jsx'
+      - 'src/lib/creativeLocalMask.js'
+      - 'scripts/smoke-creative-local-model.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/creative-operations-model-smoke.yml'
   push:
     branches: [feature/unified-creative-operations-suite-20261029]
     paths:
