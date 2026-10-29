@@ -9,8 +9,8 @@ for(let y=0;y<height;y++) for(let x=0;x<width;x++){
   const c=fg?[40,75,190]:[240,242,245];
   data.set(c,i);
 }
-console.log('Loading local WebAssembly uint8 model...');
-const remover=await pipeline('background-removal','onnx-community/ormbg-ONNX',{device:'wasm',dtype:'uint8'});
+console.log('Loading local CPU uint8 model in Node.js (browser uses WASM)...');
+const remover=await pipeline('background-removal','onnx-community/ormbg-ONNX',{device:'cpu',dtype:'uint8'});
 console.log('Performing inference on synthetic image...');
 const output=await remover([new RawImage(data,width,height,3)]);
 assert(Array.isArray(output)&&output.length===1,'Expected one output image');
