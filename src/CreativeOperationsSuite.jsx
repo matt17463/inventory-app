@@ -4,6 +4,7 @@ import './CreativeOperationsSuite.css';
 import CreativeKnowledgeHub from './CreativeKnowledgeHub';
 import CreativeDesignWorkbench from './CreativeDesignWorkbench';
 import CreativeLocalAi from './CreativeLocalAi';
+import DailyCommandCenter from './DailyCommandCenter';
 import { computeDraftPackage } from './lib/creativePackageMath';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { supabase } from './supabaseClient';
@@ -121,13 +122,14 @@ function PackageBuilder() {
   </section>;
 }
 export default function CreativeOperationsSuite() {
+  const access=useContext(EmployeeAccessContext);
   const [active,setActive]=useState('command');
   const module=MODULES.find(m=>m.id===active)||MODULES[0];
   return <main className="page cos-page">
     <header className="cos-hero"><p className="eyebrow">Skilled Crafting · Unified Development Suite</p><h1>Creative Operations</h1><p>Five connected workspaces built around your current application. Existing workflow approvals, billing verification and production safety checks remain authoritative.</p><div className="cos-hero-pills"><span>Existing data & workflows</span><span>Local-first artwork</span><span>No paid AI required</span></div></header>
     <nav className="cos-tabs" aria-label="Creative operations modules">{MODULES.map(m=><button type="button" key={m.id} className={active===m.id?'active':''} aria-pressed={active===m.id} onClick={()=>setActive(m.id)}>{m.name}</button>)}</nav>
     <section className="cos-card"><p className="eyebrow">{module.eyebrow}</p><h2>{module.name}</h2><p>{module.summary}</p><div className="cos-links">{module.links.map(([label,path])=><Link key={path} to={path}>{label} →</Link>)}</div></section>
-    {active==='command'&&<section className="cos-card"><h3>Today's work, without duplicate dashboards</h3><p>Use the existing live Command Center for urgent jobs, blockers, QC and purchasing. The Equipment Center already holds machine records. This suite does not manufacture machine telemetry or pretend a disconnected device is online.</p></section>}
+    {active==='command'&&(access?.role==='marketing'?<section className="cos-card"><p>Operations job metrics are limited to authorized production staff. Product research and marketing tools remain available through the other tabs.</p></section>:<section className="cos-card"><h3>Live daily operations</h3><p>These metrics are loaded through your existing authorized Command Center queries. Device telemetry is only shown by its verified equipment source, not inferred here.</p><DailyCommandCenter embedded /></section>)}
     {active==='artwork'&&<><CreativeLocalAi/><ArtworkInspect/></>}
     {active==='design'&&<CreativeDesignWorkbench/>}
     {active==='packages'&&<PackageBuilder/>}
