@@ -1,0 +1,26 @@
+.pdc-page{padding:clamp(16px,2vw,32px);max-width:1600px;margin:0 auto;color:var(--sc-text,#edf3ff);--pdcard:var(--sc-panel,#172236);--pdcborder:var(--sc-border,#314258);--pdcmuted:var(--sc-muted,#b8c6d8)}
+.pdc-page *, .pdc-page *::before,.pdc-page *::after{box-sizing:border-box}
+.pdc-hero{display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px;padding:28px;background:linear-gradient(115deg,#102a41,#1d2a47 62%,#193f50);color:white;border:1px solid #3b5369;border-radius:20px}
+.pdc-hero h1{font-size:clamp(25px,3vw,38px);margin:6px 0}.pdc-hero p{max-width:760px;color:#d1e3f0}.pdc-eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#83e0d4}
+.pdc-hero-links{display:flex;gap:9px;align-items:start;flex-wrap:wrap}
+.pdc-page a,.pdc-page button{text-decoration:none}.pdc-page button,.pdc-page .pdc-link{border:1px solid var(--pdcborder);padding:10px 13px;border-radius:10px;background:var(--pdcard);color:inherit;cursor:pointer}
+.pdc-page button:hover,.pdc-page .pdc-link:hover{border-color:#56bdbb}
+.pdc-page button:disabled{opacity:.5;cursor:not-allowed}
+.pdc-primary{background:#037d77!important;color:white!important;border-color:#05a99f!important}
+.pdc-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}.pdc-tabs button[aria-selected=true]{background:#087f7b;color:white;border-color:#00b2a5}
+.pdc-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}.pdc-stat{background:var(--pdcard);border:1px solid var(--pdcborder);padding:18px;border-radius:14px}.pdc-stat strong{display:block;font-size:29px}.pdc-stat span{color:var(--pdcmuted);font-size:12px}
+.pdc-layout{display:grid;grid-template-columns:minmax(260px,350px) minmax(0,1fr);gap:18px}.pdc-panel{background:var(--pdcard);border:1px solid var(--pdcborder);padding:18px;border-radius:16px;min-width:0}.pdc-panel h2{font-size:20px;margin:0 0 12px}.pdc-panel h3{font-size:16px;margin:18px 0 10px}
+.pdc-list{max-height:680px;overflow:auto;display:grid;gap:8px}.pdc-list button{text-align:left;width:100%;line-height:1.4;display:flex;align-items:center;justify-content:space-between;gap:8px}.pdc-list button[aria-current=true]{outline:2px solid #0faaa3}.pdc-list small,.pdc-muted{color:var(--pdcmuted);font-size:12px}
+.pdc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.pdc-form{display:grid;gap:12px}.pdc-form label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600}
+.pdc-form input,.pdc-form select,.pdc-form textarea,.pdc-toolbar input,.pdc-toolbar select{width:100%;font:inherit;background:var(--sc-input-bg,#0c192d);border:1px solid var(--pdcborder);border-radius:9px;padding:10px;color:var(--sc-text,#fff)}
+.pdc-form textarea{min-height:80px;resize:vertical}.pdc-toolbar{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}.pdc-toolbar>*{flex:1;min-width:160px}
+.pdc-actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.pdc-note{border-left:3px solid #58b7ae;background:rgba(67,151,146,.11);padding:12px;border-radius:8px;font-size:13px}
+.pdc-error{background:#4d1e23;color:#ffd9dc;border:1px solid #e16e72;padding:12px;border-radius:9px;margin:10px 0}
+.pdc-success{background:#143d34;color:#c1f5df;border:1px solid #2f846c;padding:12px;border-radius:9px;margin:10px 0}
+.pdc-table-wrap{overflow-x:auto}.pdc-table{width:100%;border-collapse:collapse;font-size:13px}.pdc-table th,.pdc-table td{padding:10px;text-align:left;border-bottom:1px solid var(--pdcborder);vertical-align:top}.pdc-table th{color:var(--pdcmuted);font-weight:600}.pdc-table input,.pdc-table select{min-width:90px;width:100%}
+.pdc-tag{font-size:11px;border:1px solid var(--pdcborder);border-radius:30px;padding:3px 8px;white-space:nowrap}.pdc-section{margin-top:22px;padding-top:18px;border-top:1px solid var(--pdcborder)}.pdc-empty{padding:24px;text-align:center;color:var(--pdcmuted)}
+.pdc-progress{background:#314354;height:7px;border-radius:10px;margin:7px 0;overflow:hidden}.pdc-progress div{background:#15b2a6;height:100%}
+.pdc-source{border:1px solid var(--pdcborder);border-radius:10px;padding:12px;margin:8px 0;overflow-wrap:anywhere}.pdc-source a{color:#7be1d0}
+.pdc-screen-only{display:block}
+@media(max-width:780px){.pdc-layout{grid-template-columns:1fr}.pdc-hero{padding:18px}.pdc-list{max-height:300px}}
