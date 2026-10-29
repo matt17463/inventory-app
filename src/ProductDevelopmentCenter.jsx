@@ -78,7 +78,7 @@ export default function ProductDevelopmentCenter(){
    const specs=[
     ['sc_pdc_opportunities',setOpportunities],['sc_pdc_sources',setSources],['sc_pdc_trials',setTrials],
     ['sc_pdc_events',setEvents],['sc_pdc_event_items',setEventItems],['sc_pdc_launches',setLaunches],
-    ['sc_pdc_performance',setMetrics],['sc_pdc_sales_imports',setImports],['sc_material_recipes',setRecipes]
+    ['sc_pdc_performance',setMetrics],...(canApprove?[['sc_pdc_sales_imports',setImports]]:[]),['sc_material_recipes',setRecipes]
    ];
    const out=await Promise.all(specs.map(async ([table,setter])=>{
      const result=await supabase.from(table).select('*').limit(1000);
@@ -86,7 +86,7 @@ export default function ProductDevelopmentCenter(){
      setter(result.data||[]);
    }));
    return out;
- },[]);
+ },[canApprove]);
  useEffect(()=>{let active=true;load().catch(e=>{if(active)setError('Database setup incomplete or your employee role cannot access this module. '+e.message);});return()=>{active=false;};},[load]);
  useEffect(()=>{
    if(selected){setCostDraft({...initialModel,...(selected.cost_model||{})});setDraft({name:selected.name,category:selected.category,audience:selected.audience,description:selected.description,equipment:selected.equipment||[]});}
