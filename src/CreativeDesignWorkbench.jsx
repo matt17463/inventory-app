@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { createMockupProject, addArtworkAsset } from './lib/mockupStudioApi';
 
 const ITEMS=[
   {id:'tee',label:'T-shirt',x:225,y:160,w:310,h:430},
@@ -58,6 +59,8 @@ export default function CreativeDesignWorkbench(){
   const canvas=useRef(null),fileRef=useRef(null),bitmapRef=useRef(null),imageUrl=useRef('');
   const [values,setValues]=useState({item:'tee',color:'#1c222b',scale:1,x:.5,y:.49,caption:''});
   const [fileName,setFileName]=useState(''),[error,setError]=useState(''),[pointer,setPointer]=useState(false);
+  const [projectName,setProjectName]=useState(''),[customerName,setCustomerName]=useState('');
+  const [saving,setSaving]=useState(false),[savedProject,setSavedProject]=useState('');
   useEffect(()=>{const ctx=canvas.current?.getContext('2d');if(ctx)draw(ctx,bitmapRef.current,values);},[values,fileName]);
   useEffect(()=>()=>{if(imageUrl.current)URL.revokeObjectURL(imageUrl.current);},[]);
   function change(key,value){setValues(v=>({...v,[key]:value}));}
@@ -65,6 +68,7 @@ export default function CreativeDesignWorkbench(){
     const file=event.target.files?.[0];if(!file)return;
     setError('');
     if(!['image/png','image/webp','image/jpeg'].includes(file.type)||file.size>12*1024*1024){setError('Choose a PNG, JPEG or WebP image under 12 MB.');return;}
+    setSavedProject('');
     const next=URL.createObjectURL(file);
     try{const img=new Image();img.src=next;await img.decode();
       if(img.width*img.height>24000000)throw Error('Maximum source resolution is 24 megapixels.');
@@ -82,6 +86,37 @@ export default function CreativeDesignWorkbench(){
     if(!bitmapRef.current){setError('Upload artwork before exporting a proof.');return;}
     const anchor=document.createElement('a');
     anchor.href=canvas.current.toDataURL('image/png');anchor.download='skilled-crafting-concept-proof.png';anchor.click();
+  }
+  async function saveToMockup(){
+    if(!file){setError('Choose source artwork before creating a saved mockup project.');return;}
+    setSaving(true);setError('');setSavedProject('');
+    let project=null;
+    try {
+      const itemName=ITEMS.find(x=>x.id===values.item)?.label||values.item;
+      project=await createMockupProject({
+        project_name:projectName.trim()||'Concept · '+itemName+' · '+new Date().toISOString().slice(0,10),
+        customer_name:customerName.trim(),
+        project_type:'client_order',
+        output_style:'clean_catalog',
+        background_preference:'preserve_source',
+        exact_artwork_required:true,
+        notes:'Unapproved Creative Operations concept. Product: '+itemName+
+          '; color: '+values.color+'; normalized artwork position: '+values.x+','+values.y+
+          '; preview scale: '+values.scale+'; personalization: '+values.caption+
+          '. These are conceptual proportions, not physical placement measurements.',
+      });
+      await addArtworkAsset({projectId:project.id,file,values:{
+        artwork_name:file.name,
+        exact_artwork_locked:false,
+        preflight_status:'pending',
+        preflight_notes:'Source imported from Creative Operations concept designer. Run technical preflight, exact mockup, and approval before production.',
+        metadata:{origin:'creative-operations-concept',status:'draft',design:{...values}},
+      }});
+      setSavedProject(project.id);
+    }catch(err){
+      setError((err.message||'Could not save the project.')+(project?.id?' The project was created but artwork upload was incomplete; check Mockup Studio.':''));
+      if(project?.id)setSavedProject(project.id);
+    }finally{setSaving(false);}
   }
   function copySpec(){
     const item=ITEMS.find(x=>x.id===values.item)?.label||values.item;
@@ -101,6 +136,10 @@ export default function CreativeDesignWorkbench(){
         <label className="cos-field">Horizontal position<input type="range" min=".2" max=".8" step=".01" value={values.x} onChange={e=>change('x',Number(e.target.value))}/></label>
         <label className="cos-field">Vertical position<input type="range" min=".25" max=".77" step=".01" value={values.y} onChange={e=>change('y',Number(e.target.value))}/></label>
         <label className="cos-field">Personalization caption (optional)<input maxLength={48} value={values.caption} onChange={e=>change('caption',e.target.value)}/></label>
+        <label className="cos-field">Mockup project name<input value={projectName} onChange={e=>setProjectName(e.target.value)} placeholder="Customer · Product concept"/></label>
+        <label className="cos-field">Customer name (optional)<input value={customerName} onChange={e=>setCustomerName(e.target.value)} placeholder="Customer or organization"/></label>
+        <div className="cos-designer-actions"><button type="button" disabled={saving||!file} onClick={saveToMockup}>{saving?'Saving source to Mockup Studio…':'Save artwork to Mockup Studio'}</button></div>
+        {savedProject&&<p role="status">Draft project created. <Link to={'/mockup-studio?project='+encodeURIComponent(savedProject)}>Open saved project →</Link></p>}
         <div className="cos-designer-actions"><button type="button" onClick={exportProof}>Download concept PNG</button><button type="button" onClick={copySpec}>Copy specifications</button></div>
         {error&&<p role="alert" className="cos-warning">{error}</p>}
         <p className="cos-warning">This is a conceptual garment illustration, not a scale-calibrated production mockup. Use the saved Mockup Studio for exact placements, approval, and artwork versioning.</p>
