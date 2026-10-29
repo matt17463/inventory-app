@@ -76,7 +76,7 @@ export default function QuickOrderPrint({jobId,onClose}){
  const invoiceAllowed=source&&canPrintCustomerCopy(source);
  const currentSelected=[...TYPES.filter(([key])=>selected.includes(key)).map(([key])=>key),...travelers.filter(t=>selected.includes('traveler:'+t.id)).map(t=>'traveler:'+t.id)];
  const blocked=(key)=>{
-  if(key==='customer'&&!invoiceAllowed)return 'Customer invoice needs verified billing totals; shop copy is still available as DRAFT.';
+  if(key==='customer'&&!invoiceAllowed)return 'Customer invoice not verified. Review billing verification details below; shop copy is available as DRAFT.';
   if(key.startsWith('traveler:')&&!travelers.some(t=>'traveler:'+t.id===key))return 'Saved traveler unavailable.';
   if(key==='labels'&&prefs.packageCount>1)return null; // PDF explicitly warns when allocation is unknown.
   return null;
@@ -167,6 +167,7 @@ export default function QuickOrderPrint({jobId,onClose}){
    <button type="button" onClick={onClose}>Close</button></div>
   {error&&<p role="alert" className="sc-quick-print-error">{error}</p>}
   {message&&<p role="status">{message}</p>}
+  {source?.warnings?.length>0&&<div role="status" className="sc-quick-print-error"><strong>Billing verification details:</strong><ul>{source.warnings.map((warning,i)=><li key={i}>{warning}</li>)}</ul></div>}
   {source&&job&&<><section className="sc-quick-print-travelers" aria-label="Print complete production travelers">
     <h4>Complete production travelers</h4>
     <p>Print each saved traveler from its authoritative detailed view. Select the travelers to include with your other documents. The print PDF uses each saved recipe snapshot, grouped order lines and approved artwork previews.</p>
