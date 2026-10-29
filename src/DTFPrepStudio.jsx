@@ -9,6 +9,7 @@ import { PROCESS_ANGLES, PROCESS_CHANNELS, screenAngleWarnings } from './lib/dtf
 import { addArtworkAsset, getMockupProjectBundle, listMockupProjects, signedAssetUrl } from './lib/mockupStudioApi';
 import { sourcePoint, validateGuidance } from './lib/dtfMaskGuidance.js';
 import { preparedMask } from './lib/dtfMaskClient.js';
+import { supabase } from './supabaseClient.js';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient.js';
 import './DTFPrepStudio.css';
 
@@ -125,9 +126,24 @@ export default function DTFPrepStudio(){
       const ratio=Math.min(1,384/Math.max(source.width,source.height)),c=makeCanvas(Math.max(1,Math.round(source.width*ratio)),Math.max(1,Math.round(source.height*ratio)));
       c.getContext('2d').drawImage(source,0,0,c.width,c.height);
       let image=c.toDataURL('image/png').split(',')[1];
-      if(image.length>1300000){const small=makeCanvas(Math.max(1,Math.round(c.width/2)),Math.max(1,Math.round(c.height/2)));small.getContext('2d').drawImage(c,0,0,small.width,small.height);image=small.toDataURL('image/png').split(',')[1];}
-      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image,mimeType:'image/png'}),signal:AbortSignal.timeout(55000)});
-      const data=await response.json();if(!response.ok)throw Error(data.message||'Gemini unavailable. Use local removal.');
+      if(image.length>200000){const small=makeCanvas(Math.max(1,Math.round(c.width/2)),Math.max(1,Math.round(c.height/2)));small.getContext('2d').drawImage(c,0,0,small.width,small.height);image=small.toDataURL('image/png').split(',')[1];}
+      const response=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance',{method:'POST',body:JSON.stringify({image,mimeType:'image/png',mode:'start'}),signal:AbortSignal.timeout(55000)});
+      let data=await response.json();if(!response.ok)throw Error(data.message||'Gemini unavailable. Use local removal.');
+      if(data.job_id){
+        const queued=await authenticatedFunctionFetch('/.netlify/functions/dtf-ai-guidance-background',{method:'POST',body:JSON.stringify({job_id:data.job_id,image,mimeType:'image/png'}),signal:AbortSignal.timeout(15000)});
+        if(!queued.ok)throw Error('Could not start image analysis. Use local removal.');
+        const jobId=data.job_id,deadline=Date.now()+200000;
+        let completed=false;
+        while(Date.now()<deadline){
+          if(revisionRef.current!==revision){setAiState('Correction needed');setAiError('Settings changed while analysis ran. Keep editing locally or request a new preview.');return;}
+          const job=await supabase.from('sc_dtf_ai_jobs').select('status,guidance,provenance,error_code').eq('id',jobId).maybeSingle();
+          if(job.error||!job.data)throw Error('Image analysis status is unavailable. Use local removal.');
+          if(job.data.status==='failed')throw Error(job.data.error_code==='quota'?'Gemini quota reached. Use local removal.':job.data.error_code==='timeout'?'Gemini analysis timed out. Use local removal.':'Gemini could not analyze this image. Use local removal.');
+          if(job.data.status==='complete'){data={...job.data.guidance,provenance:job.data.provenance};completed=true;break;}
+          await new Promise(resolve=>setTimeout(resolve,2500));
+        }
+        if(!completed)throw Error('Image analysis took too long. Use local removal.');
+      }
       if(revisionRef.current!==revision){setAiState('Correction needed');setAiError('Source or settings changed during analysis. Request a new preview.');return;}
       const guidance={...validateGuidance(data),provenance:data.provenance};
       // Conservative intent offers only exterior candidates; all-background includes interior proposals.
@@ -159,6 +175,7 @@ export default function DTFPrepStudio(){
     paintMask(event);
   }
   function finishMask(){maskDraggingRef.current=false;maskLastRef.current=null;panRef.current=null;}
+  useEffect(()=>()=>{revisionRef.current++;},[]);
   useEffect(()=>{listMockupProjects().then(setProjects).catch(e=>setMessage('Project list: '+e.message));},[]);
   useEffect(()=>{
     if(!projectId){setBundle(null);setGarmentUrls({});return;}
@@ -247,9 +264,13 @@ export default function DTFPrepStudio(){
       const render=await prepareFull(),blob=await exportDtfPng(render.canvas);
       let sourceId=savedSource;
       if(!sourceId){
+        const sourceCanvas=makeCanvas(bitmap.width,bitmap.height),sourceContext=sourceCanvas.getContext('2d',{willReadFrequently:true});
+        sourceContext.drawImage(bitmap,0,0);
+        const sourceHasTransparency=inspectPngAlpha(sourceContext.getImageData(0,0,bitmap.width,bitmap.height).data,bitmap.width,bitmap.height).hasTransparency;
+        sourceCanvas.width=sourceCanvas.height=1;
         const s=await addArtworkAsset({projectId,file,values:{
           artwork_name:baseName(file.name)+' — original (DTF Studio)',pixel_width:sourceMeta.width,
-          pixel_height:sourceMeta.height,has_transparency:file.type==='image/png',preflight_status:'pending',
+          pixel_height:sourceMeta.height,has_transparency:sourceHasTransparency,preflight_status:'pending',
           exact_artwork_locked:true,metadata:{dtf_studio:'v1',role:'immutable_source'} }});
         sourceId=s.id;setSavedSource(sourceId);
       }
@@ -330,7 +351,7 @@ export default function DTFPrepStudio(){
           <button type="button" className="dtf-remove-action" disabled={!bitmap||aiState==='Analyzing'||aiState==='Generating mask'} onClick={requestAi}>AI Remove Background</button>
           {field('AI intent',<select value={aiIntent} onChange={e=>setAiIntent(e.target.value)}><option value="keep">Keep artwork — exterior guidance</option><option value="all">Remove all unwanted background — include gaps</option></select>)}
           <p className="dtf-note">AI sends a thumbnail to Google Gemini for analysis when invoked. Google free-tier content may be used to improve its products. AI suggests regions; color-based masking keeps original artwork pixels. Photos and ambiguous white details may need correction. Review mask before apply is always enabled.</p>
-          <p role="status">{aiState}</p>{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
+          <p role="status">{aiState}</p>{aiState==='Analyzing'&&<p className="dtf-note">Detailed logos can take up to three minutes. Local editing stays available; changing the mask prevents an older AI result from replacing your edits.</p>}{aiError&&<p className="dtf-channel-warning" role="alert">{aiError}</p>}
           {maskNeedsReview&&<p className="dtf-channel-warning">The mask may remove meaningful artwork. Inspect red removal points, green keep points and the proof; restore details before applying.</p>}
           {(opts.requireMaskReview||maskNeedsReview)&&<button type="button" disabled={!proofUrl||opts.maskReviewed||renderedOpts!==opts} onClick={()=>{setOpts(o=>({...o,maskReviewed:true}));setSavedPrepared('');setAiState('Applied');}}>Apply reviewed mask</button>}
           <div className="dtf-mask-buttons"><button type="button" disabled={!history.length} onClick={undo}>Undo mask edit</button><button type="button" disabled={!future.length} onClick={redo}>Redo mask edit</button><button type="button" onClick={()=>change('regionPoints',[])}>Clear region points</button></div>

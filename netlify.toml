@@ -38,3 +38,6 @@ background = true
 # while clients read RLS-protected progress from Supabase.
 [functions."product-discovery-run-background"]
   background = true
+
+[functions."dtf-ai-guidance-background"]
+  background = true
