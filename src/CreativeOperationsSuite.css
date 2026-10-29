@@ -33,3 +33,21 @@
 .cos-result span{font-weight:400;font-size:13px}
 .cos-result small{color:var(--sc-muted,#526276)}
 @media(max-width:650px){.cos-page{padding:12px}.cos-inspection{grid-template-columns:1fr}.cos-tabs button{min-height:44px}}
+
+.cos-designer{display:grid;grid-template-columns:minmax(245px,330px) minmax(0,1fr);gap:24px;align-items:start}
+.cos-designer-controls{display:grid;gap:14px}
+.cos-designer-canvas{width:100%;height:auto;border:1px solid var(--sc-border,#c7d2df);border-radius:12px;touch-action:none;cursor:grab;background:#edf1f5}
+.cos-designer-canvas:active{cursor:grabbing}
+.cos-designer-actions{display:flex;gap:10px;flex-wrap:wrap}
+.cos-designer-actions button,.cos-knowledge-search button,.cos-knowledge-editor button{background:#255d83;color:#fff;border:1px solid #255d83;font-weight:650}
+.cos-designer-actions button:focus-visible,.cos-knowledge-search button:focus-visible,.cos-knowledge-editor button:focus-visible,.cos-tabs button:focus-visible{outline:3px solid #e8a32b;outline-offset:3px}
+.cos-note{font-size:13px;color:var(--sc-muted,#526276)}
+.cos-knowledge-search{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:16px 0}
+.cos-knowledge-search .cos-field{flex:1;min-width:230px}
+.cos-result button{padding:6px 12px!important;background:var(--sc-surface,#fff);color:var(--sc-text,#152334);border:1px solid var(--sc-border,#c7d2df)}
+.cos-result>div{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.cos-result a{font-size:13px}
+.cos-document{white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit;font-size:13px;max-height:480px;overflow:auto;padding:12px;background:var(--sc-background,#edf2f7);border-radius:8px}
+.cos-knowledge-editor{display:grid;gap:14px;max-width:750px;margin-top:28px;padding-top:20px;border-top:1px solid var(--sc-border,#c7d2df)}
+.cos-knowledge-editor textarea{width:100%;min-height:160px;color:var(--sc-text,#152334);background:var(--sc-surface,#fff);border:1px solid var(--sc-border,#9aaabc);border-radius:8px;padding:10px}
+@media(max-width:800px){.cos-designer{grid-template-columns:1fr}}
