@@ -214,7 +214,7 @@ export const october2026GuideChapters=[
  description:'Code, source documentation and a visible button do not prove that connected services or live commerce are active.',
  sections:[
   section('oct-current-vs-planned','How to interpret a feature status','Separate coded, configured, tested and actually used. A feature can be implemented in source while remaining disabled or incomplete in the workshop.',{
-   relatedRoutes:['/application-guide','/deployment-health','/woocommerce-sync-monitor','/product-event-center'],
+   relatedRoutes:['/application-guide','/deployment-health','/woo-sync','/product-event-center'],
    steps:['For any new feature, verify code in production, latest database migration, server secrets/feature flags, employee role, functional test and actual business-record output.','Woo graphic selector: test plugin activation, product mapping approval, public choice display, live-safe checkout, webhook resolution and traveler identity separately.','Printer integration: confirm CUPS, network device, correct paper, D530 Pro/Epson queue, agent status and signed preview before enabling automatic dispatch.','Local AI: verify approved business-manual indexing, private gateway, Tailscale, model availability and cited answers.','AI Product Discovery: only run manually within provider quotas; scheduled unattended discovery is not part of the current documented release.','If one check is missing, label the feature Pending setup, Unverified or Not implemented, rather than Complete.'],
    warnings:['Do not deploy a schema migration, rotate API keys, activate payments or route printers just to complete a documentation checklist.','Verify these statuses against current environment; these notes are not a live configuration audit.']
   })
