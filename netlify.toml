@@ -48,3 +48,7 @@ background = true
 
 [functions."knowledge-manual-sync"]
   included_files = ["netlify/functions/_vendor/pdfjs/pdf.worker.mjs", "netlify/functions/_vendor/pdfjs/LICENSE"]
+
+# Slowly refresh exact supplier style/color reference photos, retaining manual overrides.
+[functions."supplier-photo-scheduled-sync"]
+  schedule = "10 9 * * *"
