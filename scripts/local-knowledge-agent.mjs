@@ -34,10 +34,27 @@ async function authorize(req){
 }
 async function localModel(messages){
  if(!MODEL)throw Object.assign(Error('Local language model not configured. Set SC_LOCAL_AI_MODEL after installing an Ollama model.'),{status:503});
- const response=await fetch(new URL('/api/chat',ollamaBase),{method:'POST',headers:{'Content-Type':'application/json'},
-  signal:AbortSignal.timeout(55000),body:JSON.stringify({model:MODEL,messages,stream:false,options:{temperature:0.15,num_predict:420}})});
- if(!response.ok)throw Object.assign(Error('Local model is offline or unavailable.'),{status:503});
- const result=await response.json();return crop(result?.message?.content,4500);
+ try{
+  const response=await fetch(new URL('/api/chat',ollamaBase),{method:'POST',headers:{'Content-Type':'application/json'},
+   signal:AbortSignal.timeout(55000),body:JSON.stringify({model:MODEL,messages,stream:false,options:{temperature:0.15,num_predict:420}})});
+  if(!response.ok)throw Error('Model request failed.');
+  const result=await response.json();
+  const answer=crop(result?.message?.content,4500);
+  if(!answer)throw Error('Model returned no answer.');
+  return answer;
+ }catch{
+  throw Object.assign(Error('Local model is offline or unavailable. Check Ollama and the configured model.'),{status:503});
+ }
+}
+async function modelAvailable(){
+ if(!MODEL)return false;
+ try{
+  const response=await fetch(new URL('/api/tags',ollamaBase),{signal:AbortSignal.timeout(3000)});
+  if(!response.ok)return false;
+  const result=await response.json();
+  const name=MODEL.includes(':')?MODEL:MODEL+':latest';
+  return Array.isArray(result.models)&&result.models.some(model=>(model.name||model.model)===name);
+ }catch{return false;}
 }
 async function answerKnowledge(db,question){
  const q=crop(question,240);if(q.length<3)throw Object.assign(Error('Ask a longer question.'),{status:400});
@@ -75,7 +92,10 @@ async function packageCopy(payload){
 const server=createServer(async(req,res)=>{
  if(req.headers.origin!==ORIGIN){reply(res,403,{error:'This gateway is accessible only from the approved Skilled Crafting origin.'});return;}
  if(req.method==='OPTIONS'){reply(res,204,{});return;}
- if(req.method==='GET'&&req.url==='/health'){reply(res,200,{connected:!!MODEL,local_only:true});return;}
+ if(req.method==='GET'&&req.url==='/health'){
+  const connected=await modelAvailable();
+  reply(res,connected?200:503,{connected,local_only:true,...(!connected?{error:'Local model is offline or unavailable.'}:{})});return;
+ }
  if(req.method!=='POST'||!['/ask','/package-copy'].includes(req.url)){reply(res,404,{error:'Not found'});return;}
  if(running>=maxConcurrent){reply(res,429,{error:'Local AI is busy. Please retry later.'});return;}
  running++;
@@ -83,10 +103,13 @@ const server=createServer(async(req,res)=>{
   const db=await authorize(req);
   let bytes=0;const pieces=[];
   for await(const chunk of req){bytes+=chunk.length;if(bytes>16_384)throw Object.assign(Error('Request too large.'),{status:413});pieces.push(chunk);}
-  const data=JSON.parse(Buffer.concat(pieces).toString()||'{}');
+  let data;
+  try{data=JSON.parse(Buffer.concat(pieces).toString()||'{}');}
+  catch{throw Object.assign(Error('Request must contain valid JSON.'),{status:400});}
+  if(!data||typeof data!=='object'||Array.isArray(data))throw Object.assign(Error('Request must contain a JSON object.'),{status:400});
   const output=req.url==='/ask'?await answerKnowledge(db,data.question):await packageCopy(data);
   reply(res,200,output);
- }catch(err){console.error('Local AI request error:',err?.message||'error');reply(res,err.status||500,{error:err.status?err.message:'Local AI failed. Check model and connection.'});}
+ }catch(err){const status=err.status||500;console.error('Local AI request failed:',status);reply(res,status,{error:err.status?err.message:'Local AI failed. Check model and connection.'});}
  finally{running--;}
 });
 server.listen(PORT,HOST,()=>console.info(`Skilled Crafting local AI listening on ${HOST}:${PORT} (private reverse proxy required)`));
