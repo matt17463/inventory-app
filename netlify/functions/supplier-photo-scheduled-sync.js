@@ -3,7 +3,7 @@
 import { createServiceClient } from './_shared/security.js';
 import { syncSupplierPhotoBatch } from './supplier-photo-sync.js';
 
-export default async () => {
+export const scheduledSupplierPhotoSync = async () => {
  const day=Math.floor(Date.now()/86400000);
  const cursor=(day*5)%100;
  try {
@@ -18,3 +18,5 @@ export default async () => {
   throw error;
  }
 };
+
+export default scheduledSupplierPhotoSync;
