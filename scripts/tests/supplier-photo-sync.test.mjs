@@ -18,7 +18,7 @@ test('blank identification guide uses color-specific product photos and sourced 
  const source=read('src/BlankIdentificationGuide.jsx');
  assert.match(source,/const match=variations\.find\(\(item\)=>item\.color===color&&item\.photo\)/);
  assert.match(source,/operationalAssetUrls/);
- assert.match(source,/Photo needs verification/);
+ assert.match(source,/No supplier photo assigned/);
 });
 test('only whitelisted supplier brand/style pairs qualify for automatic enrichment', async()=>{
  const {catalogStyle,suitableTitle}=await import('../../netlify/functions/supplier-photo-sync.js');
