@@ -29,3 +29,10 @@
 - Verify Netlify PDF worker bundling and scheduled function registration.
 - Confirm Supabase RLS and restricted source visibility with role tests.
 - Do not claim local AI is *running* until the hardware, model download, tunnel and hostname are provisioned.
+
+## Approved NAS / business Mac manual sync
+- On a trusted workstation or Pi with access to an explicitly approved business-manuals-only folder, install Node dependencies and configure the existing private R2 environment variables on that machine.
+- Set `SC_MANUAL_SYNC_ENABLED=1` and `SC_MANUAL_SOURCE_DIR=/path/to/approved/business-manuals`. Do not point this at the home directory, NAS root, personnel files, customer records, or broad file shares.
+- Run `node scripts/sync-approved-manuals.mjs` manually once. It scans at most 250 PDFs, ignores symlinks and hidden items, imposes a 12 MB/file limit and only uploads changed files to the private `knowledge/manuals/` namespace.
+- After checking output, schedule the same command on the trusted host (e.g., systemd timer or cron) to pick up new files. A Netlify scheduled index task checks the approved R2 prefix every 15 minutes and processes one new or changed PDF per run. Existing files outside that prefix are never ingested automatically.
+- Scanned image-only documents need a separate OCR workflow and human review. No documents were moved out of the existing NAS or deleted by this release.
