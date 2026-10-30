@@ -46,3 +46,21 @@ test('catalog images must use an exact style/color and approved supplier source'
  assert.equal(validImage('https://malicious.example/18500_black.jpg'),'');
  assert.equal(validImage('http://sanmarsports.com/foo.jpg'),'');
 });
+test('Shopify product feed accepts text/javascript while reading actual JSON safely',async()=>{
+ const {fetchProduct}=await import('../../netlify/functions/supplier-photo-sync.js');
+ const prior=globalThis.fetch;
+ try{
+  globalThis.fetch=async()=>new Response(JSON.stringify({title:'Gildan Heavy Blend 18500',vendor:'Gildan',images:[],variants:[]}),{status:200,headers:{'Content-Type':'text/javascript; charset=utf-8'}});
+  const result=await fetchProduct('18500');
+  assert.equal(result.vendor,'Gildan');
+  globalThis.fetch=async()=>new Response('<script>not json</script>',{status:200,headers:{'Content-Type':'text/html'}});
+  await assert.rejects(fetchProduct('18500'),/content type/);
+ }finally{globalThis.fetch=prior}
+});
+test('guide clearly distinguishes missing reference photos from failed image links',()=>{
+ const source=read('src/BlankIdentificationGuide.jsx');
+ assert.match(source,/No supplier photo assigned/);
+ assert.match(source,/Supplier photo failed to load/);
+ assert.match(source,/loading="eager"/);
+ assert.match(source,/Photo coverage/);
+});
