@@ -124,7 +124,7 @@ export default function BlankIdentificationGuide() {
           }
         }
       } catch (error) { if (active) setStatus(error.message || 'Cannot load the blank catalog.'); }
-      finally { if (active) setLoading(false); }
+      finally { if (active) { setLoading(false);setStatus((current)=>current==='Loading every non-archived blank…'?'':current); } }
     })();
     return () => { active = false; };
   }, []);
@@ -255,6 +255,7 @@ export default function BlankIdentificationGuide() {
         {photoEdit?.groupId===group.id&&<form className="sc-blank-guide-photo-editor no-print" onSubmit={(event)=>{event.preventDefault();saveImage('set');}}>
           <h3>Replace / assign photograph — {photoEdit.brand} {photoEdit.style} · {photoEdit.color}</h3>
           <p>This saves one image for all sizes of the selected brand, style and color. Exact saved photos override provisional references. Use a supplier image URL or upload a photo to the business R2 storage.</p>
+          <a className="sc-blank-guide-source-search" href={'https://www.google.com/search?tbm=isch&q='+encodeURIComponent(photoEdit.brand+' '+photoEdit.style+' '+photoEdit.color+' official supplier product image')} target="_blank" rel="noopener noreferrer">Find a supplier photo for this style/color</a>
           <label>Supplier image URL (HTTPS)<input type="url" placeholder="https://supplier.example/photo.jpg" value={photoUrlDraft} disabled={Boolean(photoFile)||photoSaving} onChange={(event)=>setPhotoUrlDraft(event.target.value)}/></label>
           <label>Or upload a photo (PNG, JPEG or WebP)<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={photoSaving} onChange={(event)=>setPhotoFile(event.target.files?.[0]||null)}/></label>
           <div className="sc-blank-guide-editor-actions">
