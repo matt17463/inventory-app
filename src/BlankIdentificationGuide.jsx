@@ -240,7 +240,7 @@ export default function BlankIdentificationGuide() {
     {!loading && groups.length === 0 && <p>No matching blanks found.</p>}
     <div className="sc-blank-guide-pages">{groups.map((group) => {
       const variations = [...group.items].sort((a,b)=>(a.color+a.size).localeCompare(b.color+b.size));
-      const photo = variations.find((item)=>item.photo);
+      const photo = variations.find((item)=>item.exactPhoto) || variations.find((item)=>item.photo);
       const options = [...new Set(variations.map((item)=>item.color).filter(Boolean))].sort();
       const sizes = [...new Set(variations.map((item)=>item.size).filter(Boolean))].sort();
       return <article key={group.id} className="sc-blank-guide-sheet">
