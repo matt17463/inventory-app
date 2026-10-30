@@ -212,7 +212,7 @@ pdf.text('Complete User Guide',margin,181);
 pdf.setFontSize(10);pdf.setFont('helvetica','normal');
 pdf.text('NOVICE WALKTHROUGHS  -  OWNER SCENARIOS  -  ADVANCED OPERATIONS',margin,224);
 y=320;heading('Release reference '+GUIDE_VERSION,{level:2});
-para('This guide combines the application source with the October 22 live WordPress browser audit. The WordPress plugin inventory was checked, but the audit is partial. A visually observed control is not proof of saving, checkout, shipping, synchronization or printing.');
+para('This guide combines the latest application source, October 29 workflow additions, and the October 22 live WordPress browser audit. WordPress plugin inventory and live integration certification remain partial. A visually observed control is not proof of saving, checkout, shipping, synchronization or printing.');
 callout('SAFETY FIRST','Source-derived control listings are an interface inventory, not proof that every control is visible to every role or that it is safe to click. Buttons that save, synchronize, delete, place orders, email, publish, receive, or change stock must be practiced in read-only training or under supervision.');
 para(chapterCount+' detailed guide chapters | '+screens.length+' navigation-linked screens | '+controlCount+' named interface controls and nested UI references.');
 para('Generated: '+new Date().toISOString().slice(0,10)+'. Application routes and plugin interfaces may change after this build. Consult the live screen for current labels.');
@@ -252,7 +252,7 @@ for(const file of extras){
  for(let i=0;i<file.controls.length;i++)controlBlock(file.controls[i],i+1);
 }
 heading('Part III - Complete operational reference',{level:1});
-para('The following material is derived from the application living guide. Read it alongside the screen-by-screen control reference to understand why each feature exists, how it connects to adjacent tasks, and what risks are involved.');
+para('The following material is derived from the current application living guide, including October 29 additions. Read it alongside the screen-by-screen control reference to understand why each feature exists, how it connects to adjacent tasks, and what risks are involved.');
 for(const chapter of guideChapters){
  heading(chapter.title,{level:1});
  para(chapter.description);
