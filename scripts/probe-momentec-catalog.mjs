@@ -34,6 +34,7 @@ for(const index of [0,20,1500]){
   const res=await fetch(url,{signal:AbortSignal.timeout(20000),headers:{'User-Agent':'Mozilla/5.0'}});
   const html=await res.text();
   const entries=extractCatalogEntries(html);
+  console.log('MOMENTEC_COLOR_SHAPE',JSON.stringify({index,colorType:typeof entries[0]?.color_images,colorSlice:String(entries[0]?.color_images||'').slice(0,260)}));
   console.log('MOMENTEC_CATALOG_PAGE',JSON.stringify({index,http:res.status,len:html.length,records:entries.length,examples:entries.slice(0,5).map(x=>({brand:x.brand,style:x.sku,title:x.name,source:x.imageUrl,colors:(()=>{try{return JSON.parse(x.color_images||'[]').length}catch{return 0}})()}))}));
  }catch(error){console.log('MOMENTEC_CATALOG_ERROR',index,String(error))}
 }
