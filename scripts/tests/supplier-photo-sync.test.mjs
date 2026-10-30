@@ -18,14 +18,14 @@ test('blank identification guide uses color-specific product photos and sourced 
  const source=read('src/BlankIdentificationGuide.jsx');
  assert.match(source,/const match=variations\.find\(\(item\)=>item\.color===color&&item\.photo\)/);
  assert.match(source,/operationalAssetUrls/);
- assert.match(source,/Photo needs verification/);
+ assert.match(source,/No supplier photo assigned/);
 });
 test('only whitelisted supplier brand/style pairs qualify for automatic enrichment', async()=>{
  const {catalogStyle,suitableTitle}=await import('../../netlify/functions/supplier-photo-sync.js');
  assert.equal(catalogStyle('Bella + Canvas','3001'),'bc3001');
  assert.equal(catalogStyle('Gildan','18500'),'18500');
  assert.equal(catalogStyle('Gildan','NA'),'');
- assert.equal(catalogStyle('Independent','SS4500'),'');
+ assert.equal(catalogStyle('Independent','SS4500'),'ss4500');
  assert.equal(suitableTitle({title:'BELLA+CANVAS Unisex Tee BC3001'},'Bella + Canvas','bc3001'),true);
  assert.equal(suitableTitle({title:'Bella Canvas BC3001'},'Gildan','18500'),false);
 });
@@ -45,4 +45,22 @@ test('catalog images must use an exact style/color and approved supplier source'
  assert.equal(bestImage(data,'18500','Red'),'');
  assert.equal(validImage('https://malicious.example/18500_black.jpg'),'');
  assert.equal(validImage('http://sanmarsports.com/foo.jpg'),'');
+});
+test('Shopify product feed accepts text/javascript while reading actual JSON safely',async()=>{
+ const {fetchProduct}=await import('../../netlify/functions/supplier-photo-sync.js');
+ const prior=globalThis.fetch;
+ try{
+  globalThis.fetch=async()=>new Response(JSON.stringify({title:'Gildan Heavy Blend 18500',vendor:'Gildan',images:[],variants:[]}),{status:200,headers:{'Content-Type':'text/javascript; charset=utf-8'}});
+  const result=await fetchProduct('18500');
+  assert.equal(result.vendor,'Gildan');
+  globalThis.fetch=async()=>new Response('<script>not json</script>',{status:200,headers:{'Content-Type':'text/html'}});
+  await assert.rejects(fetchProduct('18500'),/content type/);
+ }finally{globalThis.fetch=prior}
+});
+test('guide clearly distinguishes missing reference photos from failed image links',()=>{
+ const source=read('src/BlankIdentificationGuide.jsx');
+ assert.match(source,/No supplier photo assigned/);
+ assert.match(source,/Supplier photo failed to load/);
+ assert.match(source,/loading="eager"/);
+ assert.match(source,/Photo coverage/);
 });
