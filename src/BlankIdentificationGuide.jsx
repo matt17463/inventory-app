@@ -166,7 +166,7 @@ export default function BlankIdentificationGuide() {
       if (!families.has(id)) families.set(id,{ id,title,brand:item.brand,style:item.style,supplierStyle:item.supplierStyle,items:[] });
       families.get(id).items.push(item);
     });
-    return [...families.values()].sort((a,b) => (a.brand+a.title).localeCompare(b.brand+b.title));
+    return [...families.values()].sort((a,b) => Number(b.items.some((item)=>item.photo)) - Number(a.items.some((item)=>item.photo)) || (a.brand+a.title).localeCompare(b.brand+b.title));
   }, [enriched, search, brandFilter, missingOnly, photoFilter]);
   return <main className="page sc-blank-guide">
     <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><div className="sc-blank-guide-actions"><a className="secondary-button" href="/scan">Scan / look up barcode</a><a className="secondary-button" href="/inventory/edit-blanks">Correct item images</a>{canRefreshSupplierPhotos&&<button type="button" className="secondary-button" disabled={syncingPhotos||loading} onClick={syncSupplierPhotos}>{syncingPhotos?'Matching supplier photos…':'Refresh supplier photos'}</button>}<button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></div></header>
@@ -178,6 +178,7 @@ export default function BlankIdentificationGuide() {
     </div>
     {status && !loading && <p className="muted" role="status">{status}</p>}
     {syncProgress&&<p className="message" role="status" aria-live="polite">{syncProgress}</p>}
+    <p className="muted sc-blank-guide-order-note">Product families with supplier photographs appear first; unmatched families follow.</p>
     <p className="sc-blank-guide-warning">For warehouse identification: color samples are approximate reference swatches, not official supplier colors. A product photograph is supporting evidence only—verify the item label and identifier.</p>
     {!loading && groups.length === 0 && <p>No matching blanks found.</p>}
     <div className="sc-blank-guide-pages">{groups.map((group) => {
