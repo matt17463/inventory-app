@@ -15,7 +15,7 @@ for(const g of sourceGroups){
   if(!/Independent Trading Company/i.test(title)||!html.toUpperCase().includes(style)){
    stats.push({brand:g.brand,style:g.style,problem:'manufacturer/style mismatch',title});continue;
   }
-  const pattern=new RegExp('Independent_Trading_Co\\._'+style+'_(.+?)_Front_High\\.(jpg|jpeg|png|webp)','gi');
+  const pattern=new RegExp('Independent_Trading_Co\\._'+style+'_(.+?)_Front_High(?:_[a-f0-9-]{20,})?\\.(jpg|jpeg|png|webp)','gi');
   const images=new Map();
   for(const match of html.matchAll(pattern)){
    const color=normalize(match[1]);
