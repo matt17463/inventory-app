@@ -26,6 +26,8 @@ const label=(value)=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>
 const date=(value)=>value?new Date(value+'T12:00:00').toLocaleDateString():'—';
 const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
 const clean=(value)=>String(value??'').trim();
+const TERMINAL_ORDER_STATUSES=new Set(['completed','closed','void','voided','cancelled','canceled']);
+const isTerminalOrder=(row)=>TERMINAL_ORDER_STATUSES.has(clean(row?.status).toLowerCase().replaceAll(' ','_'))||Boolean(row?.closed_at||row?.voided_at||row?.cancelled_at);
 
 function lineSavePatch(item){
   return {
@@ -86,6 +88,7 @@ export default function ClientOrders(){
   const [attachments,setAttachments]=useState([]);
   const [rules,setRules]=useState([]);
   const [filter,setFilter]=useState('open');
+  const [showTerminalOrders,setShowTerminalOrders]=useState(false);
   const [message,setMessage]=useState('');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -417,10 +420,11 @@ export default function ClientOrders(){
   const pricedCount=items.filter((item)=>Number(item.unit_price||0)>0).length;
 
   const filtered=useMemo(()=>rows.filter((row)=>{
+    if(filter==='open') return !isTerminalOrder(row);
+    if(!showTerminalOrders && isTerminalOrder(row)) return false;
     if(filter==='all') return true;
-    if(filter==='open') return !['completed','cancelled'].includes(row.status);
     return row.status===filter;
-  }),[rows,filter]);
+  }),[rows,filter,showTerminalOrders]);
   const submitted=rows.filter((r)=>r.status==='submitted').length;
 
   return <main className="page sc-page-stack">
@@ -430,11 +434,11 @@ export default function ClientOrders(){
 
     <section className="metric-grid">
       <article className="metric-card"><strong>{submitted}</strong><span>New submissions</span></article>
-      <article className="metric-card"><strong>{rows.filter((r)=>!['completed','cancelled'].includes(r.status)).length}</strong><span>Open requests</span></article>
+      <article className="metric-card"><strong>{rows.filter((r)=>!isTerminalOrder(r)).length}</strong><span>Open requests</span></article>
       <article className="metric-card"><strong>{rows.reduce((sum,r)=>sum+Number(r.total_quantity||0),0)}</strong><span>Requested units</span></article>
     </section>
 
-    <section className="card elevated-card"><div className="section-heading-row wrap-row"><div><h2>Request queue</h2><p className="muted">Inventory demand is created only after payment is recorded and you explicitly choose Convert to Production.</p></div><select value={filter} onChange={(e)=>setFilter(e.target.value)}><option value="open">Open</option><option value="all">All</option>{statuses.map((s)=><option key={s} value={s}>{label(s)}</option>)}</select></div></section>
+    <section className="card elevated-card"><div className="section-heading-row wrap-row"><div><h2>Request queue</h2><p className="muted">Inventory demand is created only after payment is recorded and you explicitly choose Convert to Production.</p></div><div className="sc-client-order-filters"><label className="sc-client-terminal-toggle"><input type="checkbox" checked={showTerminalOrders} onChange={(e)=>setShowTerminalOrders(e.target.checked)} /> Show completed, closed, voided &amp; cancelled</label><select aria-label="Filter client orders by status" value={filter} onChange={(e)=>{const next=e.target.value;setFilter(next);if(TERMINAL_ORDER_STATUSES.has(next))setShowTerminalOrders(true);}}><option value="open">Open only</option><option value="all">All statuses</option>{[...new Set([...statuses,'closed','voided','canceled'])].map((s)=><option key={s} value={s}>{label(s)}</option>)}</select></div></div></section>
 
     <section className="sc-client-orders-layout">
       <section className="card elevated-card table-card">
