@@ -1,12 +1,16 @@
 // Run as the logged-in workshop user, after private configuration and model setup.
-// Creates only these two dedicated user LaunchAgents; preserves other services.
+// Creates dedicated user LaunchAgents or reuses the verified official Ollama agent.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
+import {verifyExistingOllama} from './lib/workshopMacServiceChecks.mjs';
 
 if(process.platform!=='darwin'||process.getuid()===0)throw Error('Run as the logged-in macOS user, without sudo.');
+const args=process.argv.slice(2);
+if(args.some(arg=>arg!=='--reuse-ollama'))throw Error('Only --reuse-ollama is supported.');
+const reuseOllama=args.includes('--reuse-ollama');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const config=path.join(os.homedir(),'.config/skilled-crafting/local-ai.env');
 const settings=fs.lstatSync(config);
@@ -23,6 +27,7 @@ for(const directory of [serviceDirectory,logDirectory]){
  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid())throw Error('Service paths must be directories owned by this user.');
 }
 const domain='gui/'+process.getuid();
+if(reuseOllama)console.log(verifyExistingOllama({domain,uid:process.getuid()})+': verified enabled, current-user server, loopback only; preserved');
 const envPath=[path.dirname(process.execPath),path.dirname(ollama),'/usr/local/bin','/opt/homebrew/bin','/usr/bin','/bin'].join(':');
 const escape=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;');
 const string=value=>'<string>'+escape(value)+'</string>';
@@ -32,7 +37,7 @@ const services=[
  {label:'com.skilledcrafting.local-ai',args:['/bin/bash',setup,'--run'],port:8788,environment:{PATH:envPath}}
 ];
 const loaded=label=>spawnSync('/bin/launchctl',['print',domain+'/'+label],{stdio:'ignore'}).status===0;
-const plans=services.map(service=>{
+const plans=services.filter(service=>!reuseOllama||service.label!=='com.skilledcrafting.ollama').map(service=>{
  const file=path.join(serviceDirectory,service.label+'.plist');
  const xml='<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n'
   +'<key>Label</key>'+string(service.label)+'\n<key>ProgramArguments</key><array>'+service.args.map(string).join('')+'</array>\n'
@@ -51,7 +56,7 @@ const plans=services.map(service=>{
  if(!isLoaded){
   const listeners=spawnSync('/usr/sbin/lsof',['-nP',`-iTCP:${service.port}`,'-sTCP:LISTEN'],{encoding:'utf8'});
   if(listeners.error||![0,1].includes(listeners.status))throw Error('Could not check local listeners.');
-  if(listeners.status===0)throw Error(`Port ${service.port} is already in use. ${service.port===11434?'Quit the Ollama app after its model download finishes, then rerun.':'Review the existing gateway before rerunning.'} No service has been changed.`);
+  if(listeners.status===0)throw Error(`Port ${service.port} is already in use. ${service.port===11434?'Use --reuse-ollama for the official managed Ollama service, or review the existing daemon.':'Review the existing gateway before rerunning.'} No service has been changed.`);
  }
  return {...service,file,xml,isLoaded};
 });
