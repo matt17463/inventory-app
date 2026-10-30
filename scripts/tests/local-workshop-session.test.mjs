@@ -22,7 +22,7 @@ test('local AI session RPC denies revoked, expired, foreign and absent sessions 
     ('22222222-2222-4222-8222-222222222222','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',null),
     ('33333333-3333-4333-8333-333333333333','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',now()-interval '1 second');
   `);
-  const sql=readFileSync(new URL('../../supabase/migrations/20261030032651_sc_local_ai_session_active.sql',import.meta.url),'utf8');
+  const sql=readFileSync(new URL('../../supabase/migrations/20261030033358_sc_local_ai_session_active.sql',import.meta.url),'utf8');
   await db.exec(sql);
   async function check(claims){
    await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(claims)]);
