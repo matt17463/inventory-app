@@ -76,12 +76,13 @@ export async function syncSupplierPhotoBatch(db,{cursor=0,limit=LIMIT,dryRun=fal
  const blanks=await loadBlanks(db);
  const grouped=new Map();
  for(const row of blanks){
-  if(row.image_url||row.image_storage_path)continue;
   const brand=row.brands?.name||'', style=row.product_types?.name||'',color=row.colors?.name||'';
   const sourceStyle=catalogStyle(brand,style);
   if(!sourceStyle||!color||['na','unknown'].includes(normalize(color)))continue;
   const groupKey=normalize(brand)+':'+normalize(style);
   if(!grouped.has(groupKey))grouped.set(groupKey,{brand,style,sourceStyle,colors:new Map()});
+  // Group identities stay stable while photos are populated, so cursor pagination never skips styles.
+  if(row.image_url||row.image_storage_path)continue;
   const group=grouped.get(groupKey);
   if(!group.colors.has(color))group.colors.set(color,[]);
   group.colors.get(color).push(row.id);
@@ -93,6 +94,7 @@ export async function syncSupplierPhotoBatch(db,{cursor=0,limit=LIMIT,dryRun=fal
  const results=[];
  for(const group of groups.slice(start,start+size)){
   const record={brand:group.brand,style:group.style,colorsMatched:0,updated:0};
+  if(!group.colors.size){results.push(record);continue}
   try{
    const product=await fetchProduct(group.sourceStyle);
    if(!suitableTitle(product,group.brand,group.sourceStyle))throw Error('Supplier brand/style title mismatch');
