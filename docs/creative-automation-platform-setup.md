@@ -45,3 +45,25 @@
 - In Skilled Crafting → Creative Operations → Knowledge Assistant → Private workshop AI connection, an admin/manager can enter the Tailscale HTTPS address and enable it. No Netlify build-time environment change is required.
 - For the NAS manual corpus, set `SC_MANUAL_SYNC_ENABLED=1` and an **approved, narrowly scoped** `SC_MANUAL_SOURCE_DIR` in the private env file. Use `bash scripts/setup-workshop-ai.sh --sync` once to test. It requires existing R2 credentials and an available mount; no broad NAS scans. Schedule only after inspecting its output.
 - Running a browser from outside the tailnet without a connected Tailscale client will intentionally fail to reach the local model. Neither static search nor public customer design intake needs Ollama.
+
+## Optional offline OCR for scanned business manuals (October 29)
+
+If an approved PDF is image-only, the automatic indexer cannot search its text. An optional **local-only, no-paid-API OCR preparation tool** is provided. It does **not** upload files, alter originals, run automatically or read general NAS directories.
+
+1. Install the open-source `ocrmypdf` command and Poppler's `pdfinfo` on a trusted Mac, Pi or Linux host. Verify both commands locally.
+2. Make a dedicated source folder containing **only approved manufacturer manuals**; not the NAS root, personal/home folders, customer designs or personnel records. Choose a separate output folder for reviewed derivatives.
+3. Preview the bounded scan (maximum 25 files by default) without making any files:
+
+   ```bash
+   node scripts/prepare-approved-manuals-ocr.mjs --source "/path/to/approved-business-manuals" --output "/path/to/reviewed-ocr"
+   ```
+
+4. To create OCR copies after inspecting the dry run, explicitly opt in on the trusted computer:
+
+   ```bash
+   SC_MANUAL_OCR_ENABLED=1 node scripts/prepare-approved-manuals-ocr.mjs --source "/path/to/approved-business-manuals" --output "/path/to/reviewed-ocr" --execute --max-files 25
+   ```
+
+5. Review every `.ocr.pdf` for transcription errors, page order and correct text extraction. If suitable, use the existing **opt-in** `scripts/sync-approved-manuals.mjs` against the separate reviewed output directory, then confirm the indexed page citations in the app. OCR copies over the existing 12 MB limit must be further reduced/split manually. The helper never overwrites a previous output copy; review/archive old copies before reprocessing.
+
+This does not implement automatic server-side OCR for incoming uploads or create an always-running background worker; the manual review boundary is deliberate.
