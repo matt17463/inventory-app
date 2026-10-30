@@ -23,7 +23,7 @@ const maxConcurrent=2;
 function reply(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Methods':'POST, GET, OPTIONS'});res.end(JSON.stringify(body));}
 const crop=(v,n=1600)=>String(v||'').trim().slice(0,n);
 async function authorize(req){
- const jwt=String(req.headers.authorization||'').match(/^Bearer\\s+([^\\s]+)$/i)?.[1];
+ const jwt=String(req.headers.authorization||'').match(/^Bearer\s+([^\s]+)$/i)?.[1];
  if(!jwt||jwt.length>4096)throw Object.assign(Error('Sign in to Skilled Crafting to use local AI.'),{status:401});
  const db=clientForUser(jwt);
  const user=await db.auth.getUser(jwt);
