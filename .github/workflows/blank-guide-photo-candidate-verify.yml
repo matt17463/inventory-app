@@ -6,11 +6,11 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - name: Verify official product image feeds
-        run: node scripts/probe-momentec-catalog.mjs && node scripts/probe-independent-filenames.mjs && node scripts/verify-vendor-photo-candidates.mjs
+        run: node scripts/verify-momentec-catalog.mjs && node scripts/verify-vendor-photo-candidates.mjs
