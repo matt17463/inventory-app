@@ -19,6 +19,7 @@ import {
 } from './lib/clientOrdersApi';
 import { getTestingModeSettings, testingModeLabel } from './lib/testingMode';
 import { calculateSalesTax, SALES_TAX_PERCENT } from './lib/salesTax';
+import { supabase } from './supabaseClient';
 import './operationsFeatures.css';
 
 const statuses=['submitted','review','pricing','quote_sent','awaiting_approval','awaiting_payment','artwork','ready_for_production','production','ready_pickup','completed','cancelled'];
@@ -26,8 +27,8 @@ const label=(value)=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>
 const date=(value)=>value?new Date(value+'T12:00:00').toLocaleDateString():'—';
 const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
 const clean=(value)=>String(value??'').trim();
-const TERMINAL_ORDER_STATUSES=new Set(['completed','closed','void','voided','cancelled','canceled']);
-const isTerminalOrder=(row)=>TERMINAL_ORDER_STATUSES.has(clean(row?.status).toLowerCase().replaceAll(' ','_'))||Boolean(row?.closed_at||row?.voided_at||row?.cancelled_at);
+const TERMINAL_ORDER_STATUSES=new Set(['completed','complete','production_complete','closed','done','archived','void','voided','cancelled','canceled','refunded','failed']);
+const isTerminalOrder=(row)=>[row?.status,row?.linked_job_status].some((status)=>TERMINAL_ORDER_STATUSES.has(clean(status).toLowerCase().replaceAll(' ','_')))||Boolean(row?.closed_at||row?.voided_at||row?.cancelled_at);
 
 function lineSavePatch(item){
   return {
@@ -104,7 +105,18 @@ export default function ClientOrders(){
   async function load(){
     setLoading(true); setMessage('');
     try{
-      const [data,pricingRules]=await Promise.all([listClientOrders(),listClientPricingRules()]);
+      const [orders,pricingRules]=await Promise.all([listClientOrders(),listClientPricingRules()]);
+      let data=orders;
+      const jobIds=[...new Set(orders.map((row)=>Number(row.generated_job_id)).filter((id)=>Number.isSafeInteger(id)&&id>0))];
+      if(jobIds.length){
+        const linked=await supabase.from('jobs').select('id,status').in('id',jobIds);
+        if(linked.error){
+          setMessage('Could not verify linked production status. Closed jobs might still appear; refresh or check Work Hub.');
+        }else{
+          const byId=new Map((linked.data||[]).map((job)=>[String(job.id),job.status]));
+          data=orders.map((row)=>({...row,linked_job_status:byId.get(String(row.generated_job_id))||''}));
+        }
+      }
       setRows(data);
       setRules(pricingRules);
       if(selected){
@@ -443,7 +455,7 @@ export default function ClientOrders(){
     <section className="sc-client-orders-layout">
       <section className="card elevated-card table-card">
         <div className="responsive-table"><table className="data-table"><thead><tr><th>Request</th><th>Customer</th><th>Qty</th><th>Status</th><th>Requested</th><th></th></tr></thead>
-        <tbody>{loading?<tr><td colSpan="6">Loading…</td></tr>:filtered.length===0?<tr><td colSpan="6">No requests found.</td></tr>:filtered.map((row)=><tr key={row.id} className={selected?.id===row.id?'selected-row':''}><td><strong>{row.order_number}</strong><br/><small>{new Date(row.submitted_at).toLocaleString()}</small></td><td>{row.organization}<br/><small>{row.contact_name}</small></td><td>{row.total_quantity}</td><td><span className={'sc-status-pill sc-status-'+row.status}>{label(row.status)}</span></td><td>{date(row.desired_completion_date)}</td><td><button className="secondary-button" onClick={()=>open(row)}>Open</button></td></tr>)}</tbody></table></div>
+        <tbody>{loading?<tr><td colSpan="6">Loading…</td></tr>:filtered.length===0?<tr><td colSpan="6">No requests found.</td></tr>:filtered.map((row)=><tr key={row.id} className={selected?.id===row.id?'selected-row':''}><td><strong>{row.order_number}</strong><br/><small>{new Date(row.submitted_at).toLocaleString()}</small></td><td>{row.organization}<br/><small>{row.contact_name}</small></td><td>{row.total_quantity}</td><td><span className={'sc-status-pill sc-status-'+row.status}>{label(row.status)}</span>{row.linked_job_status&&<small className="sc-client-linked-job-status">Job: {label(row.linked_job_status)}</small>}</td><td>{date(row.desired_completion_date)}</td><td><button className="secondary-button" onClick={()=>open(row)}>Open</button></td></tr>)}</tbody></table></div>
       </section>
 
       <aside className="card elevated-card sc-client-order-detail">
