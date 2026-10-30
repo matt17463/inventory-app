@@ -1,7 +1,8 @@
 import {wordpressAuditTutorials} from './wordpressAuditTraining.js';
+import {october2026Tutorials} from './october2026Training.js';
 import {recentModernizationTutorials} from './recentModernizationTraining.js';
 import {certificationTutorial} from './certificationOperations.js';
-export const TRAINING_VERSION = '1.9.0';
+export const TRAINING_VERSION = '2.0.0';
 
 export const trainingRoles = [
   { id:'marketing',label:'Marketing / Business Development',description:'Client relationships, prospect pipeline, outreach materials, samples, demos, client-specific pricing and design/operations handoffs.' },
@@ -421,6 +422,8 @@ trainingTutorials.push({
 });
 
 trainingTutorials.push(...recentModernizationTutorials);
+
+trainingTutorials.push(...october2026Tutorials);
 
 export function tutorialsForRole(roleId) {
   return trainingTutorials.filter((tutorial) => tutorial.roles.includes(roleId));
