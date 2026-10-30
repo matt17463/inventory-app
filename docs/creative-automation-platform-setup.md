@@ -10,9 +10,9 @@
 ## Activate private local language model
 1. Choose a powered-on Mac with enough RAM for an appropriately sized Ollama text model, or a dedicated inference server. A Pi 5 can work with a small model but may be slow. Install Ollama and pull an openly licensed model; review its license before production use.
 2. Keep Ollama at `http://127.0.0.1:11434`, never exposed publicly.
-3. On that same trusted computer, set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SC_LOCAL_AI_MODEL`, `SC_LOCAL_AI_ORIGIN=https://inventory.skilledcrafting.com` and optionally `SC_LOCAL_AI_PORT=8788`. **Service role key stays ONLY on the trusted local server**, never in `VITE_*` or browser code. Launch `node scripts/local-knowledge-agent.mjs`.
+3. On that same trusted computer, set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SC_LOCAL_AI_MODEL`, `SC_LOCAL_AI_ORIGIN=https://inventory.skilledcrafting.com` and optionally `SC_LOCAL_AI_PORT=8788`. **The public anon key and employee JWT are used; no service-role key on the workshop computer**, never in `VITE_*` or browser code. Launch `node scripts/local-knowledge-agent.mjs`.
 4. Put the gateway behind a private TLS reverse proxy with access restricted to Tailscale, on a distinct authenticated HTTPS hostname. Do not expose 8788 or 11434 on the public internet. The gateway verifies employee JWTs and active app roles on every request.
-5. Configure Netlify build variable `VITE_SC_LOCAL_AI_URL` to the final private HTTPS gateway hostname and redeploy. Browser clients must be on Tailscale to connect. If this variable is absent, search works but AI buttons are disabled.
+5. Configure optional fallback Netlify build variable `admin-managed gateway settings` to the final private HTTPS gateway hostname and redeploy. Browser clients must be on Tailscale to connect. If this variable is absent, search works but AI buttons are disabled.
 6. Check source citations, response quality, application login, errors when Ollama is stopped, and role-denied behavior. Never use the model to bypass machine-safety guidance or customer approvals.
 
 ## PDF indexing
@@ -36,3 +36,12 @@
 - Run `node scripts/sync-approved-manuals.mjs` manually once. It scans at most 250 PDFs, ignores symlinks and hidden items, imposes a 12 MB/file limit and only uploads changed files to the private `knowledge/manuals/` namespace.
 - After checking output, schedule the same command on the trusted host (e.g., systemd timer or cron) to pick up new files. A Netlify scheduled index task checks the approved R2 prefix every 15 minutes and processes one new or changed PDF per run. Existing files outside that prefix are never ingested automatically.
 - Scanned image-only documents need a separate OCR workflow and human review. No documents were moved out of the existing NAS or deleted by this release.
+
+## Streamlined private activation (October 29)
+- On a Tailscale-connected Pi or business Mac, run `bash scripts/setup-workshop-ai.sh --check` to identify installed dependencies, then `--init` to create a private `~/.config/skilled-crafting/local-ai.env` file. Fill its **Supabase public anon key** and project URL; **do not copy the service-role key** onto the host. New gateway queries use the employee JWT, role checks and Postgres RLS.
+- Install Ollama using its official instructions for the host OS, start the Ollama service bound to loopback, and run `bash scripts/setup-workshop-ai.sh --model` to pull the configured model.
+- Run `npm ci` from the checked-out repository; launch the gateway with `bash scripts/setup-workshop-ai.sh --run` (keep it running with a user-level service manager after verification).
+- In a second terminal run `bash scripts/setup-workshop-ai.sh --serve` to configure tailnet-only HTTPS on port 8443. **Never use Funnel**. Restrict access with Tailscale ACLs and keep the endpoint inside the authorized tailnet.
+- In Skilled Crafting → Creative Operations → Knowledge Assistant → Private workshop AI connection, an admin/manager can enter the Tailscale HTTPS address and enable it. No Netlify build-time environment change is required.
+- For the NAS manual corpus, set `SC_MANUAL_SYNC_ENABLED=1` and an **approved, narrowly scoped** `SC_MANUAL_SOURCE_DIR` in the private env file. Use `bash scripts/setup-workshop-ai.sh --sync` once to test. It requires existing R2 credentials and an available mount; no broad NAS scans. Schedule only after inspecting its output.
+- Running a browser from outside the tailnet without a connected Tailscale client will intentionally fail to reach the local model. Neither static search nor public customer design intake needs Ollama.
