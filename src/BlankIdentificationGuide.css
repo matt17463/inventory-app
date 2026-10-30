@@ -40,3 +40,7 @@
 .sc-blank-guide-checklist {display:flex; flex-wrap:wrap; gap:.7rem 1rem; padding:.7rem 0; font-size:.8rem;}
 .sc-blank-guide-checklist span {white-space:normal;}
 @media print {.sc-blank-guide-checklist {break-inside:avoid;page-break-inside:avoid;}}
+
+.sc-blank-guide-color img{width:75px;height:92px;object-fit:contain;background:#f3f6f8;border:1px solid var(--sc-border);border-radius:6px}
+.sc-blank-guide-color:has(img){width:110px}
+@media print{.sc-blank-guide-color img{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
