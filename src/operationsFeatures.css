@@ -129,3 +129,8 @@
 
 /* v1.4.38 client order persistence + delete */
 .sc-client-save-status{display:inline-flex;margin:.35rem 0 0;padding:5px 9px;border-radius:999px;background:#fff7ed;color:#9a3412;font-size:.78rem;font-weight:800}.sc-client-delete-panel{margin-top:18px;padding:16px;border:1px solid #fecaca;border-radius:12px;background:#fff7f7;display:flex;align-items:center;justify-content:space-between;gap:16px}.sc-client-delete-panel h3{margin:0 0 4px;color:#991b1b}.sc-client-delete-panel p{margin:0}.sc-danger-button{background:#b91c1c!important;color:#fff!important;border:1px solid #991b1b!important;border-radius:8px;padding:9px 14px;font-weight:800;cursor:pointer;white-space:nowrap}.sc-danger-button:hover{background:#991b1b!important}.sc-danger-button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:760px){.sc-client-delete-panel{align-items:stretch;flex-direction:column}.sc-danger-button{width:100%}}
+
+.sc-client-order-filters {display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:1rem;}
+.sc-client-terminal-toggle {display:inline-flex; align-items:center; gap:.5rem; color:var(--sc-text); font-weight:650; cursor:pointer;}
+.sc-client-terminal-toggle input {width:18px; height:18px; accent-color:var(--sc-primary);}
+.sc-client-order-filters select {min-height:40px; color:var(--sc-text); background:var(--sc-panel); border:1px solid var(--sc-border); border-radius:8px; padding:.5rem;}
