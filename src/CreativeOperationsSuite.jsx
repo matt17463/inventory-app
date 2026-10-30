@@ -1,4 +1,4 @@
-import { useContext, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './CreativeOperationsSuite.css';
 import CreativeKnowledgeHub from './CreativeKnowledgeHub';
@@ -8,7 +8,7 @@ import DailyCommandCenter from './DailyCommandCenter';
 import { computeDraftPackage } from './lib/creativePackageMath';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { supabase } from './supabaseClient';
-import { localAiCall,localAiConfigured } from './lib/localAiGateway';
+import { localAiCall,localAiConfigured,loadLocalAiConnection } from './lib/localAiGateway';
 import { shouldSimulateWrites } from './lib/testingMode';
 
 const MODULES = [
@@ -72,6 +72,8 @@ function ArtworkInspect() {
 }
 function PackageBuilder() {
   const access=useContext(EmployeeAccessContext);
+  const [aiReady,setAiReady]=useState(localAiConfigured());
+  useEffect(()=>{loadLocalAiConnection().then(c=>setAiReady(c.configured)).catch(()=>setAiReady(false));},[]);
   const maySave=['admin','manager','marketing'].includes(access?.role);
   const [packageName,setPackageName]=useState(''),[customerName,setCustomerName]=useState('');
   const [saving,setSaving]=useState(false),[saveError,setSaveError]=useState(''),[savedId,setSavedId]=useState('');
@@ -128,8 +130,8 @@ function PackageBuilder() {
     <div className="cos-metrics"><div><small>Projected sales</small><strong>{money(revenue)}</strong></div><div><small>Estimated direct + setup cost</small><strong>{money(totals.cost)}</strong></div><div><small>Estimated gross contribution</small><strong>{money(profit)}</strong></div><div><small>Estimated contribution margin</small><strong>{revenue?(totals.contributionMargin.toFixed(1)+'%'):'—'}</strong></div></div>
     <div className="cos-knowledge-editor"><h3>Local AI package description</h3>
       <p>Draft persuasive package copy without sending client data to a paid AI provider. Descriptions are not approved or published automatically.</p>
-      <button type="button" disabled={copyBusy||!localAiConfigured()} onClick={requestLocalCopy}>{copyBusy?'Drafting locally…':'Draft with local model'}</button>
-      {!localAiConfigured()&&<p className="cos-note">Connect the private shop-hosted model gateway to enable local copywriting.</p>}
+      <button type="button" disabled={copyBusy||!aiReady} onClick={requestLocalCopy}>{copyBusy?'Drafting locally…':'Draft with local model'}</button>
+      {!aiReady&&<p className="cos-note">Connect the private shop-hosted model gateway to enable local copywriting.</p>}
       {copyDraft&&<><textarea aria-label="Editable AI package description" rows={6} value={copyDraft} onChange={e=>setCopyDraft(e.target.value)}/><p>Draft only. Check all claims, product availability, and pricing before using this copy.</p></>}
     </div>
     {maySave&&<button type="button" disabled={saving} onClick={saveEventDraft}>{saving?'Saving draft…':'Save draft to Product & Event Center'}</button>}
