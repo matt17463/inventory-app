@@ -137,7 +137,7 @@ export default function BlankIdentificationGuide() {
     return [...families.values()].sort((a,b) => (a.brand+a.title).localeCompare(b.brand+b.title));
   }, [enriched, search, brandFilter, missingOnly]);
   return <main className="page sc-blank-guide">
-    <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></header>
+    <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><div className="sc-blank-guide-actions"><a className="secondary-button" href="/scan">Scan / look up barcode</a><a className="secondary-button" href="/inventory/edit-blanks">Correct item images</a><button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></div></header>
     <div className="card sc-blank-guide-filters">
       <label>Search SKU, brand, style, color, size or UPC<input type="search" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Find a blank…" /></label>
       <label>Brand<select value={brandFilter} onChange={(e)=>setBrandFilter(e.target.value)}><option value="">All brands</option>{brands.map((value)=><option key={value}>{value}</option>)}</select></label>
@@ -158,6 +158,7 @@ export default function BlankIdentificationGuide() {
         <h3>Color reference (approximate)</h3>
         <div className="sc-blank-guide-palettes">{options.length?options.map((color)=><div key={color} className="sc-blank-guide-color"><span style={{background:swatch(color)||'repeating-linear-gradient(45deg,#ddd 0 6px,#fff 6px 12px)'}}/><small>{color}</small></div>):<p>Colors not recorded</p>}</div>
         <table><thead><tr><th>Internal / supplier SKU</th><th>Barcode / UPC</th><th>Color</th><th>Size</th></tr></thead><tbody>{variations.map((item)=><tr key={item.id}><td>{item.sku||'Not assigned'}</td><td>{item.barcode||'—'}</td><td>{item.color||'—'}</td><td>{item.size||'—'}</td></tr>)}</tbody></table>
+        <div className="sc-blank-guide-checklist"><strong>Before counting:</strong> <span>☐ Scan SKU / UPC</span><span>☐ Verify manufacturer style &amp; size tag</span><span>☐ Compare color under neutral light</span><span>☐ Set aside mismatches for supervisor review</span></div>
         <div className="sc-blank-guide-signoff"><span>Counted by: __________________</span><span>Date: ____________</span><span>Exception notes: __________________</span></div>
       </article>;
     })}</div>
