@@ -38,7 +38,7 @@ async function localModel(messages){
  if(!MODEL)throw Object.assign(Error('Local language model not configured. Set SC_LOCAL_AI_MODEL after installing an Ollama model.'),{status:503});
  try{
   const response=await fetch(new URL('/api/chat',ollamaBase),{method:'POST',headers:{'Content-Type':'application/json'},
-   signal:AbortSignal.timeout(55000),body:JSON.stringify({model:MODEL,messages,stream:false,options:{temperature:0.15,num_predict:420}})});
+   signal:AbortSignal.timeout(55000),body:JSON.stringify({model:MODEL,messages,stream:false,think:false,options:{temperature:0.15,num_predict:420,num_ctx:8192}})});
   if(!response.ok)throw Error('Model request failed.');
   const result=await response.json();
   const answer=crop(result?.message?.content,4500);

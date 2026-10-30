@@ -99,6 +99,7 @@ test('workshop gateway enforces authorization, caller-scoped retrieval and actua
   const result=await r.json();assert.equal(result.citations[0].page,12);assert.equal(result.citations[0].title,'Runtime fixture manual');
   assert(queries.length>=2&&queries.every(query=>query.authorization==='Bearer runtime-staff-token'));
   assert(chats[0].messages[1].content.includes('page 12'));
+  assert.equal(chats[0].think,false);assert.equal(chats[0].options.num_ctx,8192);
  });
  await t.test('missing source returns an honest answer without calling the model',async()=>{
   hasSources=false;const count=chats.length;
