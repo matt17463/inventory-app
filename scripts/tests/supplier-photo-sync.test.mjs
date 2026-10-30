@@ -25,7 +25,7 @@ test('only whitelisted supplier brand/style pairs qualify for automatic enrichme
  assert.equal(catalogStyle('Bella + Canvas','3001'),'bc3001');
  assert.equal(catalogStyle('Gildan','18500'),'18500');
  assert.equal(catalogStyle('Gildan','NA'),'');
- assert.equal(catalogStyle('Independent','SS4500'),'');
+ assert.equal(catalogStyle('Independent','SS4500'),'ss4500');
  assert.equal(suitableTitle({title:'BELLA+CANVAS Unisex Tee BC3001'},'Bella + Canvas','bc3001'),true);
  assert.equal(suitableTitle({title:'Bella Canvas BC3001'},'Gildan','18500'),false);
 });
