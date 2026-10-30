@@ -41,3 +41,10 @@ background = true
 
 [functions."dtf-ai-guidance-background"]
   background = true
+
+# Page-level text indexing uses the vetted PDF.js runtime already bundled for supplier receiving.
+[functions."knowledge-manual-admin"]
+  included_files = ["netlify/functions/_vendor/pdfjs/pdf.worker.mjs", "netlify/functions/_vendor/pdfjs/LICENSE"]
+
+[functions."knowledge-manual-sync"]
+  included_files = ["netlify/functions/_vendor/pdfjs/pdf.worker.mjs", "netlify/functions/_vendor/pdfjs/LICENSE"]

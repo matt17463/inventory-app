@@ -27,6 +27,7 @@ const ClientOrders = lazy(() => import('./ClientOrders'));
 const ColorAliasReview = lazy(() => import('./ColorAliasReview'));
 const CreateFinishedFromBlank = lazy(() => import('./CreateFinishedFromBlank'));
 const CustomerPortal = lazy(() => import('./CustomerPortal'));
+const PublicDesignConfigurator = lazy(() => import('./PublicDesignConfigurator'));
 const CustomerPortalAdmin = lazy(() => import('./CustomerPortalAdmin'));
 const CustomerPortalPreview = lazy(() => import('./CustomerPortalPreview'));
 const CustomerReorderIntelligence = lazy(() => import('./CustomerReorderIntelligence'));
@@ -287,6 +288,7 @@ export default function App() {
         <Routes>
           <Route path="/customer-portal" element={publicPage(<CustomerPortal />)} />
           <Route path="/team-order" element={publicPage(<PublicClientOrderForm />)} />
+          <Route path="/design" element={publicPage(<PublicDesignConfigurator />)} />
           <Route path="/stores/:slug" element={publicPage(<PublicTeamStore />)} />
           <Route path="/coordinator/:token" element={publicPage(<CoordinatorDashboard />)} />
           <Route path="/mockup-review" element={publicPage(<MockupCustomerReview />)} />
