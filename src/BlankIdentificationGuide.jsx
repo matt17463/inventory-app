@@ -158,7 +158,7 @@ export default function BlankIdentificationGuide() {
   }, []);
   function editImage(item,groupId) {
     setPhotoEdit({id:item.id,color:item.color,brand:item.brand,style:item.style,groupId});
-    setPhotoUrlDraft(item.exactPhoto||'');
+    setPhotoUrlDraft('');
     setPhotoFile(null);
     setStatus('');
   }
