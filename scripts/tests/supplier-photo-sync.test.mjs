@@ -16,7 +16,7 @@ test('supplier photo synchronization must restrict source and require authentica
 });
 test('blank identification guide uses color-specific product photos and sourced material',()=>{
  const source=read('src/BlankIdentificationGuide.jsx');
- assert.match(source,/const match=variations\.find\(\(item\)=>item\.color===color&&item\.photo\)/);
+ assert.match(source,/const match=variations\.find\(\(item\)=>item\.color===color&&item\.exactPhoto\)/);
  assert.match(source,/operationalAssetUrls/);
  assert.match(source,/No supplier photo assigned/);
 });
@@ -63,4 +63,35 @@ test('guide clearly distinguishes missing reference photos from failed image lin
  assert.match(source,/Supplier photo failed to load/);
  assert.match(source,/loading="eager"/);
  assert.match(source,/Photo coverage/);
+});
+
+test('supplier image lookup supports official BC6400 and BC6405 style handles',async()=>{
+ const {catalogStyle}=await import('../../netlify/functions/supplier-photo-sync.js');
+ assert.equal(catalogStyle('Bella + Canvas','6400'),'bc6400');
+ assert.equal(catalogStyle('Bella + Canvas','6405'),'bc6405');
+});
+test('provisional photos match only the same manufacturer and style, except an explicitly documented style alias',async()=>{
+ const {referenceIndex,referenceFor}=await import('../../src/lib/blankGuidePhotos.js');
+ const known=[{brand:'Gildan',style:'18500',color:'Black',savedPhoto:'https://example.com/a.jpg'},
+ {brand:'Gildan',style:'64000',color:'White',savedPhoto:'https://example.com/b.jpg'}];
+ const index=referenceIndex(known);
+ const probable=referenceFor({brand:'Gildan',style:'18500',color:'Red'},index);
+ assert.equal(probable.kind,'style');
+ assert.match(probable.note,/color may differ/);
+ assert.equal(probable.exactPhoto,'');
+ assert.equal(referenceFor({brand:'Richardson',style:'18500',color:'Red'},index).photo,'');
+ assert.equal(referenceFor({brand:'Gildan',style:'6400',color:'White'},index).kind,'alias');
+ assert.equal(referenceFor({brand:'Gildan',style:'NA',color:'White'},index).photo,'');
+});
+test('blank-guide SKU table is collapsed by default but printable, and photo edits require privileged staff',()=>{
+ const jsx=read('src/BlankIdentificationGuide.jsx');
+ const functionSource=read('netlify/functions/blank-guide-photo-edit.js');
+ assert.match(jsx,/<details className="sc-blank-guide-identifiers">/);
+ assert.match(jsx,/beforeprint/);
+ assert.match(jsx,/afterprint/);
+ assert.match(jsx,/uploadOperationalImage/);
+ assert.match(jsx,/blank-guide-photo-edit/);
+ assert.match(functionSource,/allowedRoles:\['admin','manager'\]/);
+ assert.match(functionSource,/matching size variations/i);
+ assert.match(functionSource,/operational\/products/);
 });

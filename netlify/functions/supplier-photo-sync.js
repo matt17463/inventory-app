@@ -5,7 +5,7 @@ import { authorizeEmployee, createServiceClient, jsonResponse, auditFunctionSecu
 const SOURCE='https://sanmarsports.com';
 const normalize=(value)=>String(value??'').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g,'');
 const LIMIT=5;
-const STYLE_OVERRIDES=new Map([['bellacanvas:3001','bc3001']]);
+const STYLE_OVERRIDES=new Map([['bellacanvas:3001','bc3001'],['bellacanvas:6400','bc6400'],['bellacanvas:6405','bc6405']]);
 const BRAND_NAMES=new Map([['gildan','gildan'],['bellacanvas','bellacanvas'],['sporttek','sporttek'],['portco','portcompany']]);
 const SUPPORTED=new Set(['gildan','bellacanvas','sporttek','portco','richardson','adidas','c2sport','independent','independenttradingco','colortone','nexgen','badger','driduck','jamerica','qtees','flexfit','weatherproof','imperial','core365','atlantis','underarmour','allesonathletic','nextlevel','yupoong','ypclassics','portauthority','jerzees','district']);
 const UNSAFE_STYLE=new Set(['na','other','unknown','general','shirt','tee','hoodie','hat','sweatshirt','']);
