@@ -1,0 +1,41 @@
+name: Verify Bella supplier blank photos
+on:
+  push:
+    branches: [feature/compact-blank-guide-editable-photo-20261030]
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Verify current supplier photos
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+            import {bestImage,suitableTitle,fetchProduct} from './netlify/functions/supplier-photo-sync.js';
+            const targets=[{"brand":"Bella + Canvas","style":"6400","sourceStyle":"bc6400","colors":[{"color":"Asphalt Grey","n":6},{"color":"Black","n":6},{"color":"Carolina Blue","n":6},{"color":"Light Pink","n":6},{"color":"Natural","n":6},{"color":"Navy","n":6},{"color":"Red","n":6},{"color":"Royal Blue","n":6},{"color":"Turquoise","n":6}]},{"brand":"Bella + Canvas","style":"6405","sourceStyle":"bc6405","colors":[{"color":"Asphalt Grey","n":6},{"color":"Black","n":6},{"color":"Light Pink","n":6},{"color":"NA","n":5},{"color":"Natural","n":6},{"color":"Navy","n":6},{"color":"Red","n":6},{"color":"Turquoise","n":5}]}];
+            const output=[];
+            for(const target of targets){
+             try{
+              const product=await fetchProduct(target.sourceStyle);
+              const verified=suitableTitle(product,target.brand,target.sourceStyle);
+              console.log('STYLE_VALIDATION',target.style,'TITLE',product.title,'BRAND',product.vendor,'MATCH',verified);
+              if(!verified) continue;
+              for(const c of target.colors){
+               const url=bestImage(product,target.sourceStyle,c.color);
+               if(!url)continue;
+               try{
+                const r=await fetch(url,{method:'HEAD',signal:AbortSignal.timeout(10000)});
+                if(r.ok && /^image\//.test(r.headers.get('content-type')||''))output.push({brand:target.brand,style:target.style,color:c.color,url});
+               }catch(error){console.log('SOURCE_HTTP_FAILED',target.style,c.color,String(error))}
+              }
+             }catch(error){console.log('STYLE_LOOKUP_FAILED',target.style,String(error))}
+            }
+            console.log('PHOTO_MATCH_SUMMARY',JSON.stringify({matched:output.length,total:targets.map(x=>x.colors.length).reduce((a,b)=>a+b,0)}));
+            for(let i=0;i<output.length;i+=20)console.log('PHOTO_MATCH_BATCH:'+JSON.stringify(output.slice(i,i+20)));
+            
+          NODE
