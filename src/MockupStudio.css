@@ -103,3 +103,9 @@
 .sc-packet-checklist label { display:flex; gap:.55rem; align-items:flex-start; }
 @media (max-width:680px) { .sc-packet-scan { flex-direction:column; align-items:flex-start; } }
 @media print { .sc-packet-scan { break-inside:avoid; } .sc-garment-guide { break-inside:avoid; } .sc-packet-checklist input { appearance:auto; } }
+
+.mockup-project-filters { display:flex; flex-wrap:wrap; gap:.75rem; align-items:end; margin:0 0 .65rem; }
+.mockup-project-filters label { display:grid; gap:.3rem; flex:1 1 180px; color:var(--sc-text); font-size:.78rem; font-weight:700; }
+.mockup-project-filters label > span {color:var(--sc-muted);}
+.mockup-project-filters :is(input,select) { width:100%; min-height:42px; border-radius:9px; padding:.6rem; color:var(--sc-text); background:var(--sc-panel); border:1px solid var(--sc-control-border); }
+.mockup-project-filters button {min-height:42px;}
