@@ -11,6 +11,7 @@ on:
       - "src/lib/centralTrainingApi.js"
       - "src/WordPressCommerceIntegrity.jsx"
       - "wordpress/skilled-crafting-client-stores/**"
+      - "wordpress/skilled-crafting-graphic-choices/**"
       - "docs/wordpress-audit/**"
       - "netlify/functions/training-certifications.js"
       - ".github/workflows/application-user-guide-pdf.yml"
