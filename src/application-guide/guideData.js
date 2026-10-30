@@ -1,7 +1,8 @@
 import {wordPressAuditChapters} from './wordpressAuditLearning.js';
+import {october2026GuideChapters} from './october2026Guide.js';
 import {recentModernizationGuideChapters} from './recentModernizationGuide.js';
 import {certificationGuideChapter} from './certificationOperations.js';
-export const GUIDE_VERSION = '1.9.0';
+export const GUIDE_VERSION = '2.0.0';
 
 const section = (id, title, summary, options = {}) => ({
   id,
@@ -1633,6 +1634,8 @@ guideChapters.push({
 });
 
 guideChapters.push(...recentModernizationGuideChapters);
+
+guideChapters.push(...october2026GuideChapters);
 
 export const guideSearchText = (chapter, sectionItem) => {
   const values = [
