@@ -119,7 +119,7 @@ export async function syncSupplierPhotoBatch(db,{cursor=0,limit=LIMIT,dryRun=fal
    groupsProcessed:results.length,totalEligibleGroups:groups.length,
    nextCursor:start+size<groups.length?start+size:null,results};
 }
-export {catalogStyle,suitableTitle,bestImage,validImage};
+export {catalogStyle,suitableTitle,bestImage,validImage,fetchProduct};
 export const handler=async(event)=>{
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);
  if(event.httpMethod!=='POST')return jsonResponse(405,{message:'POST required'},event);
