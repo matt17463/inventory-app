@@ -20,6 +20,7 @@ const BarcodeLabelGenerator = lazy(() => import('./BarcodeLabelGenerator'));
 const BinContents = lazy(() => import('./BinContents'));
 const BinsDashboard = lazy(() => import('./BinsDashboard'));
 const BlankInventory = lazy(() => import('./BlankInventory'));
+const BlankIdentificationGuide = lazy(() => import('./BlankIdentificationGuide'));
 const BulkPairingRepair = lazy(() => import('./BulkPairingRepair'));
 const CampaignForecast = lazy(() => import('./CampaignForecast'));
 const CapacityPlanning = lazy(() => import('./CapacityPlanning'));
@@ -179,6 +180,7 @@ function EmployeeRoutes() {
       <Route path="/user-management" element={<UserManagement />} />
       <Route path="/contractor-hours" element={<ContractorHours />} />
       <Route path="/inventory/blanks" element={<BlankInventory />} />
+      <Route path="/inventory/identification-guide" element={<BlankIdentificationGuide />} />
       <Route path="/inventory/edit-blanks" element={<EditBlankItems />} />
       <Route path="/inventory/import" element={<InventoryImport />} />
       <Route path="/inventory/samples" element={<SampleInventory />} />

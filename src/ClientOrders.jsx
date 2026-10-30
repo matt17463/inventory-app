@@ -19,6 +19,7 @@ import {
 } from './lib/clientOrdersApi';
 import { getTestingModeSettings, testingModeLabel } from './lib/testingMode';
 import { calculateSalesTax, SALES_TAX_PERCENT } from './lib/salesTax';
+import { supabase } from './supabaseClient';
 import './operationsFeatures.css';
 
 const statuses=['submitted','review','pricing','quote_sent','awaiting_approval','awaiting_payment','artwork','ready_for_production','production','ready_pickup','completed','cancelled'];
@@ -26,6 +27,8 @@ const label=(value)=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>
 const date=(value)=>value?new Date(value+'T12:00:00').toLocaleDateString():'—';
 const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
 const clean=(value)=>String(value??'').trim();
+const TERMINAL_ORDER_STATUSES=new Set(['completed','complete','production_complete','closed','done','archived','void','voided','cancelled','canceled','refunded','failed']);
+const isTerminalOrder=(row)=>[row?.status,row?.linked_job_status].some((status)=>TERMINAL_ORDER_STATUSES.has(clean(status).toLowerCase().replaceAll(' ','_')))||Boolean(row?.closed_at||row?.voided_at||row?.cancelled_at);
 
 function lineSavePatch(item){
   return {
@@ -86,6 +89,7 @@ export default function ClientOrders(){
   const [attachments,setAttachments]=useState([]);
   const [rules,setRules]=useState([]);
   const [filter,setFilter]=useState('open');
+  const [showTerminalOrders,setShowTerminalOrders]=useState(false);
   const [message,setMessage]=useState('');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -101,7 +105,18 @@ export default function ClientOrders(){
   async function load(){
     setLoading(true); setMessage('');
     try{
-      const [data,pricingRules]=await Promise.all([listClientOrders(),listClientPricingRules()]);
+      const [orders,pricingRules]=await Promise.all([listClientOrders(),listClientPricingRules()]);
+      let data=orders;
+      const jobIds=[...new Set(orders.map((row)=>Number(row.generated_job_id)).filter((id)=>Number.isSafeInteger(id)&&id>0))];
+      if(jobIds.length){
+        const linked=await supabase.from('jobs').select('id,status').in('id',jobIds);
+        if(linked.error){
+          setMessage('Could not verify linked production status. Closed jobs might still appear; refresh or check Work Hub.');
+        }else{
+          const byId=new Map((linked.data||[]).map((job)=>[String(job.id),job.status]));
+          data=orders.map((row)=>({...row,linked_job_status:byId.get(String(row.generated_job_id))||''}));
+        }
+      }
       setRows(data);
       setRules(pricingRules);
       if(selected){
@@ -417,10 +432,11 @@ export default function ClientOrders(){
   const pricedCount=items.filter((item)=>Number(item.unit_price||0)>0).length;
 
   const filtered=useMemo(()=>rows.filter((row)=>{
+    if(filter==='open') return !isTerminalOrder(row);
+    if(!showTerminalOrders && isTerminalOrder(row)) return false;
     if(filter==='all') return true;
-    if(filter==='open') return !['completed','cancelled'].includes(row.status);
     return row.status===filter;
-  }),[rows,filter]);
+  }),[rows,filter,showTerminalOrders]);
   const submitted=rows.filter((r)=>r.status==='submitted').length;
 
   return <main className="page sc-page-stack">
@@ -430,16 +446,16 @@ export default function ClientOrders(){
 
     <section className="metric-grid">
       <article className="metric-card"><strong>{submitted}</strong><span>New submissions</span></article>
-      <article className="metric-card"><strong>{rows.filter((r)=>!['completed','cancelled'].includes(r.status)).length}</strong><span>Open requests</span></article>
+      <article className="metric-card"><strong>{rows.filter((r)=>!isTerminalOrder(r)).length}</strong><span>Open requests</span></article>
       <article className="metric-card"><strong>{rows.reduce((sum,r)=>sum+Number(r.total_quantity||0),0)}</strong><span>Requested units</span></article>
     </section>
 
-    <section className="card elevated-card"><div className="section-heading-row wrap-row"><div><h2>Request queue</h2><p className="muted">Inventory demand is created only after payment is recorded and you explicitly choose Convert to Production.</p></div><select value={filter} onChange={(e)=>setFilter(e.target.value)}><option value="open">Open</option><option value="all">All</option>{statuses.map((s)=><option key={s} value={s}>{label(s)}</option>)}</select></div></section>
+    <section className="card elevated-card"><div className="section-heading-row wrap-row"><div><h2>Request queue</h2><p className="muted">Inventory demand is created only after payment is recorded and you explicitly choose Convert to Production.</p></div><div className="sc-client-order-filters"><label className="sc-client-terminal-toggle"><input type="checkbox" checked={showTerminalOrders} onChange={(e)=>setShowTerminalOrders(e.target.checked)} /> Show completed, closed, voided &amp; cancelled</label><select aria-label="Filter client orders by status" value={filter} onChange={(e)=>{const next=e.target.value;setFilter(next);if(TERMINAL_ORDER_STATUSES.has(next))setShowTerminalOrders(true);}}><option value="open">Open only</option><option value="all">All statuses</option>{[...new Set([...statuses,'closed','voided','canceled'])].map((s)=><option key={s} value={s}>{label(s)}</option>)}</select></div></div></section>
 
     <section className="sc-client-orders-layout">
       <section className="card elevated-card table-card">
         <div className="responsive-table"><table className="data-table"><thead><tr><th>Request</th><th>Customer</th><th>Qty</th><th>Status</th><th>Requested</th><th></th></tr></thead>
-        <tbody>{loading?<tr><td colSpan="6">Loading…</td></tr>:filtered.length===0?<tr><td colSpan="6">No requests found.</td></tr>:filtered.map((row)=><tr key={row.id} className={selected?.id===row.id?'selected-row':''}><td><strong>{row.order_number}</strong><br/><small>{new Date(row.submitted_at).toLocaleString()}</small></td><td>{row.organization}<br/><small>{row.contact_name}</small></td><td>{row.total_quantity}</td><td><span className={'sc-status-pill sc-status-'+row.status}>{label(row.status)}</span></td><td>{date(row.desired_completion_date)}</td><td><button className="secondary-button" onClick={()=>open(row)}>Open</button></td></tr>)}</tbody></table></div>
+        <tbody>{loading?<tr><td colSpan="6">Loading…</td></tr>:filtered.length===0?<tr><td colSpan="6">No requests found.</td></tr>:filtered.map((row)=><tr key={row.id} className={selected?.id===row.id?'selected-row':''}><td><strong>{row.order_number}</strong><br/><small>{new Date(row.submitted_at).toLocaleString()}</small></td><td>{row.organization}<br/><small>{row.contact_name}</small></td><td>{row.total_quantity}</td><td><span className={'sc-status-pill sc-status-'+row.status}>{label(row.status)}</span>{row.linked_job_status&&<small className="sc-client-linked-job-status">Job: {label(row.linked_job_status)}</small>}</td><td>{date(row.desired_completion_date)}</td><td><button className="secondary-button" onClick={()=>open(row)}>Open</button></td></tr>)}</tbody></table></div>
       </section>
 
       <aside className="card elevated-card sc-client-order-detail">

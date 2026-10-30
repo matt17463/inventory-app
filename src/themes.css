@@ -3031,3 +3031,67 @@ html body .growth-workspace :is(input,select,textarea,th) {
 html body .growth-workspace :is(.growth-help,small,.growth-metrics span) {
   color:var(--sc-text) !important;opacity:1;
 }
+
+/* UV Studio Console: a deliberate application-wide match for the UV texture editor. */
+html[data-preset='uv-studio-console'] {
+  --sc-bg:#0b111a; --sc-panel:#131f2c; --sc-panel-2:#182938;
+  --sc-text:#e6f1f8; --sc-muted:#b6cbd9; --sc-border:#304657;
+  --sc-primary:#19b6a9; --sc-primary-2:#0f958c;
+  --sc-success:#47d7bf; --sc-warning:#e4b76f; --sc-danger:#ff9b9f;
+  --sc-logo-blue:#1fbfb4; --sc-logo-teal:#47d7bf; --sc-logo-navy:#e6f1f8;
+  --sc-soft-blue:#183040; --sc-soft-teal:#123734; --sc-soft-orange:#423523; --sc-soft-green:#15352e;
+  --sc-surface-gradient:linear-gradient(160deg,#0b111a,#111d29);
+  --sc-card-gradient:linear-gradient(160deg,#172432,#111c29);
+  --sc-sidebar-bg:linear-gradient(180deg,#0c1520,#101b28);
+  --sc-sidebar-text:#e6f1f8; --sc-sidebar-muted:#b3c8d5;
+  --sc-sidebar-hover:#1b3541; --sc-sidebar-active:#124c50;
+  --sc-topbar-bg:#101a27; --sc-primary-gradient:linear-gradient(130deg,#12a69a,#20c8b8);
+  --sc-secondary-bg:#203442; --sc-secondary-text:#e6f1f8;
+  --sc-table-header-bg:#1b3140; --sc-table-header-text:#e4f0f8;
+  --sc-page-header-bg:linear-gradient(120deg,#182b3a,#111d29);
+  --sc-card-border:#304657; --sc-control-border:#426173; --sc-row-hover:#203746; --sc-focus-ring:#1bc6b4a0;
+  --sc-radius:11px; --sc-panel-shadow:0 12px 28px #0004; color-scheme:dark;
+}
+html[data-preset='uv-studio-console'][data-theme='light'] {
+  --sc-bg:#eff6f8; --sc-panel:#fff; --sc-panel-2:#eaf3f5;
+  --sc-text:#172c38; --sc-muted:#3e5c6b; --sc-border:#afc6cf;
+  --sc-primary:#087e72; --sc-primary-2:#086d63; --sc-success:#136a56; --sc-warning:#976116; --sc-danger:#a73445;
+  --sc-logo-blue:#087e72; --sc-logo-teal:#0d857a; --sc-logo-navy:#172c38;
+  --sc-soft-blue:#d9edf0; --sc-soft-teal:#d8eeeb; --sc-soft-orange:#f5e4c9; --sc-soft-green:#d8eee1;
+  --sc-surface-gradient:linear-gradient(160deg,#f4f9fa,#e8f1f5); --sc-card-gradient:linear-gradient(160deg,#fff,#f2f8fa);
+  --sc-sidebar-bg:linear-gradient(180deg,#15303d,#1d3f4c); --sc-sidebar-text:#fff; --sc-sidebar-muted:#deeff4;
+  --sc-sidebar-hover:#32606a; --sc-sidebar-active:#0c7169; --sc-topbar-bg:#f6fafb;
+  --sc-primary-gradient:linear-gradient(120deg,#087e72,#0b7169);
+  --sc-secondary-bg:#d8eff0; --sc-secondary-text:#173943;
+  --sc-table-header-bg:#dbeef0; --sc-table-header-text:#173943; --sc-page-header-bg:linear-gradient(120deg,#fff,#e7f2f4);
+  --sc-card-border:#b6cbd3; --sc-control-border:#9fbbc6; --sc-row-hover:#edf6f8; --sc-focus-ring:#087e7288;
+  color-scheme:light;
+}
+html[data-preset='uv-studio-console'] :is(.card,.elevated-card,.sc-card,.sc-section-card,.sc-metric-card) {
+  background:var(--sc-card-gradient); color:var(--sc-text); border-color:var(--sc-card-border);
+}
+html[data-preset='uv-studio-console'] :is(input,textarea,select) {
+  background:var(--sc-panel-2); color:var(--sc-text); border-color:var(--sc-control-border);
+}
+html[data-preset='uv-studio-console'] .sc-sidebar { background:var(--sc-sidebar-bg); border-right:1px solid var(--sc-border); }
+html[data-preset='uv-studio-console'] .sc-topbar {background:var(--sc-topbar-bg);border-bottom:1px solid var(--sc-border)}
+html[data-preset='uv-studio-console'] .sc-page-shell {background:var(--sc-surface-gradient)}
+html[data-preset='uv-studio-console'] .sc-nav-link.active {background:var(--sc-sidebar-active);border-left:3px solid #25cabb;color:#fff}
+html[data-preset='uv-studio-console'] .page-header {background:var(--sc-page-header-bg)!important;color:var(--sc-text)}
+html[data-preset='uv-studio-console'] :is(.secondary-button,.sc-btn-secondary) {background:var(--sc-secondary-bg);color:var(--sc-secondary-text);border:1px solid var(--sc-border)}
+/* Legacy surfaces occasionally keep dark-mode text when changing appearance.
+   Limit the corrections to standard form, table, and utility text surfaces. */
+html[data-theme] :is(.page,.sc-page-shell,.sc-section-card,.card,.elevated-card) :is(label,.muted,.helper-text,small) {
+  color:var(--sc-muted,inherit);
+}
+html[data-theme] :is(.page,.sc-page-shell) :is(input:not([type='checkbox']):not([type='radio']),select,textarea) {
+  color:var(--sc-text)!important; background-color:var(--sc-panel-2)!important;
+  border-color:var(--sc-control-border)!important;
+  -webkit-text-fill-color:var(--sc-text);
+}
+html[data-theme] :is(.page,.sc-page-shell) :is(input,select,textarea):focus-visible,
+html[data-theme] :is(.page,.sc-page-shell) :is(button,a):focus-visible {
+  outline:3px solid var(--sc-primary)!important; outline-offset:2px;
+}
+html[data-theme] :is(.page,.sc-page-shell) :is(button,.secondary-button,.sc-btn) {font-family:var(--sc-font-body,inherit);}
+html[data-theme] :is(.page,.sc-page-shell) button:disabled {opacity:.6;cursor:not-allowed;}

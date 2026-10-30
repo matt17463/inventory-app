@@ -101,6 +101,17 @@ export const THEME_PRESETS = [
     },
   },
   {
+    id: 'uv-studio-console',
+    name: 'UV Studio Console',
+    icon: '◈',
+    category: 'Industrial',
+    visualStyle: 'industrial',
+    description: 'UV Studio-inspired charcoal workspaces, precise steel dividers, clear typography, and sea-glass teal actions.',
+    bestFor: 'Daily inventory, artwork, production and workstation operations',
+    traits: ['Slate panels', 'Teal controls', 'Compact utility labels', 'Light and dark mode'],
+    preview: { background: '#0b111a', panel: '#131f2c', sidebar: '#0c1520', primary: '#14b8a6', accent: '#42d8ca', text: '#e6f1f8' },
+  },
+  {
     id: 'midnight-industrial',
     name: 'Midnight Industrial',
     icon: '◈',

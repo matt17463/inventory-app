@@ -132,10 +132,20 @@
   }
 }
 
-@page {
+@page sc-warehouse-audit {
   size: landscape;
   margin: 0.4in;
 }
+
+@media print {
+  .warehouse-audit-page { page: sc-warehouse-audit; display: block !important; overflow: visible !important; }
+  .warehouse-audit-page .audit-bin-section { display: block !important; overflow: visible !important; margin: 0 !important; }
+  .warehouse-audit-page .audit-bin-section:not(:first-of-type) { page-break-before: always !important; break-before: page !important; }
+  .warehouse-audit-page .audit-table { width: 100%; border-collapse: collapse; }
+  .warehouse-audit-page .audit-table thead { display: table-header-group; }
+  .warehouse-audit-page .audit-table tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+}
+
 
 .warehouse-audit-actions {
   display: flex;

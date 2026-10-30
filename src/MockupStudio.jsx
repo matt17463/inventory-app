@@ -250,10 +250,21 @@ function PlacementPreview({ blankUrl, artworkUrl, placement, blankAsset = null }
 function ProjectDashboard({ projects, onOpen, onCreated, busy, setBusy, setMessage }) {
   const [form, setForm] = useState({ project_name: '', customer_name: '', campaign_name: '', output_style: 'clean_catalog' });
   const [sortField, setSortField] = useState('updated_at');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectCustomer, setProjectCustomer] = useState('');
+  const [projectStatus, setProjectStatus] = useState('active');
   const [sortDirection, setSortDirection] = useState('desc');
 
+  const customerOptions = useMemo(() => [...new Set(projects.map((item) => String(item.customer_name || '').trim()).filter(Boolean))].sort(), [projects]);
+  const statusOptions = useMemo(() => [...new Set(projects.map((item) => String(item.status || '').trim()).filter(Boolean))].sort(), [projects]);
   const sortedProjects = useMemo(() => {
-    const rows = [...projects];
+    const search = projectSearch.toLowerCase().trim();
+    const rows = projects.filter((item) => {
+      if (projectCustomer && String(item.customer_name || '') !== projectCustomer) return false;
+      if (projectStatus === 'active' && ['archived', 'deleted'].includes(String(item.status || '').toLowerCase())) return false;
+      if (!['active', 'all'].includes(projectStatus) && String(item.status || '') !== projectStatus) return false;
+      return !search || [item.project_name, item.customer_name, item.campaign_name, item.status].some((value) => String(value || '').toLowerCase().includes(search));
+    });
     rows.sort((leftProject, rightProject) => {
       if (sortField === 'updated_at') {
         const leftTime = new Date(leftProject.updated_at || leftProject.created_at || 0).getTime() || 0;
@@ -269,7 +280,7 @@ function ProjectDashboard({ projects, onOpen, onCreated, busy, setBusy, setMessa
       return sortDirection === 'asc' ? comparison : -comparison;
     });
     return rows;
-  }, [projects, sortDirection, sortField]);
+  }, [projects, sortDirection, sortField, projectSearch, projectCustomer, projectStatus]);
 
   async function submit(event) {
     event.preventDefault();
@@ -340,7 +351,14 @@ function ProjectDashboard({ projects, onOpen, onCreated, busy, setBusy, setMessa
           </div>
         )}
       >
-        {!projects.length ? <EmptyState title="No mockup projects yet" description="Create the first project above." /> : (
+        <div className="mockup-project-filters" aria-label="Filter mockup projects">
+          <label><span>Find a client design</span><input type="search" placeholder="Project, client, campaign, or status" value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} /></label>
+          <label><span>Client</span><select value={projectCustomer} onChange={(event) => setProjectCustomer(event.target.value)}><option value="">All clients</option>{customerOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label><span>Status</span><select value={projectStatus} onChange={(event) => setProjectStatus(event.target.value)}><option value="active">Active (exclude archived)</option><option value="all">All statuses</option>{statusOptions.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label>
+          <button type="button" className="secondary-button" onClick={() => { setProjectSearch(''); setProjectCustomer(''); setProjectStatus('active'); }}>Clear filters</button>
+        </div>
+        <p className="muted" aria-live="polite">Showing {sortedProjects.length} of {projects.length} mockup projects</p>
+        {!projects.length ? <EmptyState title="No mockup projects yet" description="Create the first project above." /> : !sortedProjects.length ? <EmptyState title="No matching mockups" description="Try a different client, status, or search term." /> : (
           <div className="mockup-project-grid">
             {sortedProjects.map((project) => (
               <button type="button" className="mockup-project-card" key={project.id} onClick={() => onOpen(project.id)}>

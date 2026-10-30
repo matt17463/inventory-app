@@ -23,6 +23,9 @@ export default function UVStudio(){
  const admin=['admin','manager'].includes(access?.role);
  const canWrite=['admin','manager','operator'].includes(access?.role);
  const iframe=useRef(null);
+ const [fullWindowEditor,setFullWindowEditor]=useState(()=>window.sessionStorage.getItem('sc_uv_full_window_editor')==='true');
+ useEffect(()=>{window.sessionStorage.setItem('sc_uv_full_window_editor',String(fullWindowEditor));},[fullWindowEditor]);
+ useEffect(()=>{const onEsc=(event)=>{if(event.key==='Escape')setFullWindowEditor(false);};window.addEventListener('keydown',onEsc);return()=>window.removeEventListener('keydown',onEsc);},[]);
  const waiting=useRef(null);
  const [project,setProject]=useState(()=>{
   const p=newProject();
@@ -318,8 +321,8 @@ export default function UVStudio(){
   {!assets.length&&<p>No verified R2 assets yet.</p>}</div>}
   <p className="sc-uv-disclaimer">Source files, editable artwork and production assets are versioned in private R2 storage. The actual UV printing settings, image approvals and physical QC still require verification in xTool Studio and on the printed substrate.</p>
   </section>
-  <section className="sc-uv-designer card"><div className="sc-uv-frame-head"><h2>Faux embroidery & UV texture editor</h2><span>Full prepress tools · version 0.3</span></div>
-    <iframe ref={iframe} src="/uv-studio/index.html" title="Skilled Crafting UV Studio advanced editor" loading="eager" allow="clipboard-write"/></section>
+  <section className={'sc-uv-designer card'+(fullWindowEditor?' is-full-window':'')}><div className="sc-uv-frame-head"><div><h2>Faux embroidery & UV texture editor</h2><span>Full prepress tools · version 0.3</span></div><div className="sc-uv-frame-actions"><a href="/uv-studio/index.html" target="_blank" rel="noopener noreferrer" className="secondary-button">Open separate full-page editor</a><button type="button" className="secondary-button" aria-pressed={fullWindowEditor} onClick={()=>setFullWindowEditor((value)=>!value)}>{fullWindowEditor?'Exit full window (Esc)':'Full-window editor'}</button></div></div>
+    <iframe ref={iframe} src="/uv-studio/index.html" title="Skilled Crafting UV Studio advanced editor" loading="eager" allow="clipboard-write" allowFullScreen /></section>
   <section className="card sc-uv-qc"><h2>Production events & quality control</h2>
     <p>Record a material test, print inspection, customer proof, reprint, or QC failure. Confirm machine recipe and physical print before fulfillment.</p>
     <div className="sc-uv-fields">
