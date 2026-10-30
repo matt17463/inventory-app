@@ -75,8 +75,8 @@ function ProductPhoto({ source, title }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [source]);
   return source && !broken
-    ? <img loading="lazy" src={source} alt={'Product reference: ' + title} onError={() => setBroken(true)} className="sc-blank-guide-photo" referrerPolicy="no-referrer" />
-    : <div className="sc-blank-guide-photo missing"><strong>Photo needs verification</strong><small>Compare supplier style and physical tags.</small></div>;
+    ? <img loading="eager" decoding="async" src={source} alt={'Product reference: ' + title} onError={() => setBroken(true)} className="sc-blank-guide-photo" referrerPolicy="no-referrer" />
+    : <div className="sc-blank-guide-photo missing"><strong>{source ? 'Supplier photo failed to load' : 'No supplier photo assigned'}</strong><small>Verify manufacturer style and physical tags before identifying this blank.</small>{source && <a href={source} target="_blank" rel="noopener noreferrer" className="sc-blank-guide-photo-link">Open photo source</a>}</div>;
 }
 export default function BlankIdentificationGuide() {
   const employee = useContext(EmployeeAccessContext);
@@ -88,6 +88,7 @@ export default function BlankIdentificationGuide() {
   const [search, setSearch] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [missingOnly, setMissingOnly] = useState(false);
+  const [photoFilter, setPhotoFilter] = useState('all');
   const [status, setStatus] = useState('Loading every non-archived blank…');
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -151,12 +152,14 @@ export default function BlankIdentificationGuide() {
     }catch(error){setSyncProgress('Supplier sync stopped: '+(error.message||String(error)))}
     finally{setSyncingPhotos(false)}
   }
+  const photoCount = useMemo(() => enriched.filter((item)=>Boolean(item.photo)).length, [enriched]);
   const brands = useMemo(() => [...new Set(enriched.map((item) => item.brand).filter(Boolean))].sort(), [enriched]);
   const groups = useMemo(() => {
     const families = new Map();
     enriched.forEach((item) => {
       if (brandFilter && item.brand !== brandFilter) return;
-      if (missingOnly && item.photo) return;
+      if ((missingOnly || photoFilter==='missing') && item.photo) return;
+      if (photoFilter==='with-photo' && !item.photo) return;
       if (search && ![item.sku,item.barcode,item.name,item.brand,item.style,item.supplierStyle,item.description,item.color,item.size].some((part) => key(part).includes(key(search)))) return;
       const title = productFamily(item);
       const id = [key(item.brand), key(item.style), key(item.supplierStyle), key(title)].join(':');
@@ -164,14 +167,14 @@ export default function BlankIdentificationGuide() {
       families.get(id).items.push(item);
     });
     return [...families.values()].sort((a,b) => (a.brand+a.title).localeCompare(b.brand+b.title));
-  }, [enriched, search, brandFilter, missingOnly]);
+  }, [enriched, search, brandFilter, missingOnly, photoFilter]);
   return <main className="page sc-blank-guide">
     <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><div className="sc-blank-guide-actions"><a className="secondary-button" href="/scan">Scan / look up barcode</a><a className="secondary-button" href="/inventory/edit-blanks">Correct item images</a>{canRefreshSupplierPhotos&&<button type="button" className="secondary-button" disabled={syncingPhotos||loading} onClick={syncSupplierPhotos}>{syncingPhotos?'Matching supplier photos…':'Refresh supplier photos'}</button>}<button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></div></header>
     <div className="card sc-blank-guide-filters">
       <label>Search SKU, brand, style, color, size or UPC<input type="search" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Find a blank…" /></label>
       <label>Brand<select value={brandFilter} onChange={(e)=>setBrandFilter(e.target.value)}><option value="">All brands</option>{brands.map((value)=><option key={value}>{value}</option>)}</select></label>
-      <label className="sc-blank-guide-check"><input type="checkbox" checked={missingOnly} onChange={(e)=>setMissingOnly(e.target.checked)} /> Needs verified picture</label>
-      <strong>{loading?'Loading…':groups.length+' product groups · '+enriched.length+' catalog items'}</strong>
+      <label>Photo coverage<select value={photoFilter} onChange={(e)=>{setPhotoFilter(e.target.value);setMissingOnly(false)}}><option value="all">All catalog items</option><option value="with-photo">Items with supplier photos</option><option value="missing">Missing supplier photos</option></select></label>
+      <strong>{loading?'Loading…':`${photoCount.toLocaleString()} of ${enriched.length.toLocaleString()} catalog items have photo URLs · ${groups.length} visible product groups`}</strong>
     </div>
     {status && !loading && <p className="muted" role="status">{status}</p>}
     {syncProgress&&<p className="message" role="status" aria-live="polite">{syncProgress}</p>}
@@ -186,7 +189,7 @@ export default function BlankIdentificationGuide() {
         <div className="sc-blank-guide-heading"><div><small>SKILLED CRAFTING / BLANK IDENTIFICATION</small><h2>{group.title}</h2><p>{group.brand||'Unspecified brand'} · Category: {group.style||'Unspecified'} · Supplier style: {group.supplierStyle||'Check label'}</p></div><strong>{variations.length} SKUs</strong></div>
         <div className="sc-blank-guide-top"><div><ProductPhoto source={photo?.photo} title={group.title} /><small>{photo?.photoSource||'No verified photo'}</small></div><div><h3>Where to find the ID</h3><p>{labelHint(group.style+' '+group.title)}</p><h3>Physical verification</h3><p>Compare brand/style and printed or sewn tag. Cross-check construction, fabric, product dimensions and color against the supplier sheet or purchase order.</p><p><strong>Sizes:</strong> {sizes.join(' · ')||'Not recorded'}</p><p><strong>Catalog description:</strong> {variations.find((item)=>item.description)?.description||'Not recorded—consult manufacturer specification sheet.'}</p><p><strong>Material:</strong> {variations.find((item)=>item.material)?.material||'Not recorded'} · <strong>Weight:</strong> {variations.find((item)=>item.weight)?.weight||'Not recorded'} · <strong>Fit:</strong> {variations.find((item)=>item.fit)?.fit||'Not recorded'}</p><p><strong>Photo source:</strong> Saved product image or exact matching supplier identifier; never inferred from the category.</p></div></div>
         <h3>Color reference (approximate)</h3>
-        <div className="sc-blank-guide-palettes">{options.length?options.map((color)=>{const match=variations.find((item)=>item.color===color&&item.photo);return <div key={color} className="sc-blank-guide-color">{match?.photo?<img src={match.photo} alt={group.brand+' '+group.style+' '+color+' supplier catalog photo'} loading="lazy" referrerPolicy="no-referrer" onError={(event)=>{event.currentTarget.style.display='none';event.currentTarget.nextElementSibling.style.display='block';}}/>:null}<span style={{display:match?.photo?'none':'block',background:swatch(color)||'repeating-linear-gradient(45deg,#ddd 0 6px,#fff 6px 12px)'}}/><small>{color}</small></div>}):<p>Colors not recorded</p>}</div>
+        <div className="sc-blank-guide-palettes">{options.length?options.map((color)=>{const match=variations.find((item)=>item.color===color&&item.photo);return <div key={color} className="sc-blank-guide-color">{match?.photo?<img src={match.photo} alt={group.brand+' '+group.style+' '+color+' supplier catalog photo'} loading="eager" referrerPolicy="no-referrer" onError={(event)=>{event.currentTarget.style.display='none';event.currentTarget.nextElementSibling.style.display='block';}}/>:null}<span style={{display:match?.photo?'none':'block',background:swatch(color)||'repeating-linear-gradient(45deg,#ddd 0 6px,#fff 6px 12px)'}}/><small>{color}</small></div>}):<p>Colors not recorded</p>}</div>
         <table><thead><tr><th>Internal / supplier SKU</th><th>Barcode / UPC</th><th>Color</th><th>Size</th></tr></thead><tbody>{variations.map((item)=><tr key={item.id}><td>{item.sku||'Not assigned'}</td><td>{item.barcode||'—'}</td><td>{item.color||'—'}</td><td>{item.size||'—'}</td></tr>)}</tbody></table>
         <div className="sc-blank-guide-checklist"><strong>Before counting:</strong> <span>☐ Scan SKU / UPC</span><span>☐ Verify manufacturer style &amp; size tag</span><span>☐ Compare color under neutral light</span><span>☐ Set aside mismatches for supervisor review</span></div>
         <div className="sc-blank-guide-signoff"><span>Counted by: __________________</span><span>Date: ____________</span><span>Exception notes: __________________</span></div>
