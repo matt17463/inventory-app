@@ -330,6 +330,13 @@ export default function ApplicationGuide() {
         <p>Work confirmed 51 installed plugins (50 active, 1 inactive) and inspected 42 screens/sections with 405 recorded controls. Only two shipping-dialog visibility cases have narrowly verified live evidence; no plugin has been certified end-to-end, and 29 still require deeper screen inspection. Read the new WordPress reference and scenario chapters for field-by-field help. Do not assume observed settings have been tested through checkout, synchronization or production.</p>
         <p><strong>Owner review:</strong> Initial WordPress audit installed 0.1.2 versus current repository 0.1.4; live installed version requires recheck; overlapping SKU writers, product option compatibility and shipping rules. These are review findings, not instructions to change live settings.</p>
       </section>
+      <section className="sc-guide-wordpress-status" aria-label="October integration readiness notes">
+        <h2>October 29 integration and AI feature readiness</h2>
+        <p>New guides cover the Creative Operations Suite, product research, public design requests, Gemini DTF masking, private manual search, local Ollama, graphic-aware WooCommerce orders, variation certification, grouped travelers, and QuickBooks/thermal printing. Use the Reference view and search for the feature name.</p>
+        <p><strong>Source available is not the same as operationally verified.</strong> Public design requests still need real queue testing, local AI needs its private workshop gateway, Gemini research needs working server credentials, and printer dispatch needs a measured physical print test. The Woo graphics selector needs end-to-end checkout, webhook, exact art selection and traveler proof before activation.</p>
+        <p><strong>Training:</strong> Choose Employee Training and the correct role for ten new guided courses. The new training curriculum is version 2.0.0; changed lessons require renewed completion and manager qualification.</p>
+        <p><strong>Scope:</strong> The October 22 WordPress plugin audit remains partially reviewed; the newer Graphic Choices plugin requires a current WordPress version/setting check. Do not use training to enable live payment, change SKU writers, bypass invoice verification, or send external customer messages.</p>
+      </section>
       <section className="sc-guide-hero">
         <div>
           <span className="sc-guide-version">Guide v{GUIDE_VERSION}</span>
