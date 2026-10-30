@@ -4,7 +4,6 @@ import { authorizeEmployee, createServiceClient, jsonResponse, auditFunctionSecu
 
 const SOURCE='https://sanmarsports.com';
 const normalize=(value)=>String(value??'').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g,'');
-const text=(v)=>String(v??'').trim();
 const LIMIT=5;
 const STYLE_OVERRIDES=new Map([['bellacanvas:3001','bc3001']]);
 const BRAND_NAMES=new Map([['gildan','gildan'],['bellacanvas','bellacanvas'],['sporttek','sporttek'],['portco','portcompany']]);
