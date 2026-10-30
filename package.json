@@ -55,7 +55,7 @@
     "test:public-order-view-modes": "node --test scripts/tests/public-order-view-modes.test.mjs",
     "test:client-order-confirmation-invoice-details": "node --test scripts/tests/client-order-confirmation-invoice-details.test.mjs",
     "test:client-order-persistence-delete": "node --test scripts/tests/client-order-persistence-delete.test.mjs",
-    "test:employee-training-guide": "node --test scripts/tests/employee-training-guide.test.mjs",
+    "test:employee-training-guide": "node --test scripts/tests/employee-training-guide.test.mjs scripts/tests/october-2026-docs-training.test.mjs scripts/tests/approved-manuals-ocr.test.mjs",
     "test:interactive-guided-training": "node --test scripts/tests/interactive-guided-training.test.mjs",
     "test:contractor-navigation-theme": "node --test scripts/tests/navigation-contractors-theme.test.mjs",
     "test:equipment": "node --test scripts/tests/equipment-controls.test.mjs",
