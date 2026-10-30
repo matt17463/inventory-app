@@ -115,7 +115,7 @@ export const october2026GuideChapters=[
   section('oct-wp-integrity','SKU writers, coupons, shipping and sync','Commerce changes can affect live customer orders even when they look like simple settings changes.',{
    relatedRoutes:['/wordpress-integrity','/product-integrity','/woo-sync'],
    steps:['Before editing SKU, note current Woo product and variation IDs and the original SKU. Identify the intended sole SKU writer.','Use WordPress Commerce Integrity for current reported shipping-rule conflicts and duplicate SKU writers. Confirm staging fixtures before remediation.','Test local pickup, school distribution, ordinary shipping, coupon exceptions and mixed shipping classes with test carts around the configured threshold.','Use Woo Sync Health to compare source records, webhook processing, product mapping and resulting job records.','Never regenerate SKUs, change published coupon rules or disable a shipping plugin based only on source-detected controls.'],
-   scenario:'A $200 order with a coupon must not accidentally receive unintended shipping when the customer's checkout mode is local pickup.',
+   scenario:'A $200 order with a coupon must not accidentally receive unintended shipping when the customer’s checkout mode is local pickup.',
    warnings:['The October 22 WordPress plugin inventory was partial; recheck plugin activation and version before interpreting these instructions.']
   })
  ]},
