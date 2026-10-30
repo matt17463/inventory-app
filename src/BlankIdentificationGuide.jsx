@@ -2,7 +2,8 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { supabase } from './supabaseClient';
-import { operationalAssetUrls } from './lib/assetStorageApi';
+import { operationalAssetUrls, uploadOperationalImage } from './lib/assetStorageApi';
+import { referenceIndex, referenceFor } from './lib/blankGuidePhotos';
 import './BlankIdentificationGuide.css';
 
 const str = (value) => String(value ?? '').trim();
@@ -83,11 +84,14 @@ export default function BlankIdentificationGuide() {
   const canRefreshSupplierPhotos = ['admin','manager'].includes(employee?.role);
   const [syncingPhotos, setSyncingPhotos] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
+  const [photoEdit, setPhotoEdit] = useState(null);
+  const [photoUrlDraft, setPhotoUrlDraft] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
   const [blanks, setBlanks] = useState([]);
   const [supplier, setSupplier] = useState(new Map());
   const [search, setSearch] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
-  const [missingOnly, setMissingOnly] = useState(false);
   const [photoFilter, setPhotoFilter] = useState('all');
   const [status, setStatus] = useState('Loading every non-archived blank…');
   const [loading, setLoading] = useState(true);
@@ -124,11 +128,63 @@ export default function BlankIdentificationGuide() {
     })();
     return () => { active = false; };
   }, []);
-  const enriched = useMemo(() => blanks.map((blank) => ({
-    ...blank,
-    photo: blank.savedPhoto || supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
-    photoSource: blank.savedPhoto ? (blank.savedPhoto.includes('sanmarsports.com') ? 'SanMar Sports supplier reference' : 'Saved blank / R2 product image') : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
-  })), [blanks,supplier]);
+  const enriched = useMemo(() => {
+    // Catalog photos and signed private R2 uploads take precedence over provisional style references.
+    const rows=blanks.map((blank) => ({
+      ...blank,
+      savedPhoto:blank.savedPhoto || supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
+    }));
+    const index=referenceIndex(rows);
+    return rows.map((blank) => {
+      const match=referenceFor(blank,index);
+      return {...blank, ...match, photoSource:match.note};
+    });
+  }, [blanks,supplier]);
+  useEffect(() => {
+    // Printing preserves the complete SKU table, while screen browsing starts collapsed.
+    const restored=new Map();
+    const openDetails=()=>{
+      document.querySelectorAll('.sc-blank-guide-identifiers').forEach((node)=>{
+        restored.set(node,node.open);node.open=true;
+      });
+    };
+    const restore=()=>{
+      restored.forEach((wasOpen,node)=>{node.open=wasOpen;});
+      restored.clear();
+    };
+    window.addEventListener('beforeprint',openDetails);
+    window.addEventListener('afterprint',restore);
+    return ()=>{window.removeEventListener('beforeprint',openDetails);window.removeEventListener('afterprint',restore);};
+  }, []);
+  function editImage(item,groupId) {
+    setPhotoEdit({id:item.id,color:item.color,brand:item.brand,style:item.style,groupId});
+    setPhotoUrlDraft(item.exactPhoto||'');
+    setPhotoFile(null);
+    setStatus('');
+  }
+  async function saveImage(action='set') {
+    if(!photoEdit||photoSaving)return;
+    setPhotoSaving(true);
+    try{
+      const payload={action,blank_id:photoEdit.id};
+      if(action==='set'){
+        if(photoFile)payload.storage=await uploadOperationalImage(photoFile,'products');
+        else {
+          if(!photoUrlDraft.trim())throw new Error('Paste an HTTPS image URL or choose a local image.');
+          payload.image_url=photoUrlDraft.trim();
+        }
+      }
+      const response=await authenticatedFunctionFetch('/.netlify/functions/blank-guide-photo-edit',{
+        method:'POST',body:JSON.stringify(payload),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||!result.success)throw new Error(result.message||'Could not save the photo.');
+      setStatus('Updated photo for '+result.updated+' matching size variations.');
+      setPhotoEdit(null);setPhotoFile(null);setPhotoUrlDraft('');
+      window.location.reload();
+    }catch(error){setStatus('Photo correction failed: '+(error.message||String(error)));}
+    finally{setPhotoSaving(false);}
+  }
   async function syncSupplierPhotos() {
     if(syncingPhotos)return;
     setSyncingPhotos(true);setSyncProgress('Checking supplier photos…');
@@ -152,13 +208,14 @@ export default function BlankIdentificationGuide() {
     }catch(error){setSyncProgress('Supplier sync stopped: '+(error.message||String(error)))}
     finally{setSyncingPhotos(false)}
   }
-  const photoCount = useMemo(() => enriched.filter((item)=>Boolean(item.photo)).length, [enriched]);
+  const photoCount = useMemo(() => enriched.filter((item)=>Boolean(item.exactPhoto)).length, [enriched]);
+  const provisionalCount = useMemo(() => enriched.filter((item)=>item.photo&&!item.exactPhoto).length,[enriched]);
   const brands = useMemo(() => [...new Set(enriched.map((item) => item.brand).filter(Boolean))].sort(), [enriched]);
   const groups = useMemo(() => {
     const families = new Map();
     enriched.forEach((item) => {
       if (brandFilter && item.brand !== brandFilter) return;
-      if ((missingOnly || photoFilter==='missing') && item.photo) return;
+      if (photoFilter==='missing' && item.photo) return;
       if (photoFilter==='with-photo' && !item.photo) return;
       if (search && ![item.sku,item.barcode,item.name,item.brand,item.style,item.supplierStyle,item.description,item.color,item.size].some((part) => key(part).includes(key(search)))) return;
       const title = productFamily(item);
@@ -167,14 +224,14 @@ export default function BlankIdentificationGuide() {
       families.get(id).items.push(item);
     });
     return [...families.values()].sort((a,b) => Number(b.items.some((item)=>item.photo)) - Number(a.items.some((item)=>item.photo)) || (a.brand+a.title).localeCompare(b.brand+b.title));
-  }, [enriched, search, brandFilter, missingOnly, photoFilter]);
+  }, [enriched, search, brandFilter, photoFilter]);
   return <main className="page sc-blank-guide">
     <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><div className="sc-blank-guide-actions"><a className="secondary-button" href="/scan">Scan / look up barcode</a><a className="secondary-button" href="/inventory/edit-blanks">Correct item images</a>{canRefreshSupplierPhotos&&<button type="button" className="secondary-button" disabled={syncingPhotos||loading} onClick={syncSupplierPhotos}>{syncingPhotos?'Matching supplier photos…':'Refresh supplier photos'}</button>}<button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></div></header>
     <div className="card sc-blank-guide-filters">
       <label>Search SKU, brand, style, color, size or UPC<input type="search" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Find a blank…" /></label>
       <label>Brand<select value={brandFilter} onChange={(e)=>setBrandFilter(e.target.value)}><option value="">All brands</option>{brands.map((value)=><option key={value}>{value}</option>)}</select></label>
-      <label>Photo coverage<select value={photoFilter} onChange={(e)=>{setPhotoFilter(e.target.value);setMissingOnly(false)}}><option value="all">All catalog items</option><option value="with-photo">Items with supplier photos</option><option value="missing">Missing supplier photos</option></select></label>
-      <strong>{loading?'Loading…':`${photoCount.toLocaleString()} of ${enriched.length.toLocaleString()} catalog items have photo URLs · ${groups.length} visible product groups`}</strong>
+      <label>Photo coverage<select value={photoFilter} onChange={(e)=>setPhotoFilter(e.target.value)}><option value="all">All catalog items</option><option value="with-photo">Items with supplier photos</option><option value="missing">Missing any reference photo</option></select></label>
+      <strong>{loading?'Loading…':`${photoCount.toLocaleString()} assigned photos · ${provisionalCount.toLocaleString()} provisional style references · ${enriched.length-photoCount-provisionalCount} unmatched · ${groups.length} product groups`}</strong>
     </div>
     {status && !loading && <p className="muted" role="status">{status}</p>}
     {syncProgress&&<p className="message" role="status" aria-live="polite">{syncProgress}</p>}
@@ -188,10 +245,24 @@ export default function BlankIdentificationGuide() {
       const sizes = [...new Set(variations.map((item)=>item.size).filter(Boolean))].sort();
       return <article key={group.id} className="sc-blank-guide-sheet">
         <div className="sc-blank-guide-heading"><div><small>SKILLED CRAFTING / BLANK IDENTIFICATION</small><h2>{group.title}</h2><p>{group.brand||'Unspecified brand'} · Category: {group.style||'Unspecified'} · Supplier style: {group.supplierStyle||'Check label'}</p></div><strong>{variations.length} SKUs</strong></div>
-        <div className="sc-blank-guide-top"><div><ProductPhoto source={photo?.photo} title={group.title} /><small>{photo?.photoSource||'No verified photo'}</small></div><div><h3>Where to find the ID</h3><p>{labelHint(group.style+' '+group.title)}</p><h3>Physical verification</h3><p>Compare brand/style and printed or sewn tag. Cross-check construction, fabric, product dimensions and color against the supplier sheet or purchase order.</p><p><strong>Sizes:</strong> {sizes.join(' · ')||'Not recorded'}</p><p><strong>Catalog description:</strong> {variations.find((item)=>item.description)?.description||'Not recorded—consult manufacturer specification sheet.'}</p><p><strong>Material:</strong> {variations.find((item)=>item.material)?.material||'Not recorded'} · <strong>Weight:</strong> {variations.find((item)=>item.weight)?.weight||'Not recorded'} · <strong>Fit:</strong> {variations.find((item)=>item.fit)?.fit||'Not recorded'}</p><p><strong>Photo source:</strong> Saved product image or exact matching supplier identifier; never inferred from the category.</p></div></div>
+        <div className="sc-blank-guide-top"><div><ProductPhoto source={photo?.photo} title={group.title} />
+          <small className={photo?.kind==='style'||photo?.kind==='alias'?'sc-blank-guide-provisional':'sc-blank-guide-source'}>{photo?.photoSource||'No image available'}{photo?.kind==='style'||photo?.kind==='alias'?' · PROVISIONAL':''}</small>
+          {canRefreshSupplierPhotos&&variations.some((item)=>item.color)&&<button type="button" className="secondary-button sc-blank-guide-edit-button" onClick={()=>editImage(photo||variations[0],group.id)}>Change cover photo</button>}
+        </div><div><h3>Where to find the ID</h3><p>{labelHint(group.style+' '+group.title)}</p><h3>Physical verification</h3><p>Compare brand/style and printed or sewn tag. Cross-check construction, fabric, product dimensions and color against the supplier sheet or purchase order.</p><p><strong>Sizes:</strong> {sizes.join(' · ')||'Not recorded'}</p><p><strong>Catalog description:</strong> {variations.find((item)=>item.description)?.description||'Not recorded—consult manufacturer specification sheet.'}</p><p><strong>Material:</strong> {variations.find((item)=>item.material)?.material||'Not recorded'} · <strong>Weight:</strong> {variations.find((item)=>item.weight)?.weight||'Not recorded'} · <strong>Fit:</strong> {variations.find((item)=>item.fit)?.fit||'Not recorded'}</p><p><strong>Photo reliability:</strong> Assigned images are saved to the specific product. Provisional references show a likely style, but the physical item or pictured color may differ. Confirm before counting.</p></div></div>
         <h3>Color reference (approximate)</h3>
-        <div className="sc-blank-guide-palettes">{options.length?options.map((color)=>{const match=variations.find((item)=>item.color===color&&item.photo);return <div key={color} className="sc-blank-guide-color">{match?.photo?<img src={match.photo} alt={group.brand+' '+group.style+' '+color+' supplier catalog photo'} loading="eager" referrerPolicy="no-referrer" onError={(event)=>{event.currentTarget.style.display='none';event.currentTarget.nextElementSibling.style.display='block';}}/>:null}<span style={{display:match?.photo?'none':'block',background:swatch(color)||'repeating-linear-gradient(45deg,#ddd 0 6px,#fff 6px 12px)'}}/><small>{color}</small></div>}):<p>Colors not recorded</p>}</div>
-        <table><thead><tr><th>Internal / supplier SKU</th><th>Barcode / UPC</th><th>Color</th><th>Size</th></tr></thead><tbody>{variations.map((item)=><tr key={item.id}><td>{item.sku||'Not assigned'}</td><td>{item.barcode||'—'}</td><td>{item.color||'—'}</td><td>{item.size||'—'}</td></tr>)}</tbody></table>
+        <div className="sc-blank-guide-palettes">{options.length?options.map((color)=>{const match=variations.find((item)=>item.color===color&&item.exactPhoto);const representative=match||variations.find((item)=>item.color===color);return <div key={color} className="sc-blank-guide-color">{match?.exactPhoto?<img src={match.exactPhoto} alt={group.brand+' '+group.style+' '+color+' assigned catalog photo'} loading="eager" referrerPolicy="no-referrer" onError={(event)=>{event.currentTarget.style.display='none';event.currentTarget.nextElementSibling.style.display='block';}}/>:null}<span style={{display:match?.exactPhoto?'none':'block',background:swatch(color)||'repeating-linear-gradient(45deg,#ddd 0 6px,#fff 6px 12px)'}}/><small>{color}</small>{!match?.exactPhoto&&representative?.photo&&<small className="sc-blank-guide-provisional">Reference photo above may show another color</small>}{canRefreshSupplierPhotos&&<button type="button" className="sc-blank-guide-edit-button" onClick={()=>editImage(representative,group.id)}>{match?'Replace':'Assign photo'}</button>}</div>}):<p>Colors not recorded</p>}</div>
+        <details className="sc-blank-guide-identifiers"><summary>SKU, barcode, color and size details ({variations.length} items) — click to expand</summary><table><thead><tr><th>Internal / supplier SKU</th><th>Barcode / UPC</th><th>Color</th><th>Size</th></tr></thead><tbody>{variations.map((item)=><tr key={item.id}><td>{item.sku||'Not assigned'}</td><td>{item.barcode||'—'}</td><td>{item.color||'—'}</td><td>{item.size||'—'}</td></tr>)}</tbody></table></details>
+        {photoEdit?.groupId===group.id&&<form className="sc-blank-guide-photo-editor no-print" onSubmit={(event)=>{event.preventDefault();saveImage('set');}}>
+          <h3>Replace / assign photograph — {photoEdit.brand} {photoEdit.style} · {photoEdit.color}</h3>
+          <p>This saves one image for all sizes of the selected brand, style and color. Exact saved photos override provisional references. Use a supplier image URL or upload a photo to the business R2 storage.</p>
+          <label>Supplier image URL (HTTPS)<input type="url" placeholder="https://supplier.example/photo.jpg" value={photoUrlDraft} disabled={Boolean(photoFile)||photoSaving} onChange={(event)=>setPhotoUrlDraft(event.target.value)}/></label>
+          <label>Or upload a photo (PNG, JPEG or WebP)<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={photoSaving} onChange={(event)=>setPhotoFile(event.target.files?.[0]||null)}/></label>
+          <div className="sc-blank-guide-editor-actions">
+            <button type="submit" disabled={photoSaving||(!photoUrlDraft.trim()&&!photoFile)}>{photoSaving?'Saving…':'Save image for this color'}</button>
+            <button type="button" className="secondary-button" disabled={photoSaving} onClick={()=>saveImage('clear')}>Clear assigned image</button>
+            <button type="button" className="secondary-button" onClick={()=>setPhotoEdit(null)}>Cancel</button>
+          </div>
+        </form>}
         <div className="sc-blank-guide-checklist"><strong>Before counting:</strong> <span>☐ Scan SKU / UPC</span><span>☐ Verify manufacturer style &amp; size tag</span><span>☐ Compare color under neutral light</span><span>☐ Set aside mismatches for supervisor review</span></div>
         <div className="sc-blank-guide-signoff"><span>Counted by: __________________</span><span>Date: ____________</span><span>Exception notes: __________________</span></div>
       </article>;
