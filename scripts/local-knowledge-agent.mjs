@@ -28,6 +28,8 @@ async function authorize(req){
  const db=clientForUser(jwt);
  const user=await db.auth.getUser(jwt);
  if(user.error||!user.data.user)throw Object.assign(Error('Session has expired.'),{status:401});
+ const session=await db.rpc('sc_local_ai_session_active');
+ if(session.error||session.data!==true)throw Object.assign(Error('Session has expired or been revoked. Sign in again.'),{status:401});
  const permission=await db.rpc('sc_internal_access_allowed',{p_roles:['admin','manager','operator','marketing']});
  if(permission.error||permission.data!==true)throw Object.assign(Error('Your active staff role does not allow local AI access.'),{status:403});
  return db; // All subsequent queries use the employee JWT; Postgres RLS stays enforced.

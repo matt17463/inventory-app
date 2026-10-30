@@ -14,7 +14,7 @@ async function listen(server){
 const close=server=>new Promise(resolve=>{server.closeAllConnections();server.close(resolve);});
 
 test('workshop gateway enforces authorization, caller-scoped retrieval and actual model readiness',async t=>{
- let allowRole=true,hasSources=true,modelMode='ready';
+ let allowRole=true,activeSession=true,hasSources=true,modelMode='ready';
  const queries=[],chats=[];
  const database=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
@@ -26,6 +26,9 @@ test('workshop gateway enforces authorization, caller-scoped retrieval and actua
   }
   if(url.pathname==='/rest/v1/rpc/sc_internal_access_allowed'){
    res.end(JSON.stringify(allowRole));return;
+  }
+  if(url.pathname==='/rest/v1/rpc/sc_local_ai_session_active'){
+   res.end(JSON.stringify(activeSession));return;
   }
   queries.push({path:url.pathname,authorization:req.headers.authorization});
   if(url.pathname==='/rest/v1/sc_knowledge_chunks'){
@@ -87,6 +90,7 @@ test('workshop gateway enforces authorization, caller-scoped retrieval and actua
   assert.equal((await request('/ask',{requestOrigin:'https://example.invalid'})).status,403);
   assert.equal((await request('/ask',{token:''})).status,401);
   assert.equal((await request('/ask',{token:'invalid-session'})).status,401);
+  activeSession=false;assert.equal((await request('/ask')).status,401);activeSession=true;
   allowRole=false;assert.equal((await request('/ask')).status,403);allowRole=true;
   assert.equal(chats.length,0);
  });
