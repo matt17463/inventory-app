@@ -33,7 +33,7 @@ export async function discoverApprovedPdfs(root,max=50){
    if(e.name.startsWith('.')||e.isSymbolicLink())continue;
    const full=path.join(dir,e.name);
    if(e.isDirectory())await walk(full,depth+1);
-   else if(e.isFile()&&/\\.pdf$/i.test(e.name)){
+   else if(e.isFile()&&/\.pdf$/i.test(e.name)){
     const st=await fs.lstat(full);
     if(!st.isSymbolicLink()&&st.size>8&&st.size<=MAX_BYTES&&contained(root,full)){
      const f=await fs.open(full,'r');
@@ -71,12 +71,12 @@ export async function ocrManual({source,output,execute=false,maxFiles=25}={}){
  const results=[];
  for(const file of files){
   const relative=path.relative(root,file);
-  const target=path.join(realDest,relative.replace(/\\.pdf$/i,'.ocr.pdf'));
+  const target=path.join(realDest,relative.replace(/\.pdf$/i,'.ocr.pdf'));
   if(!contained(realDest,target))throw Error('Unexpected output path');
   await fs.mkdir(path.dirname(target),{recursive:true});
   if(await fs.lstat(target).then(()=>true).catch(()=>false)){results.push({file:relative,status:'existing-reviewed-copy'});continue;}
   const info=await execFile('pdfinfo',[file],20000);
-  const pages=Number(info.match(/^Pages:\\s*(\\d+)/m)?.[1]||0);
+  const pages=Number(info.match(/^Pages:\s*(\d+)/m)?.[1]||0);
   if(!pages||pages>MAX_PAGES){results.push({file:relative,status:'page-limit'});continue;}
   const temp=target+'.partial-'+process.pid;
   try{
