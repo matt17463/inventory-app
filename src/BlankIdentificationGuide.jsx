@@ -50,8 +50,10 @@ async function readAll(table, transform, limit = 30000) {
 function recordToBlank(row) {
   return {
     id: row.id, sku:str(row.sku_base), barcode:str(row.barcode), name:str(row.name),
-    brand:nameOf(row.brands), style:nameOf(row.product_types), color:nameOf(row.colors),
+    brand:nameOf(row.brands), style:nameOf(row.product_types), supplierStyle:str(row.supplier_style || row.manufacturer_style || row.style_number), color:nameOf(row.colors),
     size:nameOf(row.sizes), savedPhoto:photoUrl(row.image_url),
+    description:str(row.description || row.product_description), material:str(row.material || row.fabric || row.fabric_content),
+    weight:str(row.weight || row.fabric_weight), fit:str(row.fit || row.fit_type),
   };
 }
 function supplierPhotos(rows) {
@@ -60,6 +62,8 @@ function supplierPhotos(rows) {
     const photo = [row.image_url,row.product_image_url,row.supplier_image_url,row.thumbnail_url]
       .map(photoUrl).find(Boolean);
     const sku = key(row.supplier_sku || row.sku || row.upc);
+    const blankId = str(row.blank_product_id);
+    if (blankId && photo) matched.set('id:' + blankId, photo);
     if (sku && photo) matched.set(sku, photo);
   });
   return matched;
@@ -84,7 +88,7 @@ export default function BlankIdentificationGuide() {
     (async () => {
       try {
         const data = await readAll('blank_products',
-          (q) => q.select('id,sku_base,barcode,name,image_url,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)').eq('sc_is_archived',false).order('sku_base'));
+          (q) => q.select('*,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)').eq('sc_is_archived',false).order('sku_base'));
         if (!active) return;
         setBlanks(data.map(recordToBlank));
         if (data.some((row) => !row.image_url)) {
@@ -102,8 +106,8 @@ export default function BlankIdentificationGuide() {
   }, []);
   const enriched = useMemo(() => blanks.map((blank) => ({
     ...blank,
-    photo: blank.savedPhoto || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
-    photoSource: blank.savedPhoto ? 'Saved product image' : supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier SKU image' : 'No verified photo',
+    photo: blank.savedPhoto || supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
+    photoSource: blank.savedPhoto ? 'Saved product image' : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
   })), [blanks,supplier]);
   const brands = useMemo(() => [...new Set(enriched.map((item) => item.brand).filter(Boolean))].sort(), [enriched]);
   const groups = useMemo(() => {
@@ -111,10 +115,10 @@ export default function BlankIdentificationGuide() {
     enriched.forEach((item) => {
       if (brandFilter && item.brand !== brandFilter) return;
       if (missingOnly && item.photo) return;
-      if (search && ![item.sku,item.barcode,item.name,item.brand,item.style,item.color,item.size].some((part) => key(part).includes(key(search)))) return;
+      if (search && ![item.sku,item.barcode,item.name,item.brand,item.style,item.supplierStyle,item.description,item.color,item.size].some((part) => key(part).includes(key(search)))) return;
       const title = productFamily(item);
-      const id = [key(item.brand), key(item.style), key(title)].join(':');
-      if (!families.has(id)) families.set(id,{ id,title,brand:item.brand,style:item.style,items:[] });
+      const id = [key(item.brand), key(item.style), key(item.supplierStyle), key(title)].join(':');
+      if (!families.has(id)) families.set(id,{ id,title,brand:item.brand,style:item.style,supplierStyle:item.supplierStyle,items:[] });
       families.get(id).items.push(item);
     });
     return [...families.values()].sort((a,b) => (a.brand+a.title).localeCompare(b.brand+b.title));
@@ -136,8 +140,8 @@ export default function BlankIdentificationGuide() {
       const options = [...new Set(variations.map((item)=>item.color).filter(Boolean))].sort();
       const sizes = [...new Set(variations.map((item)=>item.size).filter(Boolean))].sort();
       return <article key={group.id} className="sc-blank-guide-sheet">
-        <div className="sc-blank-guide-heading"><div><small>SKILLED CRAFTING / BLANK IDENTIFICATION</small><h2>{group.title}</h2><p>{group.brand||'Unspecified brand'} · {group.style||'Unspecified style'}</p></div><strong>{variations.length} SKUs</strong></div>
-        <div className="sc-blank-guide-top"><div><ProductPhoto source={photo?.photo} title={group.title} /><small>{photo?.photoSource||'No verified photo'}</small></div><div><h3>Where to find the ID</h3><p>{labelHint(group.style+' '+group.title)}</p><h3>Physical verification</h3><p>Compare brand/style and printed or sewn tag. Cross-check construction, fabric, product dimensions and color against the supplier sheet or purchase order.</p><p><strong>Sizes:</strong> {sizes.join(' · ')||'Not recorded'}</p><p><strong>Source:</strong> Current inventory product identifiers. A supplier photo is used only for a matching supplier SKU/UPC.</p></div></div>
+        <div className="sc-blank-guide-heading"><div><small>SKILLED CRAFTING / BLANK IDENTIFICATION</small><h2>{group.title}</h2><p>{group.brand||'Unspecified brand'} · Category: {group.style||'Unspecified'} · Supplier style: {group.supplierStyle||'Check label'}</p></div><strong>{variations.length} SKUs</strong></div>
+        <div className="sc-blank-guide-top"><div><ProductPhoto source={photo?.photo} title={group.title} /><small>{photo?.photoSource||'No verified photo'}</small></div><div><h3>Where to find the ID</h3><p>{labelHint(group.style+' '+group.title)}</p><h3>Physical verification</h3><p>Compare brand/style and printed or sewn tag. Cross-check construction, fabric, product dimensions and color against the supplier sheet or purchase order.</p><p><strong>Sizes:</strong> {sizes.join(' · ')||'Not recorded'}</p><p><strong>Catalog description:</strong> {variations.find((item)=>item.description)?.description||'Not recorded—consult manufacturer specification sheet.'}</p><p><strong>Material:</strong> {variations.find((item)=>item.material)?.material||'Not recorded'} · <strong>Weight:</strong> {variations.find((item)=>item.weight)?.weight||'Not recorded'} · <strong>Fit:</strong> {variations.find((item)=>item.fit)?.fit||'Not recorded'}</p><p><strong>Photo source:</strong> Saved product image or exact matching supplier identifier; never inferred from the category.</p></div></div>
         <h3>Color reference (approximate)</h3>
         <div className="sc-blank-guide-palettes">{options.length?options.map((color)=><div key={color} className="sc-blank-guide-color"><span style={{background:swatch(color)||'repeating-linear-gradient(45deg,#ddd 0 6px,#fff 6px 12px)'}}/><small>{color}</small></div>):<p>Colors not recorded</p>}</div>
         <table><thead><tr><th>Internal / supplier SKU</th><th>Barcode / UPC</th><th>Color</th><th>Size</th></tr></thead><tbody>{variations.map((item)=><tr key={item.id}><td>{item.sku||'Not assigned'}</td><td>{item.barcode||'—'}</td><td>{item.color||'—'}</td><td>{item.size||'—'}</td></tr>)}</tbody></table>
