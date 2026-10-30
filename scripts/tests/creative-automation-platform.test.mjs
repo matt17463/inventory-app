@@ -44,7 +44,7 @@ test('manuals use RLS-only reads and server-restricted writes',()=>{
 test('local gateway only permits approved staff and loopback inference',()=>{
  const s=src('scripts/local-knowledge-agent.mjs');
  assert.match(s,/auth\.getUser\(jwt\)/);
- assert.match(s,/from\('sc_app_user_roles'\)/);
+ assert.match(s,/sc_internal_access_allowed/);
  assert.match(s,/localhost','127\.0\.0\.1'/);
  assert.match(s,/origin!==ORIGIN/);
  assert.match(s,/\[M1\]|source excerpts/i);

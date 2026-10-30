@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 import { supabase } from './supabaseClient';
 import CreativeManualLibrary from './CreativeManualLibrary';
+import LocalAiConnectionSettings from './LocalAiConnectionSettings';
 
 const TABLE='sc_creative_knowledge_documents';
 const STARTER_SOURCES=[
@@ -90,6 +91,7 @@ export default function CreativeKnowledgeHub(){
       <label className="cos-field">Verified source text<textarea rows={8} value={input.body} maxLength={100000} required onChange={e=>setInput(v=>({...v,body:e.target.value}))}/></label>
       <button type="submit" disabled={saving}>{saving?'Saving…':'Save to private library'}</button>
     </form>}
+    <LocalAiConnectionSettings/>
     <CreativeManualLibrary/>
   </section>;
 }
