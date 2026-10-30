@@ -27,7 +27,7 @@ function suitableTitle(product,brand,style){
  const vendor=normalize(product.vendor||'');
  const prefix=BRAND_NAMES.get(normalize(brand));
  const trueStyle=normalize(style);
- return Boolean(prefix && (title.includes(prefix)||vendor.includes(prefix)) && title.includes(trueStyle));
+ return Boolean(prefix && (title.includes(prefix)||vendor.includes(prefix)|| (normalize(brand)==='portco'&&(title.includes('portco')||vendor.includes('portco')))) && title.includes(trueStyle));
 }
 function bestImage(product,style,color){
  const target=normalize(color), s=normalize(style);
@@ -68,7 +68,7 @@ async function fetchProduct(style) {
   signal:AbortSignal.timeout(7000),
  });
  if(!response.ok)throw Error('Supplier product unavailable: HTTP '+response.status);
- if(!String(response.headers.get('content-type')||'').includes('json'))throw Error('Supplier catalog did not return JSON');
+ if(!/\b(json|javascript)\b/i.test(String(response.headers.get('content-type')||'')))throw Error('Supplier catalog returned an unexpected content type');
  return response.json();
 }
 export async function syncSupplierPhotoBatch(db,{cursor=0,limit=LIMIT,dryRun=false}={}){
