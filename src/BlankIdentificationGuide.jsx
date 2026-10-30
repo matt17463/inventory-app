@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { EmployeeAccessContext } from './lib/employeeAccessContext';
+import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { supabase } from './supabaseClient';
 import { operationalAssetUrls } from './lib/assetStorageApi';
 import './BlankIdentificationGuide.css';
@@ -77,6 +79,10 @@ function ProductPhoto({ source, title }) {
     : <div className="sc-blank-guide-photo missing"><strong>Photo needs verification</strong><small>Compare supplier style and physical tags.</small></div>;
 }
 export default function BlankIdentificationGuide() {
+  const employee = useContext(EmployeeAccessContext);
+  const canRefreshSupplierPhotos = ['admin','manager'].includes(employee?.role);
+  const [syncingPhotos, setSyncingPhotos] = useState(false);
+  const [syncProgress, setSyncProgress] = useState('');
   const [blanks, setBlanks] = useState([]);
   const [supplier, setSupplier] = useState(new Map());
   const [search, setSearch] = useState('');
@@ -122,6 +128,29 @@ export default function BlankIdentificationGuide() {
     photo: blank.savedPhoto || supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
     photoSource: blank.savedPhoto ? 'Saved / signed R2 product image' : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
   })), [blanks,supplier]);
+  async function syncSupplierPhotos() {
+    if(syncingPhotos)return;
+    setSyncingPhotos(true);setSyncProgress('Checking supplier photos…');
+    let cursor=0, updated=0, matched=0, failures=0, attempts=0;
+    try {
+      do {
+        const response=await authenticatedFunctionFetch('/.netlify/functions/supplier-photo-sync',{
+          method:'POST',body:JSON.stringify({cursor,limit:5}),
+        });
+        const payload=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(payload.message||'Supplier sync failed.');
+        updated+=Number(payload.updated||0);
+        matched+=Number(payload.colorsMatched||0);
+        failures+=(payload.results||[]).filter((row)=>row.error).length;
+        cursor=payload.nextCursor;
+        attempts++;
+        setSyncProgress('Checked '+Math.min(attempts*5,payload.totalEligibleGroups)+' of '+payload.totalEligibleGroups+' supported styles. Added '+updated+' blank photos; '+failures+' styles need review.');
+      }while(cursor!=null&&attempts<30);
+      setSyncProgress('Supplier photo refresh finished. '+updated+' variations and '+matched+' exact colors matched; '+failures+' supplier styles could not be verified.');
+      if(updated)window.setTimeout(()=>window.location.reload(),1400);
+    }catch(error){setSyncProgress('Supplier sync stopped: '+(error.message||String(error)))}
+    finally{setSyncingPhotos(false)}
+  }
   const brands = useMemo(() => [...new Set(enriched.map((item) => item.brand).filter(Boolean))].sort(), [enriched]);
   const groups = useMemo(() => {
     const families = new Map();
@@ -137,7 +166,7 @@ export default function BlankIdentificationGuide() {
     return [...families.values()].sort((a,b) => (a.brand+a.title).localeCompare(b.brand+b.title));
   }, [enriched, search, brandFilter, missingOnly]);
   return <main className="page sc-blank-guide">
-    <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><div className="sc-blank-guide-actions"><a className="secondary-button" href="/scan">Scan / look up barcode</a><a className="secondary-button" href="/inventory/edit-blanks">Correct item images</a><button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></div></header>
+    <header className="page-header sc-blank-guide-toolbar"><div><p className="eyebrow">Warehouse</p><h1>Blank Product Identification Guide</h1><p>Reference every inventory blank, including zero-stock products. Confirm actual tags, style, size and color before counting.</p></div><div className="sc-blank-guide-actions"><a className="secondary-button" href="/scan">Scan / look up barcode</a><a className="secondary-button" href="/inventory/edit-blanks">Correct item images</a>{canRefreshSupplierPhotos&&<button type="button" className="secondary-button" disabled={syncingPhotos||loading} onClick={syncSupplierPhotos}>{syncingPhotos?'Matching supplier photos…':'Refresh supplier photos'}</button>}<button type="button" disabled={loading||!groups.length} onClick={() => window.print()}>Print guide</button></div></header>
     <div className="card sc-blank-guide-filters">
       <label>Search SKU, brand, style, color, size or UPC<input type="search" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Find a blank…" /></label>
       <label>Brand<select value={brandFilter} onChange={(e)=>setBrandFilter(e.target.value)}><option value="">All brands</option>{brands.map((value)=><option key={value}>{value}</option>)}</select></label>
@@ -145,6 +174,7 @@ export default function BlankIdentificationGuide() {
       <strong>{loading?'Loading…':groups.length+' product groups · '+enriched.length+' catalog items'}</strong>
     </div>
     {status && !loading && <p className="muted" role="status">{status}</p>}
+    {syncProgress&&<p className="message" role="status" aria-live="polite">{syncProgress}</p>}
     <p className="sc-blank-guide-warning">For warehouse identification: color samples are approximate reference swatches, not official supplier colors. A product photograph is supporting evidence only—verify the item label and identifier.</p>
     {!loading && groups.length === 0 && <p>No matching blanks found.</p>}
     <div className="sc-blank-guide-pages">{groups.map((group) => {
