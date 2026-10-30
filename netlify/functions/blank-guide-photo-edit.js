@@ -74,6 +74,6 @@ export const handler=async(event)=>{
   if(updateError)throw updateError;
   await auditFunctionSecurity({functionName:'blank-guide-photo-edit',action:'change_photo',outcome:'success',
     userId:auth.user.id,role:auth.role,event,metadata:{blank_id:id,action,count:updated?.length||0,method:input.image_url?'url':'r2'}});
-  return jsonResponse(200,{success:true,updated:updated?.length||0,message:'Updated image reference across matching sizes.'},event);
+  return jsonResponse(200,{success:true,updated:updated?.length||0,message:'Updated image reference across matching size variations.'},event);
  }catch(error){return jsonResponse(500,{success:false,message:error.message||'Unable to update identification photograph.'},event)}
 };
