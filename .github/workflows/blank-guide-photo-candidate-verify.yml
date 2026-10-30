@@ -13,4 +13,4 @@ jobs:
         with:
           node-version: '24'
       - name: Verify official product image feeds
-        run: node scripts/probe-independent-filenames.mjs && node scripts/verify-vendor-photo-candidates.mjs
+        run: node scripts/probe-momentec-catalog.mjs && node scripts/probe-independent-filenames.mjs && node scripts/verify-vendor-photo-candidates.mjs
