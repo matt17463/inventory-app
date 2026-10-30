@@ -53,7 +53,7 @@ async function readAll(table, transform, limit = 30000) {
 function recordToBlank(row) {
   return {
     id: row.id, sku:str(row.sku_base), barcode:str(row.barcode), name:str(row.name),
-    brand:nameOf(row.brands), style:nameOf(row.product_types), supplierStyle:str(row.supplier_style || row.manufacturer_style || row.style_number), color:nameOf(row.colors),
+    brand:nameOf(row.brands), style:nameOf(row.product_types), supplierStyle:str(row.manufacturer_sku || row.supplier_sku || row.product_types?.name), color:nameOf(row.colors),
     size:nameOf(row.sizes), savedPhoto:photoUrl(row.image_url),
     description:str(row.description || row.product_description), material:str(row.material || row.fabric || row.fabric_content),
     weight:str(row.weight || row.fabric_weight), fit:str(row.fit || row.fit_type),
@@ -126,7 +126,7 @@ export default function BlankIdentificationGuide() {
   const enriched = useMemo(() => blanks.map((blank) => ({
     ...blank,
     photo: blank.savedPhoto || supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
-    photoSource: blank.savedPhoto ? 'Saved / signed R2 product image' : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
+    photoSource: blank.savedPhoto ? (blank.savedPhoto.includes('sanmarsports.com') ? 'SanMar Sports supplier reference' : 'Saved blank / R2 product image') : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
   })), [blanks,supplier]);
   async function syncSupplierPhotos() {
     if(syncingPhotos)return;
