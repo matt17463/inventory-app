@@ -24,7 +24,7 @@ jobs:
               const r=await fetch(u,{signal:AbortSignal.timeout(12000),headers:{'User-Agent':'Mozilla/5.0'}});
               const type=r.headers.get('content-type')||'';
               console.log('SOURCE CHECK',new URL(u).pathname, 'HTTP',r.status,'TYPE',type,'LEN',r.headers.get('content-length'));
-              if(type.includes('json')&&r.ok){
+              if((type.includes('json') || type.includes('javascript'))&&r.ok){
                 const p=await r.json();
                 console.log('PRODUCT',p.title,p.vendor,'variants',(p.variants||[]).length,'images',(p.images||[]).length,'firstImage',JSON.stringify((p.images||[])[0]).slice(0,250),'variant',JSON.stringify((p.variants||[]).find(x=>String(x.title).toLowerCase().includes('black'))).slice(0,350));
               }
