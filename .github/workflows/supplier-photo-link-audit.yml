@@ -7,27 +7,13 @@ on:
 jobs:
   verify-supplier-images:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Check actual supplier image responses and product feed
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          const urls=[
-            'https://sanmarsports.com/cdn/shop/files/18500_black_model_front_d037fa76-ebf0-476a-b6cd-bf97bc2ea5dc.jpg?v=1761871849&width=1445',
-            'https://sanmarsports.com/cdn/shop/files/18500_antiquecherryred_model_front_72fa292a-84d9-4253-87f2-3358f19c38d0.jpg?v=1761871849&width=416',
-            'https://sanmarsports.com/products/18500.js',
-            'https://sanmarsports.com/products/bc3001.js'
-          ];
-          for(const u of urls){
-            try{
-              const r=await fetch(u,{signal:AbortSignal.timeout(12000),headers:{'User-Agent':'Mozilla/5.0'}});
-              const type=r.headers.get('content-type')||'';
-              console.log('SOURCE CHECK',new URL(u).pathname, 'HTTP',r.status,'TYPE',type,'LEN',r.headers.get('content-length'));
-              if((type.includes('json') || type.includes('javascript'))&&r.ok){
-                const p=await r.json();
-                console.log('PRODUCT',p.title,p.vendor,'variants',(p.variants||[]).length,'images',(p.images||[]).length,'firstImage',JSON.stringify((p.images||[])[0]).slice(0,250),'variant',JSON.stringify((p.variants||[]).find(x=>String(x.title).toLowerCase().includes('black'))).slice(0,350));
-              }
-            }catch(e){console.log('SOURCE ERROR',new URL(u).pathname,String(e))}
-          }
-          NODE
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Verify supplier images for missing blank variants
+        run: node scripts/catalog-photo-fetch.mjs
