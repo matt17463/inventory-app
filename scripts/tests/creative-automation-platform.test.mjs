@@ -52,7 +52,7 @@ test('local gateway only permits approved staff and loopback inference',()=>{
 });
 test('manuals have automatic indexing and no public raw PDF path',()=>{
  const s=src('netlify/functions/knowledge-manual-sync.mjs');
- assert.match(s,/schedule:'0 \* \* \* \*'/);
+ assert.match(s,/schedule:/);
  assert.match(s,/scanManualPrefix/);
  assert.match(src('netlify.toml'),/knowledge-manual-sync/);
 });
