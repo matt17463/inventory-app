@@ -34,3 +34,9 @@
   .sc-blank-guide-sheet th {background:#e5e7eb!important;color:#111!important}
   .sc-blank-guide-sheet tr,.sc-blank-guide-top,.sc-blank-guide-signoff {break-inside:avoid;page-break-inside:avoid}
 }
+
+.sc-blank-guide-actions {display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.6rem;}
+.sc-blank-guide-actions :is(a,button) {display:inline-flex;align-items:center;min-height:40px;padding:.55rem .9rem;border-radius:8px;text-decoration:none;}
+.sc-blank-guide-checklist {display:flex; flex-wrap:wrap; gap:.7rem 1rem; padding:.7rem 0; font-size:.8rem;}
+.sc-blank-guide-checklist span {white-space:normal;}
+@media print {.sc-blank-guide-checklist {break-inside:avoid;page-break-inside:avoid;}}
