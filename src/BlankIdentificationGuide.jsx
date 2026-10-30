@@ -40,7 +40,7 @@ function productFamily(row) {
 async function readAll(table, transform, limit = 30000) {
   let results = [];
   for (let offset = 0; offset < limit; offset += 750) {
-    const { data, error } = await transform(supabase.from(table).select('*')).range(offset, offset + 749);
+    const { data, error } = await transform(supabase.from(table)).range(offset, offset + 749);
     if (error) throw error;
     results = results.concat(data || []);
     if ((data || []).length < 750) break;
@@ -89,7 +89,7 @@ export default function BlankIdentificationGuide() {
         setBlanks(data.map(recordToBlank));
         if (data.some((row) => !row.image_url)) {
           try {
-            const sources = await readAll('supplier_catalog_review', (q) => q.order('supplier_name'), 15000);
+            const sources = await readAll('supplier_catalog_review', (q) => q.select('*').order('supplier_name'), 15000);
             if (active) setSupplier(supplierPhotos(sources));
           } catch {
             if (active) setStatus('Supplier photos unavailable. Missing or unverified photos will be flagged.');
