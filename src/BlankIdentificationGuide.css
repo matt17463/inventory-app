@@ -24,7 +24,8 @@
 .sc-blank-guide-signoff { display:flex; flex-wrap:wrap; justify-content:space-between; gap:1rem; padding-top:1rem; font-size:.8rem; }
 @media(max-width:650px){.sc-blank-guide-top{grid-template-columns:1fr}}
 @media print {
-  @page {size:letter portrait; margin:.4in}
+  @page sc-blank-reference {size:letter portrait; margin:.4in}
+  .sc-blank-guide {page:sc-blank-reference}
   .sc-blank-guide-toolbar,.sc-blank-guide-filters,.sc-blank-guide-warning,nav,.sc-sidebar,.sc-topbar {display:none!important}
   .sc-blank-guide-pages {display:block!important}
   .sc-blank-guide-sheet {display:block!important; color:#111!important; background:#fff!important; margin:0!important; padding:0!important; border:0!important; border-radius:0!important; box-shadow:none!important; break-before:page; page-break-before:always}
