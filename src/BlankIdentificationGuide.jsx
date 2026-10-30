@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { operationalAssetUrls } from './lib/assetStorageApi';
 import './BlankIdentificationGuide.css';
 
 const str = (value) => String(value ?? '').trim();
@@ -90,8 +91,20 @@ export default function BlankIdentificationGuide() {
         const data = await readAll('blank_products',
           (q) => q.select('*,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)').eq('sc_is_archived',false).order('sku_base'));
         if (!active) return;
-        setBlanks(data.map(recordToBlank));
-        if (data.some((row) => !row.image_url)) {
+        let storedUrls = {};
+        try {
+          storedUrls = await operationalAssetUrls(data, {
+            idField:'id', urlField:'image_url', providerField:'image_storage_provider',
+            bucketField:'image_storage_bucket', pathField:'image_storage_path',
+            previewProviderField:'image_preview_storage_provider', previewBucketField:'image_preview_storage_bucket',
+            previewPathField:'image_preview_storage_path',
+          });
+        } catch {
+          if (active) setStatus('Private R2 preview signing is unavailable. Saved public URLs and exact supplier reference images remain usable.');
+        }
+        if (!active) return;
+        setBlanks(data.map(recordToBlank).map((blank) => ({ ...blank, savedPhoto:photoUrl(storedUrls[String(blank.id)]) || blank.savedPhoto })));
+        if (data.some((row) => !row.image_url && !row.image_storage_path)) {
           try {
             const sources = await readAll('supplier_catalog_review', (q) => q.select('*').order('supplier_name'), 15000);
             if (active) setSupplier(supplierPhotos(sources));
@@ -107,7 +120,7 @@ export default function BlankIdentificationGuide() {
   const enriched = useMemo(() => blanks.map((blank) => ({
     ...blank,
     photo: blank.savedPhoto || supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) || '',
-    photoSource: blank.savedPhoto ? 'Saved product image' : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
+    photoSource: blank.savedPhoto ? 'Saved / signed R2 product image' : supplier.get('id:'+str(blank.id)) || supplier.get(key(blank.sku)) || supplier.get(key(blank.barcode)) ? 'Matched supplier identifier image' : 'No verified photo',
   })), [blanks,supplier]);
   const brands = useMemo(() => [...new Set(enriched.map((item) => item.brand).filter(Boolean))].sort(), [enriched]);
   const groups = useMemo(() => {
