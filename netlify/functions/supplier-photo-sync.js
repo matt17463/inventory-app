@@ -7,7 +7,7 @@ const normalize=(value)=>String(value??'').normalize('NFKD').toLowerCase().repla
 const LIMIT=5;
 const STYLE_OVERRIDES=new Map([['bellacanvas:3001','bc3001']]);
 const BRAND_NAMES=new Map([['gildan','gildan'],['bellacanvas','bellacanvas'],['sporttek','sporttek'],['portco','portcompany']]);
-const SUPPORTED=new Set(['gildan','bellacanvas','sporttek','portco']);
+const SUPPORTED=new Set(['gildan','bellacanvas','sporttek','portco','richardson','adidas','c2sport','independent','independenttradingco','colortone','nexgen','badger','driduck','jamerica','qtees','flexfit','weatherproof','imperial','core365','atlantis','underarmour','allesonathletic','nextlevel','yupoong','ypclassics','portauthority','jerzees','district']);
 const UNSAFE_STYLE=new Set(['na','other','unknown','general','shirt','tee','hoodie','hat','sweatshirt','']);
 
 function catalogStyle(brand,style) {
@@ -25,7 +25,7 @@ function validImage(url) {
 function suitableTitle(product,brand,style){
  const title=normalize(product.title||'');
  const vendor=normalize(product.vendor||'');
- const prefix=BRAND_NAMES.get(normalize(brand));
+ const prefix=BRAND_NAMES.get(normalize(brand)) || normalize(brand);
  const trueStyle=normalize(style);
  return Boolean(prefix && (title.includes(prefix)||vendor.includes(prefix)|| (normalize(brand)==='portco'&&(title.includes('portco')||vendor.includes('portco')))) && title.includes(trueStyle));
 }
