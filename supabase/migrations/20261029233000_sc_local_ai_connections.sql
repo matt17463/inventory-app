@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS public.sc_local_ai_connections (
   id text PRIMARY KEY DEFAULT 'primary' CHECK (id='primary'),
   endpoint_url text NOT NULL CHECK (
-    endpoint_url ~ '^https://[a-z0-9-]+\\.tail934ae0\\.ts\\.net(:[0-9]{2,5})?$'
+    endpoint_url ~ '^https://[a-z0-9-]+\.tail934ae0\.ts\.net(:[0-9]{2,5})?$'
   ),
   enabled boolean NOT NULL DEFAULT false,
   updated_by uuid REFERENCES auth.users(id),
