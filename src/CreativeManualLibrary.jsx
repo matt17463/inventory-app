@@ -1,7 +1,7 @@
-import {useContext,useState} from 'react';
+import {useContext,useState,useEffect} from 'react';
 import {EmployeeAccessContext} from './lib/employeeAccessContext';
 import {supabase} from './supabaseClient';
-import {localAiCall,localAiConfigured} from './lib/localAiGateway';
+import {localAiCall,localAiConfigured,loadLocalAiConnection} from './lib/localAiGateway';
 
 async function authenticatedRequest(url,options={}){
  const {data,error}=await supabase.auth.getSession();
@@ -14,6 +14,8 @@ async function authenticatedRequest(url,options={}){
 function asBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||'').split(',')[1]||'');r.onerror=()=>reject(Error('Could not read PDF'));r.readAsDataURL(file);});}
 export default function CreativeManualLibrary(){
  const access=useContext(EmployeeAccessContext);
+ const [aiReady,setAiReady]=useState(localAiConfigured());
+ useEffect(()=>{loadLocalAiConnection().then(c=>setAiReady(c.configured)).catch(()=>setAiReady(false));},[]);
  const canUpload=['admin','manager'].includes(access?.role);
  const [query,setQuery]=useState(''),[results,setResults]=useState([]),[sources,setSources]=useState([]);
  const [question,setQuestion]=useState(''),[answer,setAnswer]=useState(null);
@@ -59,9 +61,9 @@ export default function CreativeManualLibrary(){
    <strong>{row.source?.title||'Manual'} · Page {row.page_number}</strong><span>{row.content.slice(0,420)}{row.content.length>420?'…':''}</span><small>Verified indexed excerpt, not a generated instruction</small>
   </article>)}{!results.length&&<p>Search to see available PDF citations. Newly added manuals may require indexing first.</p>}</div>
   <div className="cos-knowledge-editor"><h3>Ask your local knowledge model</h3>
-   <p>{localAiConfigured()?'Private AI endpoint configured; answers cite indexed manuals and approved staff documents.':'Local AI endpoint has not been configured. You can still search manuals directly.'}</p>
+   <p>{aiReady?'Private AI endpoint configured; answers cite indexed manuals and approved staff documents.':'Local AI endpoint has not been configured. You can still search manuals directly.'}</p>
    <label className="cos-field">Question<input value={question} onChange={e=>setQuestion(e.target.value)} maxLength={240} placeholder="What setting does the approved material guide recommend?"/></label>
-   <button type="button" disabled={busy||!localAiConfigured()||question.trim().length<3} onClick={ask}>Ask local AI</button>
+   <button type="button" disabled={busy||!aiReady||question.trim().length<3} onClick={ask}>Ask local AI</button>
    {answer&&<div><h4>Answer — local model</h4><p style={{whiteSpace:'pre-wrap'}}>{answer.answer}</p><h4>Sources used</h4><ol>{(answer.citations||[]).map(row=><li key={row.id}><strong>[{row.id}] {row.title}</strong>{row.page?' · Page '+row.page:''}<p>{row.excerpt?.slice(0,320)}</p></li>)}</ol></div>}
   </div>
   {canUpload&&<div className="cos-knowledge-editor">
