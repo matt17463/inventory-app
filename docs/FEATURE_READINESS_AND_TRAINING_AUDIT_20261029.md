@@ -43,7 +43,7 @@ The October 22 WordPress audit observed 51 installed plugins (50 active) at that
 
 1. Scheduled unattended AI product discovery is explicitly marked not implemented in the research guide. It requires safe provider budgets and authorization before scheduled activation.
 2. Local AI activation requires a powered host, Ollama download, private reverse proxy and permitted workstation/Tailscale connection. Source code cannot complete the physical setup.
-3. Scanned, image-only PDF manuals still need a separately authorized OCR pipeline. The indexer handles approved PDF text but not automatic OCR.
+3. Scanned, image-only PDF manuals still need a reviewed OCR step. A new optional local OCR preparation helper makes approved copies using open-source tools, but automatic on-upload OCR and source verification are not implemented.
 4. Woo checkout-to-traveler must be accepted in an isolated fixture with exact graphic binding, no real charge or email, and observed final traveler.
 5. Epson and D530 Pro need live Pi queue, 4x6 and letter print tests. Device network attachment is not proof of a working print agent.
 6. CO-1006-type billing total mismatch should be resolved against the actual QuickBooks invoice; never override customer invoice verification to print.
