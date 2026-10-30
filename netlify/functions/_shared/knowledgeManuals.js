@@ -92,7 +92,7 @@ export async function scanManualPrefix(db,{limit=3}={}){
     const page=await r2Client().send(new ListObjectsV2Command({Bucket:r2BucketName(),Prefix:MANUAL_PREFIX,MaxKeys:250,ContinuationToken:cursor}));
     for(const object of page.Contents||[]){
       if(!allowlistedPdfKey(object.Key)||Number(object.Size)>MANUAL_MAX_BYTES)continue;
-      items.push(object.Key);
+      items.push({key:object.Key,etag:String(object.ETag||'').replaceAll('"','')});
     }
     cursor=page.IsTruncated?page.NextContinuationToken:undefined;
   }while(cursor&&items.length<600);
@@ -100,12 +100,13 @@ export async function scanManualPrefix(db,{limit=3}={}){
   if(known.error)throw known.error;
   const byKey=new Map((known.data||[]).map(r=>[r.source_key,r]));
   let processed=0;const results=[];
-  for(const key of items){
+  for(const object of items){
     if(processed>=limit)break;
+    const key=object.key;
     const existing=byKey.get(key);
     // Every scan refreshes entries with errors, but avoids reprocessing unchanged indexed items;
     // content digest is verified when the candidate runs.
-    if(existing?.status==='indexed')continue;
+    if(existing?.status==='indexed'&&existing.object_etag===object.etag)continue;
     try{results.push({key,...await ingestManual(db,key)});}catch(e){results.push({key,status:'error',message:String(e.message||'Index failed').slice(0,200)});}
     processed++;
   }
