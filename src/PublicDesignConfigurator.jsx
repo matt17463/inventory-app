@@ -82,7 +82,8 @@ export default function PublicDesignConfigurator(){
         website:form.website,customer_confirmation:{approved:true},
         items:[{garment_type:product.garment,size:form.size,garment_color:form.color.replace(/_/g,' '),
           quantity:Math.trunc(Number(form.quantity)),notes:'Custom design inquiry, staff quote/approval required.'}],
-        attachments:artwork?[{name:artwork.file.name,type:artwork.file.type,data:artwork.base64}]:[],
+        attachments:[...(artwork?[{name:artwork.file.name,type:artwork.file.type,data:artwork.base64}]:[]),
+          {name:'customer-design-concept.png',type:'image/png',data:canvas.current.toDataURL('image/png').split(',')[1]}],
       };
       const response=await fetch('/.netlify/functions/client-order-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
       const data=await response.json().catch(()=>({}));
