@@ -15,7 +15,7 @@ export function isOpenJob(row = {}) {
 export function isOpenClientOrder(row = {}) {
   return ![row.status, row.linked_job_status, row.linked_job_production_status, row.linked_job_woo_status].some(isTerminalWorkStatus) &&
     !row.linked_job_production_completed_at &&
-    !Boolean(row.closed_at || row.voided_at || row.cancelled_at);
+    !(row.closed_at || row.voided_at || row.cancelled_at);
 }
 export function isOpenCalendarItem(row = {}, type) {
   if (type === 'job') return isOpenJob(row);
