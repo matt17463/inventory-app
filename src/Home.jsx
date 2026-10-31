@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import HomeClientOrderNotice from './HomeClientOrderNotice';
 import HomeUpcomingCommitments from './HomeUpcomingCommitments';
+import { isOpenClientOrder } from './lib/openWorkStatus';
+import './ArtworkHub.css';
 
 const money = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 const number = (value) => new Intl.NumberFormat('en-US').format(Number(value || 0));
@@ -41,6 +43,7 @@ function HomeLogo() {
 export default function Home() {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
+  const [pendingClientOrders, setPendingClientOrders] = useState(null);
   const [error, setError] = useState('');
   const [artworkActivity, setArtworkActivity] = useState([]);
   const [artworkSeenAt, setArtworkSeenAt] = useState('');
@@ -48,7 +51,7 @@ export default function Home() {
   async function loadStats() {
     setLoading(true);
     setError('');
-    const [statsResult, activityResult] = await Promise.all([
+    const [statsResult, activityResult, clientResult] = await Promise.all([
       supabase.rpc('sc_home_dashboard_stats'),
       supabase
         .from('sc_artwork_system_handoffs')
@@ -56,6 +59,7 @@ export default function Home() {
         .eq('source_type', 'request')
         .order('received_at', { ascending: false })
         .limit(8),
+      supabase.from('sc_client_order_requests_detail').select('id,status,generated_job_id'),
     ]);
 
     if (statsResult.error) {
@@ -70,6 +74,38 @@ export default function Home() {
       setArtworkActivity([]);
     } else {
       setArtworkActivity(activityResult.data || []);
+    }
+    if (clientResult.error) {
+      setPendingClientOrders(null);
+      setError((current) => current || `Client order count unavailable: ${clientResult.error.message}`);
+    } else {
+      const requests = clientResult.data || [];
+      const ids = [...new Set(requests.map((row) => Number(row.generated_job_id))
+        .filter((id) => Number.isSafeInteger(id) && id > 0))];
+      let linkedJobs = [];
+      let linkedError = null;
+      if (ids.length) {
+        const result = await supabase.from('jobs')
+          .select('id,status,production_status,production_completed_at,woo_status')
+          .in('id', ids);
+        linkedError = result.error;
+        linkedJobs = result.data || [];
+      }
+      if (linkedError) {
+        setPendingClientOrders(null);
+        setError((current) => current || `Linked client order status unavailable: ${linkedError.message}`);
+      } else {
+        const byJob = new Map(linkedJobs.map((job) => [String(job.id), job]));
+        setPendingClientOrders(requests.filter((row) => {
+          const job = byJob.get(String(row.generated_job_id)) || {};
+          return isOpenClientOrder({
+            ...row, linked_job_status: job.status,
+            linked_job_production_status: job.production_status,
+            linked_job_production_completed_at: job.production_completed_at,
+            linked_job_woo_status: job.woo_status,
+          });
+        }).length);
+      }
     }
     setLoading(false);
   }
@@ -121,7 +157,7 @@ export default function Home() {
       value: number(stats.low_stock_count),
       help: 'Blank products at or below their reorder threshold.',
       tone: 'warning',
-      to: '/purchase-orders/new',
+      to: '/low-stock',
     },
     {
       label: 'Inventory Value',
@@ -144,6 +180,13 @@ export default function Home() {
       tone: 'artwork',
       to: '/artwork-requests',
     },
+    {
+      label: 'Pending Client Orders',
+      value: pendingClientOrders == null ? '—' : number(pendingClientOrders),
+      help: 'Open client requests; completed and cancelled work is excluded.',
+      tone: 'pullsheets',
+      to: '/client-orders',
+    },
   ];
 
   return (
@@ -165,6 +208,13 @@ export default function Home() {
             <Link className="sc-btn sc-btn-purple" to="/artwork-requests">Artwork Queue</Link>
             <Link className="sc-btn" to="/production-board">Production Board</Link>
           </div>
+          <div className="sc-hero-actions sc-home-secondary-actions" aria-label="More common tasks">
+            <Link className="sc-btn" to="/artwork-hub">Artwork Hub</Link>
+            <Link className="sc-btn" to="/dtf-studio">Artwork Prep / DTF</Link>
+            <Link className="sc-btn" to="/mockup-studio">Mockup Studio</Link>
+            <Link className="sc-btn" to="/client-orders">Client Orders</Link>
+            <Link className="sc-btn" to="/print-center">Print Orders</Link>
+          </div>
         </div>
       </section>
 
@@ -176,35 +226,6 @@ export default function Home() {
 
       <HomeClientOrderNotice />
       <HomeUpcomingCommitments />
-
-      {artworkActivity.length > 0 && (
-        <section className="sc-panel sc-panel-color-left">
-          <div className="sc-panel-header">
-            <div>
-              <div className="sc-kicker">Artwork Notifications</div>
-              <h3>{unreadArtworkActivity > 0 ? `${unreadArtworkActivity} artwork update${unreadArtworkActivity === 1 ? '' : 's'} need attention` : 'Recent artwork activity'}</h3>
-              <p>New requests and meaningful Artwork System changes appear here as soon as WordPress sends the webhook.</p>
-            </div>
-            <div className="sc-hero-actions">
-              <Link className="sc-btn sc-btn-purple" to="/artwork-requests">Open Artwork Queue</Link>
-              {unreadArtworkActivity > 0 && <button className="sc-btn" type="button" onClick={markArtworkActivityViewed}>Mark viewed</button>}
-            </div>
-          </div>
-          <div className="sc-workflow-list sc-workflow-list-colored">
-            {artworkActivity.slice(0, 5).map((row) => {
-              const request = row.payload?.artwork_request || {};
-              const project = request.organization || request.customer_name || request.project_type || `Artwork request #${row.source_id}`;
-              const isUnread = !artworkSeenAt || new Date(row.received_at).getTime() > new Date(artworkSeenAt).getTime();
-              return (
-                <div key={row.id} style={{ padding: '10px 0' }}>
-                  <strong>{isUnread ? 'NEW · ' : ''}{artworkActivityLabel(row)}</strong>
-                  <span style={{ display: 'block' }}>{project} · WordPress #{row.source_id} · {new Date(row.received_at).toLocaleString()}</span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       <section className="sc-stat-grid sc-stat-grid-home">
         {cards.map((card) => (
@@ -254,9 +275,44 @@ export default function Home() {
             <Link to="/artwork-bridge">Artwork Bridge</Link>
             <Link to="/product-data-health">Product Data Health</Link>
             <Link to="/capacity-planning">Capacity Planning</Link>
+            <Link to="/artwork-hub">All Artwork Tools</Link>
+            <Link to="/dtf-studio">Prepare DTF Artwork</Link>
+            <Link to="/mockup-studio">Create Mockup</Link>
+            <Link to="/client-orders">Review Client Orders</Link>
+            <Link to="/print-center">Print Order Documents</Link>
           </div>
         </div>
       </section>
+
+      {artworkActivity.length > 0 && (
+        <section className="sc-panel sc-panel-color-left">
+          <div className="sc-panel-header">
+            <div>
+              <div className="sc-kicker">Artwork Notifications</div>
+              <h3>{unreadArtworkActivity > 0 ? `${unreadArtworkActivity} artwork update${unreadArtworkActivity === 1 ? '' : 's'} need attention` : 'Recent artwork activity'}</h3>
+              <p>New requests and meaningful Artwork System changes appear here as soon as WordPress sends the webhook.</p>
+            </div>
+            <div className="sc-hero-actions">
+              <Link className="sc-btn sc-btn-purple" to="/artwork-requests">Open Artwork Queue</Link>
+              {unreadArtworkActivity > 0 && <button className="sc-btn" type="button" onClick={markArtworkActivityViewed}>Mark viewed</button>}
+            </div>
+          </div>
+          <div className="sc-workflow-list sc-workflow-list-colored">
+            {artworkActivity.slice(0, 5).map((row) => {
+              const request = row.payload?.artwork_request || {};
+              const project = request.organization || request.customer_name || request.project_type || `Artwork request #${row.source_id}`;
+              const isUnread = !artworkSeenAt || new Date(row.received_at).getTime() > new Date(artworkSeenAt).getTime();
+              return (
+                <div key={row.id} style={{ padding: '10px 0' }}>
+                  <strong>{isUnread ? 'NEW · ' : ''}{artworkActivityLabel(row)}</strong>
+                  <span style={{ display: 'block' }}>{project} · WordPress #{row.source_id} · {new Date(row.received_at).toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
     </div>
   );
 }

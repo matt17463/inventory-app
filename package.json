@@ -47,7 +47,7 @@
     "test:mockup-downloads": "node --test scripts/tests/mockup-download-all.test.mjs",
     "test:artwork-notifications": "node --test scripts/tests/artwork-home-notifications.test.mjs",
     "test:artwork-downloads": "node --test scripts/tests/artwork-mockup-download.test.mjs",
-    "test:operations-client-orders": "node --test scripts/tests/operations-calendar-client-orders.test.mjs",
+    "test:operations-client-orders": "node --test scripts/tests/operations-calendar-client-orders.test.mjs scripts/tests/home-artwork-hub.test.mjs",
     "test:client-order-pricing-conversion": "node --test scripts/tests/client-order-pricing-conversion.test.mjs",
     "test:client-order-test-mode": "node --test scripts/tests/client-order-test-mode.test.mjs",
     "test:client-order-quote-summary": "node --test scripts/tests/client-order-quote-summary.test.mjs",

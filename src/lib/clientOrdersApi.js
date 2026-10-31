@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { isOpenJob } from './openWorkStatus';
 import { authenticatedFunctionFetch } from './netlifyFunctionClient';
 import { createManualInvoiceOrder, searchManualInvoiceProducts } from './manualOrdersApi';
 import { shouldSimulateWrites } from './testingMode';
@@ -499,13 +500,29 @@ export async function listCalendarData() {
     return result.data || [];
   };
   const [jobs, purchaseOrders, artwork, clientOrders, tasks] = await Promise.all([
-    safe(supabase.from('jobs').select('id,job_name,customer_name,woocommerce_order_id,due_date,status,updated_at').not('due_date','is',null)),
+    safe(supabase.from('jobs').select('id,job_name,customer_name,woocommerce_order_id,due_date,status,production_status,production_completed_at,woo_status,updated_at').not('due_date','is',null)),
     safe(supabase.from('phase1_purchase_orders_with_totals').select('*').not('expected_at','is',null)),
     safe(supabase.from('sc_artwork_system_requests').select('*')),
     safe(supabase.from('sc_client_order_requests_detail').select('*').not('desired_completion_date','is',null)),
     safe(supabase.from('phase5_tasks_detail').select('*').not('due_at','is',null)),
   ]);
-  return { jobs, purchaseOrders, artwork, clientOrders, tasks };
+  const linkedIds = [...new Set(clientOrders.map((row) => Number(row.generated_job_id))
+    .filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const linkedJobs = linkedIds.length
+    ? await safe(supabase.from('jobs').select('id,status,production_status,production_completed_at,woo_status').in('id', linkedIds))
+    : [];
+  const byJob = new Map([...jobs, ...linkedJobs].map((job) => [String(job.id), job]));
+  const resolvedClientOrders = clientOrders.map((row) => {
+    const linkedJob = byJob.get(String(row.generated_job_id));
+    return linkedJob ? {
+      ...row,
+      linked_job_status: linkedJob.status,
+      linked_job_production_status: linkedJob.production_status,
+      linked_job_production_completed_at: linkedJob.production_completed_at,
+      linked_job_woo_status: linkedJob.woo_status,
+    } : row;
+  });
+  return { jobs: jobs.filter(isOpenJob), purchaseOrders, artwork, clientOrders: resolvedClientOrders, tasks };
 }
 
 export async function listClientOrderAttachments(requestId) {

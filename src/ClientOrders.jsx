@@ -20,6 +20,7 @@ import {
 import { getTestingModeSettings, testingModeLabel } from './lib/testingMode';
 import { calculateSalesTax, SALES_TAX_PERCENT } from './lib/salesTax';
 import { supabase } from './supabaseClient';
+import { isOpenClientOrder, TERMINAL_WORK_STATUSES } from './lib/openWorkStatus';
 import './operationsFeatures.css';
 
 const statuses=['submitted','review','pricing','quote_sent','awaiting_approval','awaiting_payment','artwork','ready_for_production','production','ready_pickup','completed','cancelled'];
@@ -27,8 +28,8 @@ const label=(value)=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>
 const date=(value)=>value?new Date(value+'T12:00:00').toLocaleDateString():'—';
 const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
 const clean=(value)=>String(value??'').trim();
-const TERMINAL_ORDER_STATUSES=new Set(['completed','complete','production_complete','closed','done','archived','void','voided','cancelled','canceled','refunded','failed']);
-const isTerminalOrder=(row)=>[row?.status,row?.linked_job_status].some((status)=>TERMINAL_ORDER_STATUSES.has(clean(status).toLowerCase().replaceAll(' ','_')))||Boolean(row?.closed_at||row?.voided_at||row?.cancelled_at);
+const TERMINAL_ORDER_STATUSES = TERMINAL_WORK_STATUSES;
+const isTerminalOrder = (row) => !isOpenClientOrder(row);
 
 function lineSavePatch(item){
   return {
@@ -109,12 +110,15 @@ export default function ClientOrders(){
       let data=orders;
       const jobIds=[...new Set(orders.map((row)=>Number(row.generated_job_id)).filter((id)=>Number.isSafeInteger(id)&&id>0))];
       if(jobIds.length){
-        const linked=await supabase.from('jobs').select('id,status').in('id',jobIds);
+        const linked=await supabase.from('jobs').select('id,status,production_status,production_completed_at,woo_status').in('id',jobIds);
         if(linked.error){
           setMessage('Could not verify linked production status. Closed jobs might still appear; refresh or check Work Hub.');
         }else{
-          const byId=new Map((linked.data||[]).map((job)=>[String(job.id),job.status]));
-          data=orders.map((row)=>({...row,linked_job_status:byId.get(String(row.generated_job_id))||''}));
+          const byId=new Map((linked.data||[]).map((job)=>[String(job.id),job]));
+          data=orders.map((row)=>{
+            const job=byId.get(String(row.generated_job_id))||{};
+            return {...row,linked_job_status:job.status||'',linked_job_production_status:job.production_status||'',linked_job_production_completed_at:job.production_completed_at||null,linked_job_woo_status:job.woo_status||''};
+          });
         }
       }
       setRows(data);

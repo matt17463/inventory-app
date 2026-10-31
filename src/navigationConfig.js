@@ -2,6 +2,7 @@ export const quickActions = [
   { label: 'Work Hub', path: '/work-hub', icon: '🧭' },
   { label: 'Command', path: '/command-center', icon: '🧭' },
   { label: 'Creative Operations', path: '/creative-operations', icon: '✨' },
+  { label: 'Artwork Hub', path: '/artwork-hub', icon: '🎨' },
   { label: 'Exceptions', path: '/exception-center', icon: '🚨' },
   { label: 'Scan', path: '/scan', icon: '📷' },
   { label: 'Receive', path: '/add-item', icon: '📦' },
@@ -129,6 +130,7 @@ export const navSections = [
     label: 'Artwork',
     icon: '🎨',
     items: [
+      { label: 'Artwork Hub — All Tools', path: '/artwork-hub', keywords: 'artwork design prepress graphic logo mockup DTF UV preflight approval hub landing page' },
       { label: 'Mockup Studio', path: '/mockup-studio', keywords: 'mockup clothing tee hoodie drinkware hat logo artwork ai caption woocommerce' },
       { label: 'DTF Prep Studio', path: '/dtf-studio', keywords: 'DTF prepress source proof halftones alpha cleanup knockout shirt garment 300 DPI artwork processing' },
       { label: 'DTF Artwork Preflight', path: '/artwork-preflight', keywords: 'image png transparency white background remove 300dpi crop DTF artwork' },

@@ -11,6 +11,7 @@ const AddItemToBin = lazy(() => import('./AddItemToBin'));
 const ApprovalAutomation = lazy(() => import('./ApprovalAutomation'));
 const AssetStorageHealth = lazy(() => import('./AssetStorageHealth'));
 const ArtworkPluginBridge = lazy(() => import('./ArtworkPluginBridge'));
+const ArtworkHub = lazy(() => import('./ArtworkHub'));
 const ArtworkRequests = lazy(() => import('./ArtworkRequests'));
 const ClientGraphics = lazy(() => import('./ClientGraphics'));
 const OrderGraphicAssignment = lazy(() => import('./OrderGraphicAssignment'));
@@ -148,6 +149,7 @@ function EmployeeRoutes() {
     <Route path="/marketing" element={<MarketingWorkspace />} />
     <Route path="/product-event-center" element={<ProductDevelopmentCenter />} />
     <Route path="/creative-operations" element={<CreativeOperationsSuite />} />
+    <Route path="/artwork-hub" element={<ArtworkHub />} />
     <Route path="/dtf-studio" element={<DTFPrepStudio />} />
     <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
@@ -204,6 +206,7 @@ function EmployeeRoutes() {
       <Route path="/client-orders" element={<ClientOrders />} />
       <Route path="/job-costing" element={<JobCosting />} />
       <Route path="/artwork-requests" element={<ArtworkRequests />} />
+      <Route path="/artwork-hub" element={<ArtworkHub />} />
       <Route path="/catalog-workbench" element={<CatalogWorkbench />} />
       <Route path="/shop-equipment" element={<EquipmentCenter />} />
       <Route path="/shop-tv" element={<ShopTvMode />} />
