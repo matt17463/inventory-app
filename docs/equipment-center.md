@@ -23,7 +23,7 @@ The Home Assistant YAML dashboard is at `/skilled-crafting/business` with Busine
 
 ## Remote access
 
-- Mac: `vnc://100.117.18.123:15900` launches macOS Screen Sharing through the Pi. The user explicitly approved the relay; it listens only on the Pi’s Tailscale address and forwards to business `192.168.1.155:5900`. Mac authentication remains required. The service is enabled at boot. Its protocol handshake was verified and a Mac desktop session worked through a temporary Pi SSH tunnel. Direct `vnc://100.106.153.72` remains an alternative. Keep the Mac powered, awake, lid open and Screen Sharing enabled. The Pi relay depends on the Mac’s LAN address staying `.155`; verify its router reservation before relying on it after lease changes.
+- Mac: `vnc://100.117.18.123:15900` launches macOS Screen Sharing through the Pi. The user explicitly approved the relay; it listens only on the Pi’s Tailscale address and forwards to the Mac’s stable Tailscale endpoint `100.106.153.72:5900`. Mac authentication remains required. The service is enabled at boot. Its protocol handshake was verified and a Mac desktop session worked through a temporary Pi SSH tunnel. Direct `vnc://100.106.153.72` remains an alternative. Keep the Mac powered, awake, lid open and Screen Sharing enabled. The relay uses the Mac’s Tailscale address so DHCP lease changes do not change its destination.
 - Pi terminal: `ssh://mcdanielm@100.117.18.123` invokes the system SSH handler. Browser/OS prompts may appear.
 - Pi desktop: Raspberry Pi Connect is installed and was enabled with the user's approval. The user linked it to their Raspberry Pi ID; signed-in status, allowed screen sharing, and an actual browser desktop session were verified.
 
