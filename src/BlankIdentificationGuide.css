@@ -62,3 +62,27 @@
 .sc-blank-guide-editor-actions {display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.9rem;}
 .sc-blank-guide-editor-actions button {min-height:38px;padding:.5rem .8rem;cursor:pointer;}
 @media print {.sc-blank-guide-photo-editor,.sc-blank-guide-edit-button {display:none!important}.sc-blank-guide-identifiers {border:0;background:transparent}.sc-blank-guide-identifiers > summary {display:none!important}.sc-blank-guide-identifiers table {display:table!important}}
+
+/* Scope shell resets to this guide so label and traveler page sizes remain independent. */
+@media print {
+  html:has(.sc-blank-guide),body:has(.sc-blank-guide) {page:sc-blank-reference; color:#111!important; background:#fff!important;}
+  body:has(.sc-blank-guide) :is(.employee-signout,.employee-access-notice,.sc-desktop-sidebar,.sc-mobile-drawer,.sc-drawer-backdrop,.sc-topbar,.sc-guided-training-bar,.sc-guided-training-coach,footer[aria-label="Legal information"]) {display:none!important;}
+  body:has(.sc-blank-guide) :is(#root,.sc-app-shell,.sc-main-shell,.sc-page-shell,.sc-blank-guide) {display:block!important; width:100%!important; max-width:none!important; min-height:0!important; margin:0!important; padding:0!important; background:#fff!important;}
+  .sc-blank-guide::before,.sc-blank-guide::after,.sc-blank-guide > p {display:none!important;}
+  .sc-blank-guide-sheet {font-size:9pt!important; line-height:1.25!important;}
+  .sc-blank-guide-sheet :is(p,small,span,strong,h2,h3) {color:#111!important;}
+  .sc-blank-guide-heading {padding-bottom:5px; break-inside:avoid;}
+  .sc-blank-guide-heading h2 {font-size:15pt!important;}
+  .sc-blank-guide-sheet h3 {font-size:10pt!important; margin:6px 0 3px!important;}
+  .sc-blank-guide-sheet p {margin:3px 0!important;}
+  .sc-blank-guide-top {grid-template-columns:160px minmax(0,1fr)!important; gap:12px; margin:6px 0;}
+  .sc-blank-guide-photo {height:130px; padding:4px;}
+  .sc-blank-guide-top small {font-size:8pt;}
+  .sc-blank-guide-palettes {gap:6px; margin:4px 0;}
+  .sc-blank-guide-color,.sc-blank-guide-color:has(img) {width:80px;}
+  .sc-blank-guide-color img {width:45px; height:55px;}
+  .sc-blank-guide-identifiers {margin:8px 0;}
+  .sc-blank-guide-sheet table {font-size:8pt;}
+  .sc-blank-guide-sheet :is(td,th) {padding:4px;}
+  .sc-blank-guide-checklist,.sc-blank-guide-signoff {font-size:8pt; gap:6px; padding:5px 0;}
+}
