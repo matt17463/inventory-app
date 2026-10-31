@@ -1,0 +1,1578 @@
+[
+  {
+    "brand": "Adidas",
+    "style": "A432",
+    "colors": [
+      {
+        "name": "Green",
+        "variants": 1
+      },
+      {
+        "name": "Grey Heather",
+        "variants": 2
+      },
+      {
+        "name": "Navy",
+        "variants": 1
+      },
+      {
+        "name": "Red",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Adidas",
+    "style": "AB602",
+    "colors": [
+      {
+        "name": "Grey/Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Adidas",
+    "style": "AT101",
+    "colors": [
+      {
+        "name": "BLACK/WHITE",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Adidas",
+    "style": "AT203",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 11
+      },
+      {
+        "name": "BLACK/WHITE",
+        "variants": 2
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 6
+      },
+      {
+        "name": "Dark Grey",
+        "variants": 7
+      },
+      {
+        "name": "Green",
+        "variants": 7
+      },
+      {
+        "name": "Medium Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 7
+      },
+      {
+        "name": "Team Grey",
+        "variants": 7
+      },
+      {
+        "name": "White",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Adidas",
+    "style": "AT208",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "Adidas",
+    "style": "AT209",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Adidas",
+    "style": "CY5888",
+    "colors": [
+      {
+        "name": "Maroon",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Alleson Athletic",
+    "style": "LP001A",
+    "colors": [
+      {
+        "name": "Maroon/White",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Alleson Athletic",
+    "style": "LP001Y",
+    "colors": [
+      {
+        "name": "Maroon/White",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Atlantis",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Forest Green",
+        "variants": 2
+      },
+      {
+        "name": "Grey",
+        "variants": 1
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Augusta",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Black/Green Inside",
+        "variants": 1
+      },
+      {
+        "name": "Grey",
+        "variants": 1
+      },
+      {
+        "name": "Maroon",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Badger",
+    "style": "1575",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 17
+      }
+    ]
+  },
+  {
+    "brand": "Badger",
+    "style": "230100",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "BLACK/WHITE",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Badger",
+    "style": "272500",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Badger",
+    "style": "272600",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Badger",
+    "style": "710100",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 4
+      },
+      {
+        "name": "BLACK/WHITE",
+        "variants": 5
+      }
+    ]
+  },
+  {
+    "brand": "Badger",
+    "style": "710200",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 5
+      },
+      {
+        "name": "BLACK/WHITE",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Bella + Canvas",
+    "style": "3001",
+    "colors": [
+      {
+        "name": "Athletic Gray",
+        "variants": 11
+      },
+      {
+        "name": "Athletic Grey",
+        "variants": 11
+      },
+      {
+        "name": "Blue",
+        "variants": 3
+      },
+      {
+        "name": "Graphite/Black",
+        "variants": 7
+      },
+      {
+        "name": "Light Grey",
+        "variants": 11
+      },
+      {
+        "name": "Light Pink",
+        "variants": 11
+      },
+      {
+        "name": "NA",
+        "variants": 5
+      },
+      {
+        "name": "Navy Blue",
+        "variants": 11
+      },
+      {
+        "name": "Purple",
+        "variants": 1
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 16
+      }
+    ]
+  },
+  {
+    "brand": "Bella + Canvas",
+    "style": "6400",
+    "colors": [
+      {
+        "name": "Asphalt Grey",
+        "variants": 6
+      },
+      {
+        "name": "Light Pink",
+        "variants": 6
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 6
+      },
+      {
+        "name": "Turquoise",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "Bella + Canvas",
+    "style": "6405",
+    "colors": [
+      {
+        "name": "Asphalt Grey",
+        "variants": 6
+      },
+      {
+        "name": "Light Pink",
+        "variants": 6
+      },
+      {
+        "name": "NA",
+        "variants": 5
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "5100",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 2
+      },
+      {
+        "name": "Forest Green",
+        "variants": 1
+      },
+      {
+        "name": "Kelly Green",
+        "variants": 3
+      },
+      {
+        "name": "Red",
+        "variants": 2
+      },
+      {
+        "name": "Silver",
+        "variants": 1
+      },
+      {
+        "name": "Yellow",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "510000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Forest Green",
+        "variants": 3
+      },
+      {
+        "name": "Kelly Green",
+        "variants": 8
+      },
+      {
+        "name": "Red",
+        "variants": 3
+      },
+      {
+        "name": "Silver",
+        "variants": 1
+      },
+      {
+        "name": "White",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "5200",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "520000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 6
+      },
+      {
+        "name": "Kelly Green",
+        "variants": 7
+      },
+      {
+        "name": "Red",
+        "variants": 2
+      },
+      {
+        "name": "Yellow",
+        "variants": 3
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "5600",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "560000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Kelly Green",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "C2 Sport",
+    "style": "5900",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 3
+      },
+      {
+        "name": "Kelly Green",
+        "variants": 4
+      }
+    ]
+  },
+  {
+    "brand": "Colortone",
+    "style": "1000Y",
+    "colors": [
+      {
+        "name": "Spider Blue",
+        "variants": 11
+      },
+      {
+        "name": "Spider Green",
+        "variants": 11
+      }
+    ]
+  },
+  {
+    "brand": "Colortone",
+    "style": "3001",
+    "colors": [
+      {
+        "name": "Spider Green",
+        "variants": 9
+      },
+      {
+        "name": "Spider Turquoise",
+        "variants": 9
+      }
+    ]
+  },
+  {
+    "brand": "Colortone",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Spider Blue",
+        "variants": 3
+      },
+      {
+        "name": "Spider Green",
+        "variants": 9
+      },
+      {
+        "name": "Spider Turquoise",
+        "variants": 9
+      }
+    ]
+  },
+  {
+    "brand": "Columbia",
+    "style": "208934",
+    "colors": [
+      {
+        "name": "Grey",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Core365",
+    "style": "CE701",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "Dri Duck",
+    "style": "5302",
+    "colors": [
+      {
+        "name": "Grey",
+        "variants": 5
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 4
+      }
+    ]
+  },
+  {
+    "brand": "Dri Duck",
+    "style": "5310",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Dri Duck",
+    "style": "5335",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Grey/Black",
+        "variants": 7
+      },
+      {
+        "name": "OLIVE/BLACK",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Flexfit",
+    "style": "6277",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 3
+      },
+      {
+        "name": "Grey/Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Flexfit",
+    "style": "8110",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "White",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Flexfit",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "18000",
+    "colors": [
+      {
+        "name": "Royal Blue",
+        "variants": 12
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "18500",
+    "colors": [
+      {
+        "name": "Azalea Pink",
+        "variants": 12
+      },
+      {
+        "name": "Blue",
+        "variants": 10
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 12
+      },
+      {
+        "name": "Columbia Blue",
+        "variants": 10
+      },
+      {
+        "name": "Dark Grey Heather",
+        "variants": 12
+      },
+      {
+        "name": "Heather Green",
+        "variants": 12
+      },
+      {
+        "name": "Kelly Green",
+        "variants": 7
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 12
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "18500B",
+    "colors": [
+      {
+        "name": "Royal Blue",
+        "variants": 4
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "18600",
+    "colors": [
+      {
+        "name": "Royal Blue",
+        "variants": 12
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "18600B",
+    "colors": [
+      {
+        "name": "Royal Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "6400",
+    "colors": [
+      {
+        "name": "Azalea Pink",
+        "variants": 9
+      },
+      {
+        "name": "Black",
+        "variants": 15
+      },
+      {
+        "name": "Cardinal Red",
+        "variants": 11
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 9
+      },
+      {
+        "name": "Forest Green",
+        "variants": 10
+      },
+      {
+        "name": "Graphite Heather",
+        "variants": 11
+      },
+      {
+        "name": "Grey",
+        "variants": 11
+      },
+      {
+        "name": "Heather Dark Grey",
+        "variants": 1
+      },
+      {
+        "name": "Heather Red",
+        "variants": 1
+      },
+      {
+        "name": "Irish Green",
+        "variants": 9
+      },
+      {
+        "name": "Maroon",
+        "variants": 10
+      },
+      {
+        "name": "Natural",
+        "variants": 10
+      },
+      {
+        "name": "Navy",
+        "variants": 11
+      },
+      {
+        "name": "Red",
+        "variants": 11
+      },
+      {
+        "name": "Sand",
+        "variants": 8
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 9
+      },
+      {
+        "name": "White",
+        "variants": 11
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "64000",
+    "colors": [
+      {
+        "name": "Cardinal Red",
+        "variants": 6
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 12
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "64000B",
+    "colors": [
+      {
+        "name": "Heather Dark Grey",
+        "variants": 1
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 12
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 12
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 12
+      }
+    ]
+  },
+  {
+    "brand": "Gildan",
+    "style": "SF000",
+    "colors": [
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Imperial",
+    "style": "18500",
+    "colors": [
+      {
+        "name": "Sport Grey",
+        "variants": 5
+      }
+    ]
+  },
+  {
+    "brand": "Imperial",
+    "style": "Trufit",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "4000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Black Camo",
+        "variants": 7
+      },
+      {
+        "name": "Snow Camo",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "EXP35SSZC",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "SF008",
+    "colors": [
+      {
+        "name": "Natural",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "SF4500Z",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "SF4600QZ",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Bone",
+        "variants": 7
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "SS4500",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Purple",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "SS4500Z",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Green",
+        "variants": 1
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Independent",
+    "style": "SS4600QZ",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 5
+      }
+    ]
+  },
+  {
+    "brand": "Independent Trading Co.",
+    "style": "SS3000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Charcoal",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Independent Trading Co.",
+    "style": "SS4001Y",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 2
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Independent Trading Co.",
+    "style": "SS4500",
+    "colors": [
+      {
+        "name": "Forest Green",
+        "variants": 2
+      },
+      {
+        "name": "Maroon",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Independent Trading Co.",
+    "style": "SS4600QZ",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Bone",
+        "variants": 1
+      },
+      {
+        "name": "Navy",
+        "variants": 4
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "J America",
+    "style": "8717",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      },
+      {
+        "name": "Oxford Grey",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "J Navy",
+    "style": "4528M",
+    "colors": [
+      {
+        "name": "Navy",
+        "variants": 1
+      },
+      {
+        "name": "Sport Grey",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "JPPlus",
+    "style": "Mug",
+    "colors": [
+      {
+        "name": "Blue",
+        "variants": 1
+      },
+      {
+        "name": "Red",
+        "variants": 1
+      },
+      {
+        "name": "White",
+        "variants": 2
+      },
+      {
+        "name": "White/Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "JPPlus",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "NA",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "JPPlus",
+    "style": "Sublimation",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "JPPlus",
+    "style": "Tumbler",
+    "colors": [
+      {
+        "name": "White",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "JPPlus",
+    "style": "Water Bottle",
+    "colors": [
+      {
+        "name": "White",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "3001",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 16
+      },
+      {
+        "name": "Columbia Blue",
+        "variants": 16
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 16
+      },
+      {
+        "name": "White",
+        "variants": 16
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "8717",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      },
+      {
+        "name": "Oxford Grey",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "BC3719",
+    "colors": [
+      {
+        "name": "Purple",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "DT810",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Forest Green",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "SF000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "NA",
+    "style": "SF4500Z",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Nexgen",
+    "style": "790",
+    "colors": [
+      {
+        "name": "Asphalt Grey",
+        "variants": 12
+      },
+      {
+        "name": "Dark Grey",
+        "variants": 12
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 12
+      },
+      {
+        "name": "White",
+        "variants": 12
+      }
+    ]
+  },
+  {
+    "brand": "Pacific",
+    "style": "601k",
+    "colors": [
+      {
+        "name": "Grey",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Pacific",
+    "style": "621k",
+    "colors": [
+      {
+        "name": "Grey",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Pacific",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Port&Co",
+    "style": "BG919",
+    "colors": [
+      {
+        "name": "Blue",
+        "variants": 1
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Port&Co",
+    "style": "PC78YP",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 5
+      },
+      {
+        "name": "Grey",
+        "variants": 5
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 5
+      }
+    ]
+  },
+  {
+    "brand": "Q-Tees",
+    "style": "Q4400",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Navy",
+        "variants": 1
+      },
+      {
+        "name": "Red",
+        "variants": 1
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Q-Tees",
+    "style": "QTB6000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Navy",
+        "variants": 1
+      },
+      {
+        "name": "Red",
+        "variants": 1
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Richardson",
+    "style": "112",
+    "colors": [
+      {
+        "name": "Black/Grey",
+        "variants": 1
+      },
+      {
+        "name": "Dark Grey/Black",
+        "variants": 1
+      },
+      {
+        "name": "Dark Grey/Navy",
+        "variants": 1
+      },
+      {
+        "name": "Light Grey/Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Richardson",
+    "style": "112Y",
+    "colors": [
+      {
+        "name": "Grey Heather",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Richardson",
+    "style": "8717",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      },
+      {
+        "name": "Oxford Grey",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "Richardson",
+    "style": "AT203",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 6
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 6
+      },
+      {
+        "name": "Navy",
+        "variants": 6
+      }
+    ]
+  },
+  {
+    "brand": "Richardson",
+    "style": "SF000",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      },
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Sport Tek",
+    "style": "ST941",
+    "colors": [
+      {
+        "name": "Charcoal Grey",
+        "variants": 7
+      },
+      {
+        "name": "Navy",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "Sport Tek",
+    "style": "YT200",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 5
+      },
+      {
+        "name": "Navy",
+        "variants": 3
+      },
+      {
+        "name": "Royal Blue",
+        "variants": 5
+      }
+    ]
+  },
+  {
+    "brand": "Sportsman",
+    "style": "SP12",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "Maroon",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Tultex",
+    "style": "202",
+    "colors": [
+      {
+        "name": "Grey Heather",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Under Armour",
+    "style": "1384673",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 2
+      },
+      {
+        "name": "Castlerock Grey",
+        "variants": 2
+      }
+    ]
+  },
+  {
+    "brand": "Weatherproof",
+    "style": "6500",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 7
+      }
+    ]
+  },
+  {
+    "brand": "YPClassics",
+    "style": "6006",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      },
+      {
+        "name": "White",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "YPClassics",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Black",
+        "variants": 1
+      }
+    ]
+  },
+  {
+    "brand": "Yupoong",
+    "style": "NA",
+    "colors": [
+      {
+        "name": "Maroon/Grey",
+        "variants": 1
+      }
+    ]
+  }
+]

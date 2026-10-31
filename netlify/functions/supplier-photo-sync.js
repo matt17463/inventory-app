@@ -1,5 +1,6 @@
 // Deterministic first-pass product photo enrichment from public SanMar Sports catalog data.
 // Only exact supplier brand/style/color matches are allowed; no generic image guessing.
+import sharp from 'sharp';
 import { authorizeEmployee, createServiceClient, jsonResponse, auditFunctionSecurity } from './_shared/security.js';
 
 const SOURCE='https://sanmarsports.com';
@@ -18,7 +19,7 @@ function catalogStyle(brand,style) {
 function validImage(url) {
  try {
    const parsed=new URL(String(url||'').startsWith('//')?'https:'+url:url);
-   return parsed.protocol==='https:' && (parsed.hostname==='sanmarsports.com'||parsed.hostname==='www.sanmarsports.com'||parsed.hostname==='cdn.shopify.com')
+   return parsed.protocol==='https:' && !parsed.username&&!parsed.password&&(!parsed.port||parsed.port==='443') && (parsed.hostname==='sanmarsports.com'||parsed.hostname==='www.sanmarsports.com'||parsed.hostname==='cdn.shopify.com')
      && /\.(png|jpe?g|webp)$/i.test(parsed.pathname) ? parsed.href:'';
  } catch {return ''}
 }
@@ -27,7 +28,7 @@ function suitableTitle(product,brand,style){
  const vendor=normalize(product.vendor||'');
  const prefix=BRAND_NAMES.get(normalize(brand)) || normalize(brand);
  const trueStyle=normalize(style);
- return Boolean(prefix && (title.includes(prefix)||vendor.includes(prefix)|| (normalize(brand)==='portco'&&(title.includes('portco')||vendor.includes('portco')))) && title.includes(trueStyle));
+ return Boolean(prefix && (title.includes(prefix)||vendor.includes(prefix)|| (normalize(brand)==='portco'&&(title.includes('portco')||vendor.includes('portco')))) && new RegExp('(^|[^a-z0-9])'+trueStyle+'([^a-z0-9]|$)','i').test(String(product.title||'')));
 }
 function bestImage(product,style,color){
  const target=normalize(color), s=normalize(style);
@@ -48,6 +49,14 @@ function bestImage(product,style,color){
   return normalize(parts[0])===s && normalize(parts.slice(1).join(''))===target;
  });
  return matches.find(u=>/model_front/i.test(u)) || matches[0] || '';
+}
+async function usableImage(url){
+ const response=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(7000)});
+ if(!response.ok||!/^image\//i.test(response.headers.get('content-type')||''))return false;
+ const reader=response.body.getReader(),chunks=[];let length=0;
+ try{while(true){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>15*1024*1024)return false;chunks.push(value);}}finally{await reader.cancel();}
+ const info=await sharp(Buffer.concat(chunks)).metadata();
+ return info.width>=100&&info.height>=100;
 }
 async function loadBlanks(db) {
  const results=[];
@@ -99,15 +108,18 @@ export async function syncSupplierPhotoBatch(db,{cursor=0,limit=LIMIT,dryRun=fal
    if(!suitableTitle(product,group.brand,group.sourceStyle))throw Error('Supplier brand/style title mismatch');
    for(const [color,ids] of group.colors){
     const image=bestImage(product,group.sourceStyle,color);
-    if(!image)continue;
+    if(!image||!await usableImage(image))continue;
     record.colorsMatched++;colorsMatched++;
     if(!dryRun){
      for(let i=0;i<ids.length;i+=200){
-      const {data,error}=await db.from('blank_products').update({image_url:image})
-       .in('id',ids.slice(i,i+200)).is('image_url',null).is('image_storage_path',null)
-       .select('id');
+      // RPC enforces .is('image_url',null) and image_storage_path null plus manual locks.
+      const {data,error}=await db.rpc('sc_save_blank_photo',{
+       p_ids:ids.slice(i,i+200),p_patch:{image_url:image},p_manual:false,
+       p_source:{supplier_name:'SanMar Sports',source_product_url:SOURCE+'/products/'+group.sourceStyle,
+        capture_type:'direct',match_confidence:'exact',matched_by:'supplier-photo-sync',evidence:'Exact catalog brand/style/color match'},
+      });
       if(error)throw error;
-      const count=(data||[]).length;
+      const count=Number(data)||0;
       record.updated+=count;updated+=count;
      }
     }
@@ -119,7 +131,7 @@ export async function syncSupplierPhotoBatch(db,{cursor=0,limit=LIMIT,dryRun=fal
    groupsProcessed:results.length,totalEligibleGroups:groups.length,
    nextCursor:start+size<groups.length?start+size:null,results};
 }
-export {catalogStyle,suitableTitle,bestImage,validImage,fetchProduct};
+export {catalogStyle,suitableTitle,bestImage,validImage,fetchProduct,usableImage};
 export const handler=async(event)=>{
  if(event.httpMethod==='OPTIONS')return jsonResponse(204,{},event);
  if(event.httpMethod!=='POST')return jsonResponse(405,{message:'POST required'},event);
