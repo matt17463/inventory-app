@@ -6,6 +6,8 @@ const validStyle=(value)=>Boolean(photoKey(value)&& !['na','unknown','other','mi
 export function referenceIndex(rows){
  const byStyle=new Map();
  for(const row of rows){
+  if(row.photoEvidence?.review_status==='cleared')continue;
+  if(['likely','provisional'].includes(row.photoEvidence?.match_confidence))continue;
   if(!row.savedPhoto || !photoKey(row.brand)||!validStyle(row.style))continue;
   const styleKey=photoKey(row.brand)+':'+photoKey(row.style);
   if(!byStyle.has(styleKey))byStyle.set(styleKey,[]);
@@ -14,6 +16,8 @@ export function referenceIndex(rows){
  return byStyle;
 }
 export function referenceFor(blank,index){
+ if(blank.photoEvidence?.review_status==='cleared')return {photo:'',exactPhoto:'',kind:'missing',note:'Photo intentionally cleared'};
+ if(blank.savedPhoto&&['likely','provisional'].includes(blank.photoEvidence?.match_confidence))return {photo:blank.savedPhoto,exactPhoto:'',kind:blank.photoEvidence.match_confidence,note:blank.photoEvidence.match_confidence==='likely'?'Likely match — needs review':'PROVISIONAL — pictured color may differ'};
  if(blank.savedPhoto)return {photo:blank.savedPhoto,exactPhoto:blank.savedPhoto,kind:'assigned',note:blank.savedPhoto.includes('sanmarsports.com')?'Supplier photo — verify label':'Saved product photo'};
  const key=photoKey(blank.brand)+':'+photoKey(blank.style);
  if(!validStyle(blank.style)||!photoKey(blank.brand))return {photo:'',exactPhoto:'',kind:'missing',note:'No photo assigned'};

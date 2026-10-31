@@ -3,7 +3,7 @@ const groups=JSON.parse(await fs.readFile(new URL('./data/blank-photo-remaining-
 const normalized=(s)=>String(s??'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const wanted=new Map();
 for(const g of groups){
- if(!/^(Augusta|Augusta Sportswear|C2 Sport|Badger|Alleson Athletic|Nexgen)$/i.test(g.brand))continue;
+ if(!/^(Augusta|Augusta Sportswear|C2 Sport|Badger|Alleson Athletic|Nexgen|Pacific)$/i.test(g.brand))continue;
  const k=normalized(g.style);
  if(!k||k==='na')continue;
  if(!wanted.has(k))wanted.set(k,[]);
@@ -33,6 +33,7 @@ function extractCatalogEntries(html){
 }
 function vendorMatch(entry,group){
  const brand=normalized(entry.brand),g=normalized(group.brand);
+ if(g==='pacific')return brand==='pacificheadwear';
  if(g==='nexgen')return brand==='augusta' && normalized(entry.name).includes('nexgen');
  if(g==='badger')return brand==='badgersport'||brand==='badger';
  if(g==='augustasportswear')return brand==='augusta'||brand===g;
@@ -58,14 +59,14 @@ await Promise.all(Array.from({length:4},async()=>{
     for(const g of gList){
      if(!vendorMatch(item,g))continue;
      const key=g.brand+'|'+g.style;
-     seenStyles.set(key,{brand:g.brand,style:g.style,officialBrand:item.brand,officialTitle:item.name,officialSku:item.sku});
+     seenStyles.set(key,{brand:g.brand,style:g.style,officialBrand:item.brand,officialTitle:item.name,officialSku:item.sku,catalogEntry:item});
      let colors=[];
      try {colors=JSON.parse(String(item.color_images||'[]').replace(/&quot;/g,'"').replace(/&amp;/g,'&'))}
      catch{}
      for(const variant of g.colors){
-      const exact=colors.find(c=>normalized(c.color)===normalized(variant.name));
+      const exact=colors.find(c=>normalized(String(c.color).replace(/\s*\([^)]*\)\s*$/,''))===normalized(variant.name));
       if(!exact?.image)continue;
-      const image=exact.image;
+      const image=String(exact.image).replace(/\.jpg$/,'_aws_640.jpg');
       let parsed;
       try{parsed=new URL(image)}catch{continue}
       if(parsed.protocol!=='https:'|| !['static.momentecbrands.com','static.augustasportswear.com'].includes(parsed.hostname))continue;
@@ -78,6 +79,9 @@ await Promise.all(Array.from({length:4},async()=>{
   await new Promise(resolve=>setTimeout(resolve,110));
  }
 }));
+if(process.env.SUPPLIER_EVIDENCE_DIR){
+ await fs.writeFile(process.env.SUPPLIER_EVIDENCE_DIR+'/momentec-candidates.json',JSON.stringify({styles:[...seenStyles.values()],candidates:[...matched.values()]},null,2));
+}
 const verified=[];
 for(const record of matched.values()){
  try{
@@ -85,5 +89,5 @@ for(const record of matched.values()){
   if(head.ok && /^image\//i.test(head.headers.get('content-type')||''))verified.push(record);
  }catch{}
 }
-console.log('MOMENTEC_MATCH_SUMMARY',JSON.stringify({pages,errors,stylesFound:seenStyles.size,colorsCandidates:matched.size,verified:verified.length,styles:[...seenStyles.values()].slice(0,65)}));
+console.log('MOMENTEC_MATCH_SUMMARY',JSON.stringify({pages,errors,stylesFound:seenStyles.size,colorsCandidates:matched.size,verified:verified.length,styles:[...seenStyles.values()].slice(0,65).map(({catalogEntry,...style})=>{void catalogEntry;return style;})}));
 for(let i=0;i<verified.length;i+=12)console.log('MOMENTEC_IMAGE_BATCH:'+JSON.stringify(verified.slice(i,i+12)));
