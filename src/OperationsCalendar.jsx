@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listCalendarData } from './lib/clientOrdersApi';
+import { isOpenCalendarItem } from './lib/openWorkStatus';
 import './operationsFeatures.css';
 
 const todayKey=()=>new Date().toISOString().slice(0,10);
 const dayKey=(value)=>{if(!value)return''; const d=new Date(value.length===10?value+'T12:00:00':value); return Number.isNaN(d.getTime())?'':d.toISOString().slice(0,10);};
-const active=(status)=>!['completed','complete','cancelled','canceled','closed','received','done'].includes(String(status||'').toLowerCase());
 const typeMeta={
   order:{label:'Order due',className:'order'},
   client:{label:'Client request',className:'client'},
@@ -16,11 +16,11 @@ const typeMeta={
 
 function buildEvents(data){
   const events=[];
-  for(const row of data.jobs||[]){ if(row.due_date&&active(row.status)) events.push({id:'job-'+row.id,type:'order',date:dayKey(row.due_date),title:`Order ${row.woocommerce_order_id?'#'+row.woocommerce_order_id:'Job #'+row.id} · ${row.customer_name||row.job_name||'Customer'}`,status:row.status,href:'/pullsheets/'+row.id});}
-  for(const row of data.clientOrders||[]){ if(row.desired_completion_date&&active(row.status)) events.push({id:'client-'+row.id,type:'client',date:dayKey(row.desired_completion_date),title:`${row.order_number} · ${row.organization}`,status:row.status,detail:`${row.total_quantity||0} requested units`,href:'/client-orders'});}
-  for(const row of data.purchaseOrders||[]){ if(row.expected_at&&active(row.status)) events.push({id:'po-'+(row.id||row.purchase_order_id),type:'purchase',date:dayKey(row.expected_at),title:`PO ${row.po_number||row.id} · ${row.supplier_name||row.supplier||'Supplier'}`,status:row.status,detail:row.total_units_open!=null?`${row.total_units_open} units open`:'',href:'/purchase-orders/'+(row.id||row.purchase_order_id)+'/receive'});}
-  for(const row of data.artwork||[]){ const due=row.deadline_date||row.deadline; if(due&&active(row.app_status||row.status)) events.push({id:'art-'+row.id,type:'artwork',date:dayKey(due),title:`Artwork · ${row.organization||row.main_subject||row.project_type||'Request'}`,status:row.app_status||row.status,href:'/artwork-requests'});}
-  for(const row of data.tasks||[]){ if(row.due_at&&active(row.status)) events.push({id:'task-'+row.id,type:'task',date:dayKey(row.due_at),title:`Task · ${row.title||row.task_type||'Work item'}`,status:row.status,detail:row.priority!=null?`Priority ${row.priority}`:'',href:'/employee-tasks'});}
+  for(const row of data.jobs||[]){ if(row.due_date&&isOpenCalendarItem(row,'job')) events.push({id:'job-'+row.id,type:'order',date:dayKey(row.due_date),title:`Order ${row.woocommerce_order_id?'#'+row.woocommerce_order_id:'Job #'+row.id} · ${row.customer_name||row.job_name||'Customer'}`,status:row.status,href:'/pullsheets/'+row.id});}
+  for(const row of data.clientOrders||[]){ if(row.desired_completion_date&&isOpenCalendarItem(row,'client')) events.push({id:'client-'+row.id,type:'client',date:dayKey(row.desired_completion_date),title:`${row.order_number} · ${row.organization}`,status:row.status,detail:`${row.total_quantity||0} requested units`,href:'/client-orders'});}
+  for(const row of data.purchaseOrders||[]){ if(row.expected_at&&isOpenCalendarItem(row,'purchase')) events.push({id:'po-'+(row.id||row.purchase_order_id),type:'purchase',date:dayKey(row.expected_at),title:`PO ${row.po_number||row.id} · ${row.supplier_name||row.supplier||'Supplier'}`,status:row.status,detail:row.total_units_open!=null?`${row.total_units_open} units open`:'',href:'/purchase-orders/'+(row.id||row.purchase_order_id)+'/receive'});}
+  for(const row of data.artwork||[]){ const due=row.deadline_date||row.deadline; if(due&&isOpenCalendarItem(row,'artwork')) events.push({id:'art-'+row.id,type:'artwork',date:dayKey(due),title:`Artwork · ${row.organization||row.main_subject||row.project_type||'Request'}`,status:row.app_status||row.status,href:'/artwork-requests'});}
+  for(const row of data.tasks||[]){ if(row.due_at&&isOpenCalendarItem(row,'task')) events.push({id:'task-'+row.id,type:'task',date:dayKey(row.due_at),title:`Task · ${row.title||row.task_type||'Work item'}`,status:row.status,detail:row.priority!=null?`Priority ${row.priority}`:'',href:'/employee-tasks'});}
   return events.sort((a,b)=>a.date.localeCompare(b.date));
 }
 
