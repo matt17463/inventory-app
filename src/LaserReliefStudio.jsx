@@ -336,8 +336,8 @@ export default function LaserReliefStudio(){
          </select></label>
          <Slider label="Brush radius" value={brush.radius} min={1} max={80} unit=" px" onChange={v=>setBrush(s=>({...s,radius:v}))}/>
          <Slider label="Brush strength" value={brush.strength} min={0.01} max={0.5} step={0.01} onChange={v=>setBrush(s=>({...s,strength:v}))}/>
-         <div className="sc-laser-actions"><button type="button" className="sc-btn" onClick={undo} disabled={!undoStack.current.length}>Undo</button>
-           <button type="button" className="sc-btn" onClick={redo} disabled={!redoStack.current.length}>Redo</button></div>
+         <div className="sc-laser-actions"><button type="button" className="sc-btn" onClick={undo} disabled={!map||!canEdit||!active}>Undo</button>
+           <button type="button" className="sc-btn" onClick={redo} disabled={!map||!canEdit||!active}>Redo</button></div>
        </Section>
      </aside>
      <div className="sc-laser-main">
