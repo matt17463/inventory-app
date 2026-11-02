@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { materialSafety } from './lib/materialSettings';
 import { LASER_PRESETS,generateHeightmap,fromAiDepth,paintHeightmap,renderHeightmap,renderReliefPreview,
-  grayscaleImageData,export16BitPng,stlRelief,svgCutOutline,downloadBlob } from './lib/laserReliefEngine';
+  export16BitPng,stlRelief,svgCutOutline,downloadBlob } from './lib/laserReliefEngine';
 import { inferDepth } from './lib/laserDepthAi';
 import { listLaserAssets,uploadLaserAsset,readLaserAsset,signedLaserAsset } from './lib/laserAssets';
 import './LaserReliefStudio.css';
@@ -186,7 +186,7 @@ export default function LaserReliefStudio(){
      if(src)setSource(src.data);else setSource(null);
      if(height){
        const n=height.data.width*height.data.height,values=new Float32Array(n),mask=new Uint8Array(n);
-       for(let i=0;i<n;i++){values[i]=height.data.data[i*4]/255;mask[i]=src?.data.data[i*4+3]>30?1:1;}
+       for(let i=0;i<n;i++){values[i]=height.data.data[i*4]/255;mask[i]=src&&src.data.width===height.data.width&&src.data.height===height.data.height?(src.data.data[i*4+3]>30?1:0):1;}
        setMap({width:height.data.width,height:height.data.height,values,mask,source:'saved'});
      }else if(src)setMap(generateHeightmap(src.data,savedSettings));
      else setMap(null);
