@@ -116,6 +116,7 @@ const MaterialSettings = lazy(() => import('./MaterialSettings'));
 const DeviceProductLibrary = lazy(() => import('./DeviceProductLibrary'));
 const ProductDevelopmentCenter = lazy(() => import('./ProductDevelopmentCenter'));
 const UVStudio = lazy(() => import('./UVStudio'));
+const LaserReliefStudio = lazy(() => import('./LaserReliefStudio'));
 const MenuManager = lazy(() => import('./MenuManager'));
 const UserManagement = lazy(() => import('./UserManagement'));
 const ContractorHours = lazy(() => import('./ContractorHours'));
@@ -151,6 +152,7 @@ function EmployeeRoutes() {
     <Route path="/creative-operations" element={<CreativeOperationsSuite />} />
     <Route path="/artwork-hub" element={<ArtworkHub />} />
     <Route path="/dtf-studio" element={<DTFPrepStudio />} />
+    <Route path="/laser-relief" element={<LaserReliefStudio />} />
     <Route path="/catalog-production-readiness" element={<CatalogProductionReadiness />} />
       <Route path="/catalog-modernization" element={<CatalogModernization />} />
       <Route path="/catalog-pairing" element={<CatalogPairingWorkbench />} />
@@ -178,6 +180,7 @@ function EmployeeRoutes() {
       <Route path="/product-event-center" element={<ProductDevelopmentCenter />} />
       <Route path="/creative-operations" element={<CreativeOperationsSuite />} />
       <Route path="/uv-studio" element={<UVStudio />} />
+      <Route path="/laser-relief" element={<LaserReliefStudio />} />
       <Route path="/menu-manager" element={<MenuManager />} />
       <Route path="/user-management" element={<UserManagement />} />
       <Route path="/contractor-hours" element={<ContractorHours />} />

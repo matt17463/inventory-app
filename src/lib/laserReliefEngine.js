@@ -53,12 +53,11 @@ export function generateHeightmap(imageData,{mode='logo',invert=false,detail=40,
   if(!width||!height||width*height>16_000_000)throw Error('Invalid source size');
   const count=width*height,values=new Float32Array(count),mask=new Uint8Array(count);
   const threshold=0.12;
-  let opaque=0,transparent=0,brightBorders=0,borderCount=0;
+  let opaque=0,brightBorders=0,borderCount=0;
   for(let i=0;i<count;i++) {
     const a=data[i*4+3]/255;
     mask[i]=a>=threshold?1:0;
     opaque+=mask[i];
-    transparent+=a<0.99?1:0;
   }
   // For opaque white-background logos, infer a foreground mask from border white.
   if(mode==='logo'&&opaque===count){

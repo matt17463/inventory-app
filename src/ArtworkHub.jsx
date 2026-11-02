@@ -23,6 +23,7 @@ const groups = [
       { name: 'DTF Artwork Preflight', path: '/artwork-preflight', detail: 'Check dimensions, edges, alpha and resolution', icon: '🔎' },
       { name: 'Mockup Studio', path: '/mockup-studio', detail: 'Product mockups and presentation proofs', icon: '👕' },
       { name: 'UV Studio', path: '/uv-studio', detail: 'Dimensional designs and textured patch workflows', icon: '🧩' },
+      { name: '3D Laser Relief Studio', path: '/laser-relief', detail: 'Create 2.5D heightmaps, sculpt relief and export to LightBurn or xTool Studio', icon: '⛰️', marketing: true },
       { name: 'Creative Operations', path: '/creative-operations', detail: 'AI-assisted creative tools and product ideas', icon: '✨', marketing: true },
     ],
   },
