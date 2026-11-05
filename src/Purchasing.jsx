@@ -16,6 +16,11 @@ import {
   sourceHasReusableMappingKey,
 } from './lib/purchasingPairingApi';
 import './purchasingPairing.css';
+import {
+  purchasingReservedShortage,
+  purchasingSourceOrderLabel,
+  purchasingSourcePairingState,
+} from './lib/purchasingReportDisplay';
 
 function number(value) {
   return Number(value || 0).toLocaleString();
@@ -91,11 +96,6 @@ function demandSources(row) {
   return Array.isArray(row?.demand_sources) ? row.demand_sources : [];
 }
 
-function sourceOrderLabel(source) {
-  const raw = source?.order_number || source?.woocommerce_order_id || source?.order_id || '';
-  return raw ? `Order #${raw}` : 'Order not recorded';
-}
-
 function sourcePullSheetLabel(source) {
   const raw = source?.job_id || source?.pullsheet_number || '';
   return raw ? `Pull Sheet #${raw}` : 'Pull sheet not recorded';
@@ -143,16 +143,19 @@ function DemandSourcesCell({ row, expanded, onToggle, onFixPairing, onFixSuggest
       </div>
 
       <div className="source-chip-list">
-        {visibleSources.map((source, index) => (
+        {visibleSources.map((source, index) => {
+          const pairingState = purchasingSourcePairingState(row, source);
+          return (
           <div className="source-chip" key={`${source.job_id || 'job'}-${source.job_item_id || index}`}>
             <div>
-              <span>{sourceOrderLabel(source)}</span>
+              <span>{purchasingSourceOrderLabel(source)}</span>
               {source?.customer_name && <small>{source.customer_name}</small>}
             </div>
             <small>
               Qty {number(sourceQuantity(source))}
               {source?.order_sku ? ` • ${source.order_sku}` : ''}
             </small>
+            {pairingState === 'paired' && <small>Paired to inventory</small>}
             {source?.pairing_warning && <small className="warning-text">{source.pairing_warning}</small>}
             <div className="purchasing-source-actions">
               {source?.job_id ? (
@@ -163,15 +166,16 @@ function DemandSourcesCell({ row, expanded, onToggle, onFixPairing, onFixSuggest
               {source?.job_item_id ? (
                 <button
                   type="button"
-                  className="pairing-fix-button"
+                  className={pairingState === 'paired' ? 'link-button compact-button' : 'pairing-fix-button'}
                   onClick={() => onFixPairing(row, source)}
                 >
-                  Fix Pairing
+                  {pairingState === 'paired' ? 'Change Pairing' : pairingState === 'unverified' ? 'Review Pairing' : 'Fix Pairing'}
                 </button>
               ) : null}
             </div>
           </div>
-        ))}
+        );
+        })}
       </div>
 
       {sources.length > 2 && (
@@ -483,7 +487,7 @@ export default function Purchasing() {
   const helpMap = {
     shortages: 'Shows items where reserved inventory is greater than on-hand inventory, including pull-sheet lines assigned to Pending Stock. These are immediate production shortages.',
     lowStock: 'Shows items where on-hand inventory is at or below your low-stock threshold.',
-    recommended: 'Uses Reserved + Pending Stock + Threshold - On Hand. The Create Purchase Order screen uses this same list and separately shows quantities already covered by open purchase orders.',
+    recommended: 'Uses Reserved + Pending Stock + Threshold - On Hand. Paired products can still require purchasing when open orders reserve more units than are on hand. The Create Purchase Order screen separately shows quantities already covered by open purchase orders.',
   };
 
   return (
@@ -599,7 +603,12 @@ export default function Purchasing() {
                       />
                       <td>{number(row.available_quantity)}</td>
                       <td>{number(row.low_stock_threshold)}</td>
-                      <td><strong>{number(getOrderQuantity(row, tab))}</strong></td>
+                      <td>
+                        <strong>{number(getOrderQuantity(row, tab))}</strong>
+                        {purchasingReservedShortage(row) > 0 && (
+                          <small className="warning-text">Open-order demand exceeds stock by {number(purchasingReservedShortage(row))}</small>
+                        )}
+                      </td>
                       <td>{money(row.estimated_order_value)}</td>
                     </tr>
                   );
