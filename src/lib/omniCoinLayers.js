@@ -35,17 +35,68 @@ export function separateCoinColors(image,layers) {
   }
   return {width:image.width,height:image.height,layers:outputs,unmatchedPixels:unmatched};
 }
-export function coinStudioManifest({title,widthMm,heightMm,depthMm,layers,unmatchedPixels=0}){
+export const COIN_STUDIO_CANDIDATES = {
+  brass: {studioMode:'UV Flatbed',materialPreset:'Choose exact metal / brass in Studio',effect:'Flat',
+    inkMode:'White+Color',whiteInk:'Rigid white',whiteLayers:1,colorLayers:1,varnishLayers:0,
+    precision:'Studio material default',feather:'Studio material default',whiteChoke:'Studio material default',
+    textureThicknessMm:null,smoothness:'Studio material default',source:'shop trial candidate'},
+  steel: {studioMode:'UV Flatbed',materialPreset:'Choose exact stainless / metal in Studio',effect:'Flat',
+    inkMode:'White+Color',whiteInk:'Rigid white',whiteLayers:1,colorLayers:1,varnishLayers:0,
+    precision:'Studio material default',feather:'Studio material default',whiteChoke:'Studio material default',
+    textureThicknessMm:null,smoothness:'Studio material default',source:'shop trial candidate'}
+};
+export function buildCoinStudioParameters({material='brass',recipe=null,overrides={}}={}){
+  const candidate=COIN_STUDIO_CANDIDATES[material==='steel'?'steel':'brass'];
+  // Existing approved recipe values only; reject fields that Studio cannot safely infer.
+  const settings=recipe?.status==='approved'&&recipe?.machine_type==='xtool_omni'&&recipe.settings&&typeof recipe.settings==='object'?recipe.settings:{};
+  const source=Object.keys(settings).length?'approved material recipe':'shop trial candidate';
+  const values={
+    studioMode:settings.studio_mode||candidate.studioMode,
+    materialPreset:settings.material_preset||candidate.materialPreset,
+    effect:settings.print_effect||candidate.effect,
+    inkMode:settings.ink_mode||candidate.inkMode,
+    whiteInk:settings.white_ink_type||candidate.whiteInk,
+    whiteLayers:typeof settings.white_layers==='number'?settings.white_layers:candidate.whiteLayers,
+    colorLayers:typeof settings.color_layers==='number'?settings.color_layers:candidate.colorLayers,
+    varnishLayers:typeof settings.varnish_layers==='number'?settings.varnish_layers:candidate.varnishLayers,
+    textureThicknessMm:typeof settings.target_relief_mm==='number'?settings.target_relief_mm:candidate.textureThicknessMm,
+    smoothness:settings.texture_smoothness??candidate.smoothness,
+    precision:settings.precision??candidate.precision,
+    feather:settings.feather??candidate.feather,
+    whiteChoke:settings.white_ink_choke??candidate.whiteChoke
+  };
+  const allowed=Object.fromEntries(Object.entries(overrides||{}).filter(([k])=>Object.hasOwn(values,k)));
+  const result={...values,...allowed};
+  for(const key of ['whiteLayers','colorLayers','varnishLayers']){
+    const v=Number(result[key]);
+    if(!Number.isInteger(v)||v<0||v>20)throw Error(key+' must be an integer from 0 to 20');
+    result[key]=v;
+  }
+  if(result.textureThicknessMm!==null&&result.textureThicknessMm!==''){
+    const v=Number(result.textureThicknessMm);
+    if(!Number.isFinite(v)||v<0||v>7)throw Error('Texture thickness must be 0–7 mm');
+    result.textureThicknessMm=v;
+  }else result.textureThicknessMm=null;
+  if(!['Flat','Texture','Relief'].includes(result.effect))throw Error('Choose a supported UV printing effect');
+  return {values:result,evidence:source,recipeId:source==='approved material recipe'?recipe.id:null,
+    notes:['Candidate white/color/varnish counts are proposed comparison values, not manufacturer-verified brass/stainless specifications.',
+      'Check Studio live material defaults for precision, feather percentage and white ink choke; do not assume numeric settings.',
+      'For Texture or Relief, test height and smoothness on an actual primed coin; relative depth PNG is not physical ink height.',
+      'Verify object-by-object processing parameters and By layer order inside xTool Studio.']};
+}
+export function coinStudioManifest({title,widthMm,heightMm,depthMm,layers,unmatchedPixels=0,processingParameters=null}){
   if(!Number.isFinite(+widthMm)||+widthMm<=0||!Number.isFinite(+heightMm)||+heightMm<=0)
     throw Error('Specify positive dimensions');
   return {
     format:'skilled-crafting-omni-coin-handoff-v1',title:String(title||'Challenge coin'),
     device:'xTool O1 Omni',target:'xTool Studio',widthMm:+widthMm,heightMm:+heightMm,
-    relativeReliefOnly:true,designReliefRangeMm:+depthMm,unmatchedPixels,
+    relativeReliefOnly:true,designReliefRangeMm:+depthMm,unmatchedPixels,processingParameters,
     operatorInstructions:[
       'Import depth PNG and all transparent color PNGs at the exact listed dimensions; align their centers.',
       'Choose the UV flatbed setup and appropriate tested coin/metal material settings in xTool Studio.',
       'Assign color artwork and relief/texture separately; map actual white, color and varnish passes in Studio.',
+      'Open Settings Overview and confirm per-object print parameters: UV Flatbed, material preset, Flat/Texture/Relief, ink mode, rigid white, white/color/varnish layers, precision, feather, white choke and any supported thickness/smoothness.',
+      'Set By layer processing if desired, arranging layers top-to-bottom; naming or color alone does not set machine parameters.',
       'Confirm order and per-object print parameters in Studio; this manifest is not an executable printer profile.',
       'Run a physical coin adhesion, relief and registration test before approving production.'
     ],
