@@ -95,7 +95,7 @@ export function coinStudioManifest({title,widthMm,heightMm,depthMm,layers,unmatc
       'Import depth PNG and all transparent color PNGs at the exact listed dimensions; align their centers.',
       'Choose the UV flatbed setup and appropriate tested coin/metal material settings in xTool Studio.',
       'Assign color artwork and relief/texture separately; map actual white, color and varnish passes in Studio.',
-      'Open Settings Overview and confirm per-object print parameters: UV Flatbed, material preset, Flat/Texture/Relief, ink mode, rigid white, white/color/varnish layers, precision, feather, white choke and any supported thickness/smoothness.',
+      'Open Settings Overview and confirm per-object print parameters: UV Flatbed, material preset, Flat/Texture/Relief, ink mode, rigid white, white/color/varnish layers, precision, feather, white ink choke and any supported thickness/smoothness.',
       'Set By layer processing if desired, arranging layers top-to-bottom; naming or color alone does not set machine parameters.',
       'Confirm order and per-object print parameters in Studio; this manifest is not an executable printer profile.',
       'Run a physical coin adhesion, relief and registration test before approving production.'
