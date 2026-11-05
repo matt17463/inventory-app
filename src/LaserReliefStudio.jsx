@@ -7,6 +7,7 @@ import { materialSafety } from './lib/materialSettings';
 import { LASER_PRESETS,generateHeightmap,fromAiDepth,paintHeightmap,renderHeightmap,renderReliefPreview,
   export16BitPng,stlRelief,svgCutOutline,downloadBlob } from './lib/laserReliefEngine';
 import { inferDepth } from './lib/laserDepthAi';
+import { DEFAULT_COIN_LAYERS, separateCoinColors, coinStudioManifest, buildCoinStudioParameters } from './lib/omniCoinLayers';
 import { listLaserAssets,uploadLaserAsset,readLaserAsset,signedLaserAsset } from './lib/laserAssets';
 import './LaserReliefStudio.css';
 
@@ -46,13 +47,28 @@ export default function LaserReliefStudio(){
  const [trial,setTrial]=useState({result:'needs_adjustment',measured_depth_mm:'',notes:''});
  const [aiLoading,setAiLoading]=useState(false);
  const [showLibrary,setShowLibrary]=useState(true);
+ const [coinLayers,setCoinLayers]=useState(DEFAULT_COIN_LAYERS.map(x=>({...x})));
+ const [coinReport,setCoinReport]=useState(null);
+ const [coinOverrides,setCoinOverrides]=useState({});
+ const [coinRecipe,setCoinRecipe]=useState(null);
  const sourceCanvas=useRef(null),depthCanvas=useRef(null),threeCanvas=useRef(null),pointerDown=useRef(false);
  const undoStack=useRef([]),redoStack=useRef([]);
  const active=project.status==='draft'||project.status==='proof';
  const canWrite=canEdit&&active&&!shouldSimulateWrites();
  const warn=materialSafety(project.machine_type,project.material_name);
  const matchRecipes=recipes.filter(r=>r.machine_type===project.machine_type);
+ const coinParameters=(()=>{try{return buildCoinStudioParameters({material:project.material_name,recipe:coinRecipe,overrides:coinOverrides});}catch{return null;}})();
  const change=(key,value)=>setProject(old=>({...old,[key]:value}));
+ const editCoinLayer=(id,key,value)=>setCoinLayers(old=>old.map(x=>x.id===id?{...x,[key]:value}:x));
+ const editCoinParameter=(key,value)=>setCoinOverrides(old=>({...old,[key]:value}));
+ useEffect(()=>{
+   let valid=true;
+   setCoinRecipe(null);
+   if(!project.material_recipe_id||project.machine_type!=='xtool_omni')return()=>{valid=false;};
+   supabase.from('sc_material_recipes').select('id,machine_type,status,settings').eq('id',project.material_recipe_id).eq('machine_type','xtool_omni').eq('status','approved').single()
+     .then(({data})=>{if(valid)setCoinRecipe(data||null);});
+   return()=>{valid=false;};
+ },[project.material_recipe_id,project.machine_type]);
  const setting=(key,value)=>setSettings(old=>({...old,[key]:value}));
  const resetHistory=()=>{undoStack.current=[];redoStack.current=[];};
  const checkpoint=()=>{if(!map)return;undoStack.current=[...undoStack.current.slice(-11),map];redoStack.current=[];};
@@ -141,6 +157,30 @@ export default function LaserReliefStudio(){
    if(!redoStack.current.length)return;
    undoStack.current.push(map);setMap(redoStack.current.pop());
  };
+ const exportCoinLayers=async()=>{
+   if(!source||!map)return setMessage('Import artwork and create a coin depth map first.');
+   if(source.width!==map.width||source.height!==map.height)return setMessage('Source artwork and depth map must have matching dimensions.');
+   setBusy(true);
+   try{
+     if(!coinParameters)throw Error('Correct the Omni print parameters before exporting.');
+     if(project.machine_type!=='xtool_omni')throw Error('Select xTool Omni UV as the machine for an Omni coin handoff.');
+     const separated=separateCoinColors(source,coinLayers);
+     const name=safeName(project.title), exported=[];
+     for(const layer of separated.layers){
+       const cv=document.createElement('canvas');cv.width=source.width;cv.height=source.height;
+       cv.getContext('2d').putImageData(new ImageData(layer.data,source.width,source.height),0,0);
+       const filename=name+'-color-'+String(layer.order).padStart(2,'0')+'-'+safeName(layer.name)+'.png';
+       downloadBlob(await imageBlob(cv),filename);exported.push({...layer,filename,data:undefined});
+     }
+     const depth=document.createElement('canvas');renderHeightmap(depth,map);
+     downloadBlob(await imageBlob(depth),name+'-depth-8bit.png');
+     const manifest=coinStudioManifest({title:project.title,widthMm:settings.widthMm,heightMm:settings.heightMm,
+       depthMm:settings.depthMm,layers:exported,unmatchedPixels:separated.unmatchedPixels,processingParameters:coinParameters});
+     downloadBlob(new Blob([JSON.stringify(manifest,null,2)],{type:'application/json'}),name+'-xtool-studio-instructions.json');
+     setCoinReport(manifest);
+     setMessage('Exported depth, '+exported.length+' transparent aligned color layers and Studio instructions. Review unmatched colors: '+separated.unmatchedPixels+'.');
+   }catch(e){setMessage('Coin export failed: '+e.message);}finally{setBusy(false);}
+ };
  const download=async(kind)=>{
    if(!map)return setMessage('Generate a depth map first.');
    setBusy(true);
@@ -174,7 +214,7 @@ export default function LaserReliefStudio(){
    setBusy(true);
    try{
      const savedSettings={...baseSettings,...(row.settings||{})};
-     setSettings(savedSettings);setProject({...row,material_recipe_id:row.material_recipe_id||'',job_id:row.job_id||''});
+     setSettings(savedSettings);setCoinOverrides(savedSettings.coinOverrides||{});setCoinLayers(Array.isArray(savedSettings.coinLayers)&&savedSettings.coinLayers.length?savedSettings.coinLayers:DEFAULT_COIN_LAYERS.map(x=>({...x})));setProject({...row,material_recipe_id:row.material_recipe_id||'',job_id:row.job_id||''});
      resetHistory();
      const [rows,t]=await Promise.all([
        listLaserAssets(row.id),
@@ -203,7 +243,7 @@ export default function LaserReliefStudio(){
    try{
      const payload={title:project.title.trim()||'Laser Relief',status:active?project.status:'draft',
        machine_type:project.machine_type,material_name:project.material_name,preset:project.preset,
-       source_mode:settings.mode,settings:{...settings},material_recipe_id:project.material_recipe_id||null,
+       source_mode:settings.mode,settings:{...settings,coinLayers,coinOverrides},material_recipe_id:project.material_recipe_id||null,
        job_id:project.job_id||null,customer_id:project.customer_id||null,
        artwork_request_id:project.artwork_request_id||null,updated_at:new Date().toISOString()};
      const op=project.id?
@@ -383,6 +423,41 @@ export default function LaserReliefStudio(){
            <button type="button" disabled={!map||busy} className="sc-btn" onClick={()=>download('svg')}>Outline SVG</button>
          </div>
          <p className="sc-laser-muted">Use LightBurn 3D Sliced only on supported galvo systems. P2/S1 use compatible grayscale modes where supported by the selected machine and material. STL is a rectangular relief mesh for modeling; SVG is an alignment rectangle, not an automatic traced contour.</p>
+       </Section>
+       <Section title="Omni challenge coin · color and print layer handoff">
+         <p className="sc-laser-muted">Create aligned transparent color layers and a grayscale depth asset. These are design separations, not automatic xTool ink-channel assignments. Use the xTool Omni UV machine selection above for the intended job.</p>
+         {coinLayers.map(layer=><div className="sc-laser-form-grid" key={layer.id}>
+           <label><input type="checkbox" checked={layer.enabled} onChange={e=>editCoinLayer(layer.id,'enabled',e.target.checked)}/> {layer.name}</label>
+           <label>Match color<input type="color" value={layer.color} onChange={e=>editCoinLayer(layer.id,'color',e.target.value)}/></label>
+           <label>Match tolerance<input type="number" min={0} max={255} value={layer.tolerance} onChange={e=>editCoinLayer(layer.id,'tolerance',Number(e.target.value))}/></label>
+           <label>Studio order<input type="number" min={1} max={12} value={layer.order} onChange={e=>editCoinLayer(layer.id,'order',Number(e.target.value))}/></label>
+           <label>Intended ink / effect<select value={layer.process} onChange={e=>editCoinLayer(layer.id,'process',e.target.value)}>
+             <option value="CMYK">Color CMYK</option><option value="White">White underbase</option><option value="Varnish">Varnish / texture</option><option value="Reference">Alignment reference only</option>
+           </select></label>
+         </div>)}
+         <h3>xTool Studio processing parameters</h3>
+         <p className="sc-laser-muted">Starting values are shop trial candidates for brass/stainless, not proven metal print settings. A selected approved Omni material recipe supplies defaults where available; edits here are saved with this design, not back to the approved recipe.</p>
+         <p className="sc-laser-muted">Parameter evidence: <strong>{coinParameters?.evidence||'Invalid setup'}</strong>{coinParameters?.recipeId?' · approved recipe '+coinParameters.recipeId:''}. Exact Studio fields can vary with firmware and machine configuration.</p>
+         <div className="sc-laser-form-grid">
+           {[["studioMode","Machine mode"],["materialPreset","Material preset"],["inkMode","Ink combination"],["whiteInk","White ink type"],["precision","Precision / resolution"],["feather","Feather percentage"],["whiteChoke","White ink choke"],["smoothness","Texture smoothness"]].map(([key,label])=><label key={key}>{label}<input value={coinParameters?.values[key]??''} onChange={e=>editCoinParameter(key,e.target.value)} disabled={!active}/></label>)}
+           <label>Print effect<select value={coinParameters?.values.effect||'Flat'} onChange={e=>editCoinParameter('effect',e.target.value)} disabled={!active}>
+             <option value="Flat">Flat</option><option value="Texture">Texture</option><option value="Relief">Relief</option>
+           </select></label>
+           {[["whiteLayers","White ink passes"],["colorLayers","Color passes"],["varnishLayers","Varnish passes"]].map(([key,label])=><label key={key}>{label}<input type="number" min={0} max={20} step={1} value={coinParameters?.values[key]??coinOverrides[key]??0} onChange={e=>editCoinParameter(key,e.target.value)} disabled={!active}/></label>)}
+           <label>Texture / relief thickness (mm; blank for Flat)<input type="number" min={0} max={7} step={0.05} value={coinParameters?.values.textureThicknessMm??''} onChange={e=>editCoinParameter('textureThicknessMm',e.target.value)} disabled={!active}/></label>
+         </div>
+         <p className="sc-laser-muted">For opaque metal coins, start by testing Flat + White+Color, rigid white, one white pass and one color pass, with varnish off; compare two white passes on a matching second coin. These are proposed trials, not measured recommendations. For Texture/Relief, choose height and smoothness only after an actual coin test. Confirm primer, material preset, feather, precision and choke in Studio.</p>
+         <div className="sc-laser-actions"><button className="sc-btn sc-btn-primary" disabled={!source||!map||busy} onClick={exportCoinLayers} type="button">Export Omni coin design + Studio instructions</button></div>
+         <p className="sc-laser-muted">For additional colors or custom print effects, edit the source art and repeat export. Current color separation assigns each source pixel to the nearest enabled color within the chosen tolerance; unmatched pixels are excluded and counted.</p>
+         {coinReport&&<div role="status"><h3>Finish this coin in xTool Studio</h3><ol>
+           <li>Connect the Omni and select the UV flatbed workflow. Use a tested coin fixture and appropriate material preparation.</li>
+           <li>Import the depth PNG and each exported transparent color PNG. Set each to {coinReport.widthMm} × {coinReport.heightMm} mm and align centers.</li>
+           <li>Use the Layer and Object List to organize objects. Set actual print modes, white ink, color, varnish/texture and pass counts individually in Studio; colored layers alone do not assign processing parameters.</li>
+           <li>Confirm the depth image is supported by the chosen Omni printing mode. Otherwise rebuild the effect with Studio's available texture/relief controls.</li>
+           <li>In the right-hand parameter panel, set the processing parameters below, then use Settings Overview to verify each object, By layer order, registration and preview.</li>
+           <li>{coinReport.processingParameters?.values.effect} · {coinReport.processingParameters?.values.inkMode} · white {coinReport.processingParameters?.values.whiteLayers} pass(es), color {coinReport.processingParameters?.values.colorLayers} pass(es), varnish {coinReport.processingParameters?.values.varnishLayers} pass(es). Material: {coinReport.processingParameters?.values.materialPreset}. Precision, feather and white choke: review the manifest or live Studio preset.</li>
+           <li>Print a small metal test coin; confirm adhesion, relief, color and alignment before saving the Studio project and approving production.</li>
+         </ol><p className="sc-laser-muted">Exported {coinReport.layers.length} color layers. Unmatched opaque pixels: {coinReport.unmatchedPixels}. This application does not control the printer or produce an .xs project.</p></div>}
        </Section>
        <Section title="Calibration, test coupons and production approval">
          <button type="button" disabled={!map||busy} className="sc-btn" onClick={calibration}>Export 16-step calibration grid</button>
