@@ -3,9 +3,25 @@ import {GetObjectCommand} from "@aws-sdk/client-s3";
 import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {r2Client,r2BucketName} from "./_shared/mockupStorage.js";
 import {authorizeEmployee,createServiceClient,jsonResponse} from "./_shared/security.js";
+import { marketingDocumentMissing } from "../../src/lib/marketingDocumentContent.js";
 const hash = token => crypto.createHash("sha256").update(token).digest("hex");
 const privateResponse = (status, payload, event) => { const result=jsonResponse(status,payload,event); return {...result,headers:{...result.headers,"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}}; };
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const cut=(value,limit=300)=>String(value??"").slice(0,limit);
+async function signedReviewAsset(asset, accountId) {
+ if(asset?.storage_provider!=="r2"||typeof asset.key!=="string")return null;
+ if(!asset.key.startsWith("marketing/artwork/"+accountId+"/") ||
+   !/^marketing\/artwork\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(asset.key))return null;
+ return getSignedUrl(r2Client(),new GetObjectCommand({Bucket:r2BucketName(),Key:asset.key}),{expiresIn:900});
+}
+function publicProductRows(value) {
+ return (Array.isArray(value)?value:[]).slice(0,25).filter(x=>x&&typeof x==="object").map(p=>({
+  name:cut(p.name,160),sku:cut(p.sku,100),sizes:cut(p.sizes,240),colors:cut(p.colors,240),
+  retailPrice:Number.isFinite(Number(p.retailPrice)) && Number(p.retailPrice)>=0?Number(p.retailPrice):null,
+  quantity:Number.isInteger(Number(p.quantity))&&Number(p.quantity)>0?Number(p.quantity):null
+ }));
+}
+
 export async function handler(event) {
  if(event.httpMethod==="OPTIONS") return privateResponse(204,{},event);
  if(!["GET","POST"].includes(event.httpMethod)) return privateResponse(405,{message:"Method not allowed"},event);
@@ -17,6 +33,8 @@ export async function handler(event) {
     if(!uuid(String(body.document_id||""))) return privateResponse(400,{message:"Invalid document."},event);
     const {data:doc,error}=await auth.supabase.from("sc_growth_documents").select("id,status,template_id,content").eq("id",body.document_id).single();
     if(error||!doc||doc.status!=="approved") return privateResponse(409,{message:"Approve the document internally first."},event);
+    const missing=marketingDocumentMissing({...doc.content,template:doc.template_id});
+    if(missing.length)return privateResponse(409,{message:"This approved draft lacks required client-facing details. Create and approve a complete new draft.",missing},event);
     const token=crypto.randomBytes(32).toString("base64url");
     const expires=new Date(Date.now()+7*86400000).toISOString();
     const {error:writeError}=await auth.supabase.from("sc_growth_document_reviews").insert({
@@ -37,18 +55,30 @@ export async function handler(event) {
   const source=doc.content||{};
   const branding=source.branding||{};
   const content={
-    organization:String(source.organization||"").slice(0,200),
-    description:String(source.description||"").slice(0,3000),
-    branding:{profile:branding.profile||"",colors:Array.isArray(branding.colors)?branding.colors.slice(0,12):[],
-      placements:Array.isArray(branding.placements)?branding.placements.slice(0,25):[]},
-    style:String(source.style||"").slice(0,200),
-    sizes:String(source.sizes||"").slice(0,400),
-    productColors:String(source.productColors||"").slice(0,400)
+    organization:cut(source.organization,200),
+    description:cut(source.description,3000),
+    aiText:cut(source.aiText,12000),
+    branding:{profile:cut(branding.profile,100),colors:Array.isArray(branding.colors)?branding.colors.filter(x=>/^#[0-9a-f]{6}$/i.test(x)).slice(0,12):[],
+      placements:Array.isArray(branding.placements)?branding.placements.map(x=>cut(x,100)).slice(0,25):[]},
+    style:cut(source.style,200),
+    sizes:cut(source.sizes,400),
+    productColors:cut(source.productColors,400),
+    sku:cut(source.sku,120),
+    placement:cut(source.placement,300),
+    terms:cut(source.terms,1500),
+    cta:cut(source.cta,800),
+    retailPrice:Number.isFinite(Number(source.retailPrice))&&source.retailPrice!==""&&source.retailPrice!=null&&Number(source.retailPrice)>=0?Number(source.retailPrice):null,
+    quantity:Number.isInteger(Number(source.quantity))&&Number(source.quantity)>0?Number(source.quantity):null,
+    productRows:publicProductRows(source.productRows),
+    productSwatches:(Array.isArray(source.productSwatches)?source.productSwatches:[]).slice(0,30)
+      .filter(x=>x&&/^#[0-9a-f]{6}$/i.test(x.hex)).map(x=>({name:cut(x.name,120),hex:x.hex}))
   };
-  const artwork=source.marketing_artwork;
-  if(artwork?.storage_provider==="r2" && typeof artwork.key==="string" && artwork.key.startsWith("marketing/artwork/"+doc.account_id+"/") && /^marketing\/artwork\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(artwork.key)) {
-   content.logo_url=await getSignedUrl(r2Client(),new GetObjectCommand({Bucket:r2BucketName(),Key:artwork.key}),{expiresIn:900});
-  }
+  content.logo_url=await signedReviewAsset(source.marketing_artwork,doc.account_id);
+  content.product_image_url=await signedReviewAsset(source.marketing_product_image,doc.account_id);
+  content.product_image_urls=(await Promise.all((Array.isArray(source.marketing_product_images)?source.marketing_product_images:[])
+    .slice(0,25).map(asset=>signedReviewAsset(asset,doc.account_id)))).filter(Boolean);
+  content.logo_option_urls=(await Promise.all((Array.isArray(source.marketing_logo_options)?source.marketing_logo_options:[])
+    .slice(0,6).map(asset=>signedReviewAsset(asset,doc.account_id)))).filter(Boolean);
   return privateResponse(200,{title:doc.title,template_id:doc.template_id,content,
     expires_at:review.expires_at},event);
  }catch(error){return privateResponse(500,{message:"Review request failed."},event);}
