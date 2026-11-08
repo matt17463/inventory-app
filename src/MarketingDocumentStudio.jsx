@@ -5,7 +5,7 @@ import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeS
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
 import { generateMarketingDraft } from "./lib/marketingAI";
-import { marketingDocumentMissing, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
+import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
@@ -44,6 +44,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [productImage,setProductImage] = useState("");
   const [logoOptions,setLogoOptions] = useState([]);
   const [productRowsText,setProductRowsText] = useState("");
+  const [productSwatchesText,setProductSwatchesText] = useState("");
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork"].includes(selectedTemplate?.kind);
 
@@ -187,6 +188,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     try {
       const parsedColors = colors.split(",").map(s => s.trim()).filter(Boolean);
       const productRows=parseMarketingProductRows(productRowsText);
+      const productSwatches=parseMarketingColorSwatches(productSwatchesText);
       const branding = suggestedBrandGuide(segment, parsedColors);
       let offer = null;
       if (template === "product-guide" && (style.trim() || sku.trim() || unitCost.trim())) {
@@ -198,7 +200,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       }
       setGuide({ template, organization: organization.trim() || "Prospective client", description, logo,
         branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
-        terms, cta, productImage, logoOptions, productRows, aiText, generated_at: new Date().toISOString() });
+        terms, cta, productImage, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
       setError("");
     } catch (e) { setError(e.message); }
   }
@@ -309,6 +311,11 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Call to action / next step</span><textarea value={cta} onChange={e=>setCta(e.target.value)}/></label>
       <label className="growth-field"><span>Actual licensed product photo or approved mockup (optional for some templates)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>readMarketingImage(e.target.files?.[0],setProductImage)}/></label>
       {template==="logo-options" && <label className="growth-field"><span>Actual logo choices — upload at least two (max six)</span><input type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={e=>uploadLogoOptions(e.target.files)}/></label>}
+      {template==="product-color-chart" && <label className="growth-field">
+        <span>Verified product color swatches (one per line: Color name | #RRGGBB)</span>
+        <textarea rows="4" value={productSwatchesText} onChange={e=>setProductSwatchesText(e.target.value)}
+          placeholder={"Royal Blue | #004F9E\\nBlack | #000000"}/>
+      </label>}
       <label className="growth-field"><span>AI copy tone</span><select value={aiTone} onChange={e=>setAiTone(e.target.value)}>{["professional","friendly","persuasive","concise","warm","energetic"].map(t=><option key={t}>{t}</option>)}</select></label>
     </div>
         <div className="growth-actions">
