@@ -66,6 +66,12 @@ export function marketingDocumentMissing(doc) {
   const missing = [];
   if (!has(doc.organization)) missing.push("client or prospect name");
   fields.forEach(key => {
+    if(key==="productImage" && doc.template==="product-catalog" && multiple) {
+      const gallery=doc.productImages || doc.marketing_product_images || [];
+      if(!Array.isArray(gallery) || gallery.length!==doc.productRows.length)
+        missing.push("one licensed product image per catalog line");
+      return;
+    }
     if(multiple && ["style","sizes","productColors","retailPrice","quantity"].includes(key) &&
       ["product-guide","product-catalog","pricing-sheet","bulk-pricing","client-quote","proposal",
         "fundraising-proposal","package-comparison"].includes(doc.template)) return;
@@ -112,7 +118,10 @@ export function renderMarketingDocumentHtml(doc) {
   const swatches = (brand.color_details || []).map(c => '<div class="swatch"><div class="color" style="background:' + e(c.hex) + '"></div>' +
     '<strong>' + e(c.hex) + '</strong><small>RGB ' + Object.values(c.rgb).join(', ') + '</small><small>CMYK estimate ' +
     Object.values(c.cmyk_approx).map(n => Math.round(n * 100) + '%').join(' / ') + '</small></div>').join('');
-  const selection = product || art ? '<div class="media">' + product + art + '</div>' : '';
+  const galleryImages=(Array.isArray(doc.productImages)?doc.productImages:[]).map((src,i)=>
+    '<figure class="gallery-card">'+image(src,"Catalog product "+(i+1),"gallery-image")+
+    '<figcaption>'+e(doc.productRows?.[i]?.name || "Product "+(i+1))+'</figcaption></figure>').join('');
+  const selection = product || art || galleryImages ? '<div class="media">' + (galleryImages || product) + art + '</div>' : '';
   const productFacts = detail("Product / style", doc.style) + detail("SKU (supplier reference)", doc.sku) +
     detail("Available sizes (verified)", doc.sizes) + detail("Available colors (verified)", doc.productColors) +
     detail("Decoration placement", doc.placement);
@@ -194,7 +203,7 @@ export function renderMarketingDocumentHtml(doc) {
     'main{max-width:920px;margin:26px auto;background:white;padding:42px;box-shadow:0 2px 12px #0001}header{border-top:9px solid ' + accent +
     ';padding-top:24px;margin-bottom:28px}small,.subtitle{color:#596974}h1{font-size:34px;margin:8px 0}h2{font-size:19px;border-bottom:1px solid #d2dbdf;padding-bottom:7px}' +
     'section{margin:26px 0;break-inside:avoid-page}.prose{white-space:pre-wrap;overflow-wrap:anywhere}.media,.grid,.swatches{display:flex;gap:15px;flex-wrap:wrap}' +
-    '.media img{max-height:260px;max-width:45%;object-fit:contain;border:1px solid #dae2e6;padding:8px}.option{border:1px solid #d7e0e5;padding:12px;min-width:160px;flex:1}' +
+    '.media img{max-height:260px;max-width:45%;object-fit:contain;border:1px solid #dae2e6;padding:8px}.gallery-card{flex:1;min-width:180px;max-width:310px;margin:0;border:1px solid #dae2e6;padding:10px}.gallery-card img{max-width:100%;width:100%;height:180px;object-fit:contain;border:0}.gallery-card figcaption{font-weight:600;padding-top:6px}.option{border:1px solid #d7e0e5;padding:12px;min-width:160px;flex:1}' +
     '.optionimage{display:block;max-height:190px;max-width:100%;margin:12px auto;object-fit:contain}.detail{display:flex;gap:12px;border-bottom:1px solid #edf1f3;padding:7px 0}' +
     '.detail strong{min-width:190px}.swatch{min-width:140px;display:flex;flex-direction:column;gap:4px}.color{height:62px;border:1px solid #ddd}' +
     'table{border-collapse:collapse;width:100%;margin:16px 0}th,td{padding:11px;border:1px solid #d4dce0;text-align:left}th{background:#e9f0f2}' +
