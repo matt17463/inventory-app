@@ -43,6 +43,23 @@ test("template completeness requires actual mockup images and artwork options",(
  assert.equal(marketingDocumentMissing(saved).length,0);
 });
 
+test("brand guide color validation accepts persisted branding palette",()=>{
+ const doc={template:"brand-guide",organization:"Demo",branding:suggestedBrandGuide("school",["#FF0000"]),
+  marketing_artwork:{key:"private-r2-reference"}};
+ assert.equal(marketingDocumentMissing(doc).length,0);
+});
+
+test("multi-product catalogs require one matching real photo per line",()=>{
+ const rows=parseMarketingProductRows("T-shirt | 5000 | Youth S | Blue | 20 | 4\nHoodie | 18500 | Adult M | Black | 40 | 2");
+ const base={template:"product-catalog",organization:"Demo",productRows:rows,description:"Catalog"};
+ assert(marketingDocumentMissing(base).some(x=>x.includes("per catalog line")));
+ const doc={...base,productImages:["data:image/png;base64,AAAA","data:image/png;base64,BBBB"]};
+ assert.equal(marketingDocumentMissing(doc).length,0);
+ const html=renderMarketingDocumentHtml(doc);
+ assert(html.includes("gallery-card") && html.includes("$80.00"));
+ assert(html.includes("Hoodie") && html.includes("T-shirt"));
+});
+
 test("multi-product pricing includes correct totals and excludes internal supplier costs",()=>{
  const rows=parseMarketingProductRows("T-shirt | 5000 | Youth S-L | Black | 19.99 | 20\nHoodie | 18500 | Adult S-XL | Blue | 35 | 10");
  assert.equal(rows.length,2);
@@ -84,6 +101,8 @@ test("manager approval preflight and private R2 client review include the comple
  assert.match(get,/content\.product_image_url/);
  assert.match(get,/content\.logo_option_urls/);
  assert.match(get,/publicProductRows/);
+ assert.match(get,/marketingDocumentMissing/);
+ assert.match(get,/content\.product_image_urls/);
  assert.doesNotMatch(get,/source\.offer/);
  assert.match(review,/reviewData\.content\.aiText/);
  assert.match(review,/reviewData\.content\.productRows/);
