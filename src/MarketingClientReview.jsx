@@ -4,6 +4,7 @@ export default function MarketingClientReview(){
  const [reviewData,setDocument]=useState(null);
  const [message,setMessage]=useState("");
  const [feedback,setFeedback]=useState("");
+ const [selectedLogoOption,setSelectedLogoOption]=useState("");
  const [busy,setBusy]=useState(false);
  useEffect(()=>{
   const meta=document.createElement("meta");
@@ -20,10 +21,15 @@ export default function MarketingClientReview(){
   return ()=>{active=false;};
  },[token]);
  async function respond(decision){
+  if(decision==="approved" && (reviewData?.content?.logo_option_urls||[]).length>1 && !selectedLogoOption){
+    setMessage("Select the approved artwork option before approving this concept.");return;
+  }
   try{setBusy(true);setMessage("");
    const r=await fetch("/.netlify/functions/marketing-review-response",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({token,decision,feedback})
+    body:JSON.stringify({token,decision,feedback:[
+      ...(selectedLogoOption?["Selected logo option: "+selectedLogoOption]:[]),feedback
+    ].filter(Boolean).join("\\n").slice(0,2000)})
    });
    const x=await r.json();if(!r.ok)throw Error(x.message||"Review failed.");
    setDocument(null);setMessage("Thank you. Your feedback has been recorded.");
@@ -50,7 +56,9 @@ export default function MarketingClientReview(){
    {(reviewData.content.logo_option_urls||[]).length>0 && <section><h3>Artwork options</h3><div style={{display:"flex",flexWrap:"wrap",gap:16}}>
      {reviewData.content.logo_option_urls.map((url,i)=><figure key={i} style={{margin:0,padding:12,border:"1px solid #ccd5d9",borderRadius:8}}>
        <img src={url} alt={"Artwork option "+(i+1)} style={{maxWidth:230,maxHeight:170,objectFit:"contain",display:"block"}}/>
-       <figcaption>Option {i+1}</figcaption></figure>)}
+       <figcaption><label><input type="radio" name="approved-logo-option" value={String(i+1)}
+         checked={selectedLogoOption===String(i+1)} onChange={()=>setSelectedLogoOption(String(i+1))}/>
+         Select option {i+1}</label></figcaption></figure>)}
    </div></section>}
    {(reviewData.content.productRows||[]).length>0 && <section><h3>Proposed products and client pricing</h3><div style={{overflowX:"auto"}}>
      <table style={{borderCollapse:"collapse",width:"100%"}}><thead><tr>{["Product","SKU","Sizes","Colors","Quantity","Client unit price","Line total"].map(h=><th key={h} scope="col" style={{textAlign:"left",padding:8,borderBottom:"1px solid #9ba8ad"}}>{h}</th>)}</tr></thead>
@@ -73,7 +81,7 @@ export default function MarketingClientReview(){
    {(reviewData.content.branding?.colors||[]).map(c=><span key={c} style={{display:"inline-flex",alignItems:"center",gap:8}}><span style={{height:25,width:25,background:/^#[0-9a-f]{6}$/i.test(c)?c:"#fff",border:"1px solid #888"}}/>{c}</span>)}</div>
    <h3>Notes or requested changes</h3>
    <textarea aria-label="Client feedback" rows={5} value={feedback} onChange={e=>setFeedback(e.target.value)} style={{display:"block",width:"100%",marginBottom:16}}/>
-   <button disabled={busy} onClick={()=>respond("approved")}>Approve concept</button>{" "}
+   <button disabled={busy||((reviewData.content.logo_option_urls||[]).length>1&&!selectedLogoOption)} onClick={()=>respond("approved")}>Approve concept</button>{" "}
    <button disabled={busy||!feedback.trim()} onClick={()=>respond("changes_requested")}>Request changes</button>
    <p><small>Concept approval is not a purchase or production authorization. Review links expire and are single-use.</small></p>
   </>}
