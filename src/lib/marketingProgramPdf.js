@@ -61,13 +61,13 @@ function requireBrand(d){
 export function exportSchoolProgramPdf(d){
  validateProgramProducts(d.products,true);requireBrand(d);
  const pdf=new jsPDF({unit:"pt",format:"letter",compress:true});
- header(pdf,d,"SCHOOL SPIRIT WEAR","Schools  •  Clubs  •  Teams  •  Sports programs");
+ header(pdf,d,"SCHOOL SPIRIT WEAR","Schools  |  Clubs  |  Teams  |  Sports programs");
  text(pdf,"YOUR SCHOOL. YOUR COLORS. YOUR COMMUNITY.",30,136,16,navy,true);
  text(pdf,d.organization?"Prepared for "+d.organization:"A spirit-wear program built around your community",30,155,10,teal);
  card(pdf,d.products.find(p=>p.type==="tee"),30,172,265,280);
  card(pdf,d.products.find(p=>p.type==="hoodie"),305,172,275,280);
  rect(pdf,30,465,550,113,[224,244,239]);
- text(pdf,"HOW THE WHOLESALE → RETAIL ARRANGEMENT WORKS",44,487,12,navy,true);
+ text(pdf,"HOW THE WHOLESALE to RETAIL ARRANGEMENT WORKS",44,487,12,navy,true);
  ["1. We agree on decorated wholesale prices and approved product options.",
   "2. Your school, club or team sets the retail price charged to supporters.",
   "3. Your organization keeps the retail-minus-wholesale difference per sale.",
@@ -75,8 +75,8 @@ export function exportSchoolProgramPdf(d){
  ].forEach((v,i)=>text(pdf,v,44,508+i*18,9));
  const tee=programPriceRows(d.products.find(p=>p.type==="tee"))[0],hoodie=programPriceRows(d.products.find(p=>p.type==="hoodie"))[0];
  text(pdf,"ILLUSTRATIVE PER-ITEM RETURN",30,606,12,teal,true);
- text(pdf,"Tee: "+money(tee.wholesale)+" wholesale  →  "+money(tee.retail)+" retail  =  "+money(tee.school)+" for your program",30,626,10);
- text(pdf,"Hoodie: "+money(hoodie.wholesale)+" wholesale  →  "+money(hoodie.retail)+" retail  =  "+money(hoodie.school)+" for your program",30,644,10);
+ text(pdf,"Tee: "+money(tee.wholesale)+" wholesale  to  "+money(tee.retail)+" retail  =  "+money(tee.school)+" for your program",30,626,10);
+ text(pdf,"Hoodie: "+money(hoodie.wholesale)+" wholesale  to  "+money(hoodie.retail)+" retail  =  "+money(hoodie.school)+" for your program",30,644,10);
  text(pdf,"CUSTOM MERCHANDISE, MADE SIMPLE",30,672,12,navy,true);
  pdf.setFontSize(9);pdf.setTextColor(...navy);
  const lines=pdf.splitTextToSize(d.notes||"School-logo tees and hoodies, artwork proofing, size and color choices, ordering options and fulfillment planning.",545).slice(0,3);
