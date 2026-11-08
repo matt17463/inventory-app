@@ -37,6 +37,14 @@ export default function MarketingClientReview(){
    <p>{reviewData.content.style}</p><p>Sizes: {reviewData.content.sizes||"To be confirmed"}</p>
    <p>Colors: {reviewData.content.productColors||"To be confirmed"}</p>
    {reviewData.content.aiText && <section><h3>Document copy</h3><p style={{whiteSpace:"pre-wrap"}}>{reviewData.content.aiText}</p></section>}
+   {(reviewData.content.product_image_urls||[]).length>0 && <section><h3>Product catalog photographs</h3>
+     <div style={{display:"flex",flexWrap:"wrap",gap:14}}>
+       {reviewData.content.product_image_urls.map((url,i)=><figure key={i} style={{margin:0,padding:8,border:"1px solid #ccd5d9"}}>
+         <img src={url} alt={"Catalog product "+(i+1)} style={{maxWidth:200,maxHeight:190,objectFit:"contain",display:"block"}}/>
+         <figcaption>{reviewData.content.productRows?.[i]?.name||"Product "+(i+1)}</figcaption>
+       </figure>)}
+     </div>
+   </section>}
    {reviewData.content.product_image_url && <section><h3>Selected product / approved concept image</h3>
      <img src={reviewData.content.product_image_url} alt="Client-selected product or mockup" style={{maxWidth:"100%",maxHeight:350,objectFit:"contain"}}/></section>}
    {(reviewData.content.logo_option_urls||[]).length>0 && <section><h3>Artwork options</h3><div style={{display:"flex",flexWrap:"wrap",gap:16}}>
