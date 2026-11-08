@@ -75,7 +75,7 @@ export function marketingDocumentMissing(doc) {
   const missing = [];
   if (!has(doc.organization)) missing.push("client or prospect name");
   fields.forEach(key => {
-    if(key==="productImage" && doc.template==="product-catalog" && multiple) {
+    if(key==="productImage" && doc.template==="product-catalog" && doc.productRows?.length>1) {
       const gallery=doc.productImages || doc.marketing_product_images || [];
       if(!Array.isArray(gallery) || gallery.length!==doc.productRows.length)
         missing.push("one licensed product image per catalog line");
@@ -164,7 +164,7 @@ export function renderMarketingDocumentHtml(doc) {
       e((brand.placements || []).join(', ')) + '</p>' + para(brand.typography) + para(brand.printing)));
   } else if (["product", "catalog", "mockup", "description"].includes(kind)) {
     blocks.push(section("Product selection", selection + productFacts));
-    if (price || productRows.length > 1) blocks.push(section("Client product pricing", priceTable));
+    if (price || doc.productRows?.length) blocks.push(section("Client product pricing", priceTable));
     if (kind === "mockup") blocks.push(section("Proof notes", para("Placement and scale shown are for concept review only. Confirm dimensions, artwork approval and decoration method before production.")));
   } else if (["pricing", "proposal", "package", "fundraiser", "quote"].includes(kind)) {
     blocks.push(section("Products and pricing", selection + productFacts + priceTable));
@@ -177,8 +177,8 @@ export function renderMarketingDocumentHtml(doc) {
   if (kind === "brochure") {
     blocks.push(section("Product and service concepts", conceptList(doc.segment) +
       para("These examples are discussion starters. Specific garments, product images, sizes, artwork, client prices and fulfillment terms are selected and verified during quoting.")));
-    if (has(doc.style) || productRows.length > 1) blocks.push(section("Selected product concepts", selection + productFacts +
-      (productRows.length > 1 || price ? priceTable : "")));
+    if (has(doc.style) || doc.productRows?.length) blocks.push(section("Selected product concepts", selection + productFacts +
+      (doc.productRows?.length || price ? priceTable : "")));
   }
   if (kind === "sample") blocks.push(section("Sample request details", selection + productFacts +
     detail("Requested quantity", doc.quantity) +
