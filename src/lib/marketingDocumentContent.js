@@ -20,6 +20,7 @@ const requirements = {
   "product-placement-guide": ["logo", "style", "placement"],
   "store-preview": ["description", "style"],
   "client-intake": ["description"],
+  "sample-request": ["style", "sizes", "productColors", "placement", "terms"],
   "order-instructions": ["description", "terms"]
 };
 const names = {
@@ -84,6 +85,15 @@ const section = (heading, contents) => '<section><h2>' + e(heading) + '</h2>' + 
 const detail = (heading, value) => has(value) ? '<div class="detail"><strong>' + e(heading) + '</strong><span>' + e(value) + '</span></div>' : "";
 const money = (v) => has(v) && Number.isFinite(Number(v)) && Number(v) >= 0 ? '$' + Number(v).toFixed(2) : '';
 const docType = id => marketingTemplates.find(x => x.id === id)?.label || "Client marketing document";
+const conceptPrograms = {
+  team: ["Team uniforms", "Spirit wear", "Coach apparel and recognition", "Personalized accessories"],
+  school: ["Student spirit wear", "Staff apparel", "School fundraiser storefronts", "Recognition gifts"],
+  business: ["Branded employee apparel", "Workwear and hats", "Promotional products", "Employee recognition"],
+  nonprofit: ["Fundraising apparel", "Volunteer gear", "Event merchandise", "Supporter stores"]
+};
+const conceptList = segment => '<ul>' + (conceptPrograms[segment] || conceptPrograms.business)
+  .map(item => '<li>' + e(item) + '</li>').join('') + '</ul>';
+
 
 export function renderMarketingDocumentHtml(doc) {
   const missing = marketingDocumentMissing(doc);
@@ -131,7 +141,9 @@ export function renderMarketingDocumentHtml(doc) {
     if (kind === "color") blocks.push(section("Garment colors", productFacts +
       '<div class="swatches">'+garmentSwatches+'</div>'+
       para("Hex swatches are screen approximations entered from documented product color references. Confirm actual manufacturer color and physical garment samples. Client logo colors above are separate from garment colors.")));
-    if (kind !== "color") blocks.push(section("Artwork application", productFacts + '<p>Suggested applications: ' +
+    if (kind !== "color") blocks.push(section("Artwork application", productFacts +
+      '<p>Suggested artwork versions: '+e((brand.variants||[]).join(", "))+'</p>' +
+      '<p>Suggested applications: ' +
       e((brand.placements || []).join(', ')) + '</p>' + para(brand.typography) + para(brand.printing)));
   } else if (["product", "catalog", "mockup", "description"].includes(kind)) {
     blocks.push(section("Product selection", selection + productFacts));
@@ -145,6 +157,35 @@ export function renderMarketingDocumentHtml(doc) {
   } else {
     if (productFacts) blocks.push(section("Proposed products and customization", selection + productFacts));
   }
+  if (kind === "brochure") {
+    blocks.push(section("Product and service concepts", conceptList(doc.segment) +
+      para("These examples are discussion starters. Specific garments, product images, sizes, artwork, client prices and fulfillment terms are selected and verified during quoting.")));
+    if (has(doc.style) || productRows.length > 1) blocks.push(section("Selected product concepts", selection + productFacts +
+      (productRows.length > 1 || price ? priceTable : "")));
+  }
+  if (kind === "sample") blocks.push(section("Sample request details", selection + productFacts +
+    detail("Requested quantity", doc.quantity) +
+    para("Physical sample selection, production method, artwork rights, shipping, costs and timing require staff confirmation before creating a production job.")));
+  if (kind === "intake") blocks.push(section("Client discovery questionnaire",
+    "<ol><li>Which products or services are you interested in?</li><li>Who will receive or purchase the products?</li>" +
+    "<li>What estimated quantities, sizes and garment colors are needed?</li>" +
+    "<li>Do you have original artwork, usage rights, or an approved brand guide?</li>" +
+    "<li>What is the target budget, delivery date, and distribution method?</li>" +
+    "<li>Will orders be collected through an online store, group order or direct invoice?</li>" +
+    "<li>Who can approve artwork, pricing and final production?</li></ol>" +
+    para("Please enter answers and share approved files securely with Skilled Crafting.")));
+  if (kind === "onboarding") blocks.push(section("Ordering and approval workflow",
+    "<ol><li>Confirm the products, colors, sizes and quantities.</li>" +
+    "<li>Provide customer artwork or approve the selected logo options.</li>" +
+    "<li>Review itemized selling prices and any setup, delivery or tax terms.</li>" +
+    "<li>Approve a correctly scaled artwork proof.</li>" +
+    "<li>Receive ordering and fulfillment instructions before paying.</li></ol>"));
+  if (kind === "outreach") blocks.push(section("Conversation and next steps",
+    para("Share the products or program you are considering. Skilled Crafting can prepare a tailored concept and a quote after product, artwork and quantity requirements are confirmed.")));
+  if (["artwork","brand","mockup","sample"].includes(kind)) blocks.push(section("Review and sign-off",
+    "<p>Selected option: _____________________</p><p>Requested revisions: _____________________________________</p>" +
+    "<p>Reviewer name: _____________________ Date: ______________</p>" +
+    "<small>Signing a concept is not an order or production authorization. Final artwork and product specifications require confirmation.</small>"));
   if (doc.terms) blocks.push(section("Terms, approvals and fulfillment", para(doc.terms)));
   if (doc.cta) blocks.push(section("Next step", para(doc.cta)));
   const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
