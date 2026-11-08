@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import { exportClientCatalogPdf,exportSchoolProgramPdf } from "./lib/marketingProgramPdf";
 const fresh=(type="tee")=>({id:Math.random().toString(36).slice(2),type,name:type==="hoodie"?"School hoodie":"School tee",sku:"",sizes:"",colors:"",photo:"",mockup:"",x:50,y:42,scale:30,tiers:[{min:1,wholesale:"",retail:""}]});
@@ -23,6 +23,17 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
  const [notes,setNotes]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ useEffect(()=>{
+  let active=true;
+  const img=new Image();
+  img.onload=()=>{if(!active)return;try{
+   const canvas=document.createElement("canvas");canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+   canvas.getContext("2d").drawImage(img,0,0);
+   setBusinessLogo(previous=>previous||canvas.toDataURL("image/png"));
+  }catch{ /* Manual upload remains available if the site logo cannot be read. */ }};
+  img.src="/skilled-crafting-logo.png";
+  return ()=>{active=false;};
+ },[]);
  const logo=clientLogo||schoolLogo;
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
