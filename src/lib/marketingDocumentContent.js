@@ -37,7 +37,11 @@ export function marketingDocumentMissing(doc) {
   const missing = [];
   if (!has(doc.organization)) missing.push("client or prospect name");
   fields.forEach(key => {
-    if (key === "logoOptions" ? !Array.isArray(doc.logoOptions) || doc.logoOptions.length < 2 : !has(doc[key])) missing.push(names[key] || key);
+    const value = key === "logoOptions" ? (doc.logoOptions || doc.marketing_logo_options) :
+      key === "productImage" ? (doc.productImage || doc.marketing_product_image?.key) :
+      key === "logo" ? (doc.logo || doc.marketing_artwork?.key) : doc[key];
+    if (key === "logoOptions" ? !Array.isArray(value) || value.length < 2 : !has(value))
+      missing.push(names[key] || key);
   });
   return missing;
 }
@@ -83,6 +87,7 @@ export function renderMarketingDocumentHtml(doc) {
   if (["brand", "artwork", "color"].includes(kind)) {
     if (art || cards) blocks.push(section("Logo and artwork options", art + (cards ? '<div class="grid">' + cards + '</div>' : '')));
     if (swatches) blocks.push(section("Client logo color palette", '<div class="swatches">' + swatches + '</div><small>CMYK values are mathematical estimates, not licensed Pantone matches or press-ready color conversions.</small>'));
+    if (kind === "color") blocks.push(section("Verified garment colors", productFacts + para("Product color names are supplier-reported and must be checked against the selected garment and physical color sample. Client logo colors above are separate from garment colors.")));
     if (kind !== "color") blocks.push(section("Artwork application", productFacts + '<p>Suggested applications: ' +
       e((brand.placements || []).join(', ')) + '</p>' + para(brand.typography) + para(brand.printing)));
   } else if (["product", "catalog", "mockup", "description"].includes(kind)) {
