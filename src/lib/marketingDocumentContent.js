@@ -61,7 +61,16 @@ export function parseMarketingColorSwatches(input) {
   });
 }
 export function marketingDocumentMissing(doc) {
-  const fields = requirements[doc.template] || ["description"];
+  const kind=marketingTemplates.find(t=>t.id===doc.template)?.kind;
+  const defaults={
+    package:["description","style","retailPrice","terms"],
+    store:["description","style","terms"],
+    brochure:["description"],
+    outreach:["description"],
+    sample:["style","sizes","productColors","placement","terms"],
+    pricing:["style","retailPrice","quantity"]
+  };
+  const fields = requirements[doc.template] || defaults[kind] || ["description"];
   const multiple=Array.isArray(doc.productRows) && doc.productRows.length>0;
   const missing = [];
   if (!has(doc.organization)) missing.push("client or prospect name");
@@ -73,8 +82,7 @@ export function marketingDocumentMissing(doc) {
       return;
     }
     if(multiple && ["style","sizes","productColors","retailPrice","quantity"].includes(key) &&
-      ["product-guide","product-catalog","pricing-sheet","bulk-pricing","client-quote","proposal",
-        "fundraising-proposal","package-comparison"].includes(doc.template)) return;
+      (["product","catalog","pricing","quote","proposal","fundraiser","package"].includes(kind))) return;
     const value = key === "logoOptions" ? (doc.logoOptions || doc.marketing_logo_options) :
       key === "productImage" ? (doc.productImage || doc.marketing_product_image?.key) :
       key === "logo" ? (doc.logo || doc.marketing_artwork?.key) : doc[key];
