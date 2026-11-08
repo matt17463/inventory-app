@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
-import { escapeGrowthHtml } from "./lib/growthPricing";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
 import { generateMarketingDraft } from "./lib/marketingAI";
@@ -222,7 +221,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       // Store uploaded document photos/options in private R2 as well. No base64 image bytes in Supabase.
       async function storeImage(dataUrl){
         if(!dataUrl)return null;
-        const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+        const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
         if(!match)throw Error("Use a valid uploaded image.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
           method:"POST",headers:{"Content-Type":"application/json"},
