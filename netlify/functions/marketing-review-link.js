@@ -3,6 +3,7 @@ import {GetObjectCommand} from "@aws-sdk/client-s3";
 import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {r2Client,r2BucketName} from "./_shared/mockupStorage.js";
 import {authorizeEmployee,createServiceClient,jsonResponse} from "./_shared/security.js";
+import { marketingDocumentMissing } from "../../src/lib/marketingDocumentContent.js";
 const hash = token => crypto.createHash("sha256").update(token).digest("hex");
 const privateResponse = (status, payload, event) => { const result=jsonResponse(status,payload,event); return {...result,headers:{...result.headers,"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}}; };
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -32,6 +33,8 @@ export async function handler(event) {
     if(!uuid(String(body.document_id||""))) return privateResponse(400,{message:"Invalid document."},event);
     const {data:doc,error}=await auth.supabase.from("sc_growth_documents").select("id,status,template_id,content").eq("id",body.document_id).single();
     if(error||!doc||doc.status!=="approved") return privateResponse(409,{message:"Approve the document internally first."},event);
+    const missing=marketingDocumentMissing({...doc.content,template:doc.template_id});
+    if(missing.length)return privateResponse(409,{message:"This approved draft lacks required client-facing details. Create and approve a complete new draft.",missing},event);
     const token=crypto.randomBytes(32).toString("base64url");
     const expires=new Date(Date.now()+7*86400000).toISOString();
     const {error:writeError}=await auth.supabase.from("sc_growth_document_reviews").insert({
