@@ -29,7 +29,7 @@ export default function MarketingClientReview(){
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({token,decision,feedback:[
       ...(selectedLogoOption?["Selected logo option: "+selectedLogoOption]:[]),feedback
-    ].filter(Boolean).join("\\n").slice(0,2000)})
+    ].filter(Boolean).join("\n").slice(0,2000)})
    });
    const x=await r.json();if(!r.ok)throw Error(x.message||"Review failed.");
    setDocument(null);setMessage("Thank you. Your feedback has been recorded.");
