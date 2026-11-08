@@ -43,6 +43,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [cta,setCta] = useState("Contact Skilled Crafting to confirm the product selection, pricing and approval.");
   const [productImage,setProductImage] = useState("");
   const [logoOptions,setLogoOptions] = useState([]);
+  const [productImages,setProductImages] = useState([]);
   const [productRowsText,setProductRowsText] = useState("");
   const [productSwatchesText,setProductSwatchesText] = useState("");
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
@@ -171,6 +172,19 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setLogoOptions(images);setGuide(null);setError("");
     }catch{setError("Unable to read the artwork options.");}
   }
+  async function uploadProductImages(files) {
+    const selected=Array.from(files||[]).slice(0,25);
+    if(selected.some(f=>!["image/png","image/jpeg","image/webp"].includes(f.type)||f.size>2_500_000)){
+      setError("Choose up to 25 PNG, JPEG or WebP catalog images under 2.5 MB each.");return;
+    }
+    try{
+      const images=await Promise.all(selected.map(file=>new Promise((resolve,reject)=>{
+        const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));
+        reader.onerror=reject;reader.readAsDataURL(file);
+      })));
+      setProductImages(images);setGuide(null);setError("");
+    }catch{setError("Unable to read selected product photographs.");}
+  }
   async function assistWithAI() {
     try {
       setAiBusy(true);setError("");
@@ -200,7 +214,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       }
       setGuide({ template, organization: organization.trim() || "Prospective client", description, logo,
         branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
-        terms, cta, productImage, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
+        terms, cta, productImage, productImages, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
       setError("");
     } catch (e) { setError(e.message); }
   }
@@ -237,12 +251,14 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       }
       const storedProductImage=await storeImage(guide.productImage);
       const storedLogoOptions=await Promise.all((guide.logoOptions||[]).map(storeImage));
-      const { logo: unusedLocalImage, productImage: unusedLocalProductImage, logoOptions: unusedLocalOptions, offer: internalSupplierOffer, ...safeGuide } = guide;
-      void unusedLocalImage;void unusedLocalProductImage;void unusedLocalOptions;void internalSupplierOffer;
+      const storedProductImages=[];
+      for(const item of (guide.productImages||[])) storedProductImages.push(await storeImage(item));
+      const { logo: unusedLocalImage, productImage: unusedLocalProductImage, productImages: unusedLocalGallery, logoOptions: unusedLocalOptions, offer: internalSupplierOffer, ...safeGuide } = guide;
+      void unusedLocalImage;void unusedLocalProductImage;void unusedLocalGallery;void unusedLocalOptions;void internalSupplierOffer;
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
         account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
         content: { ...safeGuide, marketing_artwork: storedArtwork, marketing_product_image:storedProductImage,
-          marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
+          marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
       });
       if (insertError) throw insertError;
       setSaveStatus(storedArtwork?"Draft and exact client artwork saved securely to R2.":"Draft saved to this client.");
@@ -276,10 +292,13 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     <h2>Marketing Document Builder</h2>
     <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);}}>{marketingTemplates.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
-      <label className="growth-field"><span>Save under client</span><select value={accountId} onChange={e=>{const id=e.target.value;setAccountId(id);const a=organizations.find(x=>x.id===id);if(a){setOrganization(a.organization);setSegment(a.segment==="club"?"team":a.segment==="other"?"business":a.segment);}}}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
-      <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>setOrganization(e.target.value)} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
-      <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>setSegment(e.target.value)}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);setAiText("");}}>
+        {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
+          <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
+            <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
+      <label className="growth-field"><span>Save under client</span><select value={accountId} onChange={e=>{const id=e.target.value;setAccountId(id);setGuide(null);setAiText("");const a=organizations.find(x=>x.id===id);if(a){setOrganization(a.organization);setSegment(a.segment==="club"?"team":a.segment==="other"?"business":a.segment);}}}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
+      <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
+      <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
       <label className="growth-field"><span>Upload client's draft logo (optional)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
       <label className="growth-field"><span>Logo colors (editable HEX values, separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
@@ -307,6 +326,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Additional itemized products (one per line: Product | SKU | Sizes | Colors | Client unit price | Quantity)</span>
         <textarea rows="4" value={productRowsText} onChange={e=>setProductRowsText(e.target.value)}
           placeholder={"T-shirt | 5000 | YS, YM, YL | Royal, Black | 19.99 | 20\\nHoodie | 18500 | S, M, L | Black | 34.99 | 10"}/></label>
+      {template==="product-catalog" && <label className="growth-field">
+        <span>Actual product photographs — one image per catalog line, in the same order (max 25)</span>
+        <input type="file" multiple accept="image/png,image/jpeg,image/webp"
+          onChange={e=>uploadProductImages(e.target.files)}/>
+        <small>{productImages.length} catalog images selected</small>
+      </label>}
       <label className="growth-field"><span>Client terms and approval instructions</span><textarea value={terms} onChange={e=>setTerms(e.target.value)}/></label>
       <label className="growth-field"><span>Call to action / next step</span><textarea value={cta} onChange={e=>setCta(e.target.value)}/></label>
       <label className="growth-field"><span>Actual licensed product photo or approved mockup (optional for some templates)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>readMarketingImage(e.target.files?.[0],setProductImage)}/></label>
@@ -339,6 +364,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <p>Suggested colors: {guide.branding.colors.join(", ") || "No colors provided"}</p>
       <p>Color and Pantone matching requires physical verification. Dimensions require approval for each product.</p>
       {guide.productImage && <img src={guide.productImage} alt="Selected product image" style={{maxWidth:220,maxHeight:220,objectFit:"contain"}}/>}
+      {(guide.productImages||[]).length>0 && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {guide.productImages.map((src,i)=><img key={i} src={src} alt={"Product "+(i+1)} style={{maxWidth:140,maxHeight:140,objectFit:"contain"}}/>)}
+      </div>}
       {guide.aiText && <p style={{whiteSpace:"pre-wrap"}}>{guide.aiText}</p>}
       {guide.retailPrice && <p>Client unit price: ${Number(guide.retailPrice).toFixed(2)} {guide.quantity && " · Quantity: "+guide.quantity}</p>}
       {guide.offer && <p>{guide.offer.supplier_name} · {guide.offer.sku} · source price verified {guide.offer.observed_at.slice(0,10)}</p>}
