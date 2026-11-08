@@ -1,5 +1,5 @@
-import { escapeGrowthHtml } from "./growthPricing";
-import { marketingTemplates } from "./marketingCatalogPolicy";
+import { escapeGrowthHtml } from "./growthPricing.js";
+import { marketingTemplates } from "./marketingCatalogPolicy.js";
 
 /** Client-facing document data only. Never put supplier unit costs or margins in exports. */
 const requirements = {
@@ -83,7 +83,8 @@ export function marketingDocumentMissing(doc) {
     }
     if(multiple && ["style","sizes","productColors","retailPrice","quantity"].includes(key) &&
       (["product","catalog","pricing","quote","proposal","fundraiser","package"].includes(kind))) return;
-    const value = key === "logoOptions" ? (doc.logoOptions || doc.marketing_logo_options) :
+    const value = key === "colors" ? (doc.colors || doc.branding?.colors) :
+      key === "logoOptions" ? (doc.logoOptions || doc.marketing_logo_options) :
       key === "productImage" ? (doc.productImage || doc.marketing_product_image?.key) :
       key === "logo" ? (doc.logo || doc.marketing_artwork?.key) : doc[key];
     if (key === "logoOptions" ? !Array.isArray(value) || value.length < 2 : !has(value))
