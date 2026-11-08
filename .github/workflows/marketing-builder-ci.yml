@@ -1,0 +1,38 @@
+name: Marketing Document Builder Regression
+on:
+  pull_request:
+    paths:
+      - 'src/MarketingDocumentStudio.jsx'
+      - 'src/MarketingClientReview.jsx'
+      - 'src/lib/marketingAI.js'
+      - 'src/lib/marketingCatalogPolicy.js'
+      - 'src/lib/marketingDocumentContent.js'
+      - 'netlify/functions/marketing-ai-draft.js'
+      - 'netlify/functions/marketing-review-link.js'
+      - 'scripts/tests/marketing-*'
+      - 'package.json'
+      - '.github/workflows/marketing-builder-ci.yml'
+  push:
+    branches:
+      - 'fix/marketing-document-builder-ai-templates-20261107'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Marketing regression tests
+        run: npm run test:marketing
+      - name: ESLint
+        run: npm run lint
+      - name: Vite production compilation
+        run: npm run build:vite
