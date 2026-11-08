@@ -212,7 +212,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
           observed_at: observedAt, source_url: sourceUrl || undefined });
         if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
       }
-      setGuide({ template, organization: organization.trim() || "Prospective client", description, logo,
+      setGuide({ template, segment, organization: organization.trim() || "Prospective client", description, logo,
         branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
         terms, cta, productImage, productImages, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
       setError("");
