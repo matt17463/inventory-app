@@ -72,6 +72,8 @@ export async function handler(event) {
   };
   content.logo_url=await signedReviewAsset(source.marketing_artwork,doc.account_id);
   content.product_image_url=await signedReviewAsset(source.marketing_product_image,doc.account_id);
+  content.product_image_urls=(await Promise.all((Array.isArray(source.marketing_product_images)?source.marketing_product_images:[])
+    .slice(0,25).map(asset=>signedReviewAsset(asset,doc.account_id)))).filter(Boolean);
   content.logo_option_urls=(await Promise.all((Array.isArray(source.marketing_logo_options)?source.marketing_logo_options:[])
     .slice(0,6).map(asset=>signedReviewAsset(asset,doc.account_id)))).filter(Boolean);
   return privateResponse(200,{title:doc.title,template_id:doc.template_id,content,
