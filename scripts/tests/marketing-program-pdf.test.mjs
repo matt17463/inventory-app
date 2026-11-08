@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 const read=p=>readFileSync(new URL(p,import.meta.url),"utf8");
 const source=read("../../src/lib/marketingProgramPdf.js").replace(/^import .*;\s*$/gm,"").replace(/^export /gm,"");
 const api=runInNewContext(source+"\n({validateProgramProducts,programPriceRows,exportSchoolProgramPdf,exportClientCatalogPdf})",{
- jsPDF:class {constructor(){this.pages=1;this.lines=[];}setFillColor(){}rect(){}setTextColor(){}setFont(){}setFontSize(){}text(v){this.lines.push(String(v));}roundedRect(){}addImage(){}setDrawColor(){}line(){}addPage(){this.pages++;}save(n){this.filename=n;}},
+ jsPDF:class {constructor(){this.pages=1;this.lines=[];}setFillColor(){}rect(){}setTextColor(){}setFont(){}setFontSize(){}splitTextToSize(v){return [String(v)];}text(v){this.lines.push(String(v));}roundedRect(){}addImage(){}setDrawColor(){}line(){}addPage(){this.pages++;}save(n){this.filename=n;}},
 });
 const product=(type="tee")=>({type,name:"School "+type,mockup:"data:image/png;base64,AAAA",tiers:[{min:1,wholesale:"12",retail:"20"},{min:24,wholesale:"10",retail:"18"}]});
 test("Wholesale-retail difference is not internal supplier cost",()=>{
