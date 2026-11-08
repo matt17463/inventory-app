@@ -83,7 +83,6 @@ const image = (value, alt, className = "") => /^data:image\/(?:png|jpeg|webp);ba
 const section = (heading, contents) => '<section><h2>' + e(heading) + '</h2>' + contents + '</section>';
 const detail = (heading, value) => has(value) ? '<div class="detail"><strong>' + e(heading) + '</strong><span>' + e(value) + '</span></div>' : "";
 const money = (v) => has(v) && Number.isFinite(Number(v)) && Number(v) >= 0 ? '$' + Number(v).toFixed(2) : '';
-const words = value => String(value || "").split(',').map(x => x.trim()).filter(Boolean);
 const docType = id => marketingTemplates.find(x => x.id === id)?.label || "Client marketing document";
 
 export function renderMarketingDocumentHtml(doc) {
