@@ -32,11 +32,31 @@ const names = {
   description: "project or campaign brief"
 };
 const has = (v) => typeof v === "string" ? Boolean(v.trim()) : Array.isArray(v) ? v.length > 0 : Boolean(v);
+/** Explicit, client-reviewed rows; never import internal supplier costs into client prices. */
+export function parseMarketingProductRows(input) {
+  const lines=String(input||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(lines.length>25)throw Error("Use no more than 25 product lines per document.");
+  return lines.map((line,index)=>{
+    const parts=line.split("|").map(x=>x.trim());
+    if(parts.length!==6)throw Error("Product line "+(index+1)+" needs: Product | SKU | Sizes | Colors | Client price | Quantity.");
+    const [name,sku,sizes,colors,price,quantity]=parts;
+    if(!name || !Number.isFinite(Number(price)) || Number(price)<0 ||
+      !Number.isInteger(Number(quantity)) || Number(quantity)<1)
+      throw Error("Product line "+(index+1)+" needs a product, nonnegative client price and whole quantity.");
+    return {name:name.slice(0,160),sku:sku.slice(0,100),sizes:sizes.slice(0,240),
+      colors:colors.slice(0,240),retailPrice:Number(price),quantity:Number(quantity)};
+  });
+}
+
 export function marketingDocumentMissing(doc) {
   const fields = requirements[doc.template] || ["description"];
+  const multiple=Array.isArray(doc.productRows) && doc.productRows.length>0;
   const missing = [];
   if (!has(doc.organization)) missing.push("client or prospect name");
   fields.forEach(key => {
+    if(multiple && ["style","sizes","productColors","retailPrice","quantity"].includes(key) &&
+      ["product-guide","product-catalog","pricing-sheet","bulk-pricing","client-quote","proposal",
+        "fundraising-proposal","package-comparison"].includes(doc.template)) return;
     const value = key === "logoOptions" ? (doc.logoOptions || doc.marketing_logo_options) :
       key === "productImage" ? (doc.productImage || doc.marketing_product_image?.key) :
       key === "logo" ? (doc.logo || doc.marketing_artwork?.key) : doc[key];
@@ -77,10 +97,18 @@ export function renderMarketingDocumentHtml(doc) {
     detail("Available sizes (verified)", doc.sizes) + detail("Available colors (verified)", doc.productColors) +
     detail("Decoration placement", doc.placement);
   const price = money(doc.retailPrice);
-  const priceTable = '<table><thead><tr><th>Product</th><th>Quantity</th><th>Client unit price</th><th>Line total</th></tr></thead><tbody><tr>' +
-    '<td>' + e(doc.style || "Select product") + '</td><td>' + e(doc.quantity || "TBC") + '</td><td>' +
-    (price || "TBC") + '</td><td>' + ((price && Number.isInteger(Number(doc.quantity)) && Number(doc.quantity) > 0)
-      ? money(Number(doc.retailPrice) * Number(doc.quantity)) : "TBC") + '</td></tr></tbody></table>';
+  const productRows=(Array.isArray(doc.productRows) && doc.productRows.length ? doc.productRows : [{
+    name:doc.style || "Select product",sku:doc.sku || "",sizes:doc.sizes || "",
+    colors:doc.productColors || "",retailPrice:doc.retailPrice,quantity:doc.quantity
+  }]);
+  const priceTable = '<table><thead><tr><th>Product</th><th>SKU</th><th>Sizes / colors</th><th>Quantity</th><th>Client unit price</th><th>Line total</th></tr></thead><tbody>' +
+    productRows.map(p=>{
+      const amount=money(p.retailPrice);
+      const qty=Number(p.quantity);
+      return '<tr><td>'+e(p.name)+'</td><td>'+e(p.sku)+'</td><td>'+e([p.sizes,p.colors].filter(Boolean).join(' / '))+
+        '</td><td>'+e(p.quantity || "TBC")+'</td><td>'+(amount||"TBC")+'</td><td>'+
+        (amount&&Number.isInteger(qty)&&qty>0?money(Number(p.retailPrice)*qty):"TBC")+'</td></tr>';
+    }).join('') + '</tbody></table>';
   const blocks = [];
   if (doc.description) blocks.push(section("Overview", para(doc.description)));
   if (doc.aiText) blocks.push(section("Suggested marketing copy — review before sharing", para(doc.aiText)));
@@ -92,7 +120,7 @@ export function renderMarketingDocumentHtml(doc) {
       e((brand.placements || []).join(', ')) + '</p>' + para(brand.typography) + para(brand.printing)));
   } else if (["product", "catalog", "mockup", "description"].includes(kind)) {
     blocks.push(section("Product selection", selection + productFacts));
-    if (price) blocks.push(section("Client price", priceTable));
+    if (price || productRows.length > 1) blocks.push(section("Client product pricing", priceTable));
     if (kind === "mockup") blocks.push(section("Proof notes", para("Placement and scale shown are for concept review only. Confirm dimensions, artwork approval and decoration method before production.")));
   } else if (["pricing", "proposal", "package", "fundraiser", "quote"].includes(kind)) {
     blocks.push(section("Products and pricing", selection + productFacts + priceTable));
