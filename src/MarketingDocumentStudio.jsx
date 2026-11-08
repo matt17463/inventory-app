@@ -4,6 +4,7 @@ import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
+import MarketingProgramDesigner from "./MarketingProgramDesigner";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
@@ -313,6 +314,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Verified sizes</span><input value={sizes} onChange={e=>setSizes(e.target.value)}/></label>
       <label className="growth-field"><span>Verified product colors</span><input value={productColors} onChange={e=>setProductColors(e.target.value)}/></label>
     </div></>}
+    {["brochure-schools","product-catalog"].includes(template) &&
+      <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo}/>}
+    {!["brochure-schools","product-catalog"].includes(template) && <>
     {needsProductFields && template!=="product-guide" && <div className="growth-grid">
       <label className="growth-field"><span>Client-facing product / style name</span><input value={style} onChange={e=>{setStyle(e.target.value);setGuide(null);}}/></label>
       <label className="growth-field"><span>Verified product SKU (optional)</span><input value={sku} onChange={e=>setSku(e.target.value)}/></label>
@@ -347,6 +351,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
       <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
     {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
+    </>}
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
