@@ -47,7 +47,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [productRowsText,setProductRowsText] = useState("");
   const [productSwatchesText,setProductSwatchesText] = useState("");
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
-  const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork"].includes(selectedTemplate?.kind);
+  const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   useEffect(() => {
     if (!accountId) return;
