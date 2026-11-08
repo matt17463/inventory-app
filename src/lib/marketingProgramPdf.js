@@ -22,7 +22,14 @@ function text(pdf,value,x,y,size=10,color=navy,bold=false){
  pdf.setTextColor(...color);pdf.setFont("helvetica",bold?"bold":"normal");pdf.setFontSize(size);
  pdf.text(String(value||"").slice(0,150),x,y);
 }
-function image(pdf,src,x,y,w,h){if(src)pdf.addImage(src,src.startsWith("data:image/jpeg")?"JPEG":"PNG",x,y,w,h,undefined,"FAST");}
+function image(pdf,src,x,y,w,h){
+ if(!src)return;
+ const type=src.startsWith("data:image/jpeg")?"JPEG":"PNG";
+ const info=typeof pdf.getImageProperties==="function"?pdf.getImageProperties(src):null;
+ const ratio=info?.width&&info?.height?Math.min(w/info.width,h/info.height):1;
+ const iw=info?info.width*ratio:w,ih=info?info.height*ratio:h;
+ pdf.addImage(src,type,x+(w-iw)/2,y+(h-ih)/2,iw,ih,undefined,"FAST");
+}
 function rect(pdf,x,y,w,h,color=[239,246,246]){pdf.setFillColor(...color);pdf.roundedRect(x,y,w,h,7,7,"F");}
 function header(pdf,d,title,subtitle){
  pdf.setFillColor(...navy);pdf.rect(0,0,612,104,"F");
