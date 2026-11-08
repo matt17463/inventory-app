@@ -9,7 +9,7 @@ const requirements = {
   "product-description": ["style", "description"],
   "product-mockup": ["style", "productImage", "logo", "placement"],
   "logo-options": ["logoOptions", "placement"],
-  "product-color-chart": ["style", "productColors"],
+  "product-color-chart": ["style", "productColors", "productSwatches"],
   "pricing-sheet": ["style", "retailPrice", "quantity"],
   "bulk-pricing": ["style", "retailPrice", "quantity"],
   "client-quote": ["style", "retailPrice", "quantity", "terms"],
@@ -26,7 +26,7 @@ const names = {
   colors: "verified logo HEX colors", logo: "client artwork image",
   style: "product name/style", sizes: "verified available sizes",
   productColors: "verified product color names", retailPrice: "approved client selling price",
-  productImage: "licensed product/mockup image", placement: "decoration placement",
+  productImage: "licensed product/mockup image", productSwatches: "verified color swatches", placement: "decoration placement",
   logoOptions: "at least two client artwork options",
   quantity: "quoted quantity", terms: "terms or approval instructions",
   description: "project or campaign brief"
@@ -48,6 +48,17 @@ export function parseMarketingProductRows(input) {
   });
 }
 
+/** Color names and visual hex references are entered by staff, never inferred from a logo. */
+export function parseMarketingColorSwatches(input) {
+  const lines=String(input||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(lines.length>30)throw Error("Use no more than 30 color swatches.");
+  return lines.map((line,index)=>{
+    const parts=line.split("|").map(x=>x.trim());
+    if(parts.length!==2 || !parts[0] || !/^#[0-9a-f]{6}$/i.test(parts[1]))
+      throw Error("Color swatch "+(index+1)+" needs: Verified color name | #RRGGBB.");
+    return {name:parts[0].slice(0,120),hex:parts[1].toUpperCase()};
+  });
+}
 export function marketingDocumentMissing(doc) {
   const fields = requirements[doc.template] || ["description"];
   const multiple=Array.isArray(doc.productRows) && doc.productRows.length>0;
@@ -97,6 +108,9 @@ export function renderMarketingDocumentHtml(doc) {
     detail("Available sizes (verified)", doc.sizes) + detail("Available colors (verified)", doc.productColors) +
     detail("Decoration placement", doc.placement);
   const price = money(doc.retailPrice);
+  const garmentSwatches=(doc.productSwatches||[]).map(c=>'<div class="swatch"><div class="color" style="background:'+
+    e(/^#[0-9a-f]{6}$/i.test(c.hex)?c.hex:"#FFFFFF")+'"></div><strong>'+e(c.name)+'</strong><small>'+e(c.hex)+
+    '</small></div>').join('');
   const productRows=(Array.isArray(doc.productRows) && doc.productRows.length ? doc.productRows : [{
     name:doc.style || "Select product",sku:doc.sku || "",sizes:doc.sizes || "",
     colors:doc.productColors || "",retailPrice:doc.retailPrice,quantity:doc.quantity
@@ -115,7 +129,9 @@ export function renderMarketingDocumentHtml(doc) {
   if (["brand", "artwork", "color"].includes(kind)) {
     if (art || cards) blocks.push(section("Logo and artwork options", art + (cards ? '<div class="grid">' + cards + '</div>' : '')));
     if (swatches) blocks.push(section("Client logo color palette", '<div class="swatches">' + swatches + '</div><small>CMYK values are mathematical estimates, not licensed Pantone matches or press-ready color conversions.</small>'));
-    if (kind === "color") blocks.push(section("Verified garment colors", productFacts + para("Product color names are supplier-reported and must be checked against the selected garment and physical color sample. Client logo colors above are separate from garment colors.")));
+    if (kind === "color") blocks.push(section("Garment colors", productFacts +
+      '<div class="swatches">'+garmentSwatches+'</div>'+
+      para("Hex swatches are screen approximations entered from documented product color references. Confirm actual manufacturer color and physical garment samples. Client logo colors above are separate from garment colors.")));
     if (kind !== "color") blocks.push(section("Artwork application", productFacts + '<p>Suggested applications: ' +
       e((brand.placements || []).join(', ')) + '</p>' + para(brand.typography) + para(brand.printing)));
   } else if (["product", "catalog", "mockup", "description"].includes(kind)) {
