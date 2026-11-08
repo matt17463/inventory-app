@@ -5,7 +5,7 @@ import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeS
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
 import { generateMarketingDraft } from "./lib/marketingAI";
-import { marketingDocumentMissing, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
+import { marketingDocumentMissing, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
@@ -43,6 +43,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [cta,setCta] = useState("Contact Skilled Crafting to confirm the product selection, pricing and approval.");
   const [productImage,setProductImage] = useState("");
   const [logoOptions,setLogoOptions] = useState([]);
+  const [productRowsText,setProductRowsText] = useState("");
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork"].includes(selectedTemplate?.kind);
 
@@ -176,7 +177,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         kind: selectedTemplate?.kind || "outreach",
         organization: organization.trim() || "Prospective client",
         segment, brief:description.trim(),tone:aiTone,
-        context:{style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta}
+        context:{style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
       });
       setAiText(result);setGuide(null);
     } catch(e){setError(e.message || "AI draft unavailable. Verify the Netlify AI provider configuration.");}
@@ -185,6 +186,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   function build() {
     try {
       const parsedColors = colors.split(",").map(s => s.trim()).filter(Boolean);
+      const productRows=parseMarketingProductRows(productRowsText);
       const branding = suggestedBrandGuide(segment, parsedColors);
       let offer = null;
       if (template === "product-guide" && (style.trim() || sku.trim() || unitCost.trim())) {
@@ -196,7 +198,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       }
       setGuide({ template, organization: organization.trim() || "Prospective client", description, logo,
         branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
-        terms, cta, productImage, logoOptions, aiText, generated_at: new Date().toISOString() });
+        terms, cta, productImage, logoOptions, productRows, aiText, generated_at: new Date().toISOString() });
       setError("");
     } catch (e) { setError(e.message); }
   }
@@ -300,6 +302,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Approved client unit price ($, not supplier cost)</span><input type="number" min="0" step="0.01" value={retailPrice} onChange={e=>setRetailPrice(e.target.value)}/></label>
       <label className="growth-field"><span>Quote / example quantity</span><input type="number" min="1" step="1" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label>
       <label className="growth-field"><span>Artwork placement / approximate scale</span><input value={placement} onChange={e=>setPlacement(e.target.value)} placeholder="Left chest, 3.5 in (verify)"/></label>
+      <label className="growth-field"><span>Additional itemized products (one per line: Product | SKU | Sizes | Colors | Client unit price | Quantity)</span>
+        <textarea rows="4" value={productRowsText} onChange={e=>setProductRowsText(e.target.value)}
+          placeholder={"T-shirt | 5000 | YS, YM, YL | Royal, Black | 19.99 | 20\\nHoodie | 18500 | S, M, L | Black | 34.99 | 10"}/></label>
       <label className="growth-field"><span>Client terms and approval instructions</span><textarea value={terms} onChange={e=>setTerms(e.target.value)}/></label>
       <label className="growth-field"><span>Call to action / next step</span><textarea value={cta} onChange={e=>setCta(e.target.value)}/></label>
       <label className="growth-field"><span>Actual licensed product photo or approved mockup (optional for some templates)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>readMarketingImage(e.target.files?.[0],setProductImage)}/></label>
