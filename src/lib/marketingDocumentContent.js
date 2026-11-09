@@ -195,7 +195,11 @@ export function renderMarketingDocumentHtml(doc) {
         '</td><td>'+e(p.quantity || "TBC")+'</td><td>'+(amount||"TBC")+'</td><td>'+
         (amount&&Number.isInteger(qty)&&qty>0?money(Number(p.retailPrice)*qty):"TBC")+'</td></tr>';
     }).join('') + '</tbody></table>';
-  const blocks = [];\n  const story = marketingStory(doc);\n  if(story) blocks.push(story);\n  const process = marketingProcess(doc);\n  if(process) blocks.push(process);
+  const blocks = [];
+  const story = marketingStory(doc);
+  if(story) blocks.push(story);
+  const process = marketingProcess(doc);
+  if(process) blocks.push(process);
   if (doc.description) blocks.push(section("Overview", para(doc.description)));
   if (doc.aiText) blocks.push(section("Suggested marketing copy — review before sharing", para(doc.aiText)));
   if (["brand", "artwork", "color"].includes(kind)) {
