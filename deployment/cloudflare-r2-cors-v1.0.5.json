@@ -1,7 +1,8 @@
 [
   {
     "AllowedOrigins": [
-      "https://inventory.skilledcrafting.com"
+      "https://inventory.skilledcrafting.com",
+      "https://app.skilledcrafting.com"
     ],
     "AllowedMethods": [
       "GET",
