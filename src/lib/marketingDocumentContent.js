@@ -125,7 +125,27 @@ const marketingStories = {
  "capabilities-sheet": ["One creative partner. Many ways to make it.", "Skilled Crafting supports custom apparel, printing, engraving and personalization for schools, clubs, businesses and events.", ["Custom apparel and decoration","Personalized gifts and recognition","Artwork preparation and mockups","Online-store and order coordination"]]
 };
 function marketingStory(doc){
- const story=marketingStories[doc.template];if(!story)return "";
+ const story=marketingStories[doc.template] || (()=>{
+ const kind=marketingTemplates.find(t=>t.id===doc.template)?.kind;
+ const generic={
+  product:["Showcase the details that matter","Help your customer compare approved garments, available options and decoration details.",["Product features and options","Verified sizes and colors","Client-approved artwork","Pricing and fulfillment review"]],
+  catalog:["A collection made for your organization","Compare selected branded products and choose the right mix for your audience.",["Coordinated product range","Visual product previews","Clear selling prices","Simple selection and approval"]],
+  mockup:["See your design before production","Review the artwork and placement concept before approving the final specifications.",["Original client artwork","Garment and color choices","Placement review","Production proof approval"]],
+  pricing:["Clear choices. Confident decisions.","Review itemized pricing and quantities before confirming a custom order.",["Itemized options","Quantity-based planning","Approval of all charges","Fulfillment terms"]],
+  proposal:["A plan tailored to your goals","Bring product recommendations, artwork and practical ordering details into one clear proposal.",["Recommended merchandise","Artwork and branding","Transparent pricing","Next steps and approvals"]],
+  package:["A coordinated collection, not just individual products","Compare personalized items that work together for your team, business or event.",["Package concept","Personalization options","Budget planning","Timing and approvals"]],
+  outreach:["Start with a conversation about your goals","Explore the products and creative services that can support your organization.",["Your audience and goals","Product possibilities","Artwork and branding","An easy next step"]],
+  store:["Make ordering easier for your community","Plan a branded shopping experience around approved products and clear fulfillment expectations.",["Branded product collection","Easy supporter access","Order coordination","Launch and fulfillment planning"]],
+  artwork:["Protect your brand through careful proofing","Review logos, colors, sizing and placement before authorizing production.",["Original artwork","Color and size checks","Placement decisions","Documented sign-off"]],
+  brand:["Keep every application consistent","Create a practical reference for colors, artwork versions and decoration placement.",["Logo variants","Color guidance","Approved placement","Production review"]],
+  color:["Choose colors with confidence","Compare verified garment color references with your branding.",["Product color options","Visual swatches","Logo compatibility","Sample verification"]],
+  sample:["Evaluate a sample before committing","Confirm product, artwork and decoration details for a physical sample request.",["Sample specifications","Artwork placement","Costs and timing","Approval workflow"]],
+  intake:["Tell us what you're planning","A few key details help us recommend the right products and production approach.",["Audience and purpose","Products and quantities","Artwork readiness","Budget and timing"]],
+  onboarding:["From approval to delivery","Follow a clear ordering process with fewer surprises.",["Confirm products","Approve artwork","Review pricing","Plan fulfillment"]],
+  description:["Make every product easy to understand","Show customers what makes this custom item a good fit.",["Product identity","Available options","Decoration details","Ordering information"]]
+ };
+ return generic[kind];
+ })();if(!story)return "";
  const [headline,summary,points]=story;
  return '<div class="hero-story"><div class="eyebrow">SKILLED CRAFTING / '+e(doc.segment||"CUSTOM PROGRAMS")+'</div><h2>'+e(headline)+'</h2><p>'+e(summary)+'</p></div>'+
  '<div class="benefit-grid">'+points.map((point,i)=>'<div class="benefit"><span class="benefit-number">0'+(i+1)+'</span><strong>'+e(point)+'</strong></div>').join("")+'</div>';
