@@ -89,7 +89,7 @@ export function exportSchoolProgramPdf(d){
  benefits.forEach((item,i)=>{
   const x=30+i*140;
   pdf.setFillColor(...light);pdf.roundedRect(x,184,132,105,7,7,"F");
-  pdf.setFillColor(...red);pdf.circle(x+15,200,5,"F");
+  pdf.setFillColor(...red);pdf.roundedRect(x+10,195,10,10,5,5,"F");
   write(item[0],x+9,221,9,navy,true);
   multiline(item[1],x+9,239,113,8,ink,11);
  });
@@ -102,7 +102,7 @@ export function exportSchoolProgramPdf(d){
  ];
  steps.forEach((item,i)=>{
   const y=338+i*40;
-  pdf.setFillColor(...red);pdf.circle(43,y+4,12,"F");
+  pdf.setFillColor(...red);pdf.roundedRect(31,y-8,24,24,12,12,"F");
   write(item[0],39,y+8,11,white,true);
   write(item[1],65,y,9,navy,true);
   write(item[2],65,y+14,8,ink);
