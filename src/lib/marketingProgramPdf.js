@@ -58,31 +58,85 @@ function requireBrand(d){
  if(!d.contact.email?.trim()&&!d.contact.phone?.trim())throw Error("Enter a business phone or email.");
  if(!d.contact.website?.trim())throw Error("Enter the business website.");
 }
+/** Value-led, print-safe one-page flyer. All commercial figures come from approved editor inputs. */
 export function exportSchoolProgramPdf(d){
  validateProgramProducts(d.products,true);requireBrand(d);
  const pdf=new jsPDF({unit:"pt",format:"letter",compress:true});
- header(pdf,d,"SCHOOL SPIRIT WEAR","Schools  |  Clubs  |  Teams  |  Sports programs");
- text(pdf,"YOUR SCHOOL. YOUR COLORS. YOUR COMMUNITY.",30,136,16,navy,true);
- text(pdf,d.organization?"Prepared for "+d.organization:"A spirit-wear program built around your community",30,155,10,teal);
- card(pdf,d.products.find(p=>p.type==="tee"),30,172,265,280);
- card(pdf,d.products.find(p=>p.type==="hoodie"),305,172,275,280);
- rect(pdf,30,465,550,113,[224,244,239]);
- text(pdf,"HOW THE WHOLESALE to RETAIL ARRANGEMENT WORKS",44,487,12,navy,true);
- ["1. We agree on decorated wholesale prices and approved product options.",
-  "2. Your school, club or team sets the retail price charged to supporters.",
-  "3. Your organization keeps the retail-minus-wholesale difference per sale.",
-  "4. We agree on order collection, delivery, taxes and payout terms in writing."
- ].forEach((v,i)=>text(pdf,v,44,508+i*18,9));
- const tee=programPriceRows(d.products.find(p=>p.type==="tee"))[0],hoodie=programPriceRows(d.products.find(p=>p.type==="hoodie"))[0];
- text(pdf,"ILLUSTRATIVE PER-ITEM RETURN",30,606,12,teal,true);
- text(pdf,"Tee: "+money(tee.wholesale)+" wholesale  to  "+money(tee.retail)+" retail  =  "+money(tee.school)+" for your program",30,626,10);
- text(pdf,"Hoodie: "+money(hoodie.wholesale)+" wholesale  to  "+money(hoodie.retail)+" retail  =  "+money(hoodie.school)+" for your program",30,644,10);
- text(pdf,"CUSTOM MERCHANDISE, MADE SIMPLE",30,672,12,navy,true);
- pdf.setFontSize(9);pdf.setTextColor(...navy);
- const lines=pdf.splitTextToSize(d.notes||"School-logo tees and hoodies, artwork proofing, size and color choices, ordering options and fulfillment planning.",545).slice(0,3);
- pdf.text(lines,30,691);
- text(pdf,"LET'S BUILD YOUR SCHOOL PROGRAM — CONTACT US",30,728,11,teal,true);
- footer(pdf,d,1);pdf.save("skilled-crafting-school-spirit-wear.pdf");
+ const tee=d.products.find(p=>p.type==="tee"),hoodie=d.products.find(p=>p.type==="hoodie");
+ const t=programPriceRows(tee)[0],h=programPriceRows(hoodie)[0];
+ const white=[255,255,255],red=[194,32,46],light=[237,244,250],ink=[23,45,76];
+ const write=(value,x,y,size=9,color=ink,bold=false)=>text(pdf,value,x,y,size,color,bold);
+ const multiline=(value,x,y,width,size=9,color=ink,leading=12)=>{
+  pdf.setFont("helvetica","normal");pdf.setFontSize(size);pdf.setTextColor(...color);
+  const lines=pdf.splitTextToSize(String(value),width);
+  pdf.text(lines,x,y,{lineHeightFactor:leading/size});
+ };
+ pdf.setFillColor(...navy);pdf.rect(0,0,612,99,"F");
+ pdf.setFillColor(...red);pdf.rect(0,96,612,4,"F");
+ image(pdf,d.businessLogo,29,12,86,68);
+ write("SKILLED CRAFTING",125,39,19,white,true);
+ write("CUSTOM APPAREL  |  PRINTING  |  PERSONALIZATION",125,56,8,[223,236,247]);
+ write("YOUR LOCAL SPIRIT WEAR PARTNER",125,78,11,white,true);
+ write("SCHOOL SPIRIT WEAR PROGRAM",30,132,20,navy,true);
+ write("Build school pride. Support your programs. Make ordering easier.",30,151,11,red,true);
+ if(d.organization)write("A program prepared for "+d.organization,30,168,9,teal);
+ const benefits=[
+  ["SCHOOL PRIDE","School-branded apparel for students, families, staff and fans."],
+  ["PROGRAM FUNDING","Set a selling price above your approved wholesale cost."],
+  ["EASY ONLINE ORDERS","A dedicated storefront helps supporters order directly."],
+  ["LOCAL SUPPORT","Artwork preparation, product guidance and fulfillment planning."]
+ ];
+ benefits.forEach((item,i)=>{
+  const x=30+i*140;
+  pdf.setFillColor(...light);pdf.roundedRect(x,184,132,105,7,7,"F");
+  pdf.setFillColor(...red);pdf.roundedRect(x+10,195,10,10,5,5,"F");
+  write(item[0],x+9,221,9,navy,true);
+  multiline(item[1],x+9,239,113,8,ink,11);
+ });
+ write("HOW YOUR PROGRAM WORKS",30,318,13,navy,true);
+ const steps=[
+  ["1","PLAN TOGETHER","Choose products, artwork and a pricing approach."],
+  ["2","WE BUILD YOUR STORE","Offer approved designs and sizes in an online storefront."],
+  ["3","SUPPORTERS ORDER","Families and fans shop; we coordinate production."],
+  ["4","YOUR PROGRAM BENEFITS","Reconcile sales and proceeds under agreed terms."]
+ ];
+ steps.forEach((item,i)=>{
+  const y=338+i*40;
+  pdf.setFillColor(...red);pdf.roundedRect(31,y-8,24,24,12,12,"F");
+  write(item[0],39,y+8,11,white,true);
+  write(item[1],65,y,9,navy,true);
+  write(item[2],65,y+14,8,ink);
+ });
+ pdf.setFillColor(228,239,248);pdf.roundedRect(315,308,267,192,9,9,"F");
+ write("THE WHOLESALE - RETAIL ADVANTAGE",329,332,11,navy,true);
+ multiline("We agree on your decorated wholesale price. Your organization chooses an approved retail price and retains the difference on each sale.",329,350,237,9,ink,13);
+ pdf.setFillColor(...navy);pdf.rect(329,399,239,23,"F");
+ write("EXAMPLE",337,415,8,white,true);
+ write("WHOLESALE",402,415,7,white,true);
+ write("RETAIL",473,415,7,white,true);
+ write("RETURN",529,415,7,white,true);
+ [["Tee",t],["Hoodie",h]].forEach(([name,row],i)=>{
+  const y=440+i*27;
+  write(name,337,y,9,ink,true);write(money(row.wholesale),405,y,9);
+  write(money(row.retail),473,y,9);write(money(row.school),529,y,9,red,true);
+ });
+ write("Examples only; actual prices and payout terms vary.",329,490,7,[90,104,110]);
+ write("WHY PARTNER WITH SKILLED CRAFTING?",30,531,12,navy,true);
+ multiline("Custom school branding  |  Product and decoration guidance  |  Online storefront options  |  Quality-focused production  |  One local point of contact",30,549,547,9,ink,13);
+ pdf.setDrawColor(199,215,227);pdf.line(30,583,582,583);
+ write("A FEW WAYS TO SHOW YOUR SCHOOL PRIDE",30,601,11,navy,true);
+ // Product samples are intentionally secondary: a compact row near the bottom.
+ image(pdf,tee.mockup,91,608,118,83);
+ image(pdf,hoodie.mockup,350,608,118,83);
+ write("SPIRIT TEE",124,703,9,navy,true);
+ write("SPIRIT HOODIE",379,703,9,navy,true);
+ pdf.setFillColor(...navy);pdf.rect(0,718,612,74,"F");
+ write("LET'S BUILD YOUR SCHOOL PROGRAM",30,741,12,white,true);
+ write([d.contact.phone,d.contact.email].filter(Boolean).join("  |  "),30,758,9,white);
+ write(d.contact.website||"",30,773,9,[222,238,247],true);
+ if(d.contact.address)write(d.contact.address,330,773,8,white);
+ write("Pricing, fulfillment and program terms subject to written agreement.",330,788,6,[222,238,247]);
+ pdf.save("skilled-crafting-school-spirit-wear.pdf");
 }
 export function exportClientCatalogPdf(d){
  validateProgramProducts(d.products);requireBrand(d);

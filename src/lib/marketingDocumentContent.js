@@ -110,12 +110,57 @@ const conceptList = segment => '<ul>' + (conceptPrograms[segment] || conceptProg
   .map(item => '<li>' + e(item) + '</li>').join('') + '</ul>';
 
 
+const marketingStories = {
+ "brochure-sports": ["Build a stronger team identity", "Coordinated uniforms, fan apparel and recognition products help your program look and feel connected.", ["Team colors and artwork","Fan and family merchandise","Coach and volunteer recognition","Storefront or team-order planning"]],
+ "brochure-schools": ["More school pride. More support for your programs.", "Bring students, families, staff and fans together with school-branded merchandise and a convenient way to order.", ["Spirit wear and staff apparel","Wholesale-to-retail fundraising options","Dedicated school storefront planning","Local artwork and production guidance"]],
+ "brochure-business": ["Make your brand part of the workday", "Give your team a consistent, professional look with branded apparel and practical promotional merchandise.", ["Employee apparel and workwear","Logo placement and artwork support","Reordering and size coordination","Recognition and branded gifts"]],
+ "brochure-nonprofit": ["Turn community support into something visible", "Equip volunteers and supporters with branded merchandise designed around your cause and event.", ["Volunteer and event apparel","Fundraiser merchandise concepts","Supporter ordering options","Clear product and fulfillment planning"]],
+ "brochure-wedding": ["Personal details that make an event memorable", "Coordinate custom keepsakes, signage, glassware and gifts with one creative production partner.", ["Personalized gifts and favors","Welcome and table signage","Glassware and keepsakes","Artwork proofing and event timelines"]],
+ "coach-recognition": ["Recognize the people behind the season", "Build coordinated appreciation gifts for coaches and volunteers using your club identity.", ["Personalized apparel and hats","Engraved or printed keepsakes","Package choices by budget","Proofing and presentation options"]],
+ "wedding-package": ["Thoughtful details, designed for your day", "Plan a cohesive collection of custom event pieces, from welcome signage to take-home gifts.", ["Coordinated design theme","Personalized favors and glassware","Decor and keepsake options","Production timing and approvals"]],
+ "employee-recognition": ["Recognition that feels personal", "Combine branded apparel and custom gifts to celebrate your people and milestones.", ["Staff gift packages","Personalized awards","Apparel and accessories","Budget and delivery planning"]],
+ "event-merchandise": ["Make the event memorable beyond the day", "Offer merchandise and keepsakes that reinforce your event identity.", ["Attendee apparel","Commemorative gifts","Sponsor and staff branding","Order and pickup planning"]],
+ "fundraising-proposal": ["A practical way to support your program", "Offer products your community wants while agreeing in advance on selling prices, costs and proceeds.", ["Approved wholesale and retail pricing","Store or group-order options","Reconciliation and payout terms","Artwork, tax and fulfillment review"]],
+ "store-launch": ["An easier way for supporters to order", "Give your community a clear, branded destination for approved products.", ["Branded storefront concept","Product and size selections","Payment and ordering flow","Fulfillment and launch checklist"]],
+ "capabilities-sheet": ["One creative partner. Many ways to make it.", "Skilled Crafting supports custom apparel, printing, engraving and personalization for schools, clubs, businesses and events.", ["Custom apparel and decoration","Personalized gifts and recognition","Artwork preparation and mockups","Online-store and order coordination"]]
+};
+function marketingStory(doc){
+ const story=marketingStories[doc.template] || (()=>{
+ const kind=marketingTemplates.find(t=>t.id===doc.template)?.kind;
+ const generic={
+  product:["Showcase the details that matter","Help your customer compare approved garments, available options and decoration details.",["Product features and options","Verified sizes and colors","Client-approved artwork","Pricing and fulfillment review"]],
+  catalog:["A collection made for your organization","Compare selected branded products and choose the right mix for your audience.",["Coordinated product range","Visual product previews","Clear selling prices","Simple selection and approval"]],
+  mockup:["See your design before production","Review the artwork and placement concept before approving the final specifications.",["Original client artwork","Garment and color choices","Placement review","Production proof approval"]],
+  pricing:["Clear choices. Confident decisions.","Review itemized pricing and quantities before confirming a custom order.",["Itemized options","Quantity-based planning","Approval of all charges","Fulfillment terms"]],
+  proposal:["A plan tailored to your goals","Bring product recommendations, artwork and practical ordering details into one clear proposal.",["Recommended merchandise","Artwork and branding","Transparent pricing","Next steps and approvals"]],
+  package:["A coordinated collection, not just individual products","Compare personalized items that work together for your team, business or event.",["Package concept","Personalization options","Budget planning","Timing and approvals"]],
+  outreach:["Start with a conversation about your goals","Explore the products and creative services that can support your organization.",["Your audience and goals","Product possibilities","Artwork and branding","An easy next step"]],
+  store:["Make ordering easier for your community","Plan a branded shopping experience around approved products and clear fulfillment expectations.",["Branded product collection","Easy supporter access","Order coordination","Launch and fulfillment planning"]],
+  artwork:["Protect your brand through careful proofing","Review logos, colors, sizing and placement before authorizing production.",["Original artwork","Color and size checks","Placement decisions","Documented sign-off"]],
+  brand:["Keep every application consistent","Create a practical reference for colors, artwork versions and decoration placement.",["Logo variants","Color guidance","Approved placement","Production review"]],
+  color:["Choose colors with confidence","Compare verified garment color references with your branding.",["Product color options","Visual swatches","Logo compatibility","Sample verification"]],
+  sample:["Evaluate a sample before committing","Confirm product, artwork and decoration details for a physical sample request.",["Sample specifications","Artwork placement","Costs and timing","Approval workflow"]],
+  intake:["Tell us what you're planning","A few key details help us recommend the right products and production approach.",["Audience and purpose","Products and quantities","Artwork readiness","Budget and timing"]],
+  onboarding:["From approval to delivery","Follow a clear ordering process with fewer surprises.",["Confirm products","Approve artwork","Review pricing","Plan fulfillment"]],
+  description:["Make every product easy to understand","Show customers what makes this custom item a good fit.",["Product identity","Available options","Decoration details","Ordering information"]]
+ };
+ return generic[kind];
+ })();if(!story)return "";
+ const [headline,summary,points]=story;
+ return '<div class="hero-story"><div class="eyebrow">SKILLED CRAFTING / '+e(doc.segment||"CUSTOM PROGRAMS")+'</div><h2>'+e(headline)+'</h2><p>'+e(summary)+'</p></div>'+
+ '<div class="benefit-grid">'+points.map((point,i)=>'<div class="benefit"><span class="benefit-number">0'+(i+1)+'</span><strong>'+e(point)+'</strong></div>').join("")+'</div>';
+}
+function marketingProcess(doc){
+ if(!["brochure","fundraiser","store","package","proposal"].includes(marketingTemplates.find(t=>t.id===doc.template)?.kind))return "";
+ const steps=["Plan products, artwork and goals together","Confirm decoration, pricing and approvals","Choose an ordering and fulfillment approach","Review results and next steps"];
+ return '<section class="process"><h2>How we work together</h2><div class="process-grid">'+steps.map((step,i)=>'<div><b>'+e(String(i+1))+'</b><span>'+e(step)+'</span></div>').join("")+'</div></section>';
+}
 export function renderMarketingDocumentHtml(doc) {
   const missing = marketingDocumentMissing(doc);
   const template = marketingTemplates.find(x => x.id === doc.template);
   const kind = template?.kind || "outreach";
   const brand = doc.branding || { color_details: [], placements: [], variants: [], typography: "", printing: "" };
-  const accent = (brand.colors || []).find(x => /^#[0-9a-f]{6}$/i.test(x)) || "#184D47";
+  const accent = (brand.colors || []).find(x => /^#[0-9a-f]{6}$/i.test(x)) || "#C51F32";
   const note = missing.length
     ? '<div class="warning"><strong>DRAFT — INFORMATION REQUIRED BEFORE FINAL APPROVAL</strong><ul>' +
       missing.map(x => '<li>' + e(x) + '</li>').join('') + '</ul></div>'
@@ -151,6 +196,10 @@ export function renderMarketingDocumentHtml(doc) {
         (amount&&Number.isInteger(qty)&&qty>0?money(Number(p.retailPrice)*qty):"TBC")+'</td></tr>';
     }).join('') + '</tbody></table>';
   const blocks = [];
+  const story = marketingStory(doc);
+  if(story) blocks.push(story);
+  const process = marketingProcess(doc);
+  if(process) blocks.push(process);
   if (doc.description) blocks.push(section("Overview", para(doc.description)));
   if (doc.aiText) blocks.push(section("Suggested marketing copy — review before sharing", para(doc.aiText)));
   if (["brand", "artwork", "color"].includes(kind)) {
@@ -209,16 +258,16 @@ export function renderMarketingDocumentHtml(doc) {
   const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>' + e(doc.organization) + ' — ' + e(docType(doc.template)) + '</title>' +
     '<style>*{box-sizing:border-box}body{font:15px/1.5 system-ui,Arial,sans-serif;margin:0;color:#1a2833;background:#eef2f3}' +
-    'main{max-width:920px;margin:26px auto;background:white;padding:42px;box-shadow:0 2px 12px #0001}header{border-top:9px solid ' + accent +
-    ';padding-top:24px;margin-bottom:28px}small,.subtitle{color:#596974}h1{font-size:34px;margin:8px 0}h2{font-size:19px;border-bottom:1px solid #d2dbdf;padding-bottom:7px}' +
-    'section{margin:26px 0;break-inside:avoid-page}.prose{white-space:pre-wrap;overflow-wrap:anywhere}.media,.grid,.swatches{display:flex;gap:15px;flex-wrap:wrap}' +
+    'main{max-width:920px;margin:26px auto;background:white;padding:38px 42px;box-shadow:0 4px 24px #0002;border-radius:5px}header{background:#102f56;color:white;border-top:9px solid ' + accent +
+    ';padding:22px 25px;margin:-38px -42px 26px}header small,header .subtitle{color:#dce8f4}small,.subtitle{color:#596974}h1{font-size:30px;margin:8px 0}h2{font-size:19px;color:#102f56;border-bottom:2px solid #e4eaf2;padding-bottom:7px}' +
+    'section{margin:23px 0;break-inside:avoid-page}.hero-story{padding:24px;background:#eaf1f9;border-left:7px solid '+accent+';margin:18px 0}.hero-story .eyebrow{font-size:10px;letter-spacing:2px;font-weight:800;color:#bd263b}.hero-story h2{font-size:26px;line-height:1.18;border:0;margin:8px 0}.hero-story p{font-size:15px;margin:8px 0}.benefit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}.benefit{background:#f3f6fb;border-top:3px solid #c51f32;padding:13px;display:flex;align-items:center;gap:10px;min-height:68px}.benefit-number{font-size:20px;color:#c51f32;font-weight:800}.process-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.process-grid div{background:#102f56;color:white;padding:12px;min-height:104px}.process-grid b{display:block;color:#f4a5ae;font-size:20px}.process-grid span{font-size:12px}.prose{white-space:pre-wrap;overflow-wrap:anywhere}.media,.grid,.swatches{display:flex;gap:15px;flex-wrap:wrap}' +
     '.media img{max-height:260px;max-width:45%;object-fit:contain;border:1px solid #dae2e6;padding:8px}.gallery-card{flex:1;min-width:180px;max-width:310px;margin:0;border:1px solid #dae2e6;padding:10px}.gallery-card img{max-width:100%;width:100%;height:180px;object-fit:contain;border:0}.gallery-card figcaption{font-weight:600;padding-top:6px}.option{border:1px solid #d7e0e5;padding:12px;min-width:160px;flex:1}' +
     '.optionimage{display:block;max-height:190px;max-width:100%;margin:12px auto;object-fit:contain}.detail{display:flex;gap:12px;border-bottom:1px solid #edf1f3;padding:7px 0}' +
     '.detail strong{min-width:190px}.swatch{min-width:140px;display:flex;flex-direction:column;gap:4px}.color{height:62px;border:1px solid #ddd}' +
-    'table{border-collapse:collapse;width:100%;margin:16px 0}th,td{padding:11px;border:1px solid #d4dce0;text-align:left}th{background:#e9f0f2}' +
+    'table{border-collapse:collapse;width:100%;margin:16px 0}th,td{padding:11px;border:1px solid #d4dce0;text-align:left}th{background:#102f56;color:white}' +
     '.warning{border:2px solid #ad6b25;background:#fff7e9;padding:15px}.approval{border:1px solid #bdcdd1;padding:12px}' +
     'footer{color:#62717b;border-top:1px solid #c6d2d5;padding-top:12px;font-size:12px}@media print{body{background:white}main{margin:0;max-width:none;box-shadow:none;padding:14px 20px}' +
-    'header{print-color-adjust:exact;-webkit-print-color-adjust:exact}.color{print-color-adjust:exact;-webkit-print-color-adjust:exact}section{break-inside:auto}tr,.option{break-inside:avoid}}</style></head><body><main>' +
+    'header,.hero-story,.benefit,.process-grid div,th{print-color-adjust:exact;-webkit-print-color-adjust:exact}.color{print-color-adjust:exact;-webkit-print-color-adjust:exact}section{break-inside:auto}tr,.option{break-inside:avoid}}</style></head><body><main>' +
     '<header><small>SKILLED CRAFTING · ' + (missing.length ? "DRAFT FOR REVIEW" : "CLIENT REVIEW COPY") + '</small><h1>' +
     e(doc.organization || "Prospective client") + '</h1><div class="subtitle">' + e(docType(doc.template)) +
     ' · Prepared ' + e(String(doc.generated_at || "").slice(0, 10)) + '</div></header>' +
