@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from './components/AppShell';
 import './App.css';
 import AuthGate from './AuthGate';
+import ResetPassword from './ResetPassword';
 
 const ActivityPage = lazy(() => import('./ActivityPage'));
 const AddItemToBin = lazy(() => import('./AddItemToBin'));
@@ -294,6 +295,7 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<RouteLoading />}>
         <Routes>
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/customer-portal" element={publicPage(<CustomerPortal />)} />
           <Route path="/team-order" element={publicPage(<PublicClientOrderForm />)} />
           <Route path="/design" element={publicPage(<PublicDesignConfigurator />)} />
