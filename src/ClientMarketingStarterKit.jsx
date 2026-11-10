@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { getMockupProjectBundle, signedAssetUrl, searchMockupBlankCatalog } from "./lib/mockupStudioApi";
 
 /**
@@ -52,7 +53,14 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   async function choose(asset) {
     setBusy(true); setError("");
     try {
-      const url = asset.kind === "catalog" ? asset.row.image_url : await signedAssetUrl(asset.row, 300, { preferPreview: false });
+      let url = asset.kind === "catalog" ? asset.row.image_url : "";
+      if (asset.kind !== "catalog") {
+        const source = asset.kind === "logo" ? "mockup_artwork_assets" : asset.kind === "blank" ? "mockup_blank_assets" : "mockup_outputs";
+        const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId, source, asset_id: asset.row.id, sign_download: true }) });
+        const result = await response.json();
+        if (!response.ok || !result.url) throw Error(result.message || "This artwork is not authorized for the selected client.");
+        url = result.url;
+      }
       if (asset.kind === "catalog" && !/^https:\/\//i.test(url || "")) throw Error("Catalog image must use a secure HTTPS source.");
       if (!url) throw Error("The original file is not available from storage.");
       const response = await fetch(url);
