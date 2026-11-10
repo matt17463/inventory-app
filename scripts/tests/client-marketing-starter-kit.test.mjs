@@ -57,3 +57,12 @@ test('Cross-client search is opt-in and limited to R2-backed blank graphics', ()
   assert.match(migration, /not coalesce\(reusable_blank, false\)/);
   assert.match(migration, /storage_provider = 'r2'/);
 });
+
+test('Shared asset endpoint loads the account before reading customer_id', () => {
+  const server = readFileSync(new URL('../../netlify/functions/marketing-shared-asset.js', import.meta.url), 'utf8');
+  const accountLookup = server.indexOf("const { data: account, error: accountError }");
+  const accountCheck = server.indexOf("if (!account.customer_id");
+  assert.ok(accountLookup > 0, 'account lookup must exist');
+  assert.ok(accountCheck > accountLookup, 'account must be initialized before checking its customer');
+  assert.match(server, /if \(!account\) return jsonResponse\(404/);
+});
