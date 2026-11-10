@@ -40,7 +40,7 @@ export const handler=async event=>{
    if(!/^[0-9a-f-]{36}$/i.test(userId))return fail(event,400,'Valid employee account required.');
    const {data:existing,error:lookupError}=await db.auth.admin.getUserById(userId);
    if(lookupError||!existing?.user?.email)return fail(event,404,'Employee account not found.');
-   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\\/+$/,'')+'/reset-password';
+   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\/+$/,'')+'/reset-password';
    const {error:resetError}=await db.auth.resetPasswordForEmail(existing.user.email,{redirectTo:redirect});
    await auditFunctionSecurity({functionName:'user-management',action:'password_reset_requested',
     outcome:resetError?'failed':'sent',userId:auth.user.id,role:auth.role,event,metadata:{target_user_id:userId}});
