@@ -1,7 +1,7 @@
 -- Validate cross-module artwork provenance even for direct PostgREST writes.
 -- This does not alter existing Mockup Studio employee workflows.
 create or replace function sc_internal.sc_growth_shared_asset_guard()
-returns trigger language plpgsql security invoker set search_path = public, pg_temp as $$
+returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $$
 declare
   item jsonb;
   source_name text;
@@ -11,6 +11,9 @@ declare
   asset_status text;
   client_customer text;
 begin
+  if auth.uid() is not null and not public.sc_internal_access_allowed(array['admin','manager','operator','marketing']) then
+    raise exception 'Employee permission required for shared artwork references';
+  end if;
   select customer_id::text into client_customer
   from public.sc_growth_accounts where id = new.account_id;
   for item in
@@ -20,7 +23,7 @@ begin
       || coalesce(new.content->'marketing_logo_options', '[]'::jsonb)
     )
   loop
-    if item is null or jsonb_typeof(item) = 'null' or not (item ? 'source') then continue; end if;
+    if item is null or jsonb_typeof(item) <> 'object' or not (item ? 'source') then continue; end if;
     source_name := item->>'source';
     if source_name = 'blank_products' then
       if not exists(select 1 from public.blank_products where id::text = item->>'asset_id' and sc_is_archived = false)
@@ -49,7 +52,7 @@ begin
   end loop;
   return new;
 end $$;
-revoke all on function sc_internal.sc_growth_shared_asset_guard() from public, anon;
+revoke all on function sc_internal.sc_growth_shared_asset_guard() from public, anon, authenticated;
 drop trigger if exists sc_growth_shared_asset_guard on public.sc_growth_documents;
 create trigger sc_growth_shared_asset_guard
 before insert or update of content, account_id on public.sc_growth_documents
