@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import './passwordSecurity.css';
 import { supabase } from './supabaseClient';
 import { passwordProblem } from './lib/passwordSecurity';
 
