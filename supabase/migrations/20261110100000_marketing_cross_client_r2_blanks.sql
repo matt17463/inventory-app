@@ -33,7 +33,6 @@ begin
     end if;
     if source_name not in ('mockup_artwork_assets','mockup_blank_assets','mockup_outputs')
       then raise exception 'Unsupported shared asset source'; end if;
-    if client_customer is null then raise exception 'Marketing account must be linked to a customer'; end if;
     begin asset_id := (item->>'asset_id')::uuid;
     exception when invalid_text_representation then raise exception 'Invalid shared asset identifier'; end;
     reusable_blank := false;
@@ -50,7 +49,7 @@ begin
     end if;
     if asset_project is null then raise exception 'Shared artwork asset not found'; end if;
     select customer_id_text into linked_customer from public.mockup_projects where id = asset_project;
-    if not coalesce(reusable_blank, false) and linked_customer is distinct from client_customer
+    if not coalesce(reusable_blank, false) and (client_customer is null or linked_customer is distinct from client_customer)
       then raise exception 'Shared artwork belongs to another customer'; end if;
   end loop;
   return new;
