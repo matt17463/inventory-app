@@ -14,7 +14,7 @@ export async function handler(event) {
     const { data: account, error: accountError } = await auth.supabase.from('sc_growth_accounts').select('id,customer_id').eq('id', body.account_id).maybeSingle();
     if (accountError) throw accountError;
     if (!account?.customer_id) return jsonResponse(403, { message: 'Marketing account must be linked to a customer' }, event);
-    const { data: asset, error: assetError } = await auth.supabase.from(body.source).select('id,project_id,storage_path,storage_provider,storage_bucket,source_url,approval_status').eq('id', body.asset_id).maybeSingle();
+    const { data: asset, error: assetError } = await auth.supabase.from(body.source).select('*').eq('id', body.asset_id).maybeSingle();
     if (assetError) throw assetError;
     if (!asset?.project_id) return jsonResponse(404, { message: 'Asset not found' }, event);
     const { data: project, error: projectError } = await auth.supabase.from('mockup_projects').select('id,customer_id_text').eq('id', asset.project_id).maybeSingle();
