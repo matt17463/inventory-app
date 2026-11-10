@@ -32,6 +32,7 @@ import {
 } from "./lib/growthPricing";
 import "./MarketingWorkspace.css";
 import MarketingDocumentStudio from "./MarketingDocumentStudio";
+import MarketingClientLogo from "./MarketingClientLogo";
 
 const label = (v) => String(v || "").replaceAll("_", " ");
 const money = (v) =>
@@ -961,6 +962,7 @@ export default function MarketingWorkspace() {
         {editor.table === "accounts"
           ? (form, change) => (
               <>
+                <MarketingClientLogo accountId={form.id} value={form.marketing_logo_key} onChange={key => change("marketing_logo_key", key)} />
                 <h3>Client pricing defaults</h3>
                 <TermsFields
                   config={{ ...defaultGrowthPricing, ...form.pricing_defaults }}

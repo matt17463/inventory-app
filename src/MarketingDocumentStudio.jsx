@@ -9,6 +9,7 @@ import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
+import { marketingLogoRequest } from "./MarketingClientLogo";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
 export default function MarketingDocumentStudio({ organizations = [], manager = false }) {
@@ -23,6 +24,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [historyDocument,setHistoryDocument]=useState(null);
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
+  const [accountMarketingLogo, setAccountMarketingLogo] = useState(null);
   const [sharedAssetReferences, setSharedAssetReferences] = useState({});
   const [colors, setColors] = useState("");
   const [description, setDescription] = useState("");
@@ -52,6 +54,16 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
+  useEffect(() => {
+    let active = true;
+    setLogo("");
+    setAccountMarketingLogo(null);
+    const selected = organizations.find(a => a.id === accountId);
+    if (selected?.marketing_logo_key) marketingLogoRequest(accountId, selected.marketing_logo_key)
+      .then(url => { if (active) { setLogo(url); setAccountMarketingLogo({storage_provider:"r2",key:selected.marketing_logo_key}); } })
+      .catch(() => { if (active) setError("Client marketing logo could not be loaded. You can upload another logo."); });
+    return () => { active = false; };
+  }, [accountId, organizations]);
   useEffect(() => {
     if (!accountId) return;
     let active=true;
@@ -128,6 +140,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     reader.onload = () => {
       const url = String(reader.result || "");
       setLogo(url);
+      setAccountMarketingLogo(null);
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -246,7 +259,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       }
       // Persist the exact uploaded raster in private R2, never as a public data URL.
       let storedArtwork = null;
-      if(guide.logo && !verifiedReferences[guide.logo]){
+      if(guide.logo && !verifiedReferences[guide.logo] && !(accountMarketingLogo && guide.logo === logo)){
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(guide.logo);
         if(!match)throw Error("Choose a PNG, JPEG or WebP logo to save.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -279,8 +292,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       void unusedLocalImage;void unusedLocalProductImage;void unusedLocalGallery;void unusedLocalOptions;void internalSupplierOffer;
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
         account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
-        content: { ...safeGuide, marketing_artwork: storedArtwork || sharedAssetReferences[guide.logo] || null, marketing_product_image:storedProductImage,
-          marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
+        content: { ...safeGuide, marketing_artwork: storedArtwork || verifiedReferences[guide.logo] || (accountMarketingLogo && guide.logo === logo ? accountMarketingLogo : null), marketing_product_image:storedProductImage,
+          marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork && !verifiedReferences[guide.logo] && !(accountMarketingLogo && guide.logo === logo)) }
       });
       if (insertError) throw insertError;
       setSaveStatus(storedArtwork?"Draft and exact client artwork saved securely to R2.":"Draft saved to this client.");
@@ -325,7 +338,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Logo colors (editable HEX values, separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
-    <ClientMarketingStarterKit accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
+    <ClientMarketingStarterKit accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
     {template==="product-guide" && <><MarketingSupplierCompare onChoose={item=>{setSupplier(Object.keys(marketingSuppliers).find(key=>marketingSuppliers[key].name===item.supplier_name)||"sanmar");setStyle(item.name);setSku(item.sku);setUnitCost(String(item.unit_cost));setObservedAt(item.observed_at.slice(0,10));setSourceUrl(item.source_url);setSizes(item.sizes.join(", "));setProductColors(item.colors.join(", "));setGuide(null);}}/><h3>Verified supplier product (optional until catalog feed is connected)</h3><div className="growth-grid">
       <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
       <label className="growth-field"><span>Product name/style</span><input value={style} onChange={e=>setStyle(e.target.value)}/></label>
