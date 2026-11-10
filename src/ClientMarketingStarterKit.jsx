@@ -63,8 +63,11 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
       const dataUrl = await new Promise((resolve,reject) => {
         const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || "")); reader.onerror = reject; reader.readAsDataURL(blob);
       });
-      if (asset.kind === "logo") onSelectLogo(dataUrl);
-      else onSelectProduct(dataUrl);
+      const reference = asset.kind === "catalog"
+        ? { source: "blank_products", asset_id: asset.row.id, source_url: url }
+        : { source: asset.kind === "logo" ? "mockup_artwork_assets" : asset.kind === "blank" ? "mockup_blank_assets" : "mockup_outputs", asset_id: asset.row.id, project_id: asset.row.project_id, storage_path: asset.row.storage_path || null };
+      if (asset.kind === "logo") onSelectLogo(dataUrl, reference);
+      else onSelectProduct(dataUrl, reference);
     } catch (e) { setError(e.message || "Unable to select this asset."); }
     finally { setBusy(false); }
   }
