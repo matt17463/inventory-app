@@ -1,3 +1,4 @@
+import { signedStoredAssetUrl } from './_shared/mockupStorage.js';
 import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 
 const TABLES = new Set(['mockup_artwork_assets', 'mockup_blank_assets', 'mockup_outputs']);
@@ -21,7 +22,8 @@ export async function handler(event) {
     if (projectError) throw projectError;
     if (!project || String(project.customer_id_text) !== String(account.customer_id)) return jsonResponse(403, { message: 'Asset is not linked to this customer' }, event);
     if (body.source === 'mockup_outputs' && !['internal_approved', 'customer_approved'].includes(asset.approval_status)) return jsonResponse(403, { message: 'Mockup is not approved' }, event);
-    return jsonResponse(200, { reference: { source: body.source, asset_id: asset.id, project_id: project.id } }, event);
+    const url = body.sign_download ? await signedStoredAssetUrl(auth.supabase, asset, 300) : undefined;
+    return jsonResponse(200, { reference: { source: body.source, asset_id: asset.id, project_id: project.id }, ...(url ? { url } : {}) }, event);
   } catch (error) {
     console.error('Shared asset reference validation failed', error);
     return jsonResponse(500, { message: 'Unable to validate shared asset' }, event);
