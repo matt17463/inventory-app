@@ -14,8 +14,7 @@ test("Wholesale-retail difference is not internal supplier cost",()=>{
  assert.equal(rows[1].school,8);
  assert.equal(rows[1].min,24);
 });
-test("Reject missing mockups, invalid price matrix and missing tee/hoodie",()=>{
- assert.throws(()=>api.validateProgramProducts([product()],true));
+test("School flyer permits a single tee or other product",()=>{\n assert.doesNotThrow(()=>api.validateProgramProducts([product()],true));\n assert.doesNotThrow(()=>api.validateProgramProducts([product("hat")],true));
  assert.throws(()=>api.validateProgramProducts([{...product(),mockup:""}]));
  assert.throws(()=>api.validateProgramProducts([{...product(),tiers:[{min:1,wholesale:"30",retail:"20"}]}]));
 });
