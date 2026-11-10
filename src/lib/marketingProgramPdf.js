@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 const money=n=>"$"+Number(n).toFixed(2);
 export function validateProgramProducts(products,school=false){
  if(!Array.isArray(products)||!products.length||products.length>25)throw Error("Select 1–25 products.");
- if(school&&(!products.some(p=>p.type==="tee")||!products.some(p=>p.type==="hoodie")))throw Error("Include a tee and hoodie.");
+
  products.forEach((p,i)=>{
   if(!p.name?.trim()||!p.mockup)throw Error("Product "+(i+1)+": name and rendered mockup required.");
   if(!p.tiers?.length||p.tiers.length>7)throw Error("Product "+(i+1)+": enter 1–7 price tiers.");
@@ -62,8 +62,7 @@ function requireBrand(d){
 export function exportSchoolProgramPdf(d){
  validateProgramProducts(d.products,true);requireBrand(d);
  const pdf=new jsPDF({unit:"pt",format:"letter",compress:true});
- const tee=d.products.find(p=>p.type==="tee"),hoodie=d.products.find(p=>p.type==="hoodie");
- const t=programPriceRows(tee)[0],h=programPriceRows(hoodie)[0];
+ const featured=d.products.slice(0,2);
  const white=[255,255,255],red=[194,32,46],light=[237,244,250],ink=[23,45,76];
  const write=(value,x,y,size=9,color=ink,bold=false)=>text(pdf,value,x,y,size,color,bold);
  const multiline=(value,x,y,width,size=9,color=ink,leading=12)=>{
@@ -115,7 +114,8 @@ export function exportSchoolProgramPdf(d){
  write("WHOLESALE",402,415,7,white,true);
  write("RETAIL",473,415,7,white,true);
  write("RETURN",529,415,7,white,true);
- [["Tee",t],["Hoodie",h]].forEach(([name,row],i)=>{
+ featured.forEach((product,i)=>{
+  const name=product.name, row=programPriceRows(product)[0];
   const y=440+i*27;
   write(name,337,y,9,ink,true);write(money(row.wholesale),405,y,9);
   write(money(row.retail),473,y,9);write(money(row.school),529,y,9,red,true);
@@ -126,10 +126,11 @@ export function exportSchoolProgramPdf(d){
  pdf.setDrawColor(199,215,227);pdf.line(30,583,582,583);
  write("A FEW WAYS TO SHOW YOUR SCHOOL PRIDE",30,601,11,navy,true);
  // Product samples are intentionally secondary: a compact row near the bottom.
- image(pdf,tee.mockup,91,608,118,83);
- image(pdf,hoodie.mockup,350,608,118,83);
- write("SPIRIT TEE",124,703,9,navy,true);
- write("SPIRIT HOODIE",379,703,9,navy,true);
+ featured.forEach((product,i)=>{
+  const x=featured.length===1?247:(i===0?91:350);
+  image(pdf,product.mockup,x,608,118,83);
+  write(product.name.slice(0,27).toUpperCase(),x,703,8,navy,true);
+ });
  pdf.setFillColor(...navy);pdf.rect(0,718,612,74,"F");
  write("LET'S BUILD YOUR SCHOOL PROGRAM",30,741,12,white,true);
  write([d.contact.phone,d.contact.email].filter(Boolean).join("  |  "),30,758,9,white);

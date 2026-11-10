@@ -17,7 +17,7 @@ async function compose(photo,logo,p){
  ctx.drawImage(art,c.width*p.x/100-w/2,c.height*p.y/100-h/2,w,h);
  return c.toDataURL("image/png");
 }
-export default function MarketingProgramDesigner({mode,organization="",schoolLogo=""}){
+export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage=""}){
  const brochure=mode==="brochure-schools";
  const [businessLogo,setBusinessLogo]=useState(""),[clientLogo,setClientLogo]=useState("");
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
@@ -34,6 +34,10 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   img.src="/skilled-crafting-logo.png";
   return ()=>{active=false;};
  },[]);
+ useEffect(() => {
+  if (!selectedProductImage) return;
+  setProducts(previous => previous.map((product,index) => index === 0 ? { ...product, photo: selectedProductImage, mockup: "" } : product));
+ }, [selectedProductImage]);
  const logo=clientLogo||schoolLogo;
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
@@ -81,9 +85,9 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
     <td><button type="button" disabled={p.tiers.length===1} onClick={()=>patch(p.id,{tiers:p.tiers.filter((_,j)=>j!==i)})}>Remove</button></td>
    </tr>)}</tbody></table></div>
    <button type="button" className="sc-btn" disabled={p.tiers.length>=7} onClick={()=>patch(p.id,{tiers:[...p.tiers,{min:24,wholesale:"",retail:""}]})}>Add quantity tier</button>
-   {!brochure&&<button type="button" className="sc-btn" disabled={products.length===1} onClick={()=>setProducts(ps=>ps.filter(x=>x.id!==p.id))}>Remove product</button>}
+   <button type="button" className="sc-btn" disabled={products.length===1} onClick={()=>setProducts(ps=>ps.filter(x=>x.id!==p.id))}>Remove product</button>
   </article>)}
-  {!brochure&&<button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh()])}>Add catalog product</button>}
+  <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
   <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={download}>{busy?"Preparing…":brochure?"Download one-page school PDF":"Download multi-page catalog PDF"}</button>
   {error&&<p role="alert">{error}</p>}

@@ -35,7 +35,16 @@ export async function handler(event) {
     const reusableBlank = body.source === 'mockup_blank_assets' && asset.storage_provider === 'r2' && !!asset.storage_bucket && !!asset.storage_path;
     if (String(project.customer_id_text) !== String(account.customer_id) && !reusableBlank) return jsonResponse(403, { message: 'Asset is not linked to this customer' }, event);
     if (body.source === 'mockup_outputs' && !['internal_approved', 'customer_approved'].includes(asset.approval_status)) return jsonResponse(403, { message: 'Mockup is not approved' }, event);
-    const url = body.sign_download ? await signedStoredAssetUrl(auth.supabase, asset, 300) : undefined;
+    let url;
+    if (body.sign_download) {
+      try {
+        url = await signedStoredAssetUrl(auth.supabase, asset, 300);
+      } catch (storageError) {
+        console.error('Shared asset R2 signing failed', { source: body.source, assetId: asset.id, code: storageError?.name || storageError?.Code || 'storage_error' });
+        return jsonResponse(422, { message: 'This blank graphic cannot be retrieved from R2. Check its stored file and R2 bucket configuration in Mockup Studio.' }, event);
+      }
+      if (!url) return jsonResponse(422, { message: 'This graphic has no retrievable stored file. Upload the blank graphic to R2 in Mockup Studio.' }, event);
+    }
     return jsonResponse(200, { reference: { source: body.source, asset_id: asset.id, project_id: project.id }, ...(url ? { url } : {}) }, event);
   } catch (error) {
     console.error('Shared asset reference validation failed', error);
