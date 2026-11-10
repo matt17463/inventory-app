@@ -23,6 +23,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [historyDocument,setHistoryDocument]=useState(null);
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
+  const [sharedAssetReferences, setSharedAssetReferences] = useState({});
   const [colors, setColors] = useState("");
   const [description, setDescription] = useState("");
   const [supplier, setSupplier] = useState("sanmar");
@@ -227,7 +228,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setSaving(true); setError("");
       // Persist the exact uploaded raster in private R2, never as a public data URL.
       let storedArtwork = null;
-      if(guide.logo){
+      if(guide.logo && !sharedAssetReferences[guide.logo]){
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(guide.logo);
         if(!match)throw Error("Choose a PNG, JPEG or WebP logo to save.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -241,6 +242,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       // Store uploaded document photos/options in private R2 as well. No base64 image bytes in Supabase.
       async function storeImage(dataUrl){
         if(!dataUrl)return null;
+        if(sharedAssetReferences[dataUrl])return sharedAssetReferences[dataUrl];
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
         if(!match)throw Error("Use a valid uploaded image.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -259,7 +261,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       void unusedLocalImage;void unusedLocalProductImage;void unusedLocalGallery;void unusedLocalOptions;void internalSupplierOffer;
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
         account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
-        content: { ...safeGuide, marketing_artwork: storedArtwork, marketing_product_image:storedProductImage,
+        content: { ...safeGuide, marketing_artwork: storedArtwork || sharedAssetReferences[guide.logo] || null, marketing_product_image:storedProductImage,
           marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
       });
       if (insertError) throw insertError;
