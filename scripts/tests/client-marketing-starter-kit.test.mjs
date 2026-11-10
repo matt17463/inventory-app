@@ -45,3 +45,15 @@ test('Database guards direct writes of shared artwork references', () => {
   assert.match(migration, /before insert or update of content, account_id/);
   assert.match(migration, /Shared artwork belongs to another customer/);
 });
+
+test('Cross-client search is opt-in and limited to R2-backed blank graphics', () => {
+  const server = readFileSync(new URL('../../netlify/functions/marketing-shared-asset.js', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../../supabase/migrations/20261110100000_marketing_cross_client_r2_blanks.sql', import.meta.url), 'utf8');
+  assert.match(kit, /includeOtherClients/);
+  assert.match(kit, /list_shared_blanks/);
+  assert.match(server, /body.source === 'mockup_blank_assets'/);
+  assert.match(server, /asset.storage_provider === 'r2'/);
+  assert.match(server, /String\(project.customer_id_text\) !== String\(account.customer_id\) && !reusableBlank/);
+  assert.match(migration, /not coalesce\(reusable_blank, false\)/);
+  assert.match(migration, /storage_provider = 'r2'/);
+});
