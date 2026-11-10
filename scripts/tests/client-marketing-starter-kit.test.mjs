@@ -21,7 +21,7 @@ test('Shared blanks come from existing Mockup Studio catalog', () => {
   assert.match(kit, /row\.image_url/);
 });
 
-test('Reusing graphics does not upload or overwrite originals', () => {
+test('Asset picker does not upload or overwrite originals (document persistence requires separate verification)', () => {
   assert.doesNotMatch(kit, /\.insert\(|\.update\(|\.upsert\(|create_upload|presignedR2Put/);
   assert.match(kit, /signedAssetUrl\(asset\.row/);
 });
