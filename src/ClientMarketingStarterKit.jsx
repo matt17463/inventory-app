@@ -12,6 +12,11 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [includeOtherClients, setIncludeOtherClients] = useState(false);
+  const [sharedBlanks, setSharedBlanks] = useState([]);
+  const [sharedPage, setSharedPage] = useState(0);
+  const [sharedMore, setSharedMore] = useState(false);
+  const [sharedBusy, setSharedBusy] = useState(false);
   const [filters, setFilters] = useState({ search: "", brand: "", type: "", color: "", style: "" });
   const account = organizations.find(a => a.id === accountId);
   useEffect(() => {
@@ -44,6 +49,26 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
     load();
     return () => { active = false; };
   }, [accountId, account?.customer_id]);
+  useEffect(() => {
+    if (!includeOtherClients || !accountId) { setSharedBlanks([]); setSharedMore(false); return; }
+    let active = true;
+    setSharedBusy(true);
+    authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list_shared_blanks", account_id: accountId, page: sharedPage })
+    }).then(async response => {
+      const result = await response.json();
+      if (!response.ok) throw Error(result.message || "Unable to search shared blank graphics.");
+      if (active) {
+        setSharedBlanks(previous => sharedPage === 0 ? result.assets : previous.concat(result.assets));
+        setSharedMore(!!result.has_more);
+      }
+    }).catch(e => { if (active) setError(e.message); })
+      .finally(() => { if (active) setSharedBusy(false); });
+    return () => { active = false; };
+  }, [includeOtherClients, accountId, sharedPage]);
+  const sharedOptions = includeOtherClients ? sharedBlanks.filter(item => !assets.some(a => a.kind === "blank" && a.row.id === item.id))
+    .map(item => ({ kind: "blank", project: "Shared Mockup Studio blank", row: item, name: item.asset_name || "Blank graphic" })) : [];
   function updateFilter(field, value) {
     setFilters(previous => ({ ...previous, [field]: value }));
   }
@@ -81,6 +106,8 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
     {!account?.customer_id && <p>Link this marketing account to its customer record to see existing Mockup Studio graphics. Names are not used to guess client identity.</p>}
     {busy && <p role="status">Loading shared graphics…</p>}
     {error && <p role="alert">{error}</p>}
+    <label className="growth-field"><input type="checkbox" checked={includeOtherClients} onChange={e => { setIncludeOtherClients(e.target.checked); setSharedPage(0); setSharedBlanks([]); }} /> Include reusable blank graphics from other Mockup Studio clients</label>
+    <p>Only R2-backed blank-product graphics are shared. Other clients’ logos, custom artwork, and finished mockups stay private.</p>
     <div className="growth-grid">
       <label className="growth-field"><span>Search products or artwork</span><input value={search} onChange={e => { setSearch(e.target.value); updateFilter("search", e.target.value); }} placeholder="Product name, SKU or project"/></label>
       {[
@@ -91,14 +118,15 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
       ].map(([field, label, placeholder]) => <label key={field} className="growth-field"><span>{label}</span><input value={filters[field]} onChange={e => updateFilter(field, e.target.value)} placeholder={placeholder}/></label>)}
       <button type="button" className="sc-btn" onClick={() => { setSearch(""); setFilters({ search: "", brand: "", type: "", color: "", style: "" }); }}>Clear filters</button>
     </div>
-    <p role="status">{assets.filter(a => a.kind === "blank").length} R2-backed blank graphics available from this client’s projects.</p>
+    <p role="status">{assets.filter(a => a.kind === "blank").length} client blank graphics{includeOtherClients ? ` · ${sharedOptions.length} additional reusable blanks` : ""}{sharedBusy ? " · Loading…" : ""}.</p>
     <div className="growth-grid">
-      {assets.filter(a => { const haystack = [a.name,a.project,a.row.product_color,a.row.product_type,a.row.blank_product_id_text,a.row.sku_base,a.row.brands?.name,a.row.colors?.name,a.row.product_types?.name].join(" ").toLowerCase(); return Object.values(filters).every(v => !v || haystack.includes(v.toLowerCase())); }).map(a =>
+      {assets.concat(sharedOptions).filter(a => { const haystack = [a.name,a.project,a.row.product_color,a.row.product_type,a.row.blank_product_id_text,a.row.sku_base,a.row.brands?.name,a.row.colors?.name,a.row.product_types?.name].join(" ").toLowerCase(); return Object.values(filters).every(v => !v || haystack.includes(v.toLowerCase())); }).map(a =>
         <div className="sc-panel" key={a.kind + ":" + a.row.id}>
           <strong>{a.name}</strong><p>{a.kind === "logo" ? "Client artwork" : a.kind === "blank" || a.kind === "catalog" ? "Blank product" : "Approved mockup"} · {a.project}</p>
           <button type="button" className="sc-btn" disabled={busy} onClick={() => choose(a)}>Use in document</button>
         </div>)}
     </div>
-    {!busy && !assets.length && <p>No reusable graphics found. Existing upload controls remain available.</p>}
+    {includeOtherClients && sharedMore && <button type="button" className="sc-btn" disabled={sharedBusy} onClick={() => setSharedPage(p => p + 1)}>Load more shared blanks</button>}
+    {!busy && !assets.length && !sharedOptions.length && <p>No reusable graphics found. Existing upload controls remain available.</p>}
   </section>;
 }
