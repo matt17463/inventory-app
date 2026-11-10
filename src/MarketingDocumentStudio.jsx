@@ -293,7 +293,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
         account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
         content: { ...safeGuide, marketing_artwork: storedArtwork || verifiedReferences[guide.logo] || (accountMarketingLogo && guide.logo === logo ? accountMarketingLogo : null), marketing_product_image:storedProductImage,
-          marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
+          marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork && !verifiedReferences[guide.logo] && !(accountMarketingLogo && guide.logo === logo)) }
       });
       if (insertError) throw insertError;
       setSaveStatus(storedArtwork?"Draft and exact client artwork saved securely to R2.":"Draft saved to this client.");
