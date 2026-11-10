@@ -20,12 +20,12 @@ export async function handler(event) {
       if (error) throw error;
       return jsonResponse(200, { assets: (data || []).filter(a => a.storage_path && a.storage_bucket).map(({ id, project_id, asset_name, product_type, product_color, blank_product_id_text }) => ({ id, project_id, asset_name, product_type, product_color, blank_product_id_text })), has_more: (data || []).length === 50 }, event);
     }
-    if (!account.customer_id && body.source !== 'mockup_blank_assets') return jsonResponse(403, { message: 'Marketing account must be linked to a customer' }, event);
     if (!UUID.test(body.asset_id || '')) return jsonResponse(400, { message: 'Invalid asset' }, event);
     if (!TABLES.has(body.source)) return jsonResponse(400, { message: 'Unsupported private asset source' }, event);
     const { data: account, error: accountError } = await auth.supabase.from('sc_growth_accounts').select('id,customer_id').eq('id', body.account_id).maybeSingle();
     if (accountError) throw accountError;
     if (!account) return jsonResponse(404, { message: 'Marketing account not found' }, event);
+    if (!account.customer_id && body.source !== 'mockup_blank_assets') return jsonResponse(403, { message: 'Marketing account must be linked to a customer' }, event);
     const { data: asset, error: assetError } = await auth.supabase.from(body.source).select('*').eq('id', body.asset_id).maybeSingle();
     if (assetError) throw assetError;
     if (!asset?.project_id) return jsonResponse(404, { message: 'Asset not found' }, event);
