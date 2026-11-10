@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { getMockupProjectBundle, signedAssetUrl } from "./lib/mockupStudioApi";
+import { getMockupProjectBundle, signedAssetUrl, searchMockupBlankCatalog } from "./lib/mockupStudioApi";
 
 /**
  * Read-only cross-workflow asset browser. Original files remain in Mockup Studio
@@ -11,6 +11,8 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [catalog, setCatalog] = useState([]);
+  const [catalogError, setCatalogError] = useState("");
   const account = organizations.find(a => a.id === accountId);
   useEffect(() => {
     let active = true;
@@ -42,10 +44,16 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
     load();
     return () => { active = false; };
   }, [accountId, account?.customer_id]);
+  useEffect(() => {
+    let active = true;
+    searchMockupBlankCatalog(search).then(rows => { if (active) { setCatalog(rows.filter(row => row.image_url)); setCatalogError(""); } }).catch(e => { if (active) setCatalogError(e.message); });
+    return () => { active = false; };
+  }, [search]);
   async function choose(asset) {
     setBusy(true); setError("");
     try {
-      const url = await signedAssetUrl(asset.row, 300, { preferPreview: false });
+      const url = asset.kind === "catalog" ? asset.row.image_url : await signedAssetUrl(asset.row, 300, { preferPreview: false });
+      if (asset.kind === "catalog" && !/^https:\/\//i.test(url || "")) throw Error("Catalog image must use a secure HTTPS source.");
       if (!url) throw Error("The original file is not available from storage.");
       const response = await fetch(url);
       if (!response.ok) throw Error("Unable to retrieve the source image.");
@@ -63,18 +71,19 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   if (!accountId) return null;
   return <section className="sc-panel" aria-label="Client marketing starter kit">
     <h3>Client Marketing Starter Kit</h3>
-    <p>Reuse artwork and blank-product images from the client's existing Mockup Studio projects. Files remain in their original storage locations. Only projects linked to the selected customer ID appear.</p>
+    <p>Reuse artwork and blank-product images from the client's existing Mockup Studio projects. Files remain in their original storage locations. Client artwork is limited to projects linked to the selected customer ID. Shared blank catalog images are available across clients.</p>
     {!account?.customer_id && <p>Link this marketing account to its customer record to see existing Mockup Studio graphics. Names are not used to guess client identity.</p>}
     {busy && <p role="status">Loading shared graphics…</p>}
     {error && <p role="alert">{error}</p>}
     <label className="growth-field"><span>Find a graphic</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Artwork, blank garment, mockup or project"/></label>
     <div className="growth-grid">
-      {assets.filter(a => (a.name + " " + a.project).toLowerCase().includes(search.toLowerCase())).map(a =>
+      {assets.concat(catalog.map(row => ({ kind: "catalog", row, name: row.name || row.sku_base, project: "Shared blank catalog" }))).filter(a => (a.name + " " + a.project).toLowerCase().includes(search.toLowerCase())).map(a =>
         <div className="sc-panel" key={a.kind + ":" + a.row.id}>
-          <strong>{a.name}</strong><p>{a.kind === "logo" ? "Client artwork" : a.kind === "blank" ? "Blank product" : "Approved mockup"} · {a.project}</p>
+          <strong>{a.name}</strong><p>{a.kind === "logo" ? "Client artwork" : a.kind === "blank" || a.kind === "catalog" ? "Blank product" : "Approved mockup"} · {a.project}</p>
           <button type="button" className="sc-btn" disabled={busy} onClick={() => choose(a)}>Use in document</button>
         </div>)}
     </div>
-    {!busy && !assets.length && <p>No linked Mockup Studio graphics found. Existing upload controls remain available.</p>}
+    {catalogError && <p role="alert">Shared blank catalog unavailable: {catalogError}</p>}
+    {!busy && !assets.length && !catalog.length && <p>No reusable graphics found. Existing upload controls remain available.</p>}
   </section>;
 }
