@@ -16,9 +16,11 @@ test('Client artwork uses exact customer ID, not client-name matching', () => {
   assert.doesNotMatch(kit, /\.ilike\("customer_name"/);
 });
 
-test('Shared blanks come from existing Mockup Studio catalog', () => {
-  assert.match(kit, /searchMockupBlankCatalog\(search\)/);
-  assert.match(kit, /row\.image_url/);
+test('Only R2-backed blank graphics from linked Mockup Studio projects are offered', () => {
+  assert.match(kit, /item\.storage_provider === "r2"/);
+  assert.match(kit, /item\.storage_path && item\.storage_bucket/);
+  assert.doesNotMatch(kit, /searchMockupBlankCatalog/);
+  assert.match(kit, /getMockupProjectBundle/);
 });
 
 test('Asset picker does not upload or overwrite originals (document persistence requires separate verification)', () => {
