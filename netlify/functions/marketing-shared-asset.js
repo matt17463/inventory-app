@@ -6,7 +6,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
   if (event.httpMethod !== 'POST') return jsonResponse(405, { message: 'Method not allowed' }, event);
-  const auth = await authorizeEmployee(event, { functionName: 'marketing-shared-asset', allowedRoles: ['admin', 'manager', 'marketing'] });
+  const auth = await authorizeEmployee(event, { functionName: 'marketing-shared-asset', allowedRoles: ['admin', 'manager', 'operator', 'marketing'] });
   if (!auth.ok) return jsonResponse(auth.statusCode, { message: auth.message }, event);
   try {
     const body = JSON.parse(event.body || '{}');
