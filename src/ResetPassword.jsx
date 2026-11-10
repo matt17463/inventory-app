@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { supabase } from './supabaseClient';
+import { supabase, passwordSetupLinkDetected } from './supabaseClient';
 import { passwordProblem } from './lib/passwordSecurity';
 import logo from './assets/logo.png';
 
 export default function ResetPassword() {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState(null);
+  const [authorizedLink, setAuthorizedLink] = useState(passwordSetupLinkDetected);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
@@ -16,9 +17,10 @@ export default function ResetPassword() {
     let mounted = true;
     const parameters = new URLSearchParams(window.location.search);
     const linkError = parameters.get('error_description') || parameters.get('error');
-    if (linkError) setError('This link has expired or cannot be used. Request a new reset link.');
+    if (linkError) { setError('This link has expired or cannot be used. Request a new reset link.'); setAuthorizedLink(false); }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, next) => {
+      if (mounted && event === 'PASSWORD_RECOVERY') setAuthorizedLink(true);
       if (mounted) {
         setSession(next);
         setReady(true);
@@ -42,7 +44,7 @@ export default function ResetPassword() {
     event.preventDefault();
     const problem = passwordProblem(password, confirmation);
     if (problem) { setError(problem); return; }
-    if (!session) { setError('Your recovery link is no longer valid. Request a new one.'); return; }
+    if (!session || !authorizedLink) { setError('Your recovery link is no longer valid. Request a new one.'); return; }
     setBusy(true);
     setError('');
     try {
@@ -68,7 +70,7 @@ export default function ResetPassword() {
       {completed ? <>
         <p role="status">Your password was saved. Sign in using your new password.</p>
         <a href="/">Return to sign in</a>
-      </> : !ready ? <p>Checking your secure link...</p> : !session ? <>
+      </> : !ready ? <p>Checking your secure link...</p> : (!session || !authorizedLink) ? <>
         <p role="alert">{error || 'No valid invitation or recovery session was found. The link may have expired.'}</p>
         <a href="/">Return to sign in to request a new link</a>
       </> : <>
