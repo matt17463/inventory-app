@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
-import { getMockupProjectBundle, signedAssetUrl, searchMockupBlankCatalog } from "./lib/mockupStudioApi";
+import { getMockupProjectBundle, searchMockupBlankCatalog } from "./lib/mockupStudioApi";
 
 /**
  * Read-only cross-workflow asset browser. Original files remain in Mockup Studio
@@ -14,6 +14,10 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   const [search, setSearch] = useState("");
   const [catalog, setCatalog] = useState([]);
   const [catalogError, setCatalogError] = useState("");
+  const [filters, setFilters] = useState({ search: "", brand: "", type: "", color: "", style: "" });
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [catalogBusy, setCatalogBusy] = useState(false);
   const account = organizations.find(a => a.id === accountId);
   useEffect(() => {
     let active = true;
@@ -47,9 +51,18 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   }, [accountId, account?.customer_id]);
   useEffect(() => {
     let active = true;
-    searchMockupBlankCatalog(search).then(rows => { if (active) { setCatalog(rows.filter(row => row.image_url)); setCatalogError(""); } }).catch(e => { if (active) setCatalogError(e.message); });
+    setCatalogBusy(true);
+    searchMockupBlankCatalog(filters, { page, pageSize: 24 })
+      .then(rows => { if (active) { setCatalog(previous => page === 0 ? rows : previous.concat(rows)); setHasMore(rows.length === 24); setCatalogError(""); } })
+      .catch(e => { if (active) { setCatalogError(e.message || "Unable to search catalog."); if (page === 0) setCatalog([]); } })
+      .finally(() => { if (active) setCatalogBusy(false); });
     return () => { active = false; };
-  }, [search]);
+  }, [filters, page]);
+  function updateFilter(field, value) {
+    setPage(0);
+    setCatalog([]);
+    setFilters(previous => ({ ...previous, [field]: value }));
+  }
   async function choose(asset) {
     setBusy(true); setError("");
     try {
@@ -86,14 +99,25 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
     {!account?.customer_id && <p>Link this marketing account to its customer record to see existing Mockup Studio graphics. Names are not used to guess client identity.</p>}
     {busy && <p role="status">Loading shared graphics…</p>}
     {error && <p role="alert">{error}</p>}
-    <label className="growth-field"><span>Find a graphic</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Artwork, blank garment, mockup or project"/></label>
     <div className="growth-grid">
-      {assets.concat(catalog.map(row => ({ kind: "catalog", row, name: row.name || row.sku_base, project: "Shared blank catalog" }))).filter(a => (a.name + " " + a.project).toLowerCase().includes(search.toLowerCase())).map(a =>
+      <label className="growth-field"><span>Search products or artwork</span><input value={search} onChange={e => { setSearch(e.target.value); updateFilter("search", e.target.value); }} placeholder="Product name, SKU or project"/></label>
+      {[
+        ["brand", "Brand", "Adidas, Gildan, Bella+Canvas"],
+        ["type", "Product type", "Hoodie, shirt, hat"],
+        ["color", "Color", "Black, navy, red"],
+        ["style", "Style / SKU", "A432, 18500"]
+      ].map(([field, label, placeholder]) => <label key={field} className="growth-field"><span>{label}</span><input value={filters[field]} onChange={e => updateFilter(field, e.target.value)} placeholder={placeholder}/></label>)}
+      <button type="button" className="sc-btn" onClick={() => { setSearch(""); setPage(0); setCatalog([]); setFilters({ search: "", brand: "", type: "", color: "", style: "" }); }}>Clear filters</button>
+    </div>
+    <p role="status">{catalogBusy ? "Searching blank products…" : `${catalog.length} blank products shown`}{hasMore ? " · More available" : ""}</p>
+    <div className="growth-grid">
+      {assets.concat(catalog.map(row => ({ kind: "catalog", row, name: row.name || row.sku_base, project: "Shared blank catalog" }))).filter(a => (a.name + " " + a.project + " " + (a.row.sku_base || "") + " " + (a.row.brands?.name || "") + " " + (a.row.colors?.name || "") + " " + (a.row.product_types?.name || "")).toLowerCase().includes(search.toLowerCase())).map(a =>
         <div className="sc-panel" key={a.kind + ":" + a.row.id}>
           <strong>{a.name}</strong><p>{a.kind === "logo" ? "Client artwork" : a.kind === "blank" || a.kind === "catalog" ? "Blank product" : "Approved mockup"} · {a.project}</p>
           <button type="button" className="sc-btn" disabled={busy} onClick={() => choose(a)}>Use in document</button>
         </div>)}
     </div>
+    {hasMore && <button type="button" className="sc-btn" disabled={catalogBusy} onClick={() => setPage(p => p + 1)}>Load more blank products</button>}
     {catalogError && <p role="alert">Shared blank catalog unavailable: {catalogError}</p>}
     {!busy && !assets.length && !catalog.length && <p>No reusable graphics found. Existing upload controls remain available.</p>}
   </section>;
