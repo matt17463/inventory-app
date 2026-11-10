@@ -17,7 +17,7 @@ async function compose(photo,logo,p){
  ctx.drawImage(art,c.width*p.x/100-w/2,c.height*p.y/100-h/2,w,h);
  return c.toDataURL("image/png");
 }
-export default function MarketingProgramDesigner({mode,organization="",schoolLogo=""}){
+export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage=""}){
  const brochure=mode==="brochure-schools";
  const [businessLogo,setBusinessLogo]=useState(""),[clientLogo,setClientLogo]=useState("");
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
@@ -34,6 +34,10 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   img.src="/skilled-crafting-logo.png";
   return ()=>{active=false;};
  },[]);
+ useEffect(() => {
+  if (!selectedProductImage) return;
+  setProducts(previous => previous.map((product,index) => index === 0 ? { ...product, photo: selectedProductImage, mockup: "" } : product));
+ }, [selectedProductImage]);
  const logo=clientLogo||schoolLogo;
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
