@@ -1,4 +1,4 @@
-import {authorizeEmployee,jsonResponse,createServiceClient} from './_shared/security.js';
+import {authorizeEmployee,jsonResponse,createServiceClient,auditFunctionSecurity} from './_shared/security.js';
 const roles=new Set(['admin','manager','operator','viewer']);
 const clean=v=>String(v??'').trim();
 const emailOk=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)&&e.length<=254;
@@ -25,10 +25,35 @@ export const handler=async event=>{
  const db=createServiceClient();
  try{
   if(data.action==='list')return jsonResponse(200,{success:true,users:await listUsers(db)},event);
+  if(data.action==='reset-history'){
+   const {data:history,error}=await db.from('sc_function_security_audit')
+    .select('created_at,user_id,outcome,metadata')
+    .eq('function_name','user-management').eq('action','password_reset_requested')
+    .order('created_at',{ascending:false}).limit(30);
+   if(error)throw error;
+   return jsonResponse(200,{success:true,history:(history||[]).map(row=>({
+    created_at:row.created_at,actor_id:row.user_id,target_id:row.metadata?.target_user_id||null,outcome:row.outcome
+   }))},event);
+  }
+  if(data.action==='reset-password'){
+   const userId=clean(data.user_id);
+   if(!/^[0-9a-f-]{36}$/i.test(userId))return fail(event,400,'Valid employee account required.');
+   const {data:existing,error:lookupError}=await db.auth.admin.getUserById(userId);
+   if(lookupError||!existing?.user?.email)return fail(event,404,'Employee account not found.');
+   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\\/+$/,'')+'/reset-password';
+   const {error:resetError}=await db.auth.resetPasswordForEmail(existing.user.email,{redirectTo:redirect});
+   await auditFunctionSecurity({functionName:'user-management',action:'password_reset_requested',
+    outcome:resetError?'failed':'sent',userId:auth.user.id,role:auth.role,event,metadata:{target_user_id:userId}});
+   if(resetError){
+    console.error('Admin password reset failed:',resetError);
+    return fail(event,502,'Unable to send recovery email. Check Supabase email delivery and redirect settings.');
+   }
+   return jsonResponse(200,{success:true,message:'Password reset email requested. The employee can set a new password using the secure link.'},event);
+  }
   if(data.action==='invite'){
    const email=clean(data.email).toLowerCase(),role=clean(data.role);
    if(!emailOk(email)||!roles.has(role))return fail(event,400,'Valid email and employee role required.');
-   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\/+$/,'');
+   const redirect=clean(process.env.SC_APP_URL||'https://inventory.skilledcrafting.com').replace(/\/+$/,'')+'/reset-password';
    const {data:invited,error}=await db.auth.admin.inviteUserByEmail(email,{redirectTo:redirect});
    if(error)throw error;
    const {error:roleError}=await db.from('sc_app_user_roles').upsert({
