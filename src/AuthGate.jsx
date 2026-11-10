@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabaseClient';
 import logo from './assets/logo.png';
+import AccountSecurity from './AccountSecurity';
+import { passwordRecoveryRedirect } from './lib/passwordSecurity';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
 
@@ -11,6 +13,7 @@ export default function AuthGate({ children }) {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [forgotMode, setForgotMode] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [access, setAccess] = useState(null);
@@ -162,6 +165,25 @@ export default function AuthGate({ children }) {
     }
   }
 
+  async function requestReset(event) {
+    event.preventDefault();
+    setMessage('');
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: passwordRecoveryRedirect(window.location.origin),
+      });
+      if (error) throw error;
+      setMessage('If this email belongs to an employee account, a password reset link will arrive shortly.');
+    } catch (error) {
+      setMessage(error?.status === 429
+        ? 'Too many requests. Please try again later.'
+        : 'Password reset email could not be sent. Please try again later.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function signOut() {
     setMessage('');
     verificationSequenceRef.current += 1;
@@ -190,36 +212,27 @@ export default function AuthGate({ children }) {
           <p className="eyebrow">Employee Access</p>
           <h1>Sign in to Skilled Crafting Inventory</h1>
           <p className="helper-text">
-            This application is limited to employee accounts created in Supabase Authentication.
+            {forgotMode ? 'Enter your employee email to request a secure password reset link.' : 'This application is limited to employee accounts created in Supabase Authentication.'}
           </p>
 
-          <form onSubmit={signIn}>
+          <form onSubmit={forgotMode ? requestReset : signIn}>
             <label>
               Email
-              <input
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
+              <input type="email" autoComplete="username" value={email}
+                onChange={(event) => setEmail(event.target.value)} required />
             </label>
-
-            <label>
+            {!forgotMode && <label>
               Password
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-            </label>
-
+              <input type="password" autoComplete="current-password" value={password}
+                onChange={(event) => setPassword(event.target.value)} required />
+            </label>}
             <button type="submit" disabled={busy}>
-              {busy ? 'Signing in...' : 'Sign In'}
+              {busy ? 'Please wait...' : forgotMode ? 'Email password reset link' : 'Sign In'}
             </button>
           </form>
+          <button type="button" className="secondary" onClick={() => { setForgotMode(value => !value); setMessage(''); }}>
+            {forgotMode ? 'Back to sign in' : 'Forgot password?'}
+          </button>
 
           {message && <p className="message error-message">{message}</p>}
           <p style={{ fontSize: 12, marginTop: 20 }}>
@@ -276,6 +289,7 @@ export default function AuthGate({ children }) {
           </button>
         </aside>
       )}
+      <AccountSecurity />
       <button type="button" className="employee-signout" onClick={signOut}>
         {access.role} · Sign out
       </button>
