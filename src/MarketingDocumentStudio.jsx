@@ -226,9 +226,27 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     try {
       if (!growthWriteAllowed()) { setSaveStatus("Training mode: draft not saved."); return; }
       setSaving(true); setError("");
+      // Recheck every private source against the linked customer on the server.
+      // Do not trust client-provided project IDs or storage paths.
+      const verifiedReferences = {};
+      for (const [image, ref] of Object.entries(sharedAssetReferences)) {
+        if (!Object.values(guide).some(value => value === image || (Array.isArray(value) && value.includes(image)))) continue;
+        if (ref.source === "blank_products") {
+          // Catalog URLs are public product references, not private client artwork.
+          verifiedReferences[image] = { source: "blank_products", asset_id: ref.asset_id };
+          continue;
+        }
+        const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: accountId, source: ref.source, asset_id: ref.asset_id })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.reference) throw Error(result.message || "Shared artwork permission check failed.");
+        verifiedReferences[image] = result.reference;
+      }
       // Persist the exact uploaded raster in private R2, never as a public data URL.
       let storedArtwork = null;
-      if(guide.logo && !sharedAssetReferences[guide.logo]){
+      if(guide.logo && !verifiedReferences[guide.logo]){
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(guide.logo);
         if(!match)throw Error("Choose a PNG, JPEG or WebP logo to save.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -242,7 +260,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       // Store uploaded document photos/options in private R2 as well. No base64 image bytes in Supabase.
       async function storeImage(dataUrl){
         if(!dataUrl)return null;
-        if(sharedAssetReferences[dataUrl])return sharedAssetReferences[dataUrl];
+        if(verifiedReferences[dataUrl])return verifiedReferences[dataUrl];
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
         if(!match)throw Error("Use a valid uploaded image.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
