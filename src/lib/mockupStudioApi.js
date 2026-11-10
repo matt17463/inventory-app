@@ -280,15 +280,28 @@ export async function completeMockupLocalArchiveRestore(archiveId, restoredFileK
   });
 }
 
-export async function searchMockupBlankCatalog(search = '') {
-  const term = String(search || '').trim().replace(/[%_,]/g, '');
+export async function searchMockupBlankCatalog(filters = {}, options = {}) {
+  // Keep the original string argument supported for existing Mockup Studio callers.
+  const criteria = typeof filters === 'string' ? { search: filters } : (filters || {});
+  const clean = value => String(value || '').trim().replace(/[%_,().]/g, '').slice(0, 80);
+  const search = clean(criteria.search);
+  const brand = clean(criteria.brand);
+  const type = clean(criteria.type);
+  const color = clean(criteria.color);
+  const style = clean(criteria.style);
+  const page = Math.max(0, Math.floor(Number(options.page) || 0));
+  const pageSize = Math.min(60, Math.max(1, Math.floor(Number(options.pageSize) || 24)));
   let query = supabase
     .from('blank_products')
-    .select('id,sku_base,name,image_url,unit_cost,brands:brand_id(name,code),product_types:product_type_id(name,code),colors:color_id(name,code),sizes:size_id(name,code)')
+    .select(`id,sku_base,name,image_url,unit_cost,brands:brand_id${brand ? '!inner' : ''}(name,code),product_types:product_type_id${type ? '!inner' : ''}(name,code),colors:color_id${color ? '!inner' : ''}(name,code),sizes:size_id(name,code)`)
     .eq('sc_is_archived', false)
-    .limit(60);
-  if (term) query = query.or(`sku_base.ilike.%${term}%,name.ilike.%${term}%`);
-  const { data, error } = await query.order('name');
+    .not('image_url', 'is', null);
+  if (search) query = query.or(`sku_base.ilike.%${search}%,name.ilike.%${search}%`);
+  if (style) query = query.or(`sku_base.ilike.%${style}%,name.ilike.%${style}%`);
+  if (brand) query = query.or(`name.ilike.%${brand}%,code.ilike.%${brand}%`, { foreignTable: 'brands' });
+  if (type) query = query.or(`name.ilike.%${type}%,code.ilike.%${type}%`, { foreignTable: 'product_types' });
+  if (color) query = query.or(`name.ilike.%${color}%,code.ilike.%${color}%`, { foreignTable: 'colors' });
+  const { data, error } = await query.order('name').order('id').range(page * pageSize, (page + 1) * pageSize);
   if (error) throw error;
   return data || [];
 }
