@@ -5,6 +5,7 @@ import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeS
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
 import MarketingProgramDesigner from "./MarketingProgramDesigner";
+import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
@@ -22,6 +23,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [historyDocument,setHistoryDocument]=useState(null);
   const [segment, setSegment] = useState("team");
   const [logo, setLogo] = useState("");
+  const [sharedAssetReferences, setSharedAssetReferences] = useState({});
   const [colors, setColors] = useState("");
   const [description, setDescription] = useState("");
   const [supplier, setSupplier] = useState("sanmar");
@@ -224,9 +226,27 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     try {
       if (!growthWriteAllowed()) { setSaveStatus("Training mode: draft not saved."); return; }
       setSaving(true); setError("");
+      // Recheck every private source against the linked customer on the server.
+      // Do not trust client-provided project IDs or storage paths.
+      const verifiedReferences = {};
+      for (const [image, ref] of Object.entries(sharedAssetReferences)) {
+        if (!Object.values(guide).some(value => value === image || (Array.isArray(value) && value.includes(image)))) continue;
+        if (ref.source === "blank_products") {
+          // Catalog URLs are public product references, not private client artwork.
+          verifiedReferences[image] = { source: "blank_products", asset_id: ref.asset_id };
+          continue;
+        }
+        const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: accountId, source: ref.source, asset_id: ref.asset_id })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.reference) throw Error(result.message || "Shared artwork permission check failed.");
+        verifiedReferences[image] = result.reference;
+      }
       // Persist the exact uploaded raster in private R2, never as a public data URL.
       let storedArtwork = null;
-      if(guide.logo){
+      if(guide.logo && !verifiedReferences[guide.logo]){
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(guide.logo);
         if(!match)throw Error("Choose a PNG, JPEG or WebP logo to save.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -240,6 +260,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       // Store uploaded document photos/options in private R2 as well. No base64 image bytes in Supabase.
       async function storeImage(dataUrl){
         if(!dataUrl)return null;
+        if(verifiedReferences[dataUrl])return verifiedReferences[dataUrl];
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
         if(!match)throw Error("Use a valid uploaded image.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -258,7 +279,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       void unusedLocalImage;void unusedLocalProductImage;void unusedLocalGallery;void unusedLocalOptions;void internalSupplierOffer;
       const { error: insertError } = await supabase.from("sc_growth_documents").insert({
         account_id: accountId, template_id: template, title: (guide.organization + " — " + template).slice(0, 200),
-        content: { ...safeGuide, marketing_artwork: storedArtwork, marketing_product_image:storedProductImage,
+        content: { ...safeGuide, marketing_artwork: storedArtwork || sharedAssetReferences[guide.logo] || null, marketing_product_image:storedProductImage,
           marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork) }
       });
       if (insertError) throw insertError;
@@ -304,6 +325,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Logo colors (editable HEX values, separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
+    <ClientMarketingStarterKit accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
     {template==="product-guide" && <><MarketingSupplierCompare onChoose={item=>{setSupplier(Object.keys(marketingSuppliers).find(key=>marketingSuppliers[key].name===item.supplier_name)||"sanmar");setStyle(item.name);setSku(item.sku);setUnitCost(String(item.unit_cost));setObservedAt(item.observed_at.slice(0,10));setSourceUrl(item.source_url);setSizes(item.sizes.join(", "));setProductColors(item.colors.join(", "));setGuide(null);}}/><h3>Verified supplier product (optional until catalog feed is connected)</h3><div className="growth-grid">
       <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
       <label className="growth-field"><span>Product name/style</span><input value={style} onChange={e=>setStyle(e.target.value)}/></label>
