@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
-import { getMockupProjectBundle, searchMockupBlankCatalog } from "./lib/mockupStudioApi";
+import { getMockupProjectBundle } from "./lib/mockupStudioApi";
 
 /**
  * Read-only cross-workflow asset browser. Original files remain in Mockup Studio
@@ -12,12 +12,7 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [catalog, setCatalog] = useState([]);
-  const [catalogError, setCatalogError] = useState("");
   const [filters, setFilters] = useState({ search: "", brand: "", type: "", color: "", style: "" });
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [catalogBusy, setCatalogBusy] = useState(false);
   const account = organizations.find(a => a.id === accountId);
   useEffect(() => {
     let active = true;
@@ -35,7 +30,7 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
         const rows = [];
         for (const project of projects || []) {
           const bundle = await getMockupProjectBundle(project.id);
-          for (const item of bundle.blanks || []) rows.push({ kind: "blank", project: project.project_name, row: item, name: item.asset_name || item.product_name || "Blank product" });
+          for (const item of bundle.blanks || []) if (item.storage_provider === "r2" && item.storage_path && item.storage_bucket) rows.push({ kind: "blank", project: project.project_name, row: item, name: item.asset_name || item.product_name || "Blank product" });
           for (const item of bundle.artwork || []) rows.push({ kind: "logo", project: project.project_name, row: item, name: item.artwork_name || "Client artwork" });
           for (const item of bundle.outputs || []) {
             if (item.approval_status === "internal_approved" || item.approval_status === "customer_approved")
@@ -49,32 +44,21 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
     load();
     return () => { active = false; };
   }, [accountId, account?.customer_id]);
-  useEffect(() => {
-    let active = true;
-    setCatalogBusy(true);
-    searchMockupBlankCatalog(filters, { page, pageSize: 24 })
-      .then(rows => { if (active) { setCatalog(previous => page === 0 ? rows : previous.concat(rows)); setHasMore(rows.length === 24); setCatalogError(""); } })
-      .catch(e => { if (active) { setCatalogError(e.message || "Unable to search catalog."); if (page === 0) setCatalog([]); } })
-      .finally(() => { if (active) setCatalogBusy(false); });
-    return () => { active = false; };
-  }, [filters, page]);
   function updateFilter(field, value) {
-    setPage(0);
-    setCatalog([]);
     setFilters(previous => ({ ...previous, [field]: value }));
   }
   async function choose(asset) {
     setBusy(true); setError("");
     try {
-      let url = asset.kind === "catalog" ? asset.row.image_url : "";
-      if (asset.kind !== "catalog") {
+      let url = "";
+      {
         const source = asset.kind === "logo" ? "mockup_artwork_assets" : asset.kind === "blank" ? "mockup_blank_assets" : "mockup_outputs";
         const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId, source, asset_id: asset.row.id, sign_download: true }) });
         const result = await response.json();
         if (!response.ok || !result.url) throw Error(result.message || "This artwork is not authorized for the selected client.");
         url = result.url;
       }
-      if (asset.kind === "catalog" && !/^https:\/\//i.test(url || "")) throw Error("Catalog image must use a secure HTTPS source.");
+
       if (!url) throw Error("The original file is not available from storage.");
       const response = await fetch(url);
       if (!response.ok) throw Error("Unable to retrieve the source image.");
@@ -84,9 +68,7 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
       const dataUrl = await new Promise((resolve,reject) => {
         const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || "")); reader.onerror = reject; reader.readAsDataURL(blob);
       });
-      const reference = asset.kind === "catalog"
-        ? { source: "blank_products", asset_id: asset.row.id, source_url: url }
-        : { source: asset.kind === "logo" ? "mockup_artwork_assets" : asset.kind === "blank" ? "mockup_blank_assets" : "mockup_outputs", asset_id: asset.row.id, project_id: asset.row.project_id, storage_path: asset.row.storage_path || null };
+      const reference = { source: asset.kind === "logo" ? "mockup_artwork_assets" : asset.kind === "blank" ? "mockup_blank_assets" : "mockup_outputs", asset_id: asset.row.id, project_id: asset.row.project_id, storage_path: asset.row.storage_path || null };
       if (asset.kind === "logo") onSelectLogo(dataUrl, reference);
       else onSelectProduct(dataUrl, reference);
     } catch (e) { setError(e.message || "Unable to select this asset."); }
@@ -95,7 +77,7 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
   if (!accountId) return null;
   return <section className="sc-panel" aria-label="Client marketing starter kit">
     <h3>Client Marketing Starter Kit</h3>
-    <p>Reuse artwork and blank-product images from the client's existing Mockup Studio projects. Files remain in their original storage locations. Client artwork is limited to projects linked to the selected customer ID. Shared blank catalog images are available across clients.</p>
+    <p>Reuse artwork and blank-product images from the client's existing Mockup Studio projects. Files remain in their original storage locations. Client artwork is limited to projects linked to the selected customer ID. Only blank graphics with verified R2 storage records from linked Mockup Studio projects are listed.</p>
     {!account?.customer_id && <p>Link this marketing account to its customer record to see existing Mockup Studio graphics. Names are not used to guess client identity.</p>}
     {busy && <p role="status">Loading shared graphics…</p>}
     {error && <p role="alert">{error}</p>}
@@ -107,18 +89,16 @@ export default function ClientMarketingStarterKit({ accountId, organizations = [
         ["color", "Color", "Black, navy, red"],
         ["style", "Style / SKU", "A432, 18500"]
       ].map(([field, label, placeholder]) => <label key={field} className="growth-field"><span>{label}</span><input value={filters[field]} onChange={e => updateFilter(field, e.target.value)} placeholder={placeholder}/></label>)}
-      <button type="button" className="sc-btn" onClick={() => { setSearch(""); setPage(0); setCatalog([]); setFilters({ search: "", brand: "", type: "", color: "", style: "" }); }}>Clear filters</button>
+      <button type="button" className="sc-btn" onClick={() => { setSearch(""); setFilters({ search: "", brand: "", type: "", color: "", style: "" }); }}>Clear filters</button>
     </div>
-    <p role="status">{catalogBusy ? "Searching blank products…" : `${catalog.length} blank products shown`}{hasMore ? " · More available" : ""}</p>
+    <p role="status">{assets.filter(a => a.kind === "blank").length} R2-backed blank graphics available from this client’s projects.</p>
     <div className="growth-grid">
-      {assets.concat(catalog.map(row => ({ kind: "catalog", row, name: row.name || row.sku_base, project: "Shared blank catalog" }))).filter(a => (a.name + " " + a.project + " " + (a.row.sku_base || "") + " " + (a.row.brands?.name || "") + " " + (a.row.colors?.name || "") + " " + (a.row.product_types?.name || "")).toLowerCase().includes(search.toLowerCase())).map(a =>
+      {assets.filter(a => { const haystack = [a.name,a.project,a.row.product_color,a.row.product_type,a.row.blank_product_id_text,a.row.sku_base,a.row.brands?.name,a.row.colors?.name,a.row.product_types?.name].join(" ").toLowerCase(); return Object.values(filters).every(v => !v || haystack.includes(v.toLowerCase())); }).map(a =>
         <div className="sc-panel" key={a.kind + ":" + a.row.id}>
           <strong>{a.name}</strong><p>{a.kind === "logo" ? "Client artwork" : a.kind === "blank" || a.kind === "catalog" ? "Blank product" : "Approved mockup"} · {a.project}</p>
           <button type="button" className="sc-btn" disabled={busy} onClick={() => choose(a)}>Use in document</button>
         </div>)}
     </div>
-    {hasMore && <button type="button" className="sc-btn" disabled={catalogBusy} onClick={() => setPage(p => p + 1)}>Load more blank products</button>}
-    {catalogError && <p role="alert">Shared blank catalog unavailable: {catalogError}</p>}
-    {!busy && !assets.length && !catalog.length && <p>No reusable graphics found. Existing upload controls remain available.</p>}
+    {!busy && !assets.length && <p>No reusable graphics found. Existing upload controls remain available.</p>}
   </section>;
 }
