@@ -112,3 +112,19 @@ test('large accepted thumbnails are reduced to 384 pixels before reaching Gemini
  const res=await make({generate:async bytes=>{const m=await sharp(bytes).metadata();dimensions=[m.width,m.height];return points;}})({...event,body:JSON.stringify({mimeType:'image/png',image:large.toString('base64')})});
  assert.equal(res.statusCode,200);assert.deepEqual(dimensions,[384,384]);
 });
+
+test('production DTF release gate retries temporary provider 503 and still fails closed',async()=>{
+ const {retryTransientProviderError}=await import('../verify-dtf-gemini-live.mjs');
+ const failure=status=>Object.assign(Error('temporary provider failure'),{providerStatus:status});
+ let attempts=0,waits=[];
+ const result=await retryTransientProviderError(async()=>{if(++attempts<3)throw failure(503);return 'verified';},{wait:async ms=>waits.push(ms)});
+ assert.equal(result,'verified');
+ assert.equal(attempts,3);
+ assert.deepEqual(waits,[1000,2000]);
+ attempts=0;
+ await assert.rejects(()=>retryTransientProviderError(async()=>{attempts++;throw failure(503);},{wait:async()=>{}}),/temporary provider failure/);
+ assert.equal(attempts,3);
+ attempts=0;
+ await assert.rejects(()=>retryTransientProviderError(async()=>{attempts++;throw failure(403);},{wait:async()=>{}}),/temporary provider failure/);
+ assert.equal(attempts,1);
+});

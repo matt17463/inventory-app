@@ -6,7 +6,19 @@ import {prepareSourceMask} from '../src/lib/dtfMaskGuidance.js';
 import {createServiceClient} from '../netlify/functions/_shared/security.js';
 import {DTF_DEFAULTS} from '../src/lib/dtfStudioEngine.js';
 
-export async function verifyDtfGeminiLive({env=process.env,fetcher=fetch,generate=generateImageGuidance,checkJobs=async()=>{const db=createServiceClient();const r=await db.from('sc_dtf_ai_jobs').select('id',{head:true,count:'exact'}).limit(1);if(r.error)throw Error('DTF job storage unavailable.');}}={}){
+const RETRYABLE_PROVIDER_STATUSES = new Set([429, 500, 502, 503, 504]);
+export async function retryTransientProviderError(operation,{wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}){
+ for(let attempt=0;attempt<3;attempt++){
+  try{return await operation();}
+  catch(error){
+   const status=error.providerStatus||error.statusCode||0;
+   const transient=RETRYABLE_PROVIDER_STATUSES.has(status)||['TimeoutError','AbortError'].includes(error.name);
+   if(!transient||attempt===2)throw error;
+   await wait(1000*(attempt+1));
+  }
+ }
+}
+export async function verifyDtfGeminiLive({env=process.env,fetcher=fetch,generate=generateImageGuidance,wait,checkJobs=async()=>{const db=createServiceClient();const r=await db.from('sc_dtf_ai_jobs').select('id',{head:true,count:'exact'}).limit(1);if(r.error)throw Error('DTF job storage unavailable.');}}={}){
  if(env.DTF_GEMINI_ENABLED!=='true'||env.NETLIFY!=='true'||env.CONTEXT!=='production')return {skipped:true};
  await checkJobs();
  const model=env.GEMINI_IMAGE_MODEL;
@@ -19,7 +31,7 @@ export async function verifyDtfGeminiLive({env=process.env,fetcher=fetch,generat
  const width=96,height=96,pixels=Buffer.alloc(width*height*4,255);
  for(let y=24;y<72;y++)for(let x=24;x<72;x++)pixels.set([120,50,10,255],(y*width+x)*4);
  const image=await sharp(pixels,{raw:{width,height,channels:4}}).png().toBuffer();
- const guidance=await generate(image,'image/png',{key:env.GEMINI_API_KEY,model,fetcher});
+ const guidance=await retryTransientProviderError(()=>generate(image,'image/png',{key:env.GEMINI_API_KEY,model,fetcher}),{wait});
  const mask=prepareSourceMask(pixels,width,height,{...DTF_DEFAULTS,background:'ai',aiGuidance:guidance,removalTolerance:20,maskStrokes:[],regionPoints:[]});
  const center=(48*width+48)*4;
  if(mask.data[3]!==0||mask.data[center+3]!==255||mask.data[center]!==120||mask.report.removed<width*height/2)throw Error('DTF live gate: guidance did not preserve the fixture foreground and remove its background. Production publish blocked.');
