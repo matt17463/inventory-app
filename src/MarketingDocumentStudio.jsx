@@ -7,6 +7,7 @@ import MarketingStorePreview from "./MarketingStorePreview";
 import MarketingProgramDesigner from "./MarketingProgramDesigner";
 import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
+import { marketingVisualBrief } from "./lib/marketingVisualBrief";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { parseTechnicalGuideRows, technicalGuideFields } from "./lib/marketingTechnicalGuide";
 import { marketingDocumentModel } from "./lib/marketingDocumentModel";
@@ -80,6 +81,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const blueprint=marketingDocumentBlueprint(template);
   const technical = technicalGuideFields[template];
   const schoolFlyer = template === "brochure-schools";
+  const visualBrief=marketingVisualBrief({templateId:template,templateLabel:selectedTemplate?.label,organization,segment:segment==="team"&&selectedTemplate?.segment!=="all"?selectedTemplate.segment:segment,colors:colors.split(","),purpose:blueprint?.purpose,description,products:productRowsText||style,style:design||"premium editorial",audience});
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   const marketingLogoKey = organizations.find(a => a.id === accountId)?.marketing_logo_key || "";
@@ -245,7 +247,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         kind: selectedTemplate?.kind || "outreach",
         organization: organization.trim() || "Prospective client",
         segment, brief:description.trim(),tone:aiTone,
-        context:{audience,style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
+        context:{audience,style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100),visualDirection:visualBrief.slice(0,1800)}
       });
       if (activeAccount.current !== accountId) return;
       setAiText(result);setGuide(null);
@@ -644,6 +646,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       {!schoolFlyer && <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>}
       <label className="growth-field"><span>{schoolFlyer?"Program overview and goals":"Client notes or product purpose"}</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
+    <details className="growth-subcard" aria-label="AI visual design direction for all marketing templates">
+      <summary><strong>AI visual design direction</strong> — {selectedTemplate?.label||"Marketing document"}</summary>
+      <p>Use this client-specific creative brief with an image-generation tool to produce a professional, illustrated background or hero image. This is a design prompt, not an image-generation button: the current AI writing assistant cannot render images. Keep pricing, contact details, and other verified content in editable document fields.</p>
+      <textarea readOnly rows="11" aria-label="Client-specific visual generation prompt" value={visualBrief} style={{width:"100%"}}/>
+      <button type="button" className="sc-btn" onClick={()=>navigator.clipboard.writeText(visualBrief).then(()=>setSaveStatus("Visual design prompt copied.")).catch(()=>setError("Copy failed; select the prompt text manually."))}>Copy AI visual design prompt</button>
+    </details>
     {schoolFlyer && <details className="growth-subcard">
       <summary><strong>Optional AI writing assistant</strong> — generate and review program copy</summary>
       <p>The assistant helps draft copy only; the approved flyer layout always comes from the guided designer below. Verify all generated claims before use.</p>
