@@ -75,7 +75,7 @@ export function buildSchoolProgramPdf(d){
  const contrastText=dark(primary)?white:ink;
  const write=(v,x,y,size=10,color=ink,bold=false)=>text(pdf,v,x,y,size,color,bold);
  const wrap=(v,x,y,w,size=10,color=ink,lineHeight=1.3,maxLines=6,bold=false)=>{
-  pdf.setFont("helvetica",bold?"bold":"normal");pdf.setFontSize(size);pdf.setTextColor(...color);
+  pdf.setFont("helvetica",bold==="display"?"bolditalic":bold?"bold":"normal");pdf.setFontSize(size);pdf.setTextColor(...color);
   const rows=pdf.splitTextToSize(String(v||""),w).slice(0,maxLines);
   rows.forEach((line,i)=>pdf.text(line,x,y+i*size*lineHeight));
   return y+rows.length*size*lineHeight;
@@ -104,6 +104,12 @@ export function buildSchoolProgramPdf(d){
  bar(0,0,612,366,primary);
  bar(0,0,612,8,secondary);
  bar(0,78,612,5,secondary);
+ if(d.backgroundArtwork){
+  const kind=d.backgroundArtwork.startsWith("data:image/jpeg")?"JPEG":"PNG";
+  pdf.addImage(d.backgroundArtwork,kind,0,83,612,283,undefined,"FAST");
+  // Retain a solid brand panel behind the legibility-critical headline.
+  bar(205,124,392,240,primary);
+ }
  backdrop();
  if(d.businessLogo)image(pdf,d.businessLogo,27,16,79,54);
  write("SKILLED CRAFTING",118,34,18,contrastText,true);
@@ -122,7 +128,7 @@ export function buildSchoolProgramPdf(d){
   pdf.triangle(580,235,600,247,580,276,"F");
   pdf.triangle(214,287,234,282,244,288,"F");
  }
- wrap(title,231,267,335,17,dark(secondary)?white:ink,1.13,2,true);
+ wrap(title,231,267,335,17,dark(secondary)?white:ink,1.13,2,"display");
  wrap(subtitle,223,316,344,11,contrastText,1.35,3);
  write("A COLLECTION MADE FOR YOUR SCHOOL",32,389,15,primary,true);
  // Use prominent genuine product mockups, placed on a clean stage.
