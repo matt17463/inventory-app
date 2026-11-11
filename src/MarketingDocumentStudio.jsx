@@ -608,7 +608,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   }
   return <section className="sc-panel" onChange={() => setGuide(null)}>
     <h2>Marketing Document Builder</h2>
-    <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
+    <p>{schoolFlyer
+      ? "Build a school spirit-wear flyer in one workflow: select the school and approved colors; add mascot artwork and apparel mockups; confirm prices; preview the actual two-page PDF; then download."
+      : "Choose a template, add client details, preview the draft, and export the completed document. Uploaded artwork stays out of AI requests."}</p>
     <div className="growth-grid">
       <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
@@ -754,7 +756,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
-    {accountId && <details className="growth-subcard"><summary><strong>Saved client documents</strong> · {savedDrafts.length} recent</summary>{savedDrafts.length ?
+    {accountId && !schoolFlyer && <details className="growth-subcard"><summary><strong>Saved client documents</strong> · {savedDrafts.length} recent</summary>{savedDrafts.length ?
       <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · Version {d.version} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {d.status==="draft" && <button type="button" className="sc-btn" disabled={saving || importing || exporting} onClick={()=>reopenDraft(d)}>Reopen draft</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{d.status === "approved" && <button type="button" className="sc-btn" disabled={saving || importing || exporting}
       onClick={()=>reopenDraft(d,true)}>Start revision</button>}{d.status === "approved" && d.content?.contentVersion === 2 && <>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx", d)}>Download approved Word</button>
