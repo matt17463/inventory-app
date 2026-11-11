@@ -610,7 +610,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     <h2>Marketing Document Builder</h2>
     <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
