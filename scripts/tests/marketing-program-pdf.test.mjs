@@ -42,6 +42,15 @@ test("Specialized editor includes exact artwork compositing, logo and contact de
  assert.match(ui,/schoolLogo/);
  assert.match(ui,/Preview finished two-page flyer/);
  assert.match(ui,/Download this PDF/);
+ assert.match(ui,/async function saveFlyer\(/);
+ assert.match(ui,/async function reopenFlyer\(/);
+ assert.match(ui,/sc_growth_documents/);
+ assert.match(ui,/marketing-artwork-asset/);
+ assert.match(ui,/kind:"school_flyer_v1"/);
+ assert.match(ui,/\.eq\("status","draft"\)/);
+ assert.match(ui,/\.eq\("updated_at",draftUpdatedAt\)/);
+ assert.match(ui,/setPreviewBlob\(null\)/);
+ assert.match(parent,/onRestoreBranding=/);
  assert.match(ui,/file\.output\("blob"\)/);
  assert.match(ui,/src=\{previewUrl/);
  assert.match(ui,/Download multi-page catalog PDF/);
