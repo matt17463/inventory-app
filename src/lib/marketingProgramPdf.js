@@ -63,7 +63,7 @@ function requireBrand(d){
  * Original artwork and product mockups come from the editor, never generated stand-ins.
  * Page 1 is the visual cover; page 2 contains the verified program and pricing details.
  */
-export function exportSchoolProgramPdf(d){
+export function buildSchoolProgramPdf(d){
  validateProgramProducts(d.products,true);requireBrand(d);
  const pdf=new jsPDF({unit:"pt",format:"letter",compress:true});
  const verified=(d.colors||[]).filter(v=>/^#[0-9a-f]{6}$/i.test(v));
@@ -83,31 +83,51 @@ export function exportSchoolProgramPdf(d){
  const bar=(x,y,w,h,color)=>{pdf.setFillColor(...color);pdf.rect(x,y,w,h,"F");};
  const featured=d.products.slice(0,3), title=d.headline?.trim()||"WEAR YOUR SCHOOL PRIDE";
  const subtitle=d.tagline?.trim()||"Spirit wear for students, families, staff and supporters";
- // PAGE 1: full-bleed visual cover with school-specific colors and authentic client artwork.
- bar(0,0,612,792,primary);
- bar(0,0,612,14,secondary);
- bar(0,521,612,271,white);
- bar(0,521,612,8,secondary);
- if(d.schoolLogo)image(pdf,d.schoolLogo,36,39,123,118);
- if(d.businessLogo)image(pdf,d.businessLogo,472,39,101,72);
- write("SKILLED CRAFTING  /  SCHOOL SPIRIT COLLECTION",37,29,8,contrastText,true);
- wrap(d.organization||"Your School",37,194,530,32,contrastText,1.1,2,true);
- wrap(title,38,266,532,30,contrastText,1.08,2,true);
- wrap(subtitle,39,333,500,12,contrastText,1.45,3);
- bar(37,386,72,5,secondary);
- // Art-forward merchandise stage: two large mockups instead of tiny footer thumbnails.
- featured.slice(0,2).forEach((product,i)=>{
-  const x=i===0?42:321;
-  pdf.setFillColor(255,255,255);
-  pdf.roundedRect(x,409,249,231,12,12,"F");
-  image(pdf,product.mockup,x+12,418,225,158);
-  write(product.name,x+16,600,12,ink,true);
+ // PAGE 1: mascot-led, full-bleed school flyer with an apparel showcase.
+ bar(0,0,612,792,white);
+ bar(0,0,612,366,primary);
+ bar(0,0,612,8,secondary);
+ bar(0,78,612,5,secondary);
+ if(d.businessLogo)image(pdf,d.businessLogo,27,16,79,54);
+ write("SKILLED CRAFTING",118,34,18,contrastText,true);
+ write("CUSTOM APPAREL  /  PRINTING  /  PERSONALIZATION",119,54,8,contrastText);
+ write("YOUR LOCAL SPIRIT WEAR PARTNER",410,66,8,contrastText,true);
+ // The school artwork is prominently displayed, never reduced to a document thumbnail.
+ if(d.heroArtwork)image(pdf,d.heroArtwork,27,98,188,170);
+ wrap(d.organization||"Your School",221,148,353,26,contrastText,1.1,3,true);
+ bar(218,235,362,53,secondary);
+ wrap(title,231,267,335,17,dark(secondary)?white:ink,1.13,2,true);
+ wrap(subtitle,223,316,344,11,contrastText,1.35,3);
+ write("A COLLECTION MADE FOR YOUR SCHOOL",32,389,15,primary,true);
+ // Use prominent genuine product mockups, placed on a clean stage.
+ featured.forEach((product,i)=>{
+  const count=featured.length;
+  const width=count===1?260:count===2?254:174;
+  const gap=count===1?0:count===2?25:15;
+  const x=count===1?176:count===2?37+i*(width+gap):30+i*(width+gap);
+  pdf.setFillColor(245,247,250);
+  pdf.roundedRect(x,407,width,222,12,12,"F");
+  image(pdf,product.mockup,x+9,415,width-18,153);
+  wrap(product.name,x+12,589,width-24,11,ink,1.14,2,true);
   const tier=programPriceRows(product)[0];
-  write("FROM "+money(tier.retail),x+16,621,12,primary,true);
+  write("RETAIL  "+money(tier.retail),x+12,614,10,primary,true);
  });
- wrap(d.notes?.trim()||"Create a coordinated look for your community with customizable apparel and an easy ordering experience.",38,675,528,13,ink,1.4,4);
- write(d.contact.website||"skilledcrafting.com",38,764,11,primary,true);
- write("1 / 2",550,764,9,muted);
+ // Three strong value pillars reflect the original school's promotional flyer.
+ const highlights=[
+  ["SCHOOL PRIDE","Coordinated apparel for students, families and staff"],
+  ["PROGRAM SUPPORT","Agreed retail pricing creates a potential program return"],
+  ["EASY ORDERING","A streamlined storefront and fulfillment plan"]
+ ];
+ highlights.forEach((item,i)=>{
+  const x=29+i*193;
+  bar(x,649,179,7,i===1?secondary:primary);
+  wrap(item[0],x+4,673,173,11,primary,1.1,2,true);
+  wrap(item[1],x+4,696,167,9,ink,1.2,3);
+ });
+ bar(0,742,612,50,primary);
+ write("LET'S BRING SCHOOL SPIRIT TO LIFE",30,766,12,contrastText,true);
+ write("skilledcrafting.com",406,766,10,contrastText,true);
+ write("1 / 2",557,782,8,contrastText);
  // PAGE 2: program explanation, editable commercial information, and call to action.
  pdf.addPage();
  bar(0,0,612,108,primary);bar(0,105,612,5,secondary);
@@ -144,7 +164,10 @@ export function exportSchoolProgramPdf(d){
  pdf.setDrawColor(209,217,225);pdf.line(34,724,578,724);
  wrap("*Illustrative difference between agreed decorated wholesale and approved retail price. Actual proceeds, taxes, fees, refunds, shipping and payout terms require written agreement.",34,740,541,8,muted,1.25,4);
  write("2 / 2",551,780,9,muted);
- pdf.save("skilled-crafting-school-spirit-wear.pdf");
+ return pdf;
+}
+export function exportSchoolProgramPdf(d){
+ buildSchoolProgramPdf(d).save("skilled-crafting-school-spirit-wear.pdf");
 }
 export function exportClientCatalogPdf(d){
  validateProgramProducts(d.products);requireBrand(d);
