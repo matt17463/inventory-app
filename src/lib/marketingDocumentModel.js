@@ -29,6 +29,16 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   const accent = ['school','team'].includes(document.segment) ? marketingTheme(document).primary :
     brandColors[0] || palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || '#284A65';
   const blocks = [];
+  const schoolTeamDocuments = new Set(['brochure-schools','brochure-sports','fundraising-proposal','store-launch','proposal','coach-recognition','product-catalog','package-comparison']);
+  if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
+    const school = document.segment === 'school';
+    const message = school ? 'More school pride. More ways to support your programs.' :
+      'Build team identity on and off the field.';
+    blocks.push({type:'heading',value:message});
+    blocks.push({type:'paragraph',value:school ?
+      'Explore coordinated spirit wear, staff apparel, branded merchandise and convenient family ordering with Skilled Crafting.' :
+      'Explore coordinated team merchandise, family apparel, coach recognition and ordering options designed around your club.'});
+  }
   if (document.logo) blocks.push(image(document.logo, 'Client logo', true));
   if (text(document.description)) blocks.push({ type: 'paragraph', value: text(document.description) });
   for (const color of (document.template === "brand-guide" ? brandColors : [])) {
@@ -38,6 +48,11 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   for (const label of blueprint.sections) {
     const value = text(document.sectionContent?.[label]);
     if (value) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value });
+  }
+  if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
+    blocks.push({type:'heading',value:'How the partnership works'});
+    blocks.push({type:'paragraph',value:'1. Discuss your audience and program goals.\\n2. Select products and confirm artwork.\\n3. Review selling prices, ordering and fulfillment details.\\n4. Approve the program before launch.'});
+    if(document.template === 'fundraising-proposal') blocks.push({type:'paragraph',value:'Fundraising proceeds depend on verified selling prices, decorated costs, taxes, fees, returns and agreed payout terms. No proceeds are guaranteed.'});
   }
   const technical = technicalGuideFields[document.template];
   if (technical && document.technicalRevision) blocks.push(field('Revision and approval', document.technicalRevision));
