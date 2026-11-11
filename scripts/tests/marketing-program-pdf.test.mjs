@@ -52,6 +52,10 @@ test("Specialized editor includes exact artwork compositing, logo and contact de
  assert.match(ui,/setPreviewBlob\(null\)/);
  assert.match(parent,/onRestoreBranding=/);
  assert.match(ui,/document\.embedPng\(coverPng\)/);
+ assert.match(ui,/approvedCover\|\|await schoolFlyerPng\(data\)/);
+ assert.match(ui,/approvedCover:refs\.get\(approvedCover\)/);
+ assert.match(ui,/setApprovedCover\(await restore\(c\.approvedCover\)\)/);
+ assert.match(ui,/Approved illustrated flyer cover/);
  assert.match(ui,/new Blob\(\[bytes\]/);
  assert.match(ui,/src=\{previewUrl/);
  assert.match(ui,/Download multi-page catalog PDF/);
