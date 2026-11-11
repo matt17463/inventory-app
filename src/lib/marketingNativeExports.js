@@ -46,7 +46,7 @@ const value = block => block.type === 'field' ? block.label + ': ' + block.value
 
 function word(model, images) {
   const children = [
-    new Paragraph({ children:[new TextRun({text:'SKILLED CRAFTING  /  CLIENT MARKETING',bold:true,color:model.accent.slice(1),size:18})],spacing:{after:180} }),
+    new Paragraph({ children:[new TextRun({text:'SKILLED CRAFTING  /  CLIENT MARKETING',bold:true,color:(model.headingColor || model.accent).slice(1),size:18})],spacing:{after:180} }),
     new Paragraph({ text: model.title, heading: HeadingLevel.TITLE }),
     new Paragraph({ text: model.organization, heading: HeadingLevel.SUBTITLE }),
   ];
@@ -80,10 +80,10 @@ function word(model, images) {
         block.type === 'subheading' ? HeadingLevel.HEADING_2 : undefined;
       const lines = value(block).split(/\r?\n/);
       lines.forEach(line => children.push(new Paragraph({
-        heading, keepNext: Boolean(heading), spacing: { after: 120 },
+        heading, pageBreakBefore: block.pageBreakBefore, keepNext: Boolean(heading), spacing: { after: 120 },
         children: [
           ...(block.type === 'swatch' ? [new TextRun({ text: '    ', shading: { fill: block.color.slice(1) } }), new TextRun('  ')] : []),
-          new TextRun({ text: line, ...(heading ? { color: model.accent.slice(1) } : {}) }),
+          new TextRun({ text: line, ...(heading ? { color: (model.headingColor || '#24364A').slice(1) } : {}) }),
         ],
       })));
     }
@@ -92,7 +92,7 @@ function word(model, images) {
     title: model.title, creator: 'Skilled Crafting', subject: model.organization,
     styles: { default: {
       document: { run: { font: 'Arial', size: 22, color: '24364A' } },
-      title: { run: { font: 'Arial', size: 48, bold: true, color: model.accent.slice(1) }, paragraph: { spacing: { after: 160 } } },
+      title: { run: { font: 'Arial', size: 48, bold: true, color: (model.headingColor || model.accent).slice(1) }, paragraph: { spacing: { after: 160 } } },
       subtitle: { run: { font: 'Arial', size: 26, color: '44546A' }, paragraph: { spacing: { after: 160 } } },
     } },
     sections: [{
@@ -123,17 +123,18 @@ function pdf(model, images) {
     }
     y += 8;
   }
-  const [red,green,blue]=rgbHex(model.accent);
+  const [red,green,blue]=rgbHex(model.headingColor || model.accent);
   document.setFillColor(red,green,blue);
   document.rect(0, 0, 612, 16, 'F');
   document.setFont('helvetica','bold');
   document.setFontSize(9);
   document.setTextColor(red,green,blue);
   document.text('SKILLED CRAFTING  /  CLIENT MARKETING',54,35);
-  write(model.title, 24, { bold: true, keepNext: true, color: model.accent });
+  write(model.title, 24, { bold: true, keepNext: true, color: model.headingColor || model.accent });
   write(model.organization, 13);
   if (status(model)) write(status(model), 10, { bold: true, color: '#A82135' });
   for (const [index, block] of model.blocks.entries()) {
+    if (block.pageBreakBefore && y > 54) { document.addPage(); y = 54; }
     if (block.type === 'image') {
       const image = images.get(block.source);
       const size = imageSize(image, block.thumbnail);
@@ -147,7 +148,7 @@ function pdf(model, images) {
         startY: y, margin: { left: 54, right: 54, top: 54, bottom: 57 },
         head: [block.columns], body: block.rows, rowPageBreak: 'avoid',
         styles: { fontSize: 10, cellPadding: 7 },
-        headStyles: { fillColor: rgbHex(model.accent) },
+        headStyles: { fillColor: rgbHex(model.headingColor || model.accent) },
       });
       y = document.lastAutoTable.finalY + 15;
     } else if (block.type === 'link') {
@@ -174,7 +175,7 @@ function pdf(model, images) {
         }
       }
       write(value(block), block.type === 'heading' ? 15 : block.type === 'subheading' ? 12 : 10.5,
-        { bold: heading, keepNext: heading, color: heading ? model.accent : '#24364A' });
+        { bold: heading, keepNext: heading, ...(heading ? { color: model.headingColor } : {}) });
     }
   }
   for (let page = 1; page <= document.getNumberOfPages(); page++) {

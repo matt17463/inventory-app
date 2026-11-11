@@ -3,13 +3,17 @@ import test from 'node:test';
 import AdmZip from 'adm-zip';
 import { inflateSync } from 'node:zlib';
 import { marketingTemplates } from '../../src/lib/marketingCatalogPolicy.js';
+import { renderMarketingDocumentHtml } from '../../src/lib/marketingDocumentContent.js';
 import { marketingDocumentBlueprint } from '../../src/lib/marketingDocumentBlueprints.js';
 import { marketingDocumentModel, marketingSectionMissing } from '../../src/lib/marketingDocumentModel.js';
 import { exportMarketingDocument } from '../../src/lib/marketingNativeExports.js';
 
 function pdfText(bytes) {
-  return [...bytes.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
-    .map(match => inflateSync(Buffer.from(match[1], 'latin1')).toString('latin1')).join('\n');
+  const streams = bytes.toString('latin1').matchAll(/\/Length (\d+)\s+\/Filter \/FlateDecode\s*>>\r?\nstream\r?\n/g);
+  return [...streams].map(match => {
+    const start = match.index + match[0].length;
+    return inflateSync(bytes.subarray(start, start + Number(match[1]))).toString('latin1');
+  }).join('\n');
 }
 
 test('all 35 templates generate editable Word and native PDF with the same editorial content', async () => {
@@ -18,17 +22,27 @@ test('all 35 templates generate editable Word and native PDF with the same edito
     const { sections } = marketingDocumentBlueprint(id);
     const input = {
       template: id, organization: 'Example Client', contentVersion: 2,
+      design: 'editorial', confirmedColors: ['#234B62', '#DFBA40'],
       sectionContent: Object.fromEntries(sections.map((section, index) => [section, 'Confirmed section content ' + index])),
       offer: { unit_cost: 'PrivateSupplierCost' },
     };
     assert.deepEqual(marketingSectionMissing({ ...input, sectionContent: {} }), sections);
     assert.deepEqual(marketingSectionMissing(input), []);
     const model = marketingDocumentModel(input);
+    assert.equal(model.headingColor, '#234B62');
+    const html = renderMarketingDocumentHtml(input);
+    assert.match(html, /Example Client/);
+    assert.doesNotMatch(html, /PrivateSupplierCost/);
+    for (const index of sections.keys()) assert.match(html, new RegExp('Confirmed section content ' + index));
     const [docx, pdf] = await Promise.all(['docx', 'pdf'].map(format => exportMarketingDocument(model, format)));
     const xml = new AdmZip(Buffer.from(await docx.arrayBuffer())).readAsText('word/document.xml');
     const pdfBytes = Buffer.from(await pdf.arrayBuffer());
     assert.match(pdfBytes.toString('ascii', 0, 8), /^%PDF-/);
     const pdfContent = pdfText(pdfBytes);
+    if (id === 'brochure-schools') {
+      assert.match(pdfBytes.toString('latin1'), /\/Count 2\b/);
+      assert.match(xml, /<w:pageBreakBefore\/>/);
+    }
     for (const output of [xml, pdfContent]) {
       assert.match(output, /Example Client/);
       assert.match(output, /FOR INTERNAL REVIEW/);

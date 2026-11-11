@@ -26,5 +26,5 @@ test("supplier comparison selection populates supplier and product fields", () =
 });
 
 test("saved document titles respect database length limit",()=>{
- assert.match(component,/title: \(guide\.organization \+ " — " \+ template\)\.slice\(0, 200\)/);
+ assert.match(component,/title: \(guide\.organization \+ " — " \+ guide\.template\)\.slice\(0, 200\)/);
 });

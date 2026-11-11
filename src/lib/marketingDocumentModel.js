@@ -12,6 +12,13 @@ const image = (source, label, thumbnail = false) => ({ type: 'image', source, la
 const field = (label, value) => ({ type: 'field', label, value });
 const palette = { 'skilled-crafting': '#A82135', wedding: '#694957', sports: '#274B62', business: '#284A65', recognition: '#6C501D' };
 
+function headingColor(accent) {
+  const channels = accent.slice(1).match(/../g).map(value => parseInt(value, 16) / 255)
+    .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  return 1.05 / (luminance + 0.05) >= 4.5 ? accent : '#24364A';
+}
+
 export function marketingSectionMissing(document) {
   if (document.contentVersion !== 2) return [];
   const blueprint = marketingDocumentBlueprint(document.template);
@@ -26,8 +33,8 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   const brandColors = Array.isArray(document.confirmedColors) ? document.confirmedColors.filter(hex) : [];
   const eventTheme = document.template.includes('wedding') ? 'wedding' : document.template === 'coach-recognition' ?
     'sports' : document.template === 'employee-recognition' ? 'recognition' : 'business';
-  const accent = ['school','team'].includes(document.segment) ? marketingTheme(document).primary :
-    brandColors[0] || palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || '#284A65';
+  const accent = (document.design || ['school','team'].includes(document.segment)) ? marketingTheme(document).primary :
+    palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || brandColors[0] || '#284A65';
   const blocks = [];
   const schoolTeamDocuments = new Set(['brochure-schools','brochure-sports','fundraising-proposal','store-launch','proposal','coach-recognition','product-catalog','package-comparison']);
   if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
@@ -45,9 +52,11 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
     const rgb = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
     blocks.push({ type: 'swatch', label: color + ' · RGB ' + rgb.join(', '), color });
   }
+  const schoolBrochure = document.template === 'brochure-schools';
+  const secondPageSection = schoolBrochure && blueprint.sections.slice(2).find(label => text(document.sectionContent?.[label]));
   for (const label of blueprint.sections) {
     const value = text(document.sectionContent?.[label]);
-    if (value) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value });
+    if (value) blocks.push({ type: 'heading', value: label, pageBreakBefore: label === secondPageSection }, { type: 'paragraph', value });
   }
   if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
     blocks.push({type:'heading',value:'How the partnership works'});
@@ -128,5 +137,5 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   for (const [label, value] of [['Artwork placement', document.placement], ['Terms', document.terms], ['Next step', document.cta]]) {
     if (text(value)) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value: text(value) });
   }
-  return { title: template.label, organization: text(document.organization), accent, approved, blocks };
+  return { title: template.label, organization: text(document.organization), accent, headingColor: headingColor(accent), approved, blocks };
 }

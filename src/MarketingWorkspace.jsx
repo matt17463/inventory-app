@@ -962,7 +962,7 @@ export default function MarketingWorkspace() {
         {editor.table === "accounts"
           ? (form, change) => (
               <>
-                <MarketingClientLogo accountId={form.id} value={form.marketing_logo_key} onChange={key => change("marketing_logo_key", key)} />
+                <MarketingClientLogo key={form.id} accountId={form.id} value={form.marketing_logo_key} onChange={key => change("marketing_logo_key", key)} />
                 <h3>Client pricing defaults</h3>
                 <TermsFields
                   config={{ ...defaultGrowthPricing, ...form.pricing_defaults }}

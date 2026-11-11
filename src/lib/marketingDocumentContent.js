@@ -1,5 +1,5 @@
 import { technicalGuideMissing } from "./marketingTechnicalGuide.js";
-import { marketingSectionMissing } from "./marketingDocumentModel.js";
+import { marketingDocumentModel, marketingSectionMissing } from "./marketingDocumentModel.js";
 import { escapeGrowthHtml } from "./growthPricing.js";
 import { marketingTemplates } from "./marketingCatalogPolicy.js";
 import { marketingTheme } from "./marketingDesignSystem.js";
@@ -176,7 +176,7 @@ export function renderMarketingDocumentHtml(doc) {
   const brand = doc.branding || { color_details: [], placements: [], variants: [], typography: "", printing: "" };
   const theme = marketingTheme(doc);
   const accent = theme.accent;
-  const primary = theme.primary;
+  const primary = doc.contentVersion === 2 && template ? marketingDocumentModel(doc).headingColor : theme.primary;
   const note = missing.length
     ? '<div class="warning"><strong>DRAFT — INFORMATION REQUIRED BEFORE FINAL APPROVAL</strong><ul>' +
       missing.map(x => '<li>' + e(x) + '</li>').join('') + '</ul></div>'
