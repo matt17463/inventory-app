@@ -8,6 +8,7 @@ import MarketingProgramDesigner from "./MarketingProgramDesigner";
 import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
+import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { marketingLogoRequest } from "./MarketingClientLogo";
 
@@ -52,6 +53,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [productRowsText,setProductRowsText] = useState("");
   const [productSwatchesText,setProductSwatchesText] = useState("");
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
+  const blueprint=marketingDocumentBlueprint(template);
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   useEffect(() => {
@@ -338,6 +340,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Logo colors (editable HEX values, separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
+    {blueprint && <div className="growth-subcard" aria-label="Document purpose and content checklist">
+      <h3>{blueprint.stage} · {selectedTemplate?.label}</h3>
+      <p><strong>Purpose:</strong> {blueprint.purpose}</p>
+      <p><strong>Recommended sections:</strong> {blueprint.sections.join(" · ")}</p>
+      <small>Content checklist is guidance for preparing a complete document. Confirm client-specific facts, artwork rights, prices and production specifications before distribution.</small>
+    </div>}
     <ClientMarketingStarterKit accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
     {template==="product-guide" && <><MarketingSupplierCompare onChoose={item=>{setSupplier(Object.keys(marketingSuppliers).find(key=>marketingSuppliers[key].name===item.supplier_name)||"sanmar");setStyle(item.name);setSku(item.sku);setUnitCost(String(item.unit_cost));setObservedAt(item.observed_at.slice(0,10));setSourceUrl(item.source_url);setSizes(item.sizes.join(", "));setProductColors(item.colors.join(", "));setGuide(null);}}/><h3>Verified supplier product (optional until catalog feed is connected)</h3><div className="growth-grid">
       <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
