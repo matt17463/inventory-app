@@ -79,6 +79,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  return <section className="growth-subcard">
   <h3>{brochure?"School spirit-wear flyer — guided two-page design":"Client product catalog — multi-page full-color PDF"}</h3>
   <p>{brochure?"One creation path: provide your approved school branding, position artwork on apparel, review the two-page flyer and download the PDF.":"Use real product photographs and approved client artwork with editable placement."} Enter agreed decorated wholesale and client retail prices; supplier purchase costs remain private.</p>
+  {brochure&&<h4>Step 2 — Flyer message and visual identity</h4>}
   {brochure&&<div className="growth-grid">
    <label className="growth-field"><span>Flyer headline</span><input value={headline} maxLength={55} onChange={e=>setHeadline(e.target.value)}/></label>
    <label className="growth-field"><span>Flyer tagline</span><input value={tagline} maxLength={140} onChange={e=>setTagline(e.target.value)}/></label>
@@ -97,6 +98,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    setProducts(ps=>ps.length>=25?ps:[...ps,{...fresh("other"),name:item.name||"Product",sku:item.sku||"",sizes:(item.sizes||[]).join(", "),colors:(item.colors||[]).join(", ")}]);
    setError("Supplier selection added. Verify product availability and enter your approved wholesale/retail prices; supplier costs are not exported.");
   }}/>}
+  {brochure&&<h4>Step 3 — Apparel mockups and verified pricing</h4>}
   {products.map((p,index)=><article className="growth-subcard" key={p.id}>
    <h4>Product {index+1}: {p.name}</h4>
    <div className="growth-grid">
@@ -123,6 +125,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   </article>)}
   <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
+  {brochure&&<h4>Step 4 — Preview the actual PDF, then download</h4>}
   {brochure&&<div className="growth-actions">
    <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={preview}>{busy?"Rendering flyer…":"Preview finished two-page flyer"}</button>
    <button type="button" className="sc-btn" disabled={busy||!previewBlob} onClick={download}>Download this PDF</button>
