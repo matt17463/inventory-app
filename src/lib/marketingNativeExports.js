@@ -39,7 +39,7 @@ function imageSize(image, thumbnail) {
   return { width: Math.max(1, Math.round(image.width * scale)), height: Math.max(1, Math.round(image.height * scale)) };
 }
 
-const footer = 'Skilled Crafting  |  253.432.0505  |  matt@skilledcrafting.com  |  skilledcrafting.com';
+const footer = 'Skilled Crafting  |  skilledcrafting.com';
 const rgbHex = hex => /^#[0-9a-f]{6}$/i.test(hex || '') ? [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)) : [36,54,74];
 const status = model => model.approved ? '' : 'DRAFT — FOR INTERNAL REVIEW';
 const value = block => block.type === 'field' ? block.label + ': ' + block.value : block.value || block.label;
