@@ -25,7 +25,7 @@ async function compose(photo,logo,p){
 }
 export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage="",confirmedColors=[],description="",accountId="",onRestoreBranding}){
  const brochure=mode==="brochure-schools";
- const [businessLogo,setBusinessLogo]=useState(""),[mascotArtwork,setMascotArtwork]=useState(""),[backgroundArtwork,setBackgroundArtwork]=useState("");
+ const [businessLogo,setBusinessLogo]=useState(""),[mascotArtwork,setMascotArtwork]=useState(""),[backgroundArtwork,setBackgroundArtwork]=useState(""),[approvedCover,setApprovedCover]=useState("");
  const [previewBlob,setPreviewBlob]=useState(null),[previewUrl,setPreviewUrl]=useState("");
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
@@ -63,7 +63,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const artwork=mascotArtwork||logo;
  const colorSignature=actualColors.join(",");
  useEffect(()=>{setRestoredBranding(null);},[organization,schoolLogo,description,confirmedColors.join(",")]);
- useEffect(()=>{setPreviewBlob(null);},[actualOrganization,logo,mascotArtwork,backgroundArtwork,businessLogo,products,contact,notes,headline,tagline,actualDescription,colorSignature]);
+ useEffect(()=>{setPreviewBlob(null);},[actualOrganization,logo,mascotArtwork,backgroundArtwork,approvedCover,businessLogo,products,contact,notes,headline,tagline,actualDescription,colorSignature]);
  useEffect(()=>{
    if(!previewBlob){setPreviewUrl("");return;}
    const url=URL.createObjectURL(previewBlob);
@@ -108,14 +108,14 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    if(!logo||!actualColors.length)throw Error("Confirm the school logo and colors before saving.");
    setSavingDraft(true);setError("");setSaveMessage("");
    // Keep image bytes in private client-scoped R2; only references go in Supabase.
-   const artworkValues=[businessLogo,logo,mascotArtwork,backgroundArtwork,...products.flatMap(p=>[p.photo,p.mockup])].filter(Boolean);
+   const artworkValues=[businessLogo,logo,mascotArtwork,backgroundArtwork,approvedCover,...products.flatMap(p=>[p.photo,p.mockup])].filter(Boolean);
    const refs=new Map();
    for(const image of new Set(artworkValues))refs.set(image,await storeArtwork(image));
    const content={
     kind:"school_flyer_v1",organization:actualOrganization,colors:actualColors,description:actualDescription,
     contact,notes,headline,tagline,
     businessLogo:refs.get(businessLogo)||null,schoolLogo:refs.get(logo)||null,
-    mascotArtwork:refs.get(mascotArtwork)||null,backgroundArtwork:refs.get(backgroundArtwork)||null,
+    mascotArtwork:refs.get(mascotArtwork)||null,backgroundArtwork:refs.get(backgroundArtwork)||null,approvedCover:refs.get(approvedCover)||null,
     products:products.map(({photo,mockup,...rest})=>({...rest,photo:refs.get(photo)||null,mockup:refs.get(mockup)||null}))
    };
    const row={template_id:"brochure-schools",title:(actualOrganization+" — School spirit-wear flyer").slice(0,200),content};
@@ -154,6 +154,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    setBusinessLogo(await restore(c.businessLogo));
    setMascotArtwork(await restore(c.mascotArtwork));
    setBackgroundArtwork(await restore(c.backgroundArtwork));
+   setApprovedCover(await restore(c.approvedCover));
    setProducts(restoredProducts);
    setContact(c.contact||{phone:"",email:"",website:"https://skilledcrafting.com",address:""});
    setNotes(c.notes||"");setHeadline(c.headline||"WEAR YOUR SCHOOL PRIDE");setTagline(c.tagline||"");
@@ -170,14 +171,14 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    if(!logo)throw Error("Select the school's approved logo in Step 1 before creating a flyer.");
    if(!actualColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
    const data=brochureData();
-   // The exact illustrated SVG design is rasterized at 216 dpi for a print-safe cover.
+   // Preserve the exact approved original design when supplied; otherwise use the editable 300-dpi illustrated cover.
    // The program-details page remains editable and generated from verified inputs.
-   const coverPng=await schoolFlyerPng(data);
+   const coverPng=approvedCover||await schoolFlyerPng(data);
    const original=buildSchoolProgramPdf(data);
    const document=await PDFDocument.load(original.output("arraybuffer"));
    document.removePage(0);
    const page=document.insertPage(0,[612,792]);
-   const art=await document.embedPng(coverPng);
+   const art=coverPng.startsWith("data:image/jpeg")?await document.embedJpg(coverPng):await document.embedPng(coverPng);
    page.drawImage(art,{x:0,y:0,width:612,height:792});
    const bytes=await document.save();
    setPreviewBlob(new Blob([bytes],{type:"application/pdf"}));
@@ -220,6 +221,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    setProducts(ps=>ps.length>=25?ps:[...ps,{...fresh("other"),name:item.name||"Product",sku:item.sku||"",sizes:(item.sizes||[]).join(", "),colors:(item.colors||[]).join(", ")}]);
    setError("Supplier selection added. Verify product availability and enter your approved wholesale/retail prices; supplier costs are not exported.");
   }}/>}
+  {brochure&&<section className="growth-subcard"><h4>Approved illustrated flyer cover (recommended for exact original design)</h4><p>Upload the original full-page flyer as PNG or JPG to preserve its mascot, scenery, realistic merchandise, typography and layout exactly. The approved cover will become page 1; the editable program details remain page 2. Text and pricing printed inside the uploaded cover are flattened artwork and must be updated in the original design before re-uploading.</p><label className="growth-field"><span>Approved school-specific full-page cover image</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setApprovedCover)}/></label>{approvedCover&&<><img src={approvedCover} alt="Approved illustrated flyer cover" style={{width:190,maxWidth:"100%",height:"auto"}}/><button type="button" className="sc-btn" onClick={()=>setApprovedCover("")}>Remove approved cover</button></>}</section>}
   {brochure&&<h4>Step 3 — Apparel mockups and verified pricing</h4>}
   {products.map((p,index)=><article className="growth-subcard" key={p.id}>
    <h4>Product {index+1}: {p.name}</h4>
