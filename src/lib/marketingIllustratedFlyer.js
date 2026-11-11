@@ -17,7 +17,7 @@ export function schoolFlyerSvg(d){
  const title=clip(d.headline||"BIG SCHOOL SPIRIT.",31).toUpperCase();
  const subtitle=clip(d.tagline||"LESS WORK FOR YOUR PTO.",39).toUpperCase();
  const products=(d.products||[]).slice(0,5);
- const treeLine=Array.from({length:18},(_,i)=>tree(i*37-5,173+(i%3)*7,47+(i*7)%39,i%2?"#083e65":"#0b628b")).join("");
+ const treeLine=Array.from({length:18},(_,i)=>tree(i*37-5,173+(i%3)*7,47+(i*7)%39,i%2?p:s)).join("");
  const row=products.slice(0,2).map((item,i)=>{
   const tier=item.tiers?.[0]||{};
   const wholesale=Number(tier.wholesale||0),retail=Number(tier.retail||0);
@@ -30,7 +30,7 @@ export function schoolFlyerSvg(d){
  const steps=[["1","PLAN","Choose apparel and prices"],["2","BUILD","Launch your school store"],["3","ORDER","Families shop online"],["4","SUPPORT","School receives proceeds"]];
  const stepsSvg=steps.map((v,i)=>{const y=542+i*24;return `<circle cx="41" cy="${y-4}" r="10" fill="${p}"/>${txt(v[0],41,y,11)}${txt(v[1],61,y,12,"#111827",900,"start")}${txt(clip(v[2],26),123,y,8.1,"#27364b",600,"start")}`;}).join("");
  const w=d.contact?.website||"skilledcrafting.com",contact=[d.contact?.phone,d.contact?.email].filter(Boolean);
- const mountains=`<path d="M0 159 L61 91 97 120 157 58 223 126 285 76 349 126 407 66 468 117 538 71 612 149V244H0Z" fill="#d9ecf7" opacity=".86"/><path d="M0 186L73 117 127 160 207 94 269 161 345 112 413 168 502 93 612 181V256H0Z" fill="#81b2d7" opacity=".68"/>`;
+ const mountains=`<path d="M0 159 L61 91 97 120 157 58 223 126 285 76 349 126 407 66 468 117 538 71 612 149V244H0Z" fill="#d9ecf7" opacity=".86"/><path d="M0 186L73 117 127 160 207 94 269 161 345 112 413 168 502 93 612 181V256H0Z" fill="${p}" opacity=".34"/>`;
  const background=d.backgroundArtwork?img(d.backgroundArtwork,0,61,612,331):mountains+treeLine;
  const brand=img(d.businessLogo,18,10,82,43);
  const logo=img(d.heroArtwork||d.schoolLogo,15,61,172,152);
@@ -39,7 +39,7 @@ export function schoolFlyerSvg(d){
  const schoolTop=schoolBottom?school.slice(0,-schoolBottom.length).trim():school;
  const headlineSize=title.length>26?15:20;
  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="612" height="792" viewBox="0 0 612 792">
- <defs><linearGradient id="hero" x2="1" y2="1"><stop stop-color="${p}"/><stop offset=".45" stop-color="#267bb2"/><stop offset="1" stop-color="${p}"/></linearGradient>
+ <defs><linearGradient id="hero" x2="1" y2="1"><stop stop-color="${p}"/><stop offset=".45" stop-color="${s}"/><stop offset="1" stop-color="${p}"/></linearGradient>
  <linearGradient id="lower" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#edf3fa"/></linearGradient>
  <filter id="shadow"><feDropShadow dx="1" dy="3" stdDeviation="3" flood-opacity=".35"/></filter><filter id="productShadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="1" dy="5" stdDeviation="4" flood-color="#061b30" flood-opacity=".45"/></filter><filter id="paint" x="-5%" y="-15%" width="110%" height="130%"><feTurbulence baseFrequency=".025" numOctaves="2" seed="8" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="5"/></filter></defs>
  <rect width="612" height="792" fill="url(#lower)"/><rect width="612" height="397" fill="url(#hero)"/>
