@@ -715,7 +715,10 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Verified product colors</span><input value={productColors} onChange={e=>setProductColors(e.target.value)}/></label>
     </div></>}
     {["brochure-schools","product-catalog"].includes(template) &&
-      <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage} confirmedColors={marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).verifiedColors} description={description}/>}
+      <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage} confirmedColors={marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).verifiedColors} description={description} accountId={accountId} onRestoreBranding={brand=>{
+       setOrganization(brand.organization);setColors(brand.colors.join(", "));setDescription(brand.description);
+       logoOverride.current=true;logoSelection.current++;setLogo(brand.schoolLogo);setPaletteSuggestions([]);setGuide(null);
+      }}/> }
 
     <>
     {!schoolFlyer && <details className="growth-subcard"><summary><strong>Products, pricing and optional settings</strong></summary>
