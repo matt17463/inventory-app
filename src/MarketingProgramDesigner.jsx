@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { growthWriteAllowed } from "./lib/marketingApi";
@@ -29,6 +29,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
  const [notes,setNotes]=useState(""),[headline,setHeadline]=useState("WEAR YOUR SCHOOL PRIDE"),[tagline,setTagline]=useState("Spirit wear for students, families, staff and supporters");
  const [error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const artworkRefCache=useRef(new Map());
  const [savedFlyers,setSavedFlyers]=useState([]),[draftId,setDraftId]=useState(""),[draftUpdatedAt,setDraftUpdatedAt]=useState(""),[savingDraft,setSavingDraft]=useState(false),[saveMessage,setSaveMessage]=useState("");
  const [restoredBranding,setRestoredBranding]=useState(null);
  const actualOrganization=restoredBranding?.organization??organization;
@@ -59,6 +60,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const logo=actualSchoolLogo;
  const artwork=mascotArtwork||logo;
  const colorSignature=actualColors.join(",");
+ useEffect(()=>{setRestoredBranding(null);},[organization,schoolLogo,description,confirmedColors.join(",")]);
  useEffect(()=>{setPreviewBlob(null);},[actualOrganization,logo,mascotArtwork,backgroundArtwork,businessLogo,products,contact,notes,headline,tagline,actualDescription,colorSignature]);
  useEffect(()=>{
    if(!previewBlob){setPreviewUrl("");return;}
@@ -80,6 +82,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  }
  async function storeArtwork(value){
   if(!value)return null;
+  if(artworkRefCache.current.has(value))return artworkRefCache.current.get(value);
   const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value);
   if(!match)throw Error("Only uploaded PNG, JPEG or WebP artwork can be saved.");
   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -88,6 +91,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   });
   const result=await response.json();
   if(!response.ok||!result.asset)throw Error(result.message||"Private R2 artwork upload failed.");
+  artworkRefCache.current.set(value,result.asset);
   return result.asset;
  }
  async function restoreArtwork(reference){
@@ -139,7 +143,8 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
     if(!ref)return "";
     const key=ref.key;
     if(!cache.has(key))cache.set(key,await restoreArtwork(ref));
-    return cache.get(key);
+    const image=cache.get(key);artworkRefCache.current.set(image,ref);
+    return image;
    };
    const restoredProducts=[];
    for(const p of c.products||[])restoredProducts.push({...p,photo:await restore(p.photo),mockup:await restore(p.mockup)});
