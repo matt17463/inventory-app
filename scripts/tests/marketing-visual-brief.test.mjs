@@ -24,3 +24,20 @@ test("document studio shares the visual brief across all templates",()=>{
  assert.ok(studio.includes("Copy AI visual design prompt"));
  assert.ok(studio.includes("visualDirection:visualBrief"));
 });
+
+test("visual generation endpoint is employee authenticated and client-scoped",()=>{
+ const endpoint=readFileSync(new URL("../../netlify/functions/marketing-ai-visual.js",import.meta.url),"utf8");
+ assert.ok(endpoint.includes("authorizeEmployee(event"));
+ assert.ok(endpoint.includes('from("sc_growth_accounts")'));
+ assert.ok(endpoint.includes('type:"image_generation"'));
+ assert.ok(endpoint.includes("OPENAI_API_KEY"));
+});
+test("school flyer and general documents expose actual image generation controls",()=>{
+ const school=readFileSync(new URL("../../src/MarketingProgramDesigner.jsx",import.meta.url),"utf8");
+ const studio=readFileSync(new URL("../../src/MarketingDocumentStudio.jsx",import.meta.url),"utf8");
+ const renderer=readFileSync(new URL("../../src/lib/marketingDocumentContent.js",import.meta.url),"utf8");
+ assert.ok(school.includes("Generate AI school scenery"));
+ assert.ok(studio.includes("Generate AI illustrated artwork"));
+ assert.ok(studio.includes("marketing_visual_background"));
+ assert.ok(renderer.includes("visual-hero"));
+});
