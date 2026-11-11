@@ -17,12 +17,13 @@ async function compose(photo,logo,p){
  ctx.drawImage(art,c.width*p.x/100-w/2,c.height*p.y/100-h/2,w,h);
  return c.toDataURL("image/png");
 }
-export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage=""}){
+export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage="",confirmedColors=[],description=""}){
  const brochure=mode==="brochure-schools";
  const [businessLogo,setBusinessLogo]=useState(""),[clientLogo,setClientLogo]=useState("");
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
- const [notes,setNotes]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [notes,setNotes]=useState(""),[headline,setHeadline]=useState("WEAR YOUR SCHOOL PRIDE"),[tagline,setTagline]=useState("Spirit wear for students, families, staff and supporters");
+ const [error,setError]=useState(""),[busy,setBusy]=useState(false);
  useEffect(()=>{
   let active=true;
   const img=new Image();
@@ -44,13 +45,18 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const tier=(id,index,key,value)=>setProducts(list=>list.map(p=>p.id===id?{...p,tiers:p.tiers.map((t,i)=>i===index?{...t,[key]:value}:t)}:p));
  async function render(p){try{if(!p.photo||!logo)throw Error("Upload a licensed product photo and school logo first.");patch(p.id,{mockup:await compose(p.photo,logo,p)});setError("");}catch(e){setError(e.message);}}
  function download(){
-  try{setBusy(true);setError("");const data={organization,contact,businessLogo,notes,products};
+  try{setBusy(true);setError("");const data={organization,contact,businessLogo,schoolLogo:logo,notes,headline,tagline,programDescription:description,colors:confirmedColors,products};
    if(brochure)exportSchoolProgramPdf(data);else exportClientCatalogPdf(data);
   }catch(e){setError(e.message);}finally{setBusy(false);}
  }
  return <section className="growth-subcard">
-  <h3>{brochure?"School spirit-wear brochure — one-page full-color PDF":"Client product catalog — multi-page full-color PDF"}</h3>
-  <p>Uses real product photographs and the original school logo, with editable placement. Enter your agreed decorated wholesale and customer retail prices; the school keeps the difference. Supplier purchase costs remain private.</p>
+  <h3>{brochure?"School spirit-wear flyer — guided two-page design":"Client product catalog — multi-page full-color PDF"}</h3>
+  <p>{brochure?"One creation path: provide your approved school branding, position artwork on apparel, review the two-page flyer and download the PDF.":"Use real product photographs and approved client artwork with editable placement."} Enter agreed decorated wholesale and client retail prices; supplier purchase costs remain private.</p>
+  {brochure&&<div className="growth-grid">
+   <label className="growth-field"><span>Flyer headline</span><input value={headline} maxLength={55} onChange={e=>setHeadline(e.target.value)}/></label>
+   <label className="growth-field"><span>Flyer tagline</span><input value={tagline} maxLength={140} onChange={e=>setTagline(e.target.value)}/></label>
+   <p><strong>School design colors:</strong> {confirmedColors.length?confirmedColors.join(", "):"Using the school-spirit design defaults until approved colors are entered above."}</p>
+  </div>}
   <div className="growth-grid">
    <label className="growth-field"><span>Skilled Crafting logo (required)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBusinessLogo)}/></label>
    <label className="growth-field"><span>School / client logo (optional override)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setClientLogo)}/></label>
@@ -89,7 +95,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   </article>)}
   <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
-  <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={download}>{busy?"Preparing…":brochure?"Download one-page school PDF":"Download multi-page catalog PDF"}</button>
+  <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={download}>{busy?"Preparing…":brochure?"Download finished two-page flyer PDF":"Download multi-page catalog PDF"}</button>
   {error&&<p role="alert">{error}</p>}
  </section>;
 }
