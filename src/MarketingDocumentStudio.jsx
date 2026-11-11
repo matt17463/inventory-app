@@ -516,6 +516,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setTerms(restored.terms || "");
       setCta(restored.cta || "");
       setAiText(restored.aiText || "");
+      setVisualBackground(restored.visualBackground||"");
       setSectionContent(restored.sectionContent || {});
       setTechnicalRows((restored.technicalRows || []).map(row => row.join(" | ")).join("\n"));
       setTechnicalLabels((restored.technicalImageLabels || []).join("\n"));
