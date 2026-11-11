@@ -611,6 +611,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     <p>{schoolFlyer
       ? "Build a school spirit-wear flyer in one workflow: select the school and approved colors; add mascot artwork and apparel mockups; confirm prices; preview the actual two-page PDF; then download."
       : "Choose a template, add client details, preview the draft, and export the completed document. Uploaded artwork stays out of AI requests."}</p>
+    {schoolFlyer && <h3>Step 1 — School and approved branding</h3>}
     <div className="growth-grid">
       <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
@@ -618,12 +619,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
       <label className="growth-field"><span>Save under client</span><select value={accountId} disabled={saving || exporting || importing} onChange={event => selectAccount(event.target.value)}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
-      <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","event","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
-      <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
-      <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}><option value="">Automatic for client type</option>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
+      {!schoolFlyer && <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","event","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>}
+      {!schoolFlyer && <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>}
+      {!schoolFlyer && <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}><option value="">Automatic for client type</option>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>}
       <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
       {logo && <img src={logo} alt="Selected client marketing artwork" style={{maxWidth:180,maxHeight:110,objectFit:"contain"}} />}
-      <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>{setColors(e.target.value);setGuide(null);}} placeholder="#008000, #000000"/>
+      <label className="growth-field"><span>Approved brand colors (HEX, comma-separated; school flyers must be verified)</span><input value={colors} onChange={e=>{setColors(e.target.value);setGuide(null);}} placeholder="#008000, #000000"/>
         <button type="button" className="sc-btn" disabled={!logo || paletteBusy} onClick={async()=>{
           const selection = logoSelection.current;
           setPaletteBusy(true);setError("");
@@ -640,7 +641,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
           <button type="button" className="sc-btn" onClick={()=>{setColors([...new Set([...colors.split(",").map(color => color.trim().toUpperCase()).filter(Boolean), ...paletteSuggestions])].join(", "));setGuide(null);}}>Use these colors after checking against the client's approved brand guide</button>
         </div>}
       </label>
-      <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>
+      {!schoolFlyer && <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>}
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
     {!schoolFlyer && blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
