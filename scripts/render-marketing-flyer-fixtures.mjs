@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import sharp from "sharp";
 import { buildSchoolProgramPdf } from "../src/lib/marketingProgramPdf.js";
+import { schoolFlyerSvg } from "../src/lib/marketingIllustratedFlyer.js";
 
 const output = "artifacts/marketing-flyers";
 mkdirSync(output, { recursive: true });
@@ -31,14 +32,18 @@ for(const s of schools){
    tiers:[{min:1,wholesale:["12","25","23"][index],retail:["20","40","38"][index]}],
   });
  }
- const file=buildSchoolProgramPdf({
+ const data={
   organization:s.school,colors:[s.primary,s.secondary],businessLogo:brand,
   schoolLogo:await png(badge(s)),heroArtwork:await png(badge(s)),
   headline:"WEAR YOUR SCHOOL PRIDE",tagline:"One school. Every student. More ways to show your spirit.",
   programDescription:"A sample spirit-wear program for school leaders and community supporters. Replace all testing details with verified client content before sharing.",
   notes:"TEST LAYOUT ONLY — not approved school merchandise.",
   contact:{email:"preview@example.invalid",website:"skilledcrafting.com"},products,
- });
+ };
+ const svg=schoolFlyerSvg(data);
+ writeFileSync(output+"/"+s.key+"-illustrated.svg",svg);
+ await sharp(Buffer.from(svg)).resize({width:1224}).png().toFile(output+"/"+s.key+"-illustrated.png");
+ const file=buildSchoolProgramPdf(data);
  const bytes=Buffer.from(file.output("arraybuffer"));
  writeFileSync(output+"/"+s.key+".pdf",bytes);
  console.log(s.school,bytes.length,"bytes",file.getNumberOfPages(),"pages");
