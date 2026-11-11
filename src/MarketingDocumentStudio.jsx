@@ -485,7 +485,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
-    {blueprint && <div className="growth-subcard" aria-label="Document purpose and content checklist">
+    {blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
       <h3>{blueprint.stage} · {selectedTemplate?.label}</h3>
       <p><strong>Purpose:</strong> {blueprint.purpose}</p>
       <div className="growth-grid">
@@ -499,8 +499,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         </label>)}
       </div>
       <small>Content checklist is guidance for preparing a complete document. Confirm client-specific facts, artwork rights, prices and production specifications before distribution.</small>
-    </div>}
-    {technical && <div className="growth-subcard">
+    </details>}
+    {technical && <details className="growth-subcard"><summary><strong>Technical specifications and approvals</strong></summary>
       <h3>{technical.heading}</h3>
       <p>{technical.help}</p>
       <label className="growth-field">
@@ -520,8 +520,10 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         <span>Image captions in upload order, one per line</span>
         <textarea rows="3" value={technicalLabels} onChange={event => { setTechnicalLabels(event.target.value); setGuide(null); }} />
       </label>
-    </div>}
+    </details>}
+    <details className="growth-subcard"><summary><strong>Client artwork and reusable assets</strong></summary>
     <ClientMarketingStarterKit key={accountId} accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{if (activeAccount.current !== accountId) return;setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{if (activeAccount.current !== accountId) return;setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
+    </details>
     {["product-catalog", "product-description"].includes(template) && accountId && <div className="growth-subcard">
       <button type="button" className="sc-btn" disabled={importing || saving} onClick={importAssortment}>
         {importing ? "Importing…" : "Import client store products and approved mockups"}
@@ -549,6 +551,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     {["brochure-schools","product-catalog"].includes(template) &&
       <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage}/>}
     <>
+    <details className="growth-subcard"><summary><strong>Products, pricing and optional settings</strong></summary>
     {needsProductFields && template!=="product-guide" && <div className="growth-grid">
       <label className="growth-field"><span>Client-facing product / style name</span><input value={style} onChange={e=>{setStyle(e.target.value);setGuide(null);}}/></label>
       <label className="growth-field"><span>Verified product SKU (optional)</span><input value={sku} onChange={e=>setSku(e.target.value)}/></label>
@@ -579,6 +582,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       </label>}
       <label className="growth-field"><span>AI copy tone</span><select value={aiTone} onChange={e=>setAiTone(e.target.value)}>{["professional","friendly","persuasive","concise","warm","energetic"].map(t=><option key={t}>{t}</option>)}</select></label>
     </div>
+    </details>
         <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
       <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <>
@@ -592,12 +596,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
-    {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
+    {accountId && <details className="growth-subcard"><summary><strong>Saved client documents</strong> · {savedDrafts.length} recent</summary>{savedDrafts.length ?
       <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{d.status === "approved" && d.content?.contentVersion === 2 && <>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx", d)}>Download approved Word</button>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf", d)}>Download approved PDF</button>
     </>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
-      <p>No saved documents found for this client.</p>}</div>}
+      <p>No saved documents found for this client.</p>}</details>}
     {guide && <article className="growth-subcard" aria-live="polite">
       {marketingDocumentMissing(guide).length>0 ?
         <div role="alert"><strong>Draft incomplete — resolve before manager approval:</strong><ul>{marketingDocumentMissing(guide).map(x=><li key={x}>{x}</li>)}</ul></div>:
