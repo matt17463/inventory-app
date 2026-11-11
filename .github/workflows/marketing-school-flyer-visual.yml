@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/lib/marketingProgramPdf.js'
+      - 'src/lib/marketingIllustratedFlyer.js'
       - 'src/MarketingProgramDesigner.jsx'
       - 'src/MarketingDocumentStudio.jsx'
       - 'scripts/render-marketing-flyer-fixtures.mjs'
@@ -25,6 +26,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: node --test scripts/tests/marketing-illustrated-flyer.test.mjs
       - run: node scripts/render-marketing-flyer-fixtures.mjs
       - run: node_modules/.bin/vite build --config scripts/marketing-flyer-visual.vite.config.js
       - run: mv artifacts/marketing-flyers/marketingProgramPdf.bundle.js artifacts/marketing-flyers/marketingProgramPdf.bundle.mjs
