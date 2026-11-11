@@ -51,7 +51,8 @@ test("Specialized editor includes exact artwork compositing, logo and contact de
  assert.match(ui,/\.eq\("updated_at",draftUpdatedAt\)/);
  assert.match(ui,/setPreviewBlob\(null\)/);
  assert.match(parent,/onRestoreBranding=/);
- assert.match(ui,/file\.output\("blob"\)/);
+ assert.match(ui,/document\.embedPng\(coverPng\)/);
+ assert.match(ui,/new Blob\(\[bytes\]/);
  assert.match(ui,/src=\{previewUrl/);
  assert.match(ui,/Download multi-page catalog PDF/);
  assert.match(parent,/MarketingProgramDesigner/);
