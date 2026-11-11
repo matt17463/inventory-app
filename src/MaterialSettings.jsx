@@ -106,14 +106,13 @@ export default function MaterialSettings(){
   async function saveRecord(){
     if(!canWrite)return setMessage('Read-only access.');
     if(safety.blocked)return setMessage(safety.reason);
-    if(!form.material_name.trim()||!form.machine_model.trim()||!form.machine_configuration.trim())return setMessage('Complete the material, exact model and machine configuration.');
     setBusy(true);setMessage('');
     try{
       const settings=normalizeSettingsJson(form.settings);
       if(form.machine_type==='roland_bn2'){
         const heater=Number(settings.print_heater_c),dryer=Number(settings.dryer_c);
-        if(!Number.isFinite(heater)||heater<30||heater>35||!Number.isFinite(dryer)||dryer<30||dryer>38)
-          throw Error('BN2-30 supports 30–35°C print heater and 30–38°C dryer; enter a value within each range.');
+        if((settings.print_heater_c !== undefined && settings.print_heater_c !== '' && (!Number.isFinite(heater)||heater<30||heater>35)) || (settings.dryer_c !== undefined && settings.dryer_c !== '' && (!Number.isFinite(dryer)||dryer<30||dryer>38)))
+          throw Error('BN2-30 print heater must be 30–35°C and dryer 30–38°C when provided.');
       }
       const payload={
         machine_type:form.machine_type,machine_model:form.machine_model.trim(),machine_configuration:form.machine_configuration.trim(),
@@ -217,13 +216,13 @@ export default function MaterialSettings(){
     {currentTab==='roland'?<RolandMediaLibrary onDraft={loadBn2Draft}/>:currentTab==='library'?<section className="card"><div className="sc-material-filter"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search material, SKU, machine or operation" aria-label="Search recipes"/>
       <select value={filterMachine} onChange={e=>setFilterMachine(e.target.value)} aria-label="Filter machine"><option value="all">All machines</option>{MACHINE_TYPES.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
       <div className="sc-material-table"><table><thead><tr><th>Material</th><th>Machine</th><th>Process</th><th>Source</th><th>Validation</th><th>Action</th></tr></thead><tbody>{visible.map(r=><tr key={r.id}>
-        <td><strong>{r.material_name}</strong><small>{[r.material_brand,r.material_sku,r.material_finish].filter(Boolean).join(' · ')}</small></td>
+        <td><strong>{r.material_name||'Untitled draft'}</strong><small>{[r.material_brand,r.material_sku,r.material_finish].filter(Boolean).join(' · ')}</small></td>
         <td>{machineFor(r.machine_type).label}<small>{r.machine_model}</small></td><td>{OPERATION_LABELS[r.operation]}</td>
         <td>{r.source_type}</td><td><span className={'sc-recipe-status '+r.status}>{r.status}</span></td>
         <td><button type="button" className="secondary-button" onClick={()=>edit(r)}>Open</button></td></tr>)}</tbody></table>
       {!visible.length&&<p>No matching recipes. Create an experimental recipe or import verified settings manually.</p>}</div></section>:
     <div className="sc-material-layout"><section className="card sc-material-editor">
-      <h2>{form.id?'Edit material recipe':'Create material recipe'}</h2>
+      <h2>{form.id?'Edit material recipe':'Create material recipe'}</h2><p className="sc-material-help">All detail fields are optional for drafts. Save now and add information later. Production approval still requires complete, tested settings.</p>
       <div className="sc-material-grid"><label>Equipment type<select value={form.machine_type} onChange={e=>{const m=machineFor(e.target.value);setForm(p=>({...p,machine_type:m.id,operation:m.modes[0]}));}}>
         {MACHINE_TYPES.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></label>
         <label>Process<select value={form.operation} onChange={e=>set('operation',e.target.value)}>{machine.modes.map(m=><option key={m} value={m}>{OPERATION_LABELS[m]}</option>)}</select></label>
