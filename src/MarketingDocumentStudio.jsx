@@ -11,6 +11,7 @@ import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingPr
 import { parseTechnicalGuideRows, technicalGuideFields } from "./lib/marketingTechnicalGuide";
 import { marketingDocumentModel } from "./lib/marketingDocumentModel";
 import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
+import { marketingDesigns, marketingAudiences, marketingTheme } from "./lib/marketingDesignSystem";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { marketingLogoRequest } from "./MarketingClientLogo";
 
@@ -27,6 +28,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [reviewHistory,setReviewHistory]=useState([]);
   const [historyDocument,setHistoryDocument]=useState(null);
   const [segment, setSegment] = useState("team");
+  const [design, setDesign] = useState("teamEnergy");
+  const [audience, setAudience] = useState("general");
+  const [showPreview, setShowPreview] = useState(false);
   const [logo, setLogo] = useState("");
   const [accountMarketingLogo, setAccountMarketingLogo] = useState(null);
   const [sharedAssetReferences, setSharedAssetReferences] = useState({});
@@ -206,7 +210,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         kind: selectedTemplate?.kind || "outreach",
         organization: organization.trim() || "Prospective client",
         segment, brief:description.trim(),tone:aiTone,
-        context:{style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
+        context:{audience,style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
       });
       if (activeAccount.current !== accountId) return;
       setAiText(result);setGuide(null);
@@ -259,7 +263,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
           observed_at: observedAt, source_url: sourceUrl || undefined });
         if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
       }
-      setGuide({ template, segment, organization: organization.trim(), description, logo,
+      setGuide({ template, segment, design, audience, organization: organization.trim(), description, logo,
         contentVersion: 2, sectionContent,
         ...(technical ? {
           technicalRows: parseTechnicalGuideRows(template, technicalRows),
@@ -481,8 +485,11 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Save under client</span><select value={accountId} disabled={saving || exporting || importing} onChange={event => selectAccount(event.target.value)}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
       <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
+      <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
       <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
       <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
+      <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
     {blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
@@ -585,7 +592,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     </details>
         <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
-      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <>
+      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button type="button" className="sc-btn" onClick={()=>setShowPreview(value=>!value)}>{showPreview?"Hide page preview":"Preview letter-size pages"}</button>}{guide && <>
       <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
@@ -602,6 +609,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf", d)}>Download approved PDF</button>
     </>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</details>}
+    {guide && showPreview && <section className="growth-subcard" aria-label="Letter size document preview"><h3>Print-layout preview (draft)</h3><p>Review content, spacing and page breaks before export. Browser preview may differ from native Word/PDF.</p><iframe title="Marketing document print preview" sandbox="" srcDoc={renderMarketingDocumentHtml(guide)} style={{width:"100%",height:780,border:"1px solid #b7c5d0",background:"#fff"}}/></section>}
     {guide && <article className="growth-subcard" aria-live="polite">
       {marketingDocumentMissing(guide).length>0 ?
         <div role="alert"><strong>Draft incomplete — resolve before manager approval:</strong><ul>{marketingDocumentMissing(guide).map(x=><li key={x}>{x}</li>)}</ul></div>:
