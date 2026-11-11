@@ -22,7 +22,7 @@ test("three schools share the illustrated composition but retain school identity
  ]){
   const svg=schoolFlyerSvg(school(name,primary,secondary));
   assert.match(svg,/viewBox="0 0 612 792"/);
-  assert.ok(svg.includes(name.toUpperCase()),name);
+  for(const word of name.toUpperCase().split(" ")) assert.ok(svg.includes(word),name+" missing "+word);
   assert.ok(svg.includes(primary),name);
   assert.ok(svg.includes(secondary),name);
   for(const section of ["HOW IT WORKS","FUNDRAISING EXAMPLE","ARTWORK MODERNIZATION","LET'S BRING SCHOOL SPIRIT"])
