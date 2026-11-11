@@ -81,6 +81,22 @@ export function buildSchoolProgramPdf(d){
   return y+rows.length*size*lineHeight;
  };
  const bar=(x,y,w,h,color)=>{pdf.setFillColor(...color);pdf.rect(x,y,w,h,"F");};
+ const mix=(a,b,f)=>a.map((v,i)=>Math.round(v*(1-f)+b[i]*f));
+ const accentLight=mix(primary,white,.19),accentShade=mix(primary,[0,0,0],.22);
+ const backdrop=()=>{
+  if(typeof pdf.triangle!=="function")return;
+  // Geometric mountain and evergreen silhouettes echo the original school flyers.
+  pdf.setFillColor(...accentLight);
+  for(const [x,y,w] of [[-100,333,280],[72,310,250],[303,335,300],[477,307,218]]){
+   pdf.triangle(x,356,x+w/2,y-158,x+w,356,"F");
+  }
+  pdf.setFillColor(...accentShade);
+  for(const [x,h] of [[3,105],[24,77],[585,100],[610,126]]){
+   pdf.triangle(x-30,361,x,361-h,x+30,361,"F");
+   pdf.triangle(x-24,355,x,347-h,x+24,355,"F");
+  }
+ };
+
  const featured=d.products.slice(0,3), title=d.headline?.trim()||"WEAR YOUR SCHOOL PRIDE";
  const subtitle=d.tagline?.trim()||"Spirit wear for students, families, staff and supporters";
  // PAGE 1: mascot-led, full-bleed school flyer with an apparel showcase.
@@ -88,14 +104,24 @@ export function buildSchoolProgramPdf(d){
  bar(0,0,612,366,primary);
  bar(0,0,612,8,secondary);
  bar(0,78,612,5,secondary);
+ backdrop();
  if(d.businessLogo)image(pdf,d.businessLogo,27,16,79,54);
  write("SKILLED CRAFTING",118,34,18,contrastText,true);
  write("CUSTOM APPAREL  /  PRINTING  /  PERSONALIZATION",119,54,8,contrastText);
  write("YOUR LOCAL SPIRIT WEAR PARTNER",410,66,8,contrastText,true);
  // The school artwork is prominently displayed, never reduced to a document thumbnail.
+ pdf.setFillColor(...mix(primary,secondary,.36));
+ if(typeof pdf.ellipse==="function")pdf.ellipse(121,183,104,103,"F");
  if(d.heroArtwork)image(pdf,d.heroArtwork,27,98,188,170);
+ wrap(d.organization||"Your School",223,151,353,26,accentShade,1.1,3,true);
  wrap(d.organization||"Your School",221,148,353,26,contrastText,1.1,3,true);
  bar(218,235,362,53,secondary);
+ if(typeof pdf.triangle==="function"){
+  pdf.setFillColor(...secondary);
+  pdf.triangle(202,247,218,235,218,278,"F");
+  pdf.triangle(580,235,600,247,580,276,"F");
+  pdf.triangle(214,287,234,282,244,288,"F");
+ }
  wrap(title,231,267,335,17,dark(secondary)?white:ink,1.13,2,true);
  wrap(subtitle,223,316,344,11,contrastText,1.35,3);
  write("A COLLECTION MADE FOR YOUR SCHOOL",32,389,15,primary,true);
@@ -121,7 +147,11 @@ export function buildSchoolProgramPdf(d){
  highlights.forEach((item,i)=>{
   const x=29+i*193;
   bar(x,649,179,7,i===1?secondary:primary);
-  wrap(item[0],x+4,673,173,11,primary,1.1,2,true);
+  if(typeof pdf.circle==="function"){
+   pdf.setFillColor(...secondary);pdf.circle(x+14,673,12,"F");
+   write(String(i+1),x+10,677,11,dark(secondary)?white:ink,true);
+  }
+  wrap(item[0],x+32,677,146,10,primary,1.1,2,true);
   wrap(item[1],x+4,696,167,9,ink,1.2,3);
  });
  bar(0,742,612,50,primary);
@@ -136,6 +166,8 @@ export function buildSchoolProgramPdf(d){
  write("PROGRAM OPTIONS & PRICING",132,70,12,contrastText,true);
  write("A straightforward way to support your school community",34,145,16,primary,true);
  wrap(d.programDescription?.trim()||"Choose approved apparel and artwork, agree on decorated wholesale prices, and offer a coordinated collection to your school community.",34,169,542,10,ink,1.4,4);
+ bar(34,209,544,28,secondary);
+ write("ARTWORK MODERNIZATION  /  SEASONAL & YEAR-ROUND DESIGNS",45,227,10,dark(secondary)?white:ink,true);
  const steps=[
   ["01", "DESIGN", "Confirm the school logo, garment choices, colors and artwork placements."],
   ["02", "APPROVE", "Review decoration, wholesale and retail pricing, and ordering terms."],
