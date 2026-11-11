@@ -308,8 +308,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       terms, cta, productImage, productImages: gallery, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() };
   }
   let guide = generatedGuide;
+  let previewError = '';
   if (showPreview && !guide) {
-    try { guide = createGuide(); } catch { /* Invalid draft fields are reported when Generate draft is clicked. */ }
+    try { guide = createGuide(); } catch (error) { previewError = error.message; }
   }
   function build() {
     try {
@@ -739,12 +740,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     </details>
         <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
-      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button type="button" className="sc-btn" onClick={()=>setShowPreview(value=>!value)}>{showPreview?"Hide page preview":"Preview letter-size pages"}</button>}{guide && <>
+      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{(guide || showPreview) && <button type="button" className="sc-btn" onClick={()=>setShowPreview(value=>!value)}>{showPreview?"Hide page preview":"Preview letter-size pages"}</button>}{guide && <>
       <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
     </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>
-    {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
+    {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use as document description</button></div>}
     </>
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
@@ -757,6 +758,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf", d)}>Download approved PDF</button>
     </>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</details>}
+    {showPreview && previewError && <p role="alert">{previewError}</p>}
     {guide && showPreview && <section className="growth-subcard" aria-label="Letter size document preview"><h3>Print-layout preview (draft)</h3><p>Review content, spacing and page breaks before export. Browser preview may differ from native Word/PDF.</p><iframe title="Marketing document print preview" sandbox="" srcDoc={renderMarketingDocumentHtml(guide)} style={{width:"100%",height:780,border:"1px solid #b7c5d0",background:"#fff"}}/></section>}
     {guide && <article className="growth-subcard" aria-live="polite">
       {marketingDocumentMissing(guide).length>0 ?

@@ -45,12 +45,13 @@ const status = model => model.approved ? '' : 'DRAFT — FOR INTERNAL REVIEW';
 const value = block => block.type === 'field' ? block.label + ': ' + block.value : block.value || block.label;
 
 function word(model, images) {
+  const brochure = model.schoolBrochure;
   const children = [
     new Paragraph({ children:[new TextRun({text:'SKILLED CRAFTING  /  CLIENT MARKETING',bold:true,color:(model.headingColor || model.accent).slice(1),size:18})],spacing:{after:180} }),
     new Paragraph({ text: model.title, heading: HeadingLevel.TITLE }),
-    new Paragraph({ text: model.organization, heading: HeadingLevel.SUBTITLE }),
+    new Paragraph({ text: model.organization, heading: HeadingLevel.SUBTITLE, spacing: brochure ? { after: 230 } : undefined }),
   ];
-  if (status(model)) children.push(new Paragraph({ children: [new TextRun({ text: status(model), bold: true, color: 'A82135' })] }));
+  if (status(model)) children.push(new Paragraph({ spacing: brochure ? { after: 260 } : undefined, children: [new TextRun({ text: status(model), bold: true, color: 'A82135' })] }));
   for (const block of model.blocks) {
     if (block.type === 'image') {
       const image = images.get(block.source);
@@ -80,10 +81,10 @@ function word(model, images) {
         block.type === 'subheading' ? HeadingLevel.HEADING_2 : undefined;
       const lines = value(block).split(/\r?\n/);
       lines.forEach(line => children.push(new Paragraph({
-        heading, pageBreakBefore: block.pageBreakBefore, keepNext: Boolean(heading), spacing: { after: 120 },
+        heading, pageBreakBefore: block.pageBreakBefore, keepNext: Boolean(heading), spacing: brochure ? { after: heading ? 110 : 235, before: heading ? 185 : 0, line: 320 } : { after: 120 },
         children: [
           ...(block.type === 'swatch' ? [new TextRun({ text: '    ', shading: { fill: block.color.slice(1) } }), new TextRun('  ')] : []),
-          new TextRun({ text: line, ...(heading ? { color: (model.headingColor || '#24364A').slice(1) } : {}) }),
+          new TextRun({ text: line, ...(brochure ? { size: heading ? 33 : 25, bold: Boolean(heading) } : {}), ...(heading ? { color: (model.headingColor || '#24364A').slice(1) } : {}) }),
         ],
       })));
     }
@@ -92,11 +93,11 @@ function word(model, images) {
     title: model.title, creator: 'Skilled Crafting', subject: model.organization,
     styles: { default: {
       document: { run: { font: 'Arial', size: 22, color: '24364A' } },
-      title: { run: { font: 'Arial', size: 48, bold: true, color: (model.headingColor || model.accent).slice(1) }, paragraph: { spacing: { after: 160 } } },
+      title: { run: { font: 'Arial', size: brochure ? 61 : 48, bold: true, color: (model.headingColor || model.accent).slice(1) }, paragraph: { spacing: { after: 160 } } },
       subtitle: { run: { font: 'Arial', size: 26, color: '44546A' }, paragraph: { spacing: { after: 160 } } },
     } },
     sections: [{
-      properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 650, right: 780, bottom: 750, left: 780 } } },
+      properties: { page: { size: { width: 12240, height: 15840 }, margin: brochure ? { top: 960, right: 1220, bottom: 900, left: 1220 } : { top: 650, right: 780, bottom: 750, left: 780 } } },
       footers: { default: new Footer({ children: [new Paragraph({ children: [new TextRun(footer + '  |  '), new TextRun({ children: [PageNumber.CURRENT] })] })] }) },
       children,
     }],
@@ -104,6 +105,7 @@ function word(model, images) {
 }
 
 function pdf(model, images) {
+  const brochure = model.schoolBrochure;
   const document = new jsPDF({ unit: 'pt', format: 'letter', compress: true });
   document.setProperties({ title: model.title, subject: model.organization, author: 'Skilled Crafting' });
   let y = 54;
@@ -114,14 +116,15 @@ function pdf(model, images) {
     document.setFont('helvetica', bold ? 'bold' : 'normal');
     document.setFontSize(size);
     document.setTextColor(color);
+    const leading = size + (brochure ? 7 : 5);
     const lines = document.splitTextToSize(text, 504 - inset);
-    reserve(Math.min(140, lines.length * (size + 5)) + (keepNext ? 32 : 0));
+    reserve(Math.min(140, lines.length * leading) + (keepNext ? 32 : 0));
     for (const line of lines) {
-      reserve(size + 5);
+      reserve(leading);
       document.text(line, 54 + inset, y + size);
-      y += size + 5;
+      y += leading;
     }
-    y += 8;
+    y += brochure ? 15 : 8;
   }
   const [red,green,blue]=rgbHex(model.headingColor || model.accent);
   document.setFillColor(red,green,blue);
@@ -130,11 +133,15 @@ function pdf(model, images) {
   document.setFontSize(9);
   document.setTextColor(red,green,blue);
   document.text('SKILLED CRAFTING  /  CLIENT MARKETING',54,35);
-  write(model.title, 24, { bold: true, keepNext: true, color: model.headingColor || model.accent });
+  write(model.title, brochure ? 30 : 24, { bold: true, keepNext: true, color: model.headingColor || model.accent });
   write(model.organization, 13);
   if (status(model)) write(status(model), 10, { bold: true, color: '#A82135' });
   for (const [index, block] of model.blocks.entries()) {
-    if (block.pageBreakBefore && y > 54) { document.addPage(); y = 54; }
+    if (block.pageBreakBefore && y > 54) {
+      document.addPage();
+      y = 54;
+      write(model.organization, 13, { bold: true, color: model.headingColor });
+    }
     if (block.type === 'image') {
       const image = images.get(block.source);
       const size = imageSize(image, block.thumbnail);
@@ -174,12 +181,17 @@ function pdf(model, images) {
           reserve((next - index) * 32 + dimensions.height + 30);
         }
       }
-      write(value(block), block.type === 'heading' ? 15 : block.type === 'subheading' ? 12 : 10.5,
+      const size = heading ? (brochure ? 17 : block.type === 'heading' ? 15 : 12) : (brochure ? 12.5 : 10.5);
+      write(value(block), size,
         { bold: heading, keepNext: heading, ...(heading ? { color: model.headingColor } : {}) });
     }
   }
   for (let page = 1; page <= document.getNumberOfPages(); page++) {
     document.setPage(page);
+    if (brochure && page > 1) {
+      document.setFillColor(red, green, blue);
+      document.rect(0, 0, 612, 16, 'F');
+    }
     document.setFont('helvetica', 'normal');
     document.setFontSize(9);
     document.setTextColor('#44546A');

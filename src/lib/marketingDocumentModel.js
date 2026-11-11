@@ -137,5 +137,5 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   for (const [label, value] of [['Artwork placement', document.placement], ['Terms', document.terms], ['Next step', document.cta]]) {
     if (text(value)) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value: text(value) });
   }
-  return { title: template.label, organization: text(document.organization), accent, headingColor: headingColor(accent), approved, blocks };
+  return { title: template.label, organization: text(document.organization), accent, headingColor: headingColor(accent), schoolBrochure, approved, blocks };
 }

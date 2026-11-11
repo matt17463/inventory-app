@@ -218,7 +218,6 @@ export function renderMarketingDocumentHtml(doc) {
   const process = marketingProcess(doc);
   if(process) blocks.push(process);
   if (doc.description) blocks.push(section("Overview", para(doc.description)));
-  if (doc.aiText) blocks.push(section("Suggested marketing copy — review before sharing", para(doc.aiText)));
   if (["brand", "artwork", "color"].includes(kind)) {
     if (art || cards) blocks.push(section("Logo and artwork options", art + (cards ? '<div class="grid">' + cards + '</div>' : '')));
     if (swatches) blocks.push(section("Client logo color palette", '<div class="swatches">' + swatches + '</div><small>CMYK values are mathematical estimates, not licensed Pantone matches or press-ready color conversions.</small>'));

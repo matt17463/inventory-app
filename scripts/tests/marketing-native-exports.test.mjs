@@ -22,7 +22,7 @@ test('all 35 templates generate editable Word and native PDF with the same edito
     const { sections } = marketingDocumentBlueprint(id);
     const input = {
       template: id, organization: 'Example Client', contentVersion: 2,
-      design: 'editorial', confirmedColors: ['#234B62', '#DFBA40'],
+      aiText: 'Unaccepted AI copy', design: 'editorial', confirmedColors: ['#234B62', '#DFBA40'],
       sectionContent: Object.fromEntries(sections.map((section, index) => [section, 'Confirmed section content ' + index])),
       offer: { unit_cost: 'PrivateSupplierCost' },
     };
@@ -32,7 +32,7 @@ test('all 35 templates generate editable Word and native PDF with the same edito
     assert.equal(model.headingColor, '#234B62');
     const html = renderMarketingDocumentHtml(input);
     assert.match(html, /Example Client/);
-    assert.doesNotMatch(html, /PrivateSupplierCost/);
+    assert.doesNotMatch(html, /PrivateSupplierCost|Unaccepted AI copy/);
     for (const index of sections.keys()) assert.match(html, new RegExp('Confirmed section content ' + index));
     const [docx, pdf] = await Promise.all(['docx', 'pdf'].map(format => exportMarketingDocument(model, format)));
     const xml = new AdmZip(Buffer.from(await docx.arrayBuffer())).readAsText('word/document.xml');
@@ -46,7 +46,7 @@ test('all 35 templates generate editable Word and native PDF with the same edito
     for (const output of [xml, pdfContent]) {
       assert.match(output, /Example Client/);
       assert.match(output, /FOR INTERNAL REVIEW/);
-      assert.doesNotMatch(output, /PrivateSupplierCost/);
+      assert.doesNotMatch(output, /PrivateSupplierCost|Unaccepted AI copy/);
       for (const index of sections.keys()) assert.match(output, new RegExp('Confirmed section content ' + index));
     }
   }
