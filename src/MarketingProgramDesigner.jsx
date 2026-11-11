@@ -239,6 +239,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    <h4>Save or reopen this client's editable flyer</h4>
    <p>Artwork is stored privately in R2 and draft details in the client document library. Saving does not publish or approve the flyer.</p>
    <button type="button" className="sc-btn" disabled={!accountId||savingDraft} onClick={saveFlyer}>{savingDraft?"Saving…":draftId?"Save changes to flyer":"Save new flyer draft"}</button>
+   {draftId&&<button type="button" className="sc-btn" disabled={savingDraft} onClick={()=>{setDraftId("");setDraftUpdatedAt("");setSaveMessage("Started a new draft from the current flyer. The existing saved version remains unchanged.");}}>Save as a separate new flyer</button>}
    {savedFlyers.length>0&&<label className="growth-field"><span>Reopen an existing school flyer draft</span><select value={draftId} disabled={savingDraft} onChange={e=>{if(e.target.value)reopenFlyer(e.target.value);}}>
     <option value="">Choose a saved draft</option>{savedFlyers.map(row=><option key={row.id} value={row.id}>{row.title} — {new Date(row.updated_at).toLocaleDateString()}</option>)}
    </select></label>}
