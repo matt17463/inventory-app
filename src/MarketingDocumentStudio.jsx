@@ -13,6 +13,7 @@ import { marketingDocumentModel } from "./lib/marketingDocumentModel";
 import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { marketingLogoRequest } from "./MarketingClientLogo";
+import { suggestMarketingLogoPalette } from "./lib/marketingLogoPalette";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
 export default function MarketingDocumentStudio({ organizations = [], manager = false }) {
@@ -31,6 +32,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [accountMarketingLogo, setAccountMarketingLogo] = useState(null);
   const [sharedAssetReferences, setSharedAssetReferences] = useState({});
   const [colors, setColors] = useState("");
+  const [paletteSuggestions, setPaletteSuggestions] = useState([]);
+  const [paletteBusy, setPaletteBusy] = useState(false);
   const [description, setDescription] = useState("");
   const [supplier, setSupplier] = useState("sanmar");
   const [style, setStyle] = useState("");
@@ -68,16 +71,17 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const technical = technicalGuideFields[template];
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
+  const marketingLogoKey = organizations.find(a => a.id === accountId)?.marketing_logo_key || "";
   useEffect(() => {
     let active = true;
-    setLogo("");
-    setAccountMarketingLogo(null);
-    const selected = organizations.find(a => a.id === accountId);
-    if (selected?.marketing_logo_key) marketingLogoRequest(accountId, selected.marketing_logo_key)
-      .then(url => { if (active) { setLogo(url); setAccountMarketingLogo({storage_provider:"r2",key:selected.marketing_logo_key}); } })
-      .catch(() => { if (active) setError("Client marketing logo could not be loaded. You can upload another logo."); });
+    if (!accountId || !marketingLogoKey) return () => { active = false; };
+    marketingLogoRequest(accountId, marketingLogoKey)
+      .then(url => { if (active && activeAccount.current === accountId) {
+        setLogo(url); setAccountMarketingLogo({storage_provider:"r2",key:marketingLogoKey}); setGuide(null);
+      } })
+      .catch(() => { if (active) setError("Client marketing-only logo could not be loaded. Upload a local copy or check its private storage."); });
     return () => { active = false; };
-  }, [accountId, organizations]);
+  }, [accountId, marketingLogoKey]);
   useEffect(() => {
     if (!accountId) return;
     let active=true;
@@ -439,6 +443,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     setAccountMarketingLogo(null);
     setSharedAssetReferences({});
     setColors("");
+    setPaletteSuggestions([]);
     setDescription("");
     setStyle("");
     setSku("");
@@ -482,7 +487,20 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
       <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
       <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
-      <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
+      <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>{setColors(e.target.value);setGuide(null);}} placeholder="#008000, #000000"/>
+        <button type="button" className="sc-btn" disabled={!logo || paletteBusy} onClick={async()=>{
+          setPaletteBusy(true);setError("");
+          try {const suggestions=await suggestMarketingLogoPalette(logo);setPaletteSuggestions(suggestions);
+            if(!suggestions.length)setError("No distinct opaque logo colors found. Enter approved HEX colors manually.");}
+          catch(e){setError(e.message||"Unable to analyze logo colors.");}
+          finally{setPaletteBusy(false);}
+        }}>{paletteBusy?"Analyzing…":"Recognize colors from selected logo"}</button>
+        {paletteSuggestions.length>0 && <div role="group" aria-label="Suggested logo colors">
+          <p>Suggested colors (not yet verified): {paletteSuggestions.join(", ")}</p>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{paletteSuggestions.map(hex=><span key={hex} title={hex} style={{width:34,height:34,background:hex,border:"1px solid #777",display:"inline-block"}} />)}</div>
+          <button type="button" className="sc-btn" onClick={()=>{setColors(paletteSuggestions.join(", "));setGuide(null);}}>Use these colors after checking against the client's approved brand guide</button>
+        </div>}
+      </label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
     {blueprint && <div className="growth-subcard" aria-label="Document purpose and content checklist">
