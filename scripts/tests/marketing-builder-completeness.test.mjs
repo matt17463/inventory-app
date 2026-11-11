@@ -1,16 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { runInNewContext } from "node:vm";
 import { marketingTemplates, suggestedBrandGuide } from "../../src/lib/marketingCatalogPolicy.js";
-import { escapeGrowthHtml } from "../../src/lib/growthPricing.js";
+import { marketingDocumentMissing, parseMarketingProductRows, parseMarketingColorSwatches, renderMarketingDocumentHtml } from "../../src/lib/marketingDocumentContent.js";
 const read = path => readFileSync(new URL(path,import.meta.url),"utf8");
-const source=read("../../src/lib/marketingDocumentContent.js");
-const executable=source.replace(/^import .*;\r?\n/gm,"").replace(/^export /gm,"");
-const {marketingDocumentMissing,parseMarketingProductRows,parseMarketingColorSwatches,renderMarketingDocumentHtml}=
- runInNewContext(executable+"\n({marketingDocumentMissing,parseMarketingProductRows,parseMarketingColorSwatches,renderMarketingDocumentHtml})",
-  {marketingTemplates,escapeGrowthHtml});
-
 test("template gallery spans client acquisition, pricing, mockups, brand approvals, and events",()=>{
  assert(marketingTemplates.length>=30);
  const categories=new Set(marketingTemplates.map(t=>t.category));

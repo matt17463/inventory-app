@@ -1,3 +1,5 @@
+import { technicalGuideMissing } from "./marketingTechnicalGuide.js";
+import { marketingSectionMissing } from "./marketingDocumentModel.js";
 import { escapeGrowthHtml } from "./growthPricing.js";
 import { marketingTemplates } from "./marketingCatalogPolicy.js";
 
@@ -41,7 +43,7 @@ export function parseMarketingProductRows(input) {
     const parts=line.split("|").map(x=>x.trim());
     if(parts.length!==6)throw Error("Product line "+(index+1)+" needs: Product | SKU | Sizes | Colors | Client price | Quantity.");
     const [name,sku,sizes,colors,price,quantity]=parts;
-    if(!name || !Number.isFinite(Number(price)) || Number(price)<0 ||
+    if(!name || !price || !Number.isFinite(Number(price)) || Number(price)<0 ||
       !Number.isInteger(Number(quantity)) || Number(quantity)<1)
       throw Error("Product line "+(index+1)+" needs a product, nonnegative client price and whole quantity.");
     return {name:name.slice(0,160),sku:sku.slice(0,100),sizes:sizes.slice(0,240),
@@ -70,23 +72,34 @@ export function marketingDocumentMissing(doc) {
     sample:["style","sizes","productColors","placement","terms"],
     pricing:["style","retailPrice","quantity"]
   };
-  const fields = requirements[doc.template] || defaults[kind] || ["description"];
+  const fields = doc.contentVersion === 2 && doc.template === "product-description"
+    ? ["style", "sizes", "productColors", "retailPrice", "productImage", "description"]
+    : requirements[doc.template] || defaults[kind] || ["description"];
   const multiple=Array.isArray(doc.productRows) && doc.productRows.length>0;
-  const missing = [];
+  const missing = [...marketingSectionMissing(doc), ...technicalGuideMissing(doc)];
   if (!has(doc.organization)) missing.push("client or prospect name");
   fields.forEach(key => {
     if(key==="productImage" && doc.template==="product-catalog" && doc.productRows?.length>1) {
       const gallery=doc.productImages || doc.marketing_product_images || [];
-      if(!Array.isArray(gallery) || gallery.length!==doc.productRows.length)
+      if (!Array.isArray(gallery) || (doc.productRows.every(row => row.gallery?.length)
+        ? doc.productRows.some(row => row.gallery.some(item => !Number.isInteger(item.index) || !gallery[item.index]))
+        : gallery.length !== doc.productRows.length))
         missing.push("one licensed product image per catalog line");
       return;
     }
+    if (multiple && doc.contentVersion === 2 && ["product-catalog", "product-description"].includes(doc.template)) {
+      const rowField = { style: "name", sizes: "sizes", productColors: "colors", retailPrice: "retailPrice" }[key];
+      if (rowField && doc.productRows.every(row => key === "retailPrice"
+        ? has(row[rowField]) || row[rowField] === 0 : has(row[rowField]))) return;
+      if (key === "productImage" && (doc.productImages?.[0] || doc.marketing_product_images?.[0])) return;
+    }
     if(multiple && ["style","sizes","productColors","retailPrice","quantity"].includes(key) &&
-      (["product","catalog","pricing","quote","proposal","fundraiser","package"].includes(kind))) return;
-    const value = key === "colors" ? (doc.colors || doc.branding?.colors) :
+      (["product","catalog","pricing","quote","proposal","fundraiser","package"].includes(kind)) &&
+      !(doc.contentVersion === 2 && doc.template === "product-catalog")) return;
+    const value = key === "colors" ? (doc.contentVersion === 2 ? doc.confirmedColors : doc.colors || doc.branding?.colors) :
       key === "logoOptions" ? (doc.logoOptions || doc.marketing_logo_options) :
-      key === "productImage" ? (doc.productImage || doc.marketing_product_image?.key) :
-      key === "logo" ? (doc.logo || doc.marketing_artwork?.key) : doc[key];
+      key === "productImage" ? (doc.productImage || (doc.marketing_product_image?.key || doc.marketing_product_image?.asset_id)) :
+      key === "logo" ? (doc.logo || (doc.marketing_artwork?.key || doc.marketing_artwork?.asset_id)) : doc[key];
     if (key === "logoOptions" ? !Array.isArray(value) || value.length < 2 : !has(value))
       missing.push(names[key] || key);
   });
@@ -195,7 +208,8 @@ export function renderMarketingDocumentHtml(doc) {
         '</td><td>'+e(p.quantity || "TBC")+'</td><td>'+(amount||"TBC")+'</td><td>'+
         (amount&&Number.isInteger(qty)&&qty>0?money(Number(p.retailPrice)*qty):"TBC")+'</td></tr>';
     }).join('') + '</tbody></table>';
-  const blocks = [];
+  const blocks = Object.entries(doc.sectionContent || {}).filter(([, value]) => typeof value === "string" && value.trim())
+    .map(([heading, value]) => section(heading, para(value)));
   const story = marketingStory(doc);
   if(story) blocks.push(story);
   const process = marketingProcess(doc);
