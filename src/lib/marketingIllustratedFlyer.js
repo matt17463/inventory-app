@@ -16,7 +16,7 @@ export function schoolFlyerSvg(d){
  const p=color(d.colors?.[0]),s=color(d.colors?.[1]||"#f4d51a"),bright=contrast(s),school=clip(d.organization||"YOUR SCHOOL",33).toUpperCase();
  const title=clip(d.headline||"BIG SCHOOL SPIRIT.",31).toUpperCase();
  const subtitle=clip(d.tagline||"LESS WORK FOR YOUR PTO.",39).toUpperCase();
- const products=(d.products||[]).slice(0,3);
+ const products=(d.products||[]).slice(0,5);
  const treeLine=Array.from({length:18},(_,i)=>tree(i*37-5,173+(i%3)*7,47+(i*7)%39,i%2?"#083e65":"#0b628b")).join("");
  const row=products.slice(0,2).map((item,i)=>{
   const tier=item.tiers?.[0]||{};
@@ -24,7 +24,7 @@ export function schoolFlyerSvg(d){
   return `${i%2?'<rect x="315" y="557" width="260" height="17" fill="#e8eef4"/>':'<rect x="315" y="538" width="260" height="17" fill="#fff"/>'}${txt(clip(item.name,20),323,551+i*19,10,"#152039",700,"start")}${txt(money(wholesale),467,551+i*19,9,"#152039",700)}${txt(money(retail),522,551+i*19,9,"#152039",700)}${txt(money(retail-wholesale),565,551+i*19,9,"#c32828",900)}`;
  }).join("");
  const sample=products[1]?.tiers?.[0],profit=sample?Number(sample.retail)-Number(sample.wholesale):0;
- const garment=products.map((product,i)=>img(product.mockup,46+i*173,263,183,130)).join("");
+ const garment=products.map((product,i)=>{const slots=products.length>3?[[18,277,154,118],[124,267,160,127],[245,277,154,118],[361,279,128,113],[478,288,106,102]]:[[46,263,183,130],[219,263,183,130],[392,263,183,130]];const [x,y,w,h]=slots[i];return `<g filter="url(#productShadow)">${img(product.mockup,x,y,w,h)}</g>`;}).join("");
  const benefits=[["★","BUILD SCHOOL PRIDE","Unite students, families","staff and fans."],["▰","SUPPORT PROGRAMS","Raise funds for activities","and enrichment."],["▣","EASY FOR FAMILIES","Simple ordering, production","and fulfillment."]];
  const benefitsSvg=benefits.map((b,i)=>{const x=107+i*200;return `${txt(b[0],x,424,29,s)}${txt(b[1],x,446,13,"#fff",900)}${txt(b[2],x,463,10)}${txt(b[3],x,476,10)}`;}).join("");
  const steps=[["1","PLAN","Choose apparel and prices"],["2","BUILD","Launch your school store"],["3","ORDER","Families shop online"],["4","SUPPORT","School receives proceeds"]];
@@ -34,12 +34,14 @@ export function schoolFlyerSvg(d){
  const background=d.backgroundArtwork?img(d.backgroundArtwork,0,61,612,331):mountains+treeLine;
  const brand=img(d.businessLogo,18,10,82,43);
  const logo=img(d.heroArtwork||d.schoolLogo,15,61,172,152);
- const schoolSize=school.length>24?20:school.length>16?25:31;
+ const schoolSize=school.length>24?27:school.length>16?32:38;
+ const schoolBottom=school.endsWith("HIGH SCHOOL")?"HIGH SCHOOL":school.endsWith("MIDDLE SCHOOL")?"MIDDLE SCHOOL":school.endsWith("ELEMENTARY")?"ELEMENTARY":"";
+ const schoolTop=schoolBottom?school.slice(0,-schoolBottom.length).trim():school;
  const headlineSize=title.length>26?15:20;
  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="612" height="792" viewBox="0 0 612 792">
  <defs><linearGradient id="hero" x2="1" y2="1"><stop stop-color="${p}"/><stop offset=".45" stop-color="#267bb2"/><stop offset="1" stop-color="${p}"/></linearGradient>
  <linearGradient id="lower" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#edf3fa"/></linearGradient>
- <filter id="shadow"><feDropShadow dx="1" dy="3" stdDeviation="3" flood-opacity=".35"/></filter></defs>
+ <filter id="shadow"><feDropShadow dx="1" dy="3" stdDeviation="3" flood-opacity=".35"/></filter><filter id="productShadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="1" dy="5" stdDeviation="4" flood-color="#061b30" flood-opacity=".45"/></filter><filter id="paint" x="-5%" y="-15%" width="110%" height="130%"><feTurbulence baseFrequency=".025" numOctaves="2" seed="8" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="5"/></filter></defs>
  <rect width="612" height="792" fill="url(#lower)"/><rect width="612" height="397" fill="url(#hero)"/>
  ${background}
  <rect width="612" height="61" fill="${p}"/>${brand}
@@ -50,8 +52,9 @@ export function schoolFlyerSvg(d){
  <rect x="0" y="59" width="612" height="4" fill="${s}"/>
  ${logo}
  <g filter="url(#shadow)"><path d="M193 75 L592 68 L587 157 L197 159Z" fill="${p}" stroke="#fff" stroke-width="4"/></g>
- ${txt(school,394,117,schoolSize,"#fff",900,"middle",'stroke="'+p+'" stroke-width="1.5" paint-order="stroke"')}
- ${brush(189,171,406,60,s)}
+ ${txt(schoolTop,394,schoolBottom?111:121,schoolSize,"#fff",900,"middle",'stroke="'+p+'" stroke-width="1.5" paint-order="stroke"')}
+ ${schoolBottom?txt(schoolBottom,394,141,24,"#fff",900,"middle",'font-style="italic"'):""}
+ <g filter="url(#paint)">${brush(189,171,406,60,s)}</g>
  ${txt(title,392,196,headlineSize,bright,900,"middle",'font-style="italic"')}
  ${txt(subtitle,392,218,12,bright,900,"middle",'font-style="italic"')}
  ${txt("A SIMPLE, TURNKEY SPIRIT WEAR PROGRAM",306,241,10,"#ffffff",900)}
@@ -93,8 +96,8 @@ export async function schoolFlyerPng(d){
  const url=URL.createObjectURL(blob);
  try{
   const image=await new Promise((resolve,reject)=>{const el=new Image();el.onload=()=>resolve(el);el.onerror=()=>reject(Error("Flyer artwork could not be rendered."));el.src=url;});
-  const canvas=document.createElement("canvas");canvas.width=1836;canvas.height=2376;
-  const ctx=canvas.getContext("2d");ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  const canvas=document.createElement("canvas");canvas.width=2550;canvas.height=3300;
+  const ctx=canvas.getContext("2d");if(!ctx)throw Error("Print-resolution flyer canvas is unavailable.");ctx.drawImage(image,0,0,canvas.width,canvas.height);
   return canvas.toDataURL("image/png");
  }finally{URL.revokeObjectURL(url);}
 }
