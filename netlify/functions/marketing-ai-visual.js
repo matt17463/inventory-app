@@ -39,9 +39,9 @@ export async function handler(event){
   if(!generated)return respond(502,{message:"The image service did not return artwork. Retry or check the image-generation model permissions."},event);
   const image=Buffer.from(generated,"base64");
   if(image.length>8_000_000)return respond(502,{message:"Generated image exceeds the permitted size."},event);
-  const png=await sharp(image,{limitInputPixels:25_000_000}).png({compressionLevel:9}).toBuffer();
+  const preview=await sharp(image,{limitInputPixels:25_000_000}).jpeg({quality:85,mozjpeg:true}).toBuffer();
   await auditFunctionSecurity({functionName:"marketing-ai-visual",action:"generate",outcome:"success",userId:auth.user.id,role:auth.role,event,metadata:{template_id:clean(input.template_id,90),provider:"openai"}});
-  return respond(200,{image:"data:image/png;base64,"+png.toString("base64"),provider:"openai",review_required:true},event);
+  return respond(200,{image:"data:image/jpeg;base64,"+preview.toString("base64"),provider:"openai",review_required:true},event);
  }catch(e){
   console.warn("Marketing visual generation failed",{reason:e?.name||"provider_error"});
   return respond(502,{message:"Visual generation unavailable. Check the image-generation model, account access and Netlify timeout settings."},event);
