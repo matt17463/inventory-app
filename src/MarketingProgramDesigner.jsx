@@ -19,7 +19,7 @@ async function compose(photo,logo,p){
 }
 export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage="",confirmedColors=[],description=""}){
  const brochure=mode==="brochure-schools";
- const [businessLogo,setBusinessLogo]=useState(""),[mascotArtwork,setMascotArtwork]=useState("");
+ const [businessLogo,setBusinessLogo]=useState(""),[mascotArtwork,setMascotArtwork]=useState(""),[backgroundArtwork,setBackgroundArtwork]=useState("");
  const [previewBlob,setPreviewBlob]=useState(null),[previewUrl,setPreviewUrl]=useState("");
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
@@ -43,14 +43,14 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const logo=schoolLogo;
  const artwork=mascotArtwork||schoolLogo;
  const colorSignature=confirmedColors.join(",");
- useEffect(()=>{setPreviewBlob(null);},[organization,logo,mascotArtwork,businessLogo,products,contact,notes,headline,tagline,description,colorSignature]);
+ useEffect(()=>{setPreviewBlob(null);},[organization,logo,mascotArtwork,backgroundArtwork,businessLogo,products,contact,notes,headline,tagline,description,colorSignature]);
  useEffect(()=>{
    if(!previewBlob){setPreviewUrl("");return;}
    const url=URL.createObjectURL(previewBlob);
    setPreviewUrl(url);
    return ()=>URL.revokeObjectURL(url);
  },[previewBlob]);
- const brochureData=()=>({organization,contact,businessLogo,schoolLogo:logo,heroArtwork:artwork,notes,headline,tagline,programDescription:description,colors:confirmedColors,products});
+ const brochureData=()=>({organization,contact,businessLogo,schoolLogo:logo,heroArtwork:artwork,backgroundArtwork,notes,headline,tagline,programDescription:description,colors:confirmedColors,products});
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
  const tier=(id,index,key,value)=>setProducts(list=>list.map(p=>p.id===id?{...p,tiers:p.tiers.map((t,i)=>i===index?{...t,[key]:value}:t)}:p));
@@ -90,6 +90,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   <div className="growth-grid">
    <label className="growth-field"><span>Skilled Crafting logo (required)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBusinessLogo)}/></label>
    {brochure&&<label className="growth-field"><span>Mascot / hero artwork (optional; otherwise uses the selected school logo)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setMascotArtwork)}/></label>}
+   {brochure&&<details className="growth-field"><summary>Optional scenic school background</summary><p>Upload a licensed landscape image without baked-in wording. The flyer adds editable school text and artwork over the design.</p><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBackgroundArtwork)}/></details>}
    {Object.entries({phone:"Business phone",email:"Business email",website:"Business website",address:"Business address"}).map(([k,label])=><label className="growth-field" key={k}><span>{label}</span><input value={contact[k]} onChange={e=>setContact({...contact,[k]:e.target.value})}/></label>)}
    <label className="growth-field"><span>Program benefits / next steps</span><textarea rows="3" value={notes} onChange={e=>setNotes(e.target.value)}/></label>
   </div>
