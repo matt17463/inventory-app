@@ -14,7 +14,7 @@ test("visual brief includes verified client context but not fabricated prices",(
  const brief=marketingVisualBrief({templateId:"coach-recognition",organization:"Team & Club",description:"Coach awards",colors:["#224466","red"]});
  assert.ok(brief.includes("Team & Club"));
  assert.ok(brief.includes("Coach awards"));
- assert.ok(!brief.includes("red"));
+ assert.ok(brief.includes("Palette: #224466."));
  assert.ok(brief.includes("Do not invent"));
 });
 test("document studio shares the visual brief across all templates",()=>{
