@@ -12,6 +12,7 @@ import { parseTechnicalGuideRows, technicalGuideFields } from "./lib/marketingTe
 import { marketingDocumentModel } from "./lib/marketingDocumentModel";
 import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
 import { marketingDesigns, marketingAudiences, marketingTheme } from "./lib/marketingDesignSystem";
+import { suggestLogoColors } from "./lib/marketingLogoPalette";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { marketingLogoRequest } from "./MarketingClientLogo";
 
@@ -35,6 +36,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [accountMarketingLogo, setAccountMarketingLogo] = useState(null);
   const [sharedAssetReferences, setSharedAssetReferences] = useState({});
   const [colors, setColors] = useState("");
+  const [suggestedColors, setSuggestedColors] = useState([]);
+  const [paletteBusy, setPaletteBusy] = useState(false);
   const [description, setDescription] = useState("");
   const [supplier, setSupplier] = useState("sanmar");
   const [style, setStyle] = useState("");
@@ -148,6 +151,15 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     }catch(error){setError(error.message||"Could not approve document.");}
     finally{setSaving(false);}
   }
+  async function analyzeLogo() {
+    try {
+      setPaletteBusy(true);setError("");
+      const result=await suggestLogoColors(logo);
+      setSuggestedColors(result);
+      if(!result.length) setSaveStatus("No distinctive logo colors found. Enter verified HEX colors manually.");
+    } catch(e) {setError(e.message || "Could not analyze logo colors.");}
+    finally {setPaletteBusy(false);}
+  }
   function uploadLogo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -159,6 +171,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       if (activeAccount.current !== accountId) return;
       const url = String(reader.result || "");
       setLogo(url);
+      setSuggestedColors([]);
       setAccountMarketingLogo(null);
       setGuide(null);
       setError("");
@@ -488,6 +501,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
       <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
       <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
+      <div className="growth-field"><button type="button" className="sc-btn" disabled={!logo || paletteBusy} onClick={analyzeLogo}>{paletteBusy?"Analyzing…":"Suggest colors from logo"}</button>{suggestedColors.length>0 && <div><small>Suggested only — review against the client brand guide before accepting.</small><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{suggestedColors.map(color=><button key={color} type="button" title={"Use suggested color "+color} onClick={()=>{setColors(current=>[...new Set([...current.split(",").map(v=>v.trim()).filter(Boolean),color])].join(", "));setGuide(null);}} style={{background:color,color:"#fff",border:"2px solid #667",borderRadius:4,padding:8,textShadow:"0 1px 3px #000"}}>{color}</button>)}</div></div>}</div>
       <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
