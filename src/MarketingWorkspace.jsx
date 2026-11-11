@@ -2192,16 +2192,28 @@ export default function MarketingWorkspace() {
               )}
             </details>
           )}
+          <div className="growth-actions">
+            <strong>{accounts.length} saved client{accounts.length === 1 ? "" : "s"}</strong>
+            <button type="button" className="sc-btn" onClick={() => { setSearch(""); setArchived(true); }}>
+              Show all clients (including archived)
+            </button>
+            <button type="button" className="sc-btn" onClick={() => refresh().catch(e => setMessage(e.message))}>
+              Refresh clients
+            </button>
+          </div>
+          {accounts.length === 0 && <p role="status">No marketing clients were returned. Use Add client to create one, or check the loading error above.</p>}
+          {accounts.length > 0 && !accounts.some(a => (archived || !a.archived_at) && String(a.organization || "").toLowerCase().includes(search.toLowerCase())) &&
+            <p role="status">No clients match the current search or archive filter. Select Show all clients to clear the filters.</p>}
           <div className="growth-card-grid">
             {accounts
               .filter(
                 (a) =>
                   (archived || !a.archived_at) &&
-                  a.organization.toLowerCase().includes(search.toLowerCase()),
+                  String(a.organization || "").toLowerCase().includes(search.toLowerCase()),
               )
               .map((a) => (
                 <article className="growth-subcard" key={a.id}>
-                  <h3>{a.organization}</h3>
+                  <h3><button type="button" className="growth-record-link" onClick={() => edit("accounts", a, accountFields, "Edit client")}>{a.organization}</button></h3>
                   <p>
                     {label(a.segment)} · {a.city} ·{" "}
                     {a.owner_name || "Unassigned"}
