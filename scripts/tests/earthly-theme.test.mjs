@@ -15,7 +15,7 @@ test('Earthly theme is selectable and has complete preview tokens', () => {
 test('Earthly theme has scoped styling and selects dark mode', () => {
   const css = readFileSync('src/graphicalDashboardThemes.css', 'utf8');
   const provider = readFileSync('src/ui/ThemeProvider.jsx', 'utf8');
-  assert.match(css, /html\\[data-preset='earthly-neon'\\]/);
+  assert.ok(css.includes("html[data-preset='earthly-neon']"));
   assert.match(css, /prefers-reduced-motion/);
   assert.match(provider, /preset === 'earthly-neon'/);
 });
