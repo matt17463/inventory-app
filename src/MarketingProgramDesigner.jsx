@@ -83,7 +83,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  async function storeArtwork(value){
   if(!value)return null;
   if(artworkRefCache.current.has(value))return artworkRefCache.current.get(value);
-  const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value);
+  const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value);
   if(!match)throw Error("Only uploaded PNG, JPEG or WebP artwork can be saved.");
   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
    method:"POST",headers:{"Content-Type":"application/json"},
