@@ -11,6 +11,18 @@ export const THEME_PRESET_ALIASES = Object.freeze({
 
 export const THEME_PRESETS = [
   {
+    id: 'earthly-neon',
+    name: 'Earthly Neon Console',
+    icon: '✳',
+    category: 'Developer console',
+    visualStyle: 'earthly',
+    layout: 'Navy command console with ambient neon status cards',
+    description: 'Near-black navy surfaces, electric cyan structure, neon green success cues, Roboto typography and ambient glow cards.',
+    bestFor: 'Production dashboards, technical workflows and low-light workstations',
+    traits: ['Cyan glow borders', 'Green success states', 'Roboto typography', 'Gradient actions'],
+    preview: { background: '#0a0e1a', panel: '#1a1f35', sidebar: '#06090f', primary: '#00d4ff', accent: '#00ff88', text: '#f5f5f5' },
+  },
+  {
     id: 'technical-blueprint',
     name: 'Technical Blueprint',
     icon: '⌖',
