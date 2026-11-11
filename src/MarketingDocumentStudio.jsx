@@ -739,7 +739,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       </label>}
       <label className="growth-field"><span>AI copy tone</span><select value={aiTone} onChange={e=>setAiTone(e.target.value)}>{["professional","friendly","persuasive","concise","warm","energetic"].map(t=><option key={t}>{t}</option>)}</select></label>
     </div>
-    </details>
+    </details>}
         {!schoolFlyer && <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
       <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{(guide || showPreview) && <button type="button" className="sc-btn" onClick={()=>setShowPreview(value=>!value)}>{showPreview?"Hide page preview":"Preview letter-size pages"}</button>}{guide && <>
@@ -747,9 +747,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
 
-    </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>
+    </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>}
     {!schoolFlyer && aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use as document description</button></div>}
-    </>}
+    </>
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
