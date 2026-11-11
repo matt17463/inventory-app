@@ -642,8 +642,15 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         </div>}
       </label>
       {!schoolFlyer && <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>}
-      <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
+      <label className="growth-field"><span>{schoolFlyer?"Program overview and goals":"Client notes or product purpose"}</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
+    {schoolFlyer && <details className="growth-subcard">
+      <summary><strong>Optional AI writing assistant</strong> — generate and review program copy</summary>
+      <p>The assistant helps draft copy only; the approved flyer layout always comes from the guided designer below. Verify all generated claims before use.</p>
+      <label className="growth-field"><span>Target audience</span><select value={audience} onChange={e=>setAudience(e.target.value)}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Drafting…":"Suggest program copy"}</button>
+      {aiText && <><textarea rows="6" aria-label="Edit AI school program copy" value={aiText} onChange={e=>setAiText(e.target.value)} style={{width:"100%"}}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use reviewed copy in flyer details</button></>}
+    </details>}
     {!schoolFlyer && blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
       <h3>{blueprint.stage} · {selectedTemplate?.label}</h3>
       <p><strong>Purpose:</strong> {blueprint.purpose}</p>
