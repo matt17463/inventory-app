@@ -22,7 +22,6 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [template, setTemplate] = useState("brand-guide");
   const [organization, setOrganization] = useState("");
   const activeAccount = useRef("");
-  const flyerCoverInput = useRef(null);
   const logoSelection = useRef(0);
   const logoOverride = useRef(false);
   const [accountId, setAccountId] = useState("");
@@ -80,6 +79,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
   const blueprint=marketingDocumentBlueprint(template);
   const technical = technicalGuideFields[template];
+  const schoolFlyer = template === "brochure-schools";
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   const marketingLogoKey = organizations.find(a => a.id === accountId)?.marketing_logo_key || "";
@@ -608,20 +608,23 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   }
   return <section className="sc-panel" onChange={() => setGuide(null)}>
     <h2>Marketing Document Builder</h2>
-    <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
+    <p>{schoolFlyer
+      ? "Build a school spirit-wear flyer in one workflow: select the school and approved colors; add mascot artwork and apparel mockups; confirm prices; preview the actual two-page PDF; then download."
+      : "Choose a template, add client details, preview the draft, and export the completed document. Uploaded artwork stays out of AI requests."}</p>
+    {schoolFlyer && <h3>Step 1 — School and approved branding</h3>}
     <div className="growth-grid">
       <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
-      <label className="growth-field"><span>Save under client</span><select value={accountId} disabled={saving || exporting || importing} onChange={event => selectAccount(event.target.value)}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
+      <label className="growth-field"><span>{schoolFlyer?"Select existing client artwork":"Save under client"}</span><select value={accountId} disabled={saving || exporting || importing} onChange={event => selectAccount(event.target.value)}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
-      <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","event","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
-      <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
-      <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}><option value="">Automatic for client type</option>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
+      {!schoolFlyer && <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","event","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>}
+      {!schoolFlyer && <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>}
+      {!schoolFlyer && <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}><option value="">Automatic for client type</option>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>}
       <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
       {logo && <img src={logo} alt="Selected client marketing artwork" style={{maxWidth:180,maxHeight:110,objectFit:"contain"}} />}
-      <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>{setColors(e.target.value);setGuide(null);}} placeholder="#008000, #000000"/>
+      <label className="growth-field"><span>Approved brand colors (HEX, comma-separated; school flyers must be verified)</span><input value={colors} onChange={e=>{setColors(e.target.value);setGuide(null);}} placeholder="#008000, #000000"/>
         <button type="button" className="sc-btn" disabled={!logo || paletteBusy} onClick={async()=>{
           const selection = logoSelection.current;
           setPaletteBusy(true);setError("");
@@ -638,10 +641,17 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
           <button type="button" className="sc-btn" onClick={()=>{setColors([...new Set([...colors.split(",").map(color => color.trim().toUpperCase()).filter(Boolean), ...paletteSuggestions])].join(", "));setGuide(null);}}>Use these colors after checking against the client's approved brand guide</button>
         </div>}
       </label>
-      <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>
-      <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
+      {!schoolFlyer && <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>}
+      <label className="growth-field"><span>{schoolFlyer?"Program overview and goals":"Client notes or product purpose"}</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
-    {blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
+    {schoolFlyer && <details className="growth-subcard">
+      <summary><strong>Optional AI writing assistant</strong> — generate and review program copy</summary>
+      <p>The assistant helps draft copy only; the approved flyer layout always comes from the guided designer below. Verify all generated claims before use.</p>
+      <label className="growth-field"><span>Target audience</span><select value={audience} onChange={e=>setAudience(e.target.value)}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Drafting…":"Suggest program copy"}</button>
+      {aiText && <><textarea rows="6" aria-label="Edit AI school program copy" value={aiText} onChange={e=>setAiText(e.target.value)} style={{width:"100%"}}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use reviewed copy in flyer details</button></>}
+    </details>}
+    {!schoolFlyer && blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
       <h3>{blueprint.stage} · {selectedTemplate?.label}</h3>
       <p><strong>Purpose:</strong> {blueprint.purpose}</p>
       <div className="growth-grid">
@@ -705,9 +715,13 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Verified product colors</span><input value={productColors} onChange={e=>setProductColors(e.target.value)}/></label>
     </div></>}
     {["brochure-schools","product-catalog"].includes(template) &&
-      <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage}/>}
+      <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage} confirmedColors={marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).verifiedColors} description={description} accountId={accountId} onRestoreBranding={brand=>{
+       setOrganization(brand.organization);setColors(brand.colors.join(", "));setDescription(brand.description);
+       logoOverride.current=true;logoSelection.current++;setLogo(brand.schoolLogo);setPaletteSuggestions([]);setGuide(null);
+      }}/> }
+
     <>
-    <details className="growth-subcard"><summary><strong>Products, pricing and optional settings</strong></summary>
+    {!schoolFlyer && <details className="growth-subcard"><summary><strong>Products, pricing and optional settings</strong></summary>
     {needsProductFields && template!=="product-guide" && <div className="growth-grid">
       <label className="growth-field"><span>Client-facing product / style name</span><input value={style} onChange={e=>{setStyle(e.target.value);setGuide(null);}}/></label>
       <label className="growth-field"><span>Verified product SKU (optional)</span><input value={sku} onChange={e=>setSku(e.target.value)}/></label>
@@ -738,42 +752,31 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       </label>}
       <label className="growth-field"><span>AI copy tone</span><select value={aiTone} onChange={e=>setAiTone(e.target.value)}>{["professional","friendly","persuasive","concise","warm","energetic"].map(t=><option key={t}>{t}</option>)}</select></label>
     </div>
-    </details>
-        <div className="growth-actions">
+    </details>}
+        {!schoolFlyer && <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
       <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{(guide || showPreview) && <button type="button" className="sc-btn" onClick={()=>setShowPreview(value=>!value)}>{showPreview?"Hide page preview":"Preview letter-size pages"}</button>}{guide && <>
       <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
-      {guide.template === "brochure-schools" && <>
-        <input ref={flyerCoverInput} type="file" accept="application/pdf,.pdf" hidden onChange={event => {
-          event.stopPropagation();
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) downloadNative("pdf", null, file);
-        }} />
-        <button type="button" className="sc-btn" disabled={exporting} onClick={() => flyerCoverInput.current?.click()}>
-          Download PDF with original flyer cover
-        </button>
-        <small>Choose a one-page letter-size PDF. Check the flyer’s prices, fundraising examples and contact details before sharing.</small>
-      </>}
-    </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>
-    {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use as document description</button></div>}
+
+    </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>}
+    {!schoolFlyer && aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use as document description</button></div>}
     </>
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
-    {accountId && <details className="growth-subcard"><summary><strong>Saved client documents</strong> · {savedDrafts.length} recent</summary>{savedDrafts.length ?
+    {accountId && !schoolFlyer && <details className="growth-subcard"><summary><strong>Saved client documents</strong> · {savedDrafts.length} recent</summary>{savedDrafts.length ?
       <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · Version {d.version} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {d.status==="draft" && <button type="button" className="sc-btn" disabled={saving || importing || exporting} onClick={()=>reopenDraft(d)}>Reopen draft</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{d.status === "approved" && <button type="button" className="sc-btn" disabled={saving || importing || exporting}
       onClick={()=>reopenDraft(d,true)}>Start revision</button>}{d.status === "approved" && d.content?.contentVersion === 2 && <>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx", d)}>Download approved Word</button>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf", d)}>Download approved PDF</button>
     </>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</details>}
-    {showPreview && previewError && <p role="alert">{previewError}</p>}
-    {guide && showPreview && <section className="growth-subcard" aria-label="Letter size document preview"><h3>Print-layout preview (draft)</h3><p>Review content, spacing and page breaks before export. Browser preview may differ from native Word/PDF.</p><iframe title="Marketing document print preview" sandbox="" srcDoc={renderMarketingDocumentHtml(guide)} style={{width:"100%",height:780,border:"1px solid #b7c5d0",background:"#fff"}}/></section>}
-    {guide && <article className="growth-subcard" aria-live="polite">
+    {!schoolFlyer && showPreview && previewError && <p role="alert">{previewError}</p>}
+    {!schoolFlyer && guide && showPreview && <section className="growth-subcard" aria-label="Letter size document preview"><h3>Print-layout preview (draft)</h3><p>Review content, spacing and page breaks before export. Browser preview may differ from native Word/PDF.</p><iframe title="Marketing document print preview" sandbox="" srcDoc={renderMarketingDocumentHtml(guide)} style={{width:"100%",height:780,border:"1px solid #b7c5d0",background:"#fff"}}/></section>}
+    {!schoolFlyer && guide && <article className="growth-subcard" aria-live="polite">
       {marketingDocumentMissing(guide).length>0 ?
         <div role="alert"><strong>Draft incomplete — resolve before manager approval:</strong><ul>{marketingDocumentMissing(guide).map(x=><li key={x}>{x}</li>)}</ul></div>:
         <p role="status">Required template content entered. Final client and production approval still required.</p>}
