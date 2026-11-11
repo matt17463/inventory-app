@@ -21,14 +21,14 @@ export function schoolFlyerSvg(d){
  const row=products.slice(0,2).map((item,i)=>{
   const tier=item.tiers?.[0]||{};
   const wholesale=Number(tier.wholesale||0),retail=Number(tier.retail||0);
-  return `${i%2?'<rect x="315" y="514" width="260" height="22" fill="#e8eef4"/>':'<rect x="315" y="492" width="260" height="22" fill="#fff"/>'}${txt(clip(item.name,20),323,507+i*22,10,"#152039",700,"start")}${txt(money(wholesale),467,507+i*22,9,"#152039",700)}${txt(money(retail),522,507+i*22,9,"#152039",700)}${txt(money(retail-wholesale),565,507+i*22,9,"#c32828",900)}`;
+  return `${i%2?'<rect x="315" y="560" width="260" height="22" fill="#e8eef4"/>':'<rect x="315" y="538" width="260" height="22" fill="#fff"/>'}${txt(clip(item.name,20),323,553+i*22,10,"#152039",700,"start")}${txt(money(wholesale),467,553+i*22,9,"#152039",700)}${txt(money(retail),522,553+i*22,9,"#152039",700)}${txt(money(retail-wholesale),565,553+i*22,9,"#c32828",900)}`;
  }).join("");
  const sample=products[1]?.tiers?.[0],profit=sample?Number(sample.retail)-Number(sample.wholesale):0;
  const garment=products.map((product,i)=>img(product.mockup,46+i*173,249,183,148)).join("");
  const benefits=[["★","BUILD SCHOOL PRIDE","Unite students, families","staff and fans."],["▰","SUPPORT PROGRAMS","Raise funds for activities","and enrichment."],["▣","EASY FOR FAMILIES","Simple ordering, production","and fulfillment."]];
  const benefitsSvg=benefits.map((b,i)=>{const x=107+i*200;return `${txt(b[0],x,424,29,s)}${txt(b[1],x,446,13,"#fff",900)}${txt(b[2],x,463,10)}${txt(b[3],x,476,10)}`;}).join("");
  const steps=[["1","PLAN","Select apparel, designs and pricing."],["2","BUILD","Create your branded school store."],["3","ORDER","Families and fans order online."],["4","SUPPORT","Reconcile sales and school proceeds."]];
- const stepsSvg=steps.map((v,i)=>{const y=507+i*24;return `<circle cx="41" cy="${y-4}" r="10" fill="${p}"/>${txt(v[0],41,y,11)}${txt(v[1],61,y,12,"#111827",900,"start")}${txt(clip(v[2],35),118,y,8.7,"#27364b",600,"start")}`;}).join("");
+ const stepsSvg=steps.map((v,i)=>{const y=542+i*24;return `<circle cx="41" cy="${y-4}" r="10" fill="${p}"/>${txt(v[0],41,y,11)}${txt(v[1],61,y,12,"#111827",900,"start")}${txt(clip(v[2],35),118,y,8.7,"#27364b",600,"start")}`;}).join("");
  const w=d.contact?.website||"skilledcrafting.com",contact=[d.contact?.phone,d.contact?.email,w].filter(Boolean);
  const mountains=`<path d="M0 159 L61 91 97 120 157 58 223 126 285 76 349 126 407 66 468 117 538 71 612 149V244H0Z" fill="#d9ecf7" opacity=".86"/><path d="M0 186L73 117 127 160 207 94 269 161 345 112 413 168 502 93 612 181V256H0Z" fill="#81b2d7" opacity=".68"/>`;
  const background=d.backgroundArtwork?img(d.backgroundArtwork,0,61,612,331):mountains+treeLine;
@@ -64,7 +64,7 @@ export function schoolFlyerSvg(d){
  ${txt("HOW IT WORKS",150,509,17,"#fff",900,"middle",'font-style="italic"')}
  ${txt("FUNDRAISING EXAMPLE",448,509,16,"#fff",900,"middle",'font-style="italic"')}
  <rect x="17" y="518" width="274" height="105" rx="8" fill="#fff"/>
- ${stepsSvg.replaceAll('507+i*24','507+i*24')}
+ ${stepsSvg}
  <rect x="307" y="518" width="284" height="105" rx="8" fill="#fff"/>
  <rect x="315" y="520" width="260" height="17" fill="${p}"/>
  ${txt("ITEM",323,532,8,"#fff",800,"start")}${txt("WHOLESALE",465,532,7,"#fff",800)}${txt("RETAIL",522,532,7,"#fff",800)}${txt("PROFIT",565,532,7,"#fff",800)}
