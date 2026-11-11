@@ -16,7 +16,7 @@ const contexts={
 };
 export function marketingVisualBrief({templateId="",templateLabel="",organization="",segment="",colors=[],purpose="",description="",products="",style="premium",audience=""}={}){
  const id=limit(templateId,90),label=limit(templateLabel,120),client=limit(organization,140);
- const group=/school|fundrais/i.test(id+" "+segment)?"school":/coach|sport|team/i.test(id+" "+segment)?"team":/wedding/i.test(id)?"wedding":/event/i.test(id)?"event":/nonprofit/i.test(segment)?"nonprofit":/business/i.test(segment)?"business":"general";
+ const group=/school|fundrais/i.test(id+" "+segment)?"school":/coach|sport|team/i.test(id+" "+segment)?"team":/wedding/i.test(id)?"wedding":/event/i.test(id)?"event":/nonprofit/i.test(segment)?"nonprofit":/business/i.test(id+" "+segment)?"business":"general";
  const palette=safeColors(colors);
  return [
   "SKILLED CRAFTING — REUSABLE AI VISUAL DESIGN BRIEF",
