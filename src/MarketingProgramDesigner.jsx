@@ -30,7 +30,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
  const [notes,setNotes]=useState(""),[headline,setHeadline]=useState("WEAR YOUR SCHOOL PRIDE"),[tagline,setTagline]=useState("Spirit wear for students, families, staff and supporters");
- const [error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [error,setError]=useState(""),[busy,setBusy]=useState(false),[visualBusy,setVisualBusy]=useState(false);
  const artworkRefCache=useRef(new Map());
  const [savedFlyers,setSavedFlyers]=useState([]),[draftId,setDraftId]=useState(""),[draftUpdatedAt,setDraftUpdatedAt]=useState(""),[savingDraft,setSavingDraft]=useState(false),[saveMessage,setSaveMessage]=useState("");
  const [restoredBranding,setRestoredBranding]=useState(null);
@@ -74,6 +74,19 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
  const tier=(id,index,key,value)=>setProducts(list=>list.map(p=>p.id===id?{...p,tiers:p.tiers.map((t,i)=>i===index?{...t,[key]:value}:t)}:p));
+ async function generateScenery(){
+  try{
+   if(!accountId||!logo)throw Error("Select a saved school and approved logo first.");
+   setVisualBusy(true);setError("");
+   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,template_id:"brochure-schools",template_label:"School spirit-wear flyer",organization:actualOrganization,segment:"school",colors:actualColors,purpose:"Illustrated school spirit wear fundraising flyer",description:actualDescription,products:products.map(p=>p.name).join(", "),logo:logo.length<1_000_000?logo:""})});
+   const result=await response.json();
+   if(!response.ok||!result.image)throw Error(result.message||"Illustration generation failed.");
+   const picture=new Image();picture.src=result.image;await picture.decode();
+   const canvas=document.createElement("canvas");canvas.width=1024;canvas.height=Math.round(1024*picture.naturalHeight/picture.naturalWidth);
+   canvas.getContext("2d").drawImage(picture,0,0,canvas.width,canvas.height);
+   setBackgroundArtwork(canvas.toDataURL("image/jpeg",.85));
+  }catch(e){setError(e.message||"AI scenery unavailable.");}finally{setVisualBusy(false);}
+ }
  async function render(p){try{if(!p.photo||!logo)throw Error("Upload a licensed product photo and school logo first.");patch(p.id,{mockup:await compose(p.photo,logo,p)});setError("");}catch(e){setError(e.message);}}
  async function refreshSaved(){
   const {data,error}=await supabase.from("sc_growth_documents").select("id,title,status,updated_at,content")
@@ -210,6 +223,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   <div className="growth-grid">
    <label className="growth-field"><span>Skilled Crafting logo (required)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBusinessLogo)}/></label>
    {brochure&&<label className="growth-field"><span>Mascot / hero artwork (optional; otherwise uses the selected school logo)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setMascotArtwork)}/></label>}
+   {brochure&&<div className="growth-field"><strong>AI-illustrated school scenery</strong><p>Generate a dramatic, school-colored, text-free landscape using the selected client branding. Review the image before using it; all pricing and program details remain editable.</p><button type="button" className="sc-btn" disabled={visualBusy||!accountId} onClick={generateScenery}>{visualBusy?"Generating scenery…":"Generate AI school scenery"}</button>{backgroundArtwork&&<img src={backgroundArtwork} alt="Illustrated school scenery awaiting review" style={{width:220,maxWidth:"100%"}}/>}</div>}
    {brochure&&<details className="growth-field"><summary>Optional scenic school background</summary><p>Upload a licensed landscape image without baked-in wording. The flyer adds editable school text and artwork over the design.</p><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBackgroundArtwork)}/></details>}
    {Object.entries({phone:"Business phone",email:"Business email",website:"Business website",address:"Business address"}).map(([k,label])=><label className="growth-field" key={k}><span>{label}</span><input value={contact[k]} onChange={e=>setContact({...contact,[k]:e.target.value})}/></label>)}
    <label className="growth-field"><span>Program benefits / next steps</span><textarea rows="3" value={notes} onChange={e=>setNotes(e.target.value)}/></label>
