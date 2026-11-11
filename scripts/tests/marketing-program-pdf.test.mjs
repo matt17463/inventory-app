@@ -20,7 +20,7 @@ test("School flyer permits a single tee or other product",()=>{
  assert.throws(()=>api.validateProgramProducts([{...product(),mockup:""}]));
  assert.throws(()=>api.validateProgramProducts([{...product(),tiers:[{min:1,wholesale:"30",retail:"20"}]}]));
 });
-test("School PDF remains one page and shows agreed revenue arrangement",()=>{
+test("School PDF has two pages and shows agreed revenue arrangement",()=>{
  const doc={organization:"Sample School",businessLogo:"data:image/png;base64,AAAA",contact:{phone:"555-555-5555",website:"https://skilledcrafting.com"},products:[product("tee"),product("hoodie")]};
  const result=api.exportSchoolProgramPdf(doc);
  assert.equal(result,undefined);
