@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import { supabase } from "./supabaseClient";
+import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
+import { growthWriteAllowed } from "./lib/marketingApi";
+import { marketingImageDataUrl, marketingLogoBlob } from "./lib/marketingArtwork";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import { exportClientCatalogPdf,buildSchoolProgramPdf } from "./lib/marketingProgramPdf";
 const fresh=(type="tee")=>({id:Math.random().toString(36).slice(2),type,name:type==="hoodie"?"School hoodie":"School tee",sku:"",sizes:"",colors:"",photo:"",mockup:"",x:50,y:42,scale:30,tiers:[{min:1,wholesale:"",retail:""}]});
@@ -17,7 +21,7 @@ async function compose(photo,logo,p){
  ctx.drawImage(art,c.width*p.x/100-w/2,c.height*p.y/100-h/2,w,h);
  return c.toDataURL("image/png");
 }
-export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage="",confirmedColors=[],description=""}){
+export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage="",confirmedColors=[],description="",accountId="",onRestoreBranding}){
  const brochure=mode==="brochure-schools";
  const [businessLogo,setBusinessLogo]=useState(""),[mascotArtwork,setMascotArtwork]=useState(""),[backgroundArtwork,setBackgroundArtwork]=useState("");
  const [previewBlob,setPreviewBlob]=useState(null),[previewUrl,setPreviewUrl]=useState("");
@@ -25,6 +29,18 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
  const [notes,setNotes]=useState(""),[headline,setHeadline]=useState("WEAR YOUR SCHOOL PRIDE"),[tagline,setTagline]=useState("Spirit wear for students, families, staff and supporters");
  const [error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [savedFlyers,setSavedFlyers]=useState([]),[draftId,setDraftId]=useState(""),[draftUpdatedAt,setDraftUpdatedAt]=useState(""),[savingDraft,setSavingDraft]=useState(false),[saveMessage,setSaveMessage]=useState("");
+ const [restoredBranding,setRestoredBranding]=useState(null);
+ const actualOrganization=restoredBranding?.organization??organization;
+ const actualSchoolLogo=restoredBranding?.schoolLogo??schoolLogo;
+ const actualColors=restoredBranding?.colors??confirmedColors;
+ const actualDescription=restoredBranding?.description??description;
+ useEffect(()=>{if(!accountId||!brochure){setSavedFlyers([]);return;}
+  let active=true;
+  supabase.from("sc_growth_documents").select("id,title,status,updated_at,content").eq("account_id",accountId).eq("template_id","brochure-schools").eq("status","draft").order("updated_at",{ascending:false}).limit(30)
+   .then(({data,error})=>{if(active){if(error)setError("Saved school flyers could not be loaded: "+error.message);else setSavedFlyers((data||[]).filter(row=>row.content?.kind==="school_flyer_v1"));}});
+  return ()=>{active=false;};
+ },[accountId,brochure]);
  useEffect(()=>{
   let active=true;
   const img=new Image();
@@ -40,26 +56,112 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   if (!selectedProductImage) return;
   setProducts(previous => previous.map((product,index) => index === 0 ? { ...product, photo: selectedProductImage, mockup: "" } : product));
  }, [selectedProductImage]);
- const logo=schoolLogo;
- const artwork=mascotArtwork||schoolLogo;
- const colorSignature=confirmedColors.join(",");
- useEffect(()=>{setPreviewBlob(null);},[organization,logo,mascotArtwork,backgroundArtwork,businessLogo,products,contact,notes,headline,tagline,description,colorSignature]);
+ const logo=actualSchoolLogo;
+ const artwork=mascotArtwork||logo;
+ const colorSignature=actualColors.join(",");
+ useEffect(()=>{setPreviewBlob(null);},[actualOrganization,logo,mascotArtwork,backgroundArtwork,businessLogo,products,contact,notes,headline,tagline,actualDescription,colorSignature]);
  useEffect(()=>{
    if(!previewBlob){setPreviewUrl("");return;}
    const url=URL.createObjectURL(previewBlob);
    setPreviewUrl(url);
    return ()=>URL.revokeObjectURL(url);
  },[previewBlob]);
- const brochureData=()=>({organization,contact,businessLogo,schoolLogo:logo,heroArtwork:artwork,backgroundArtwork,notes,headline,tagline,programDescription:description,colors:confirmedColors,products});
+ const brochureData=()=>({organization:actualOrganization,contact,businessLogo,schoolLogo:logo,heroArtwork:artwork,backgroundArtwork,notes,headline,tagline,programDescription:actualDescription,colors:actualColors,products});
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
  const tier=(id,index,key,value)=>setProducts(list=>list.map(p=>p.id===id?{...p,tiers:p.tiers.map((t,i)=>i===index?{...t,[key]:value}:t)}:p));
  async function render(p){try{if(!p.photo||!logo)throw Error("Upload a licensed product photo and school logo first.");patch(p.id,{mockup:await compose(p.photo,logo,p)});setError("");}catch(e){setError(e.message);}}
+ async function refreshSaved(){
+  const {data,error}=await supabase.from("sc_growth_documents").select("id,title,status,updated_at,content")
+   .eq("account_id",accountId).eq("template_id","brochure-schools").eq("status","draft")
+   .order("updated_at",{ascending:false}).limit(30);
+  if(error)throw Error(error.message);
+  setSavedFlyers((data||[]).filter(row=>row.content?.kind==="school_flyer_v1"));
+ }
+ async function storeArtwork(value){
+  if(!value)return null;
+  const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value);
+  if(!match)throw Error("Only uploaded PNG, JPEG or WebP artwork can be saved.");
+  const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({account_id:accountId,mime_type:match[1],base64:match[2]})
+  });
+  const result=await response.json();
+  if(!response.ok||!result.asset)throw Error(result.message||"Private R2 artwork upload failed.");
+  return result.asset;
+ }
+ async function restoreArtwork(reference){
+  if(!reference)return "";
+  if(!reference.key||reference.storage_provider!=="r2")throw Error("Invalid stored flyer artwork reference.");
+  return marketingImageDataUrl(await marketingLogoBlob(accountId,reference.key));
+ }
+ async function saveFlyer(){
+  try{
+   if(!accountId)throw Error("Select an existing client in Step 1 to save this flyer.");
+   if(!growthWriteAllowed())throw Error("Training mode: changes are not saved.");
+   if(!logo||!actualColors.length)throw Error("Confirm the school logo and colors before saving.");
+   setSavingDraft(true);setError("");setSaveMessage("");
+   // Keep image bytes in private client-scoped R2; only references go in Supabase.
+   const artworkValues=[businessLogo,logo,mascotArtwork,backgroundArtwork,...products.flatMap(p=>[p.photo,p.mockup])].filter(Boolean);
+   const refs=new Map();
+   for(const image of new Set(artworkValues))refs.set(image,await storeArtwork(image));
+   const content={
+    kind:"school_flyer_v1",organization:actualOrganization,colors:actualColors,description:actualDescription,
+    contact,notes,headline,tagline,
+    businessLogo:refs.get(businessLogo)||null,schoolLogo:refs.get(logo)||null,
+    mascotArtwork:refs.get(mascotArtwork)||null,backgroundArtwork:refs.get(backgroundArtwork)||null,
+    products:products.map(({photo,mockup,...rest})=>({...rest,photo:refs.get(photo)||null,mockup:refs.get(mockup)||null}))
+   };
+   const row={template_id:"brochure-schools",title:(actualOrganization+" — School spirit-wear flyer").slice(0,200),content};
+   const query=supabase.from("sc_growth_documents");
+   const mutation=draftId
+    ?query.update(row).eq("id",draftId).eq("account_id",accountId).eq("status","draft").eq("updated_at",draftUpdatedAt)
+    :query.insert({...row,account_id:accountId});
+   const {data,error}=await mutation.select("id,updated_at").maybeSingle();
+   if(error)throw Error(error.message);
+   if(!data)throw Error("This draft was modified or approved elsewhere. Reload before saving.");
+   setDraftId(data.id);setDraftUpdatedAt(data.updated_at);
+   setSaveMessage("Editable school flyer saved privately under this client.");
+   await refreshSaved();
+  }catch(e){setError(e.message||"Could not save school flyer.");}
+  finally{setSavingDraft(false);}
+ }
+ async function reopenFlyer(id){
+  try{
+   if(!accountId)throw Error("Select a client first.");
+   setSavingDraft(true);setError("");setSaveMessage("");
+   const {data,error}=await supabase.from("sc_growth_documents").select("id,updated_at,content")
+    .eq("id",id).eq("account_id",accountId).eq("template_id","brochure-schools").eq("status","draft").single();
+   if(error||data?.content?.kind!=="school_flyer_v1")throw Error("The editable school flyer draft is unavailable.");
+   const c=data.content;
+   const cache=new Map();
+   const restore=async(ref)=>{
+    if(!ref)return "";
+    const key=ref.key;
+    if(!cache.has(key))cache.set(key,await restoreArtwork(ref));
+    return cache.get(key);
+   };
+   const restoredProducts=[];
+   for(const p of c.products||[])restoredProducts.push({...p,photo:await restore(p.photo),mockup:await restore(p.mockup)});
+   const restoredLogo=await restore(c.schoolLogo);
+   setBusinessLogo(await restore(c.businessLogo));
+   setMascotArtwork(await restore(c.mascotArtwork));
+   setBackgroundArtwork(await restore(c.backgroundArtwork));
+   setProducts(restoredProducts);
+   setContact(c.contact||{phone:"",email:"",website:"https://skilledcrafting.com",address:""});
+   setNotes(c.notes||"");setHeadline(c.headline||"WEAR YOUR SCHOOL PRIDE");setTagline(c.tagline||"");
+   setRestoredBranding({organization:c.organization||"",schoolLogo:restoredLogo,colors:c.colors||[],description:c.description||""});
+   onRestoreBranding?.({organization:c.organization||"",schoolLogo:restoredLogo,colors:c.colors||[],description:c.description||""});
+   setDraftId(data.id);setDraftUpdatedAt(data.updated_at);setPreviewBlob(null);
+   setSaveMessage("School flyer reopened. Review and preview again before downloading.");
+  }catch(e){setError(e.message||"Could not reopen school flyer.");}
+  finally{setSavingDraft(false);}
+ }
  function preview(){
   try{
    setBusy(true);setError("");
    if(!logo)throw Error("Select the school\'s approved logo in Step 1 before creating a flyer.");
-   if(!confirmedColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
+   if(!actualColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
    const file=buildSchoolProgramPdf(brochureData());
    setPreviewBlob(file.output("blob"));
   }catch(e){setPreviewBlob(null);setError(e.message||"Could not preview flyer.");}
@@ -85,7 +187,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   {brochure&&<div className="growth-grid">
    <label className="growth-field"><span>Flyer headline</span><input value={headline} maxLength={55} onChange={e=>setHeadline(e.target.value)}/></label>
    <label className="growth-field"><span>Flyer tagline</span><input value={tagline} maxLength={140} onChange={e=>setTagline(e.target.value)}/></label>
-   <p><strong>School design colors:</strong> {confirmedColors.length?confirmedColors.join(", "):"Using the school-spirit design defaults until approved colors are entered above."}</p>
+   <p><strong>School design colors:</strong> {actualColors.length?actualColors.join(", "):"Using the school-spirit design defaults until approved colors are entered above."}</p>
   </div>}
   <div className="growth-grid">
    <label className="growth-field"><span>Skilled Crafting logo (required)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBusinessLogo)}/></label>
@@ -128,6 +230,15 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   </article>)}
   <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
+  {brochure&&<div className="growth-subcard">
+   <h4>Save or reopen this client's editable flyer</h4>
+   <p>Artwork is stored privately in R2 and draft details in the client document library. Saving does not publish or approve the flyer.</p>
+   <button type="button" className="sc-btn" disabled={!accountId||savingDraft} onClick={saveFlyer}>{savingDraft?"Saving…":draftId?"Save changes to flyer":"Save new flyer draft"}</button>
+   {savedFlyers.length>0&&<label className="growth-field"><span>Reopen an existing school flyer draft</span><select value={draftId} disabled={savingDraft} onChange={e=>{if(e.target.value)reopenFlyer(e.target.value);}}>
+    <option value="">Choose a saved draft</option>{savedFlyers.map(row=><option key={row.id} value={row.id}>{row.title} — {new Date(row.updated_at).toLocaleDateString()}</option>)}
+   </select></label>}
+   {saveMessage&&<p role="status">{saveMessage}</p>}
+  </div>}
   {brochure&&<h4>Step 4 — Preview the actual PDF, then download</h4>}
   {brochure&&<div className="growth-actions">
    <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={preview}>{busy?"Rendering flyer…":"Preview finished two-page flyer"}</button>
