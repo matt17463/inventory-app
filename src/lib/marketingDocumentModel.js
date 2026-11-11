@@ -51,7 +51,7 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   }
   if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
     blocks.push({type:'heading',value:'How the partnership works'});
-    blocks.push({type:'paragraph',value:'1. Discuss your audience and program goals.\\n2. Select products and confirm artwork.\\n3. Review selling prices, ordering and fulfillment details.\\n4. Approve the program before launch.'});
+    blocks.push({type:'paragraph',value:'1. Discuss your audience and program goals.\n2. Select products and confirm artwork.\n3. Review selling prices, ordering and fulfillment details.\n4. Approve the program before launch.'});
     if(document.template === 'fundraising-proposal') blocks.push({type:'paragraph',value:'Fundraising proceeds depend on verified selling prices, decorated costs, taxes, fees, returns and agreed payout terms. No proceeds are guaranteed.'});
   }
   const technical = technicalGuideFields[document.template];
