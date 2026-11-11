@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { growthWriteAllowed } from "./lib/marketingApi";
 import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeSupplierOffer } from "./lib/marketingCatalogPolicy";
@@ -8,6 +8,7 @@ import MarketingProgramDesigner from "./MarketingProgramDesigner";
 import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
+import { marketingDocumentModel } from "./lib/marketingDocumentModel";
 import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { marketingLogoRequest } from "./MarketingClientLogo";
@@ -16,6 +17,7 @@ import { marketingLogoRequest } from "./MarketingClientLogo";
 export default function MarketingDocumentStudio({ organizations = [], manager = false }) {
   const [template, setTemplate] = useState("brand-guide");
   const [organization, setOrganization] = useState("");
+  const activeAccount = useRef("");
   const [accountId, setAccountId] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedDrafts, setSavedDrafts] = useState([]);
@@ -37,6 +39,11 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [sourceUrl, setSourceUrl] = useState("");
   const [sizes, setSizes] = useState("");
   const [productColors, setProductColors] = useState("");
+  const [sectionContent, setSectionContent] = useState({});
+  const [assortment, setAssortment] = useState([]);
+  const [assortmentProduct, setAssortmentProduct] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [guide, setGuide] = useState(null);
   const [error, setError] = useState("");
   const [aiBusy,setAiBusy] = useState(false);
@@ -124,7 +131,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       });
       if(rpcError) throw rpcError;
       const {data, error:refreshError}=await supabase.from("sc_growth_documents")
-        .select("id,title,template_id,status,version,created_at,updated_at")
+        .select("id,title,template_id,status,version,created_at,updated_at,content")
         .eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
       if(refreshError) throw refreshError;
       setSavedDrafts(data||[]);
@@ -140,29 +147,11 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     }
     const reader = new FileReader();
     reader.onload = () => {
+      if (activeAccount.current !== accountId) return;
       const url = String(reader.result || "");
       setLogo(url);
       setAccountMarketingLogo(null);
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 80; canvas.height = 80;
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        if (!context) return;
-        context.drawImage(img, 0, 0, 80, 80);
-        const pixels = context.getImageData(0, 0, 80, 80).data;
-        const bucket = new Map();
-        for (let i = 0; i < pixels.length; i += 4) {
-          if (pixels[i+3] < 220) continue;
-          const rgb = [pixels[i], pixels[i+1], pixels[i+2]];
-          if (rgb.every(v => v > 242) || rgb.every(v => v < 14)) continue;
-          const reduced = rgb.map(v => Math.min(255, Math.round(v / 24) * 24));
-          const key = "#" + reduced.map(v => v.toString(16).padStart(2,"0")).join("").toUpperCase();
-          bucket.set(key,(bucket.get(key)||0)+1);
-        }
-        setColors([...bucket].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([hex])=>hex).join(", "));
-      };
-      img.src = url;
+      setGuide(null);
       setError("");
     };
     reader.readAsDataURL(file);
@@ -173,7 +162,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setError("Choose a PNG, JPEG or WebP under 2.5 MB.");return;
     }
     const reader=new FileReader();
-    reader.onload=()=>{callback(String(reader.result||""));setGuide(null);setError("");};
+    reader.onload=()=>{if (activeAccount.current !== accountId) return;callback(String(reader.result||""));setGuide(null);setError("");};
     reader.onerror=()=>setError("Unable to read image.");
     reader.readAsDataURL(file);
   }
@@ -187,6 +176,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));
         reader.onerror=reject;reader.readAsDataURL(file);
       })));
+      if (activeAccount.current !== accountId) return;
       setLogoOptions(images);setGuide(null);setError("");
     }catch{setError("Unable to read the artwork options.");}
   }
@@ -200,6 +190,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));
         reader.onerror=reject;reader.readAsDataURL(file);
       })));
+      if (activeAccount.current !== accountId) return;
       setProductImages(images);setGuide(null);setError("");
     }catch{setError("Unable to read selected product photographs.");}
   }
@@ -212,14 +203,46 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         segment, brief:description.trim(),tone:aiTone,
         context:{style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
       });
+      if (activeAccount.current !== accountId) return;
       setAiText(result);setGuide(null);
     } catch(e){setError(e.message || "AI draft unavailable. Verify the Netlify AI provider configuration.");}
     finally{setAiBusy(false);}
   }
+  async function importAssortment() {
+    try {
+      setImporting(true);
+      setError("");
+      const { loadMarketingAssortment } = await import("./lib/marketingStoreAssortment");
+      const products = await loadMarketingAssortment(supabase, accountId);
+      if (!products.length) throw Error("No live store assortment is linked to this customer's Mockup Studio projects.");
+      setAssortment(products);
+      setAssortmentProduct("");
+      setGuide(null);
+      setSaveStatus("Imported " + products.length + " store products. Confirm prices and fill any missing product details.");
+    } catch (error) {
+      setError(error.message || "Could not import this client's store.");
+    } finally {
+      setImporting(false);
+    }
+  }
   function build() {
     try {
       const parsedColors = colors.split(",").map(s => s.trim()).filter(Boolean);
-      const productRows=parseMarketingProductRows(productRowsText);
+      let productRows = parseMarketingProductRows(productRowsText);
+      let gallery = productImages;
+      const imported = template === "product-catalog" ? assortment :
+        template === "product-description" && assortmentProduct !== "" ? [assortment[Number(assortmentProduct)]] : [];
+      if (imported.length) {
+        gallery = [];
+        productRows = imported.map(({ images, ...product }) => ({
+          ...product,
+          gallery: images.map(({ color, assetId }) => {
+            const index = gallery.length;
+            gallery.push({ source: "mockup_outputs", asset_id: assetId });
+            return { index, color };
+          }),
+        }));
+      }
       const productSwatches=parseMarketingColorSwatches(productSwatchesText);
       const branding = suggestedBrandGuide(segment, parsedColors);
       let offer = null;
@@ -230,9 +253,10 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
           observed_at: observedAt, source_url: sourceUrl || undefined });
         if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
       }
-      setGuide({ template, segment, organization: organization.trim() || "Prospective client", description, logo,
+      setGuide({ template, segment, organization: organization.trim(), description, logo,
+        contentVersion: 2, sectionContent, confirmedColors: parsedColors.filter(color => /^#[0-9a-f]{6}$/i.test(color)),
         branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
-        terms, cta, productImage, productImages, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
+        terms, cta, productImage, productImages: gallery, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
       setError("");
     } catch (e) { setError(e.message); }
   }
@@ -246,11 +270,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       const verifiedReferences = {};
       for (const [image, ref] of Object.entries(sharedAssetReferences)) {
         if (!Object.values(guide).some(value => value === image || (Array.isArray(value) && value.includes(image)))) continue;
-        if (ref.source === "blank_products") {
-          // Catalog URLs are public product references, not private client artwork.
-          verifiedReferences[image] = { source: "blank_products", asset_id: ref.asset_id };
-          continue;
-        }
+        if (ref.source === "blank_products") continue;
         const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ account_id: accountId, source: ref.source, asset_id: ref.asset_id })
@@ -276,6 +296,15 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       async function storeImage(dataUrl){
         if(!dataUrl)return null;
         if(verifiedReferences[dataUrl])return verifiedReferences[dataUrl];
+        if (dataUrl.source === "mockup_outputs") {
+          const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ account_id: accountId, source: dataUrl.source, asset_id: dataUrl.asset_id }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.reference) throw Error(result.message || "Approved mockup could not be verified.");
+          return result.reference;
+        }
         const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
         if(!match)throw Error("Use a valid uploaded image.");
         const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{
@@ -299,7 +328,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       });
       if (insertError) throw insertError;
       setSaveStatus(storedArtwork?"Draft and exact client artwork saved securely to R2.":"Draft saved to this client.");
-      const {data:latest} = await supabase.from("sc_growth_documents").select("id,title,template_id,status,version,created_at,content").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
+      const {data:latest} = await supabase.from("sc_growth_documents").select("id,title,template_id,status,version,created_at,updated_at,content").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30);
       if(latest) setSavedDrafts(latest);
     } catch(e) { setError(e.message || "Draft could not be saved."); }
     finally { setSaving(false); }
@@ -316,6 +345,107 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setSaveStatus("Artwork link opened. Private image links expire after five minutes.");
     }catch(error){setError(error.message);}
   }
+  async function downloadNative(format, saved) {
+    try {
+      setExporting(true);
+      setError("");
+      let source = guide;
+      if (saved) {
+        const { data, error } = await supabase.from("sc_growth_documents")
+          .select("content,status,account_id").eq("id", saved.id).eq("account_id", accountId).single();
+        if (error || data.status !== "approved" || data.content?.contentVersion !== 2 || marketingDocumentMissing(data.content).length)
+          throw Error("Only complete, manager-approved documents can be exported as final.");
+        const { content } = data;
+        source = {
+          ...content,
+          logo: content.marketing_artwork,
+          logoOptions: content.marketing_logo_options || [],
+          productImage: content.marketing_product_image,
+          productImages: content.marketing_product_images || [],
+        };
+      }
+      if (!source) return;
+      const { exportMarketingDocument } = await import("./lib/marketingNativeExports");
+      const model = marketingDocumentModel(source, { approved: Boolean(saved) });
+      const blob = await exportMarketingDocument(model, format, async image => {
+        let url;
+        if (typeof image === "string" && /^data:image\/(png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(image)) {
+          url = image;
+        } else if (typeof image === "string" && image === logo && accountMarketingLogo?.key) {
+          url = await marketingLogoRequest(accountId, accountMarketingLogo.key);
+        } else {
+          const reference = typeof image === "string" ? sharedAssetReferences[image] : image;
+          let response;
+          if (reference?.source && reference.source !== "blank_products") {
+            response = await authenticatedFunctionFetch("/.netlify/functions/marketing-shared-asset", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ account_id: accountId, source: reference.source, asset_id: reference.asset_id, sign_download: true }),
+            });
+          } else if (reference?.key?.startsWith("marketing/artwork/")) {
+            const query = new URLSearchParams({ account_id: accountId, key: reference.key });
+            response = await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset?" + query);
+          } else if (reference?.key) {
+            url = await marketingLogoRequest(accountId, reference.key);
+          }
+          if (response?.ok) url = (await response.json()).url;
+        }
+        if (!url) throw Error("A document image could not be authorized for export.");
+        const response = await fetch(url, { cache: "no-store", referrerPolicy: "no-referrer" });
+        if (!response.ok) throw Error("A document image could not be downloaded.");
+        return response.blob();
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (saved ? "" : "draft-") + "skilled-crafting-" + source.template + "." + format;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setError(error.message || "Document export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+  function selectAccount(id) {
+    activeAccount.current = id;
+    setAccountId(id);
+    setSavedDrafts([]);
+    setReviewLink("");
+    setReviewHistory([]);
+    setHistoryDocument(null);
+    setSaveStatus("");
+    setError("");
+    setGuide(null);
+    setAiText("");
+    setSectionContent({});
+    setAssortment([]);
+    setAssortmentProduct("");
+    setLogo("");
+    setAccountMarketingLogo(null);
+    setSharedAssetReferences({});
+    setColors("");
+    setDescription("");
+    setStyle("");
+    setSku("");
+    setUnitCost("");
+    setObservedAt("");
+    setSourceUrl("");
+    setSizes("");
+    setProductColors("");
+    setRetailPrice("");
+    setQuantity("");
+    setPlacement("");
+    setTerms("");
+    setProductImage("");
+    setLogoOptions([]);
+    setProductImages([]);
+    setProductRowsText("");
+    setProductSwatchesText("");
+    setCta("Contact Skilled Crafting to confirm the product selection, pricing and approval.");
+    const selected = organizations.find(account => account.id === id);
+    setOrganization(selected?.organization || "");
+    setSegment(selected?.segment === "club" ? "team" : selected?.segment === "other" ? "business" : selected?.segment || "team");
+  }
   function printGuide() {
     if (!guide) return;
     const markup=renderMarketingDocumentHtml(guide);
@@ -329,24 +459,47 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     <h2>Marketing Document Builder</h2>
     <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);setAiText("");}}>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);setAiText("");setSectionContent({});}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
-      <label className="growth-field"><span>Save under client</span><select value={accountId} onChange={e=>{const id=e.target.value;setAccountId(id);setGuide(null);setAiText("");const a=organizations.find(x=>x.id===id);if(a){setOrganization(a.organization);setSegment(a.segment==="club"?"team":a.segment==="other"?"business":a.segment);}}}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
+      <label className="growth-field"><span>Save under client</span><select value={accountId} disabled={saving || exporting || importing} onChange={event => selectAccount(event.target.value)}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
       <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
-      <label className="growth-field"><span>Upload client's draft logo (optional)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
-      <label className="growth-field"><span>Logo colors (editable HEX values, separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
+      <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
+      <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>setColors(e.target.value)} placeholder="#008000, #000000"/></label>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
     {blueprint && <div className="growth-subcard" aria-label="Document purpose and content checklist">
       <h3>{blueprint.stage} · {selectedTemplate?.label}</h3>
       <p><strong>Purpose:</strong> {blueprint.purpose}</p>
-      <p><strong>Recommended sections:</strong> {blueprint.sections.join(" · ")}</p>
+      <div className="growth-grid">
+        {blueprint.sections.map(section => <label className="growth-field" key={section}>
+          <span>{section} (required)</span>
+          <textarea rows="3" maxLength={3000} value={sectionContent[section] || ""} onChange={event => {
+            const value = event.target.value;
+            setSectionContent(previous => ({ ...previous, [section]: value }));
+            setGuide(null);
+          }} />
+        </label>)}
+      </div>
       <small>Content checklist is guidance for preparing a complete document. Confirm client-specific facts, artwork rights, prices and production specifications before distribution.</small>
     </div>}
-    <ClientMarketingStarterKit accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
+    <ClientMarketingStarterKit key={accountId} accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{if (activeAccount.current !== accountId) return;setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{if (activeAccount.current !== accountId) return;setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
+    {["product-catalog", "product-description"].includes(template) && accountId && <div className="growth-subcard">
+      <button type="button" className="sc-btn" disabled={importing || saving} onClick={importAssortment}>
+        {importing ? "Importing…" : "Import client store products and approved mockups"}
+      </button>
+      {assortment.length > 0 && (template === "product-description" ? <label className="growth-field">
+        <span>Store product</span>
+        <select value={assortmentProduct} onChange={event => { setAssortmentProduct(event.target.value); setGuide(null); }}>
+          <option value="">Choose a product</option>
+          {assortment.map((product, index) => <option key={product.orderUrl} value={index}>{product.name}</option>)}
+        </select>
+      </label> : <ul>{assortment.map(product => <li key={product.orderUrl}>
+        {product.type} · {product.name} · ${product.retailPrice.toFixed(2)} · {product.images.length} mockup colors
+      </li>)}</ul>)}
+    </div>}
     {template==="product-guide" && <><MarketingSupplierCompare onChoose={item=>{setSupplier(Object.keys(marketingSuppliers).find(key=>marketingSuppliers[key].name===item.supplier_name)||"sanmar");setStyle(item.name);setSku(item.sku);setUnitCost(String(item.unit_cost));setObservedAt(item.observed_at.slice(0,10));setSourceUrl(item.source_url);setSizes(item.sizes.join(", "));setProductColors(item.colors.join(", "));setGuide(null);}}/><h3>Verified supplier product (optional until catalog feed is connected)</h3><div className="growth-grid">
       <label className="growth-field"><span>Supplier</span><select value={supplier} onChange={e=>setSupplier(e.target.value)}>{Object.entries(marketingSuppliers).map(([key,v])=><option key={key} value={key}>{v.name}</option>)}</select></label>
       <label className="growth-field"><span>Product name/style</span><input value={style} onChange={e=>setStyle(e.target.value)}/></label>
@@ -359,7 +512,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     </div></>}
     {["brochure-schools","product-catalog"].includes(template) &&
       <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage}/>}
-    {!["brochure-schools","product-catalog"].includes(template) && <>
+    <>
     {needsProductFields && template!=="product-guide" && <div className="growth-grid">
       <label className="growth-field"><span>Client-facing product / style name</span><input value={style} onChange={e=>{setStyle(e.target.value);setGuide(null);}}/></label>
       <label className="growth-field"><span>Verified product SKU (optional)</span><input value={sku} onChange={e=>setSku(e.target.value)}/></label>
@@ -374,7 +527,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         <textarea rows="4" value={productRowsText} onChange={e=>setProductRowsText(e.target.value)}
           placeholder={"T-shirt | 5000 | YS, YM, YL | Royal, Black | 19.99 | 20\\nHoodie | 18500 | S, M, L | Black | 34.99 | 10"}/></label>
       {template==="product-catalog" && <label className="growth-field">
-        <span>Actual product photographs — one image per catalog line, in the same order (max 25)</span>
+        <span>Manual catalog photos in product order (up to 25)</span>
         <input type="file" multiple accept="image/png,image/jpeg,image/webp"
           onChange={e=>uploadProductImages(e.target.files)}/>
         <small>{productImages.length} catalog images selected</small>
@@ -392,15 +545,22 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     </div>
         <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
-      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
+      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <>
+      <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>
+      <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
+      <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
+    </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":"Save client draft"}</button>}</div>
     {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
-    </>}
+    </>
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
     {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
-      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
+      <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{d.status === "approved" && d.content?.contentVersion === 2 && <>
+      <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx", d)}>Download approved Word</button>
+      <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf", d)}>Download approved PDF</button>
+    </>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
       <p>No saved documents found for this client.</p>}</div>}
     {guide && <article className="growth-subcard" aria-live="polite">
       {marketingDocumentMissing(guide).length>0 ?
@@ -412,9 +572,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <p>Suggested colors: {guide.branding.colors.join(", ") || "No colors provided"}</p>
       <p>Color and Pantone matching requires physical verification. Dimensions require approval for each product.</p>
       {guide.productImage && <img src={guide.productImage} alt="Selected product image" style={{maxWidth:220,maxHeight:220,objectFit:"contain"}}/>}
-      {(guide.productImages||[]).length>0 && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        {guide.productImages.map((src,i)=><img key={i} src={src} alt={"Product "+(i+1)} style={{maxWidth:140,maxHeight:140,objectFit:"contain"}}/>)}
+      {(guide.productImages || []).some(src => typeof src === "string") && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {guide.productImages.filter(src => typeof src === "string").map((src,i)=><img key={i} src={src} alt={"Product "+(i+1)} style={{maxWidth:140,maxHeight:140,objectFit:"contain"}}/>)}
       </div>}
+      {Object.entries(guide.sectionContent || {}).map(([heading, content]) => content.trim() && <section key={heading}>
+        <h4>{heading}</h4><p style={{ whiteSpace: "pre-wrap" }}>{content}</p>
+      </section>)}
       {guide.aiText && <p style={{whiteSpace:"pre-wrap"}}>{guide.aiText}</p>}
       {guide.retailPrice && <p>Client unit price: ${Number(guide.retailPrice).toFixed(2)} {guide.quantity && " · Quantity: "+guide.quantity}</p>}
       {guide.offer && <p>{guide.offer.supplier_name} · {guide.offer.sku} · source price verified {guide.offer.observed_at.slice(0,10)}</p>}

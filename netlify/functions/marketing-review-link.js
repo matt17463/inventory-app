@@ -4,6 +4,7 @@ import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {r2Client,r2BucketName} from "./_shared/mockupStorage.js";
 import {authorizeEmployee,createServiceClient,jsonResponse} from "./_shared/security.js";
 import { marketingDocumentMissing } from "../../src/lib/marketingDocumentContent.js";
+import { marketingDocumentBlueprint } from "../../src/lib/marketingDocumentBlueprints.js";
 const hash = token => crypto.createHash("sha256").update(token).digest("hex");
 const privateResponse = (status, payload, event) => { const result=jsonResponse(status,payload,event); return {...result,headers:{...result.headers,"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}}; };
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -57,7 +58,10 @@ export async function handler(event) {
   const content={
     organization:cut(source.organization,200),
     description:cut(source.description,3000),
-    aiText:cut(source.aiText,12000),
+    aiText:source.contentVersion === 2 ? "" : cut(source.aiText,12000),
+    sections:(marketingDocumentBlueprint(doc.template_id)?.sections || [])
+      .map(heading=>({heading,value:cut(source.sectionContent?.[heading],3000)}))
+      .filter(section=>section.value.trim()),
     branding:{profile:cut(branding.profile,100),colors:Array.isArray(branding.colors)?branding.colors.filter(x=>/^#[0-9a-f]{6}$/i.test(x)).slice(0,12):[],
       placements:Array.isArray(branding.placements)?branding.placements.map(x=>cut(x,100)).slice(0,25):[]},
     style:cut(source.style,200),

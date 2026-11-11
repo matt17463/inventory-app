@@ -42,6 +42,9 @@ export default function MarketingClientReview(){
    <h2>{reviewData.content.organization}</h2>{reviewData.content.logo_url&&<img src={reviewData.content.logo_url} alt="Client artwork for concept review" style={{maxWidth:280,maxHeight:260,objectFit:"contain",display:"block",margin:"16px 0"}}/>}<p style={{whiteSpace:"pre-wrap"}}>{reviewData.content.description}</p>
    <p>{reviewData.content.style}</p><p>Sizes: {reviewData.content.sizes||"To be confirmed"}</p>
    <p>Colors: {reviewData.content.productColors||"To be confirmed"}</p>
+   {(reviewData.content.sections || []).map(({heading,value}) => <section key={heading}>
+     <h3>{heading}</h3><p style={{whiteSpace:"pre-wrap"}}>{value}</p>
+   </section>)}
    {reviewData.content.aiText && <section><h3>Document copy</h3><p style={{whiteSpace:"pre-wrap"}}>{reviewData.content.aiText}</p></section>}
    {(reviewData.content.product_image_urls||[]).length>0 && <section><h3>Product catalog photographs</h3>
      <div style={{display:"flex",flexWrap:"wrap",gap:14}}>

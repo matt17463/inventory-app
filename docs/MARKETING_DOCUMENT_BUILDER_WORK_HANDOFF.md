@@ -90,3 +90,19 @@ There is an unrelated open PR #226 for optional equipment/material recipe drafts
 
 ## Reporting
 Return summary of implementation, test results, PR and commit, database changes, deployment evidence, live URL checks, and remaining issues. Do not claim success based solely on a GitHub push.
+
+## Current branch workflow
+
+In Marketing Document Builder, choose a template and client, then complete the template's required sections with confirmed details. For an existing storefront, select Product Catalog or Product Description and use **Import client store products and approved mockups**. A product description requires choosing one imported product. The catalog includes all products returned from the linked live store campaigns. Confirm prices, sizes, colors and specifications before generating the draft.
+
+Select **Generate draft** and check the required-content list. **Download Word draft** and **Download PDF draft** produce files labeled for internal review. Save the draft under the client to request manager approval. Once a complete new-format document is approved, use its **Download approved Word** or **Download approved PDF** action. Saved images are resolved through the existing private artwork and shared-asset functions at download time.
+
+### Import troubleshooting
+
+The CRM account must link to a customer record. A live store campaign must link to that customer's Mockup Studio project. Each selected store product must have a WooCommerce product ID linked to a project for the same customer, a confirmed USD selling price, and at least one selected and approved mockup. The import stops if a selected product fails those checks. Review the item's sizes and colors against the store before distribution. The imported size and color fields currently reflect linked mockup blank metadata.
+
+### Release verification still required
+
+- Verify an isolated storefront with multiple products, decorated color variants and two distinct client accounts through import, saved draft, manager approval, client review and both downloads. Production had no selected storefront product records or customer-linked Mockup Studio projects during the read-only inspection.
+- Finish the specialized brand and placement layouts and verify complete store variant, product specification and image coverage against the authoritative records.
+- Verify the new commit's required checks and the production-context Netlify release gate before merging. After release, check the production deploy record and authenticated workflow.
