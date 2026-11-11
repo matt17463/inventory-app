@@ -14,8 +14,8 @@ const tree=(x,y,h,fill)=>`<path d="M${x} ${y} l${-h*.24} ${h*.38} h${h*.11} l${-
 const money=n=>"$"+Number(n||0).toFixed(2);
 export function schoolFlyerSvg(d){
  const p=color(d.colors?.[0]),s=color(d.colors?.[1]||"#f4d51a"),bright=contrast(s),school=clip(d.organization||"YOUR SCHOOL",33).toUpperCase();
- const title=clip(d.headline||"BIG SCHOOL SPIRIT.",46).toUpperCase();
- const subtitle=clip(d.tagline||"LESS WORK FOR YOUR PTO.",55).toUpperCase();
+ const title=clip(d.headline||"BIG SCHOOL SPIRIT.",31).toUpperCase();
+ const subtitle=clip(d.tagline||"LESS WORK FOR YOUR PTO.",39).toUpperCase();
  const products=(d.products||[]).slice(0,3);
  const treeLine=Array.from({length:18},(_,i)=>tree(i*37-5,173+(i%3)*7,47+(i*7)%39,i%2?"#083e65":"#0b628b")).join("");
  const row=products.slice(0,2).map((item,i)=>{
@@ -27,15 +27,15 @@ export function schoolFlyerSvg(d){
  const garment=products.map((product,i)=>img(product.mockup,46+i*173,249,183,148)).join("");
  const benefits=[["★","BUILD SCHOOL PRIDE","Unite students, families","staff and fans."],["▰","SUPPORT PROGRAMS","Raise funds for activities","and enrichment."],["▣","EASY FOR FAMILIES","Simple ordering, production","and fulfillment."]];
  const benefitsSvg=benefits.map((b,i)=>{const x=107+i*200;return `${txt(b[0],x,424,29,s)}${txt(b[1],x,446,13,"#fff",900)}${txt(b[2],x,463,10)}${txt(b[3],x,476,10)}`;}).join("");
- const steps=[["1","PLAN","Select apparel, designs and pricing."],["2","BUILD","Create your branded school store."],["3","ORDER","Families and fans order online."],["4","SUPPORT","Reconcile sales and school proceeds."]];
- const stepsSvg=steps.map((v,i)=>{const y=542+i*24;return `<circle cx="41" cy="${y-4}" r="10" fill="${p}"/>${txt(v[0],41,y,11)}${txt(v[1],61,y,12,"#111827",900,"start")}${txt(clip(v[2],35),118,y,8.7,"#27364b",600,"start")}`;}).join("");
- const w=d.contact?.website||"skilledcrafting.com",contact=[d.contact?.phone,d.contact?.email,w].filter(Boolean);
+ const steps=[["1","PLAN","Choose apparel and prices"],["2","BUILD","Launch your school store"],["3","ORDER","Families shop online"],["4","SUPPORT","School receives proceeds"]];
+ const stepsSvg=steps.map((v,i)=>{const y=542+i*24;return `<circle cx="41" cy="${y-4}" r="10" fill="${p}"/>${txt(v[0],41,y,11)}${txt(v[1],61,y,12,"#111827",900,"start")}${txt(clip(v[2],26),123,y,8.1,"#27364b",600,"start")}`;}).join("");
+ const w=d.contact?.website||"skilledcrafting.com",contact=[d.contact?.phone,d.contact?.email].filter(Boolean);
  const mountains=`<path d="M0 159 L61 91 97 120 157 58 223 126 285 76 349 126 407 66 468 117 538 71 612 149V244H0Z" fill="#d9ecf7" opacity=".86"/><path d="M0 186L73 117 127 160 207 94 269 161 345 112 413 168 502 93 612 181V256H0Z" fill="#81b2d7" opacity=".68"/>`;
  const background=d.backgroundArtwork?img(d.backgroundArtwork,0,61,612,331):mountains+treeLine;
  const brand=img(d.businessLogo,18,10,82,43);
  const logo=img(d.heroArtwork||d.schoolLogo,15,61,172,152);
- const schoolSize=school.length>24?25:school.length>16?31:38;
- const headlineSize=title.length>26?19:25;
+ const schoolSize=school.length>24?20:school.length>16?25:31;
+ const headlineSize=title.length>26?15:20;
  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="612" height="792" viewBox="0 0 612 792">
  <defs><linearGradient id="hero" x2="1" y2="1"><stop stop-color="${p}"/><stop offset=".45" stop-color="#267bb2"/><stop offset="1" stop-color="${p}"/></linearGradient>
  <linearGradient id="lower" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#edf3fa"/></linearGradient>
@@ -53,9 +53,9 @@ export function schoolFlyerSvg(d){
  ${txt(school,394,117,schoolSize,"#fff",900,"middle",'stroke="'+p+'" stroke-width="1.5" paint-order="stroke"')}
  ${brush(189,171,406,60,s)}
  ${txt(title,392,196,headlineSize,bright,900,"middle",'font-style="italic"')}
- ${txt(subtitle,392,218,18,bright,900,"middle",'font-style="italic"')}
- ${txt("A SIMPLE, TURNKEY SPIRIT WEAR PROGRAM",306,239,12,"#102640",900)}
- ${txt("THAT BUILDS PRIDE AND SUPPORTS SCHOOL PROGRAMS.",306,252,10,"#102640",800)}
+ ${txt(subtitle,392,218,12,bright,900,"middle",'font-style="italic"')}
+ ${txt("A SIMPLE, TURNKEY SPIRIT WEAR PROGRAM",306,240,10,"#102640",900)}
+ ${txt("THAT BUILDS PRIDE AND SUPPORTS SCHOOL PROGRAMS.",306,254,9,"#102640",800)}
  <rect x="22" y="260" width="568" height="135" fill="#fff" opacity=".16" rx="12"/>${garment}
  <path d="M0 397L612 390V488H0Z" fill="${p}"/><path d="M0 393L612 388" stroke="#fff" stroke-width="6"/>
  ${benefitsSvg}
@@ -70,10 +70,10 @@ export function schoolFlyerSvg(d){
  ${txt("ITEM",323,532,8,"#fff",800,"start")}${txt("WHOLESALE",465,532,7,"#fff",800)}${txt("RETAIL",522,532,7,"#fff",800)}${txt("PROFIT",565,532,7,"#fff",800)}
  ${row}
  ${brush(321,572,260,45,s)}
- ${txt("SELL 75 ITEMS = "+money(profit*75),451,592,17,bright,900)}
- ${txt("ILLUSTRATIVE SCHOOL PROCEEDS*",451,608,9,bright,800)}
+ ${txt("75 ITEMS COULD RAISE "+money(profit*75),451,592,11,bright,900)}
+ ${txt("ILLUSTRATIVE SCHOOL PROCEEDS*",451,606,8,bright,800)}
  ${brush(18,631,577,33,p)}
- ${txt("ARTWORK MODERNIZATION & YEARLY DESIGNS",306,655,18,"#fff",900,"middle",'font-style="italic"')}
+ ${txt("ARTWORK MODERNIZATION & YEARLY DESIGNS",306,655,15,"#fff",900,"middle",'font-style="italic"')}
  <rect x="18" y="669" width="575" height="71" fill="#fff" rx="8"/>
  ${img(d.schoolLogo,31,671,80,64)}
  ${txt("»",125,718,39,s,900)}
