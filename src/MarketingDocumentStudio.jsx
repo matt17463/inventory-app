@@ -7,6 +7,7 @@ import MarketingStorePreview from "./MarketingStorePreview";
 import MarketingProgramDesigner from "./MarketingProgramDesigner";
 import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
+import { marketingVisualBrief } from "./lib/marketingVisualBrief";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
 import { parseTechnicalGuideRows, technicalGuideFields } from "./lib/marketingTechnicalGuide";
 import { marketingDocumentModel } from "./lib/marketingDocumentModel";
@@ -65,6 +66,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [error, setError] = useState("");
   const [aiBusy,setAiBusy] = useState(false);
   const [aiText,setAiText] = useState("");
+  const [visualBackground,setVisualBackground]=useState("");
+  const [visualBusy,setVisualBusy]=useState(false);
   const [aiTone,setAiTone] = useState("professional");
   const [retailPrice,setRetailPrice] = useState("");
   const [quantity,setQuantity] = useState("");
@@ -80,6 +83,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const blueprint=marketingDocumentBlueprint(template);
   const technical = technicalGuideFields[template];
   const schoolFlyer = template === "brochure-schools";
+  const visualBrief=marketingVisualBrief({templateId:template,templateLabel:selectedTemplate?.label,organization,segment:segment==="team"&&selectedTemplate?.segment!=="all"?selectedTemplate.segment:segment,colors:colors.split(","),purpose:blueprint?.purpose,description,products:productRowsText||style,style:design||"premium editorial",audience});
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   const marketingLogoKey = organizations.find(a => a.id === accountId)?.marketing_logo_key || "";
@@ -238,6 +242,29 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setProductImages(images);setGuide(null);setError("");
     }catch{setError("Unable to read selected product photographs.");}
   }
+  async function generateVisual(){
+    if(!accountId){setError("Select an existing CRM client before generating artwork.");return;}
+    try{
+      setVisualBusy(true);setError("");
+      const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({account_id:accountId,template_id:template,template_label:selectedTemplate?.label,organization,segment,colors:colors.split(","),purpose:blueprint?.purpose,description,products:productRowsText||style,style:design,audience,logo:logo&&logo.length<1_000_000?logo:""})
+      });
+      const result=await response.json();
+      if(!response.ok||!result.image)throw Error(result.message||"Image generation failed.");
+      if(activeAccount.current!==accountId)return;
+      const generated=new Image();
+      generated.src=result.image;
+      await generated.decode();
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.min(1024,generated.naturalWidth);canvas.height=Math.round(generated.naturalHeight*canvas.width/generated.naturalWidth);
+      canvas.getContext("2d").drawImage(generated,0,0,canvas.width,canvas.height);
+      setVisualBackground(canvas.toDataURL("image/jpeg",0.85));
+      setGuide(null);
+      setSaveStatus("AI artwork generated. Review brand fidelity and all imagery before approval.");
+    }catch(e){setError(e.message||"AI artwork generation unavailable.");}
+    finally{setVisualBusy(false);}
+  }
   async function assistWithAI() {
     try {
       setAiBusy(true);setError("");
@@ -245,7 +272,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         kind: selectedTemplate?.kind || "outreach",
         organization: organization.trim() || "Prospective client",
         segment, brief:description.trim(),tone:aiTone,
-        context:{audience,style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
+        context:{audience,style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100),visualDirection:visualBrief.slice(0,1800)}
       });
       if (activeAccount.current !== accountId) return;
       setAiText(result);setGuide(null);
@@ -297,7 +324,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         observed_at: observedAt, source_url: sourceUrl || undefined });
       if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
     }
-    return { template, segment, design, audience, organization: organization.trim(), description, logo,
+    return { template, segment, design, audience, organization: organization.trim(), description, logo, visualBackground,
       contentVersion: 2, sectionContent,
       ...(technical ? {
         technicalRows: parseTechnicalGuideRows(template, technicalRows),
@@ -378,15 +405,16 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         if(!response.ok||!result.asset)throw Error(result.message||"Document image upload failed.");
         return result.asset;
       }
+      const storedVisualBackground=await storeImage(guide.visualBackground);
       const storedProductImage=await storeImage(guide.productImage);
       const storedLogoOptions=await Promise.all((guide.logoOptions||[]).map(storeImage));
       const storedProductImages=[];
       for(const item of (guide.productImages||[])) storedProductImages.push(await storeImage(item));
-      const { logo: unusedLocalImage, productImage: unusedLocalProductImage, productImages: unusedLocalGallery, logoOptions: unusedLocalOptions, offer: internalSupplierOffer, ...safeGuide } = guide;
-      void unusedLocalImage;void unusedLocalProductImage;void unusedLocalGallery;void unusedLocalOptions;void internalSupplierOffer;
+      const { visualBackground: unusedLocalVisual, logo: unusedLocalImage, productImage: unusedLocalProductImage, productImages: unusedLocalGallery, logoOptions: unusedLocalOptions, offer: internalSupplierOffer, ...safeGuide } = guide;
+      void unusedLocalVisual;void unusedLocalImage;void unusedLocalProductImage;void unusedLocalGallery;void unusedLocalOptions;void internalSupplierOffer;
       const draft = {
         template_id: guide.template, title: (guide.organization + " — " + guide.template).slice(0, 200),
-        content: { ...safeGuide, ...(revisionOf ? { previous_document_id: revisionOf.id } : {}), marketing_artwork: storedArtwork || verifiedReferences[guide.logo] || (accountMarketingLogo && guide.logo === logo ? accountMarketingLogo : null), marketing_product_image:storedProductImage,
+        content: { ...safeGuide, ...(revisionOf ? { previous_document_id: revisionOf.id } : {}), marketing_artwork: storedArtwork || verifiedReferences[guide.logo] || (accountMarketingLogo && guide.logo === logo ? accountMarketingLogo : null), marketing_product_image:storedProductImage,marketing_visual_background:storedVisualBackground,
           marketing_product_images:storedProductImages, marketing_logo_options:storedLogoOptions, logo_upload_required: Boolean(guide.logo && !storedArtwork && !verifiedReferences[guide.logo] && !(accountMarketingLogo && guide.logo === logo)) },
       };
       const collection = supabase.from("sc_growth_documents");
@@ -399,7 +427,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       if (!saved) throw Error("The draft changed or was approved. Reopen it before saving.");
       setEditingDraft(saved);
       const uploaded = [
-        [guide.logo, storedArtwork], [guide.productImage, storedProductImage],
+        [guide.logo, storedArtwork], [guide.visualBackground,storedVisualBackground], [guide.productImage, storedProductImage],
         ...(guide.logoOptions || []).map((image, index) => [image, storedLogoOptions[index]]),
         ...(guide.productImages || []).map((image, index) => [image, storedProductImages[index]]),
       ].filter(([image, reference]) => typeof image === "string" && reference);
@@ -460,6 +488,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       const restored = {
         ...source, template: data.template_id,
         logo: await restoreImage(source.marketing_artwork, source.logo),
+        visualBackground:await restoreImage(source.marketing_visual_background,source.visualBackground),
         productImage: await restoreImage(source.marketing_product_image, source.productImage),
         logoOptions: await restoreGallery(source.marketing_logo_options, source.logoOptions),
         productImages: await restoreGallery(source.marketing_product_images, source.productImages),
@@ -487,6 +516,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setTerms(restored.terms || "");
       setCta(restored.cta || "");
       setAiText(restored.aiText || "");
+      setVisualBackground(restored.visualBackground||"");
       setSectionContent(restored.sectionContent || {});
       setTechnicalRows((restored.technicalRows || []).map(row => row.join(" | ")).join("\n"));
       setTechnicalLabels((restored.technicalImageLabels || []).join("\n"));
@@ -613,7 +643,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       : "Choose a template, add client details, preview the draft, and export the completed document. Uploaded artwork stays out of AI requests."}</p>
     {schoolFlyer && <h3>Step 1 — School and approved branding</h3>}
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setVisualBackground("");if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
@@ -644,6 +674,14 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       {!schoolFlyer && <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>}
       <label className="growth-field"><span>{schoolFlyer?"Program overview and goals":"Client notes or product purpose"}</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
+    <details className="growth-subcard" aria-label="AI visual design direction for all marketing templates">
+      <summary><strong>AI visual design direction</strong> — {selectedTemplate?.label||"Marketing document"}</summary>
+      <p>Use this client-specific creative brief with an image-generation tool to produce a professional, illustrated background or hero image. This is a design prompt, not an image-generation button: the current AI writing assistant cannot render images. Keep pricing, contact details, and other verified content in editable document fields.</p>
+      <textarea readOnly rows="11" aria-label="Client-specific visual generation prompt" value={visualBrief} style={{width:"100%"}}/>
+      <button type="button" className="sc-btn" disabled={visualBusy||!accountId} onClick={generateVisual}>{visualBusy?"Generating illustrated artwork…":"Generate AI illustrated artwork"}</button>
+      {visualBackground&&<div><img src={visualBackground} alt="Generated campaign illustration awaiting approval" style={{width:260,maxWidth:"100%",height:"auto"}}/><button type="button" className="sc-btn" onClick={()=>{setVisualBackground("");setGuide(null);}}>Remove generated artwork</button></div>}
+      <button type="button" className="sc-btn" onClick={()=>navigator.clipboard.writeText(visualBrief).then(()=>setSaveStatus("Visual design prompt copied.")).catch(()=>setError("Copy failed; select the prompt text manually."))}>Copy AI visual design prompt</button>
+    </details>
     {schoolFlyer && <details className="growth-subcard">
       <summary><strong>Optional AI writing assistant</strong> — generate and review program copy</summary>
       <p>The assistant helps draft copy only; the approved flyer layout always comes from the guided designer below. Verify all generated claims before use.</p>

@@ -7,10 +7,10 @@ const TYPES = new Set(["outreach", "brand", "brand-guide", "artwork", "color", "
   "fundraiser", "quote", "sample", "intake", "onboarding"]);
 const TONES = new Set(["professional", "friendly", "persuasive", "concise", "warm", "energetic"]);
 const clean = (value, limit = 1000) => String(value ?? "").trim().slice(0, limit);
-const FIELDS = ["audience", "style", "sku", "sizes", "productColors", "retailPrice", "quantity", "placement", "terms", "cta", "products"];
+const FIELDS = ["audience", "style", "sku", "sizes", "productColors", "retailPrice", "quantity", "placement", "terms", "cta", "products", "visualDirection"];
 function safeContext(input) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  return Object.fromEntries(FIELDS.map(field => [field, clean(source[field], field === "terms" ? 800 : 240)]).filter(([,v])=>v));
+  return Object.fromEntries(FIELDS.map(field => [field, clean(source[field], field === "visualDirection" ? 1800 : field === "terms" ? 800 : 240)]).filter(([,v])=>v));
 }
 function draftPrompt({kind, organization, segment, brief, tone, context}) {
   return [
