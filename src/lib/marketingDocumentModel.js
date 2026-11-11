@@ -2,6 +2,7 @@ import { technicalGuideFields } from './marketingTechnicalGuide.js';
 import { safeGrowthUrl } from './growthPricing.js';
 import { marketingDocumentBlueprint } from './marketingDocumentBlueprints.js';
 import { marketingTemplates } from './marketingCatalogPolicy.js';
+import { marketingTheme } from './marketingDesignSystem.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const hex = value => /^#[0-9a-f]{6}$/i.test(value || '');
@@ -25,7 +26,8 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   const brandColors = Array.isArray(document.confirmedColors) ? document.confirmedColors.filter(hex) : [];
   const eventTheme = document.template.includes('wedding') ? 'wedding' : document.template === 'coach-recognition' ?
     'sports' : document.template === 'employee-recognition' ? 'recognition' : 'business';
-  const accent = palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || brandColors[0] || '#284A65';
+  const accent = ['school','team'].includes(document.segment) ? marketingTheme(document).primary :
+    brandColors[0] || palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || '#284A65';
   const blocks = [];
   if (document.logo) blocks.push(image(document.logo, 'Client logo', true));
   if (text(document.description)) blocks.push({ type: 'paragraph', value: text(document.description) });
