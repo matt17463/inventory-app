@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
-import { exportClientCatalogPdf,exportSchoolProgramPdf } from "./lib/marketingProgramPdf";
+import { exportClientCatalogPdf,buildSchoolProgramPdf } from "./lib/marketingProgramPdf";
 const fresh=(type="tee")=>({id:Math.random().toString(36).slice(2),type,name:type==="hoodie"?"School hoodie":"School tee",sku:"",sizes:"",colors:"",photo:"",mockup:"",x:50,y:42,scale:30,tiers:[{min:1,wholesale:"",retail:""}]});
 async function fileImage(file){
  if(!file)return "";
@@ -19,7 +19,8 @@ async function compose(photo,logo,p){
 }
 export default function MarketingProgramDesigner({mode,organization="",schoolLogo="",selectedProductImage="",confirmedColors=[],description=""}){
  const brochure=mode==="brochure-schools";
- const [businessLogo,setBusinessLogo]=useState(""),[clientLogo,setClientLogo]=useState("");
+ const [businessLogo,setBusinessLogo]=useState(""),[mascotArtwork,setMascotArtwork]=useState("");
+ const [previewBlob,setPreviewBlob]=useState(null),[previewUrl,setPreviewUrl]=useState("");
  const [contact,setContact]=useState({phone:"",email:"",website:"https://skilledcrafting.com",address:""});
  const [products,setProducts]=useState(()=>brochure?[fresh("tee"),fresh("hoodie")]:[fresh()]);
  const [notes,setNotes]=useState(""),[headline,setHeadline]=useState("WEAR YOUR SCHOOL PRIDE"),[tagline,setTagline]=useState("Spirit wear for students, families, staff and supporters");
@@ -39,15 +40,41 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   if (!selectedProductImage) return;
   setProducts(previous => previous.map((product,index) => index === 0 ? { ...product, photo: selectedProductImage, mockup: "" } : product));
  }, [selectedProductImage]);
- const logo=clientLogo||schoolLogo;
+ const logo=schoolLogo;
+ const artwork=mascotArtwork||schoolLogo;
+ const colorSignature=confirmedColors.join(",");
+ useEffect(()=>{setPreviewBlob(null);},[organization,logo,mascotArtwork,businessLogo,products,contact,notes,headline,tagline,description,colorSignature]);
+ useEffect(()=>{
+   if(!previewBlob){setPreviewUrl("");return;}
+   const url=URL.createObjectURL(previewBlob);
+   setPreviewUrl(url);
+   return ()=>URL.revokeObjectURL(url);
+ },[previewBlob]);
+ const brochureData=()=>({organization,contact,businessLogo,schoolLogo:logo,heroArtwork:artwork,notes,headline,tagline,programDescription:description,colors:confirmedColors,products});
  const patch=(id,changes)=>setProducts(list=>list.map(p=>p.id===id?{...p,...changes,mockup:changes.mockup??(changes.photo!==undefined||changes.x!==undefined||changes.y!==undefined||changes.scale!==undefined?"":p.mockup)}:p));
  const upload=async(file,callback)=>{try{const v=await fileImage(file);if(v){callback(v);setError("");}}catch(e){setError(e.message);}};
  const tier=(id,index,key,value)=>setProducts(list=>list.map(p=>p.id===id?{...p,tiers:p.tiers.map((t,i)=>i===index?{...t,[key]:value}:t)}:p));
  async function render(p){try{if(!p.photo||!logo)throw Error("Upload a licensed product photo and school logo first.");patch(p.id,{mockup:await compose(p.photo,logo,p)});setError("");}catch(e){setError(e.message);}}
+ function preview(){
+  try{
+   setBusy(true);setError("");
+   const file=buildSchoolProgramPdf(brochureData());
+   setPreviewBlob(file.output("blob"));
+  }catch(e){setPreviewBlob(null);setError(e.message||"Could not preview flyer.");}
+  finally{setBusy(false);}
+ }
  function download(){
-  try{setBusy(true);setError("");const data={organization,contact,businessLogo,schoolLogo:logo,notes,headline,tagline,programDescription:description,colors:confirmedColors,products};
-   if(brochure)exportSchoolProgramPdf(data);else exportClientCatalogPdf(data);
-  }catch(e){setError(e.message);}finally{setBusy(false);}
+  try{
+   setBusy(true);setError("");
+   if(brochure){
+    if(!previewBlob)throw Error("Preview the current two-page flyer before downloading.");
+    const url=URL.createObjectURL(previewBlob);
+    const anchor=document.createElement("a");anchor.href=url;
+    anchor.download="skilled-crafting-school-spirit-wear.pdf";anchor.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+   }else exportClientCatalogPdf(brochureData());
+  }catch(e){setError(e.message||"Document download failed.");}
+  finally{setBusy(false);}
  }
  return <section className="growth-subcard">
   <h3>{brochure?"School spirit-wear flyer — guided two-page design":"Client product catalog — multi-page full-color PDF"}</h3>
@@ -59,12 +86,13 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   </div>}
   <div className="growth-grid">
    <label className="growth-field"><span>Skilled Crafting logo (required)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setBusinessLogo)}/></label>
-   <label className="growth-field"><span>School / client logo (optional override)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setClientLogo)}/></label>
+   {brochure&&<label className="growth-field"><span>Mascot / hero artwork (optional; otherwise uses the selected school logo)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0],setMascotArtwork)}/></label>}
    {Object.entries({phone:"Business phone",email:"Business email",website:"Business website",address:"Business address"}).map(([k,label])=><label className="growth-field" key={k}><span>{label}</span><input value={contact[k]} onChange={e=>setContact({...contact,[k]:e.target.value})}/></label>)}
    <label className="growth-field"><span>Program benefits / next steps</span><textarea rows="3" value={notes} onChange={e=>setNotes(e.target.value)}/></label>
   </div>
   {businessLogo&&<img src={businessLogo} alt="Business logo preview" style={{maxWidth:120,maxHeight:90,objectFit:"contain"}}/>}
   {logo&&<img src={logo} alt="School logo preview" style={{maxWidth:120,maxHeight:90,objectFit:"contain"}}/>}
+  {brochure&&mascotArtwork&&<img src={mascotArtwork} alt="Selected hero mascot artwork" style={{maxWidth:120,maxHeight:90,objectFit:"contain"}}/>}
   {!brochure&&<MarketingSupplierCompare onChoose={item=>{
    setProducts(ps=>ps.length>=25?ps:[...ps,{...fresh("other"),name:item.name||"Product",sku:item.sku||"",sizes:(item.sizes||[]).join(", "),colors:(item.colors||[]).join(", ")}]);
    setError("Supplier selection added. Verify product availability and enter your approved wholesale/retail prices; supplier costs are not exported.");
@@ -95,7 +123,16 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   </article>)}
   <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
-  <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={download}>{busy?"Preparing…":brochure?"Download finished two-page flyer PDF":"Download multi-page catalog PDF"}</button>
+  {brochure&&<div className="growth-actions">
+   <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={preview}>{busy?"Rendering flyer…":"Preview finished two-page flyer"}</button>
+   <button type="button" className="sc-btn" disabled={busy||!previewBlob} onClick={download}>Download this PDF</button>
+  </div>}
+  {brochure&&previewUrl&&<div className="growth-subcard">
+   <h4>Actual PDF preview — both pages</h4>
+   <p>This is the same PDF that will download. Editing products or branding requires a new preview.</p>
+   <iframe title="Branded school spirit wear PDF preview" src={previewUrl+"#toolbar=1&view=FitH"} style={{width:"100%",height:920,border:"1px solid #9aaabc",background:"#fff"}}/>
+  </div>}
+  {!brochure&&<button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={download}>{busy?"Preparing…":"Download multi-page catalog PDF"}</button>}
   {error&&<p role="alert">{error}</p>}
  </section>;
 }
