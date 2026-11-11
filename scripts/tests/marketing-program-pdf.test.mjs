@@ -40,7 +40,7 @@ test("Specialized editor includes exact artwork compositing, logo and contact de
  assert.match(ui,/Render exact-artwork mockup/);
  assert.match(ui,/MarketingSupplierCompare/);
  assert.match(ui,/schoolLogo/);
- assert.match(ui,/Preview finished two-page flyer/);
+ assert.match(ui,/Preview illustrated two-page flyer/);
  assert.match(ui,/Download this PDF/);
  assert.match(ui,/async function saveFlyer\(/);
  assert.match(ui,/async function reopenFlyer\(/);
@@ -58,6 +58,6 @@ test("Specialized editor includes exact artwork compositing, logo and contact de
  assert.doesNotMatch(parent,/Download PDF with original flyer cover/);
  assert.match(parent,/!schoolFlyer && <div className="growth-actions">/);
  assert.match(parent,/Optional AI writing assistant/);
- assert.match(ui,/Preview finished two-page flyer/);
+ assert.match(ui,/Preview illustrated two-page flyer/);
  assert.match(ui,/Download this PDF/);
 });
