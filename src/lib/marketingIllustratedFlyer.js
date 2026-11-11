@@ -21,10 +21,10 @@ export function schoolFlyerSvg(d){
  const row=products.slice(0,2).map((item,i)=>{
   const tier=item.tiers?.[0]||{};
   const wholesale=Number(tier.wholesale||0),retail=Number(tier.retail||0);
-  return `${i%2?'<rect x="315" y="560" width="260" height="22" fill="#e8eef4"/>':'<rect x="315" y="538" width="260" height="22" fill="#fff"/>'}${txt(clip(item.name,20),323,553+i*22,10,"#152039",700,"start")}${txt(money(wholesale),467,553+i*22,9,"#152039",700)}${txt(money(retail),522,553+i*22,9,"#152039",700)}${txt(money(retail-wholesale),565,553+i*22,9,"#c32828",900)}`;
+  return `${i%2?'<rect x="315" y="557" width="260" height="17" fill="#e8eef4"/>':'<rect x="315" y="538" width="260" height="17" fill="#fff"/>'}${txt(clip(item.name,20),323,551+i*19,10,"#152039",700,"start")}${txt(money(wholesale),467,551+i*19,9,"#152039",700)}${txt(money(retail),522,551+i*19,9,"#152039",700)}${txt(money(retail-wholesale),565,551+i*19,9,"#c32828",900)}`;
  }).join("");
  const sample=products[1]?.tiers?.[0],profit=sample?Number(sample.retail)-Number(sample.wholesale):0;
- const garment=products.map((product,i)=>img(product.mockup,46+i*173,249,183,148)).join("");
+ const garment=products.map((product,i)=>img(product.mockup,46+i*173,263,183,130)).join("");
  const benefits=[["★","BUILD SCHOOL PRIDE","Unite students, families","staff and fans."],["▰","SUPPORT PROGRAMS","Raise funds for activities","and enrichment."],["▣","EASY FOR FAMILIES","Simple ordering, production","and fulfillment."]];
  const benefitsSvg=benefits.map((b,i)=>{const x=107+i*200;return `${txt(b[0],x,424,29,s)}${txt(b[1],x,446,13,"#fff",900)}${txt(b[2],x,463,10)}${txt(b[3],x,476,10)}`;}).join("");
  const steps=[["1","PLAN","Choose apparel and prices"],["2","BUILD","Launch your school store"],["3","ORDER","Families shop online"],["4","SUPPORT","School receives proceeds"]];
@@ -54,9 +54,9 @@ export function schoolFlyerSvg(d){
  ${brush(189,171,406,60,s)}
  ${txt(title,392,196,headlineSize,bright,900,"middle",'font-style="italic"')}
  ${txt(subtitle,392,218,12,bright,900,"middle",'font-style="italic"')}
- ${txt("A SIMPLE, TURNKEY SPIRIT WEAR PROGRAM",306,240,10,"#102640",900)}
- ${txt("THAT BUILDS PRIDE AND SUPPORTS SCHOOL PROGRAMS.",306,254,9,"#102640",800)}
- <rect x="22" y="260" width="568" height="135" fill="#fff" opacity=".16" rx="12"/>${garment}
+ ${txt("A SIMPLE, TURNKEY SPIRIT WEAR PROGRAM",306,241,10,"#ffffff",900)}
+ ${txt("THAT BUILDS PRIDE AND SUPPORTS SCHOOL PROGRAMS.",306,254,9,"#ffffff",800)}
+ <rect x="22" y="260" width="568" height="135" fill="#fff" opacity=".28" rx="12"/>${garment}
  <path d="M0 397L612 390V488H0Z" fill="${p}"/><path d="M0 393L612 388" stroke="#fff" stroke-width="6"/>
  ${benefitsSvg}
  <path d="M205 418V476M406 418V476" stroke="#fff" stroke-width="1" opacity=".65"/>
@@ -69,9 +69,9 @@ export function schoolFlyerSvg(d){
  <rect x="315" y="520" width="260" height="17" fill="${p}"/>
  ${txt("ITEM",323,532,8,"#fff",800,"start")}${txt("WHOLESALE",465,532,7,"#fff",800)}${txt("RETAIL",522,532,7,"#fff",800)}${txt("PROFIT",565,532,7,"#fff",800)}
  ${row}
- ${brush(321,572,260,45,s)}
- ${txt("75 ITEMS COULD RAISE "+money(profit*75),451,592,11,bright,900)}
- ${txt("ILLUSTRATIVE SCHOOL PROCEEDS*",451,606,8,bright,800)}
+ ${brush(321,580,260,34,s)}
+ ${txt("75 ITEMS COULD RAISE "+money(profit*75),451,594,11,bright,900)}
+ ${txt("ILLUSTRATIVE SCHOOL PROCEEDS*",451,608,8,bright,800)}
  ${brush(18,631,577,33,p)}
  ${txt("ARTWORK MODERNIZATION & YEARLY DESIGNS",306,655,15,"#fff",900,"middle",'font-style="italic"')}
  <rect x="18" y="669" width="575" height="71" fill="#fff" rx="8"/>
@@ -85,7 +85,7 @@ export function schoolFlyerSvg(d){
  ${txt("LET'S BRING SCHOOL SPIRIT TO LIFE!",24,766,17,"#fff",900,"start",'font-style="italic"')}
  ${contact.slice(0,2).map((v,i)=>txt(clip(v,34),419,758+i*13,9,"#fff",700,"start")).join("")}
  ${txt(clip(w,36),419,784,9,"#fff",700,"start")}
- <text x="307" y="622" font-family="Arial" font-size="6.2" fill="#48566c">*Illustrative only. Final proceeds, taxes and terms require approval.</text>
+ <text x="307" y="620" font-family="Arial" font-size="6.2" fill="#48566c">*Illustrative only. Final proceeds, taxes and terms require approval.</text>
  </svg>`;
 }
 export async function schoolFlyerPng(d){
