@@ -22,6 +22,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [template, setTemplate] = useState("brand-guide");
   const [organization, setOrganization] = useState("");
   const activeAccount = useRef("");
+  const flyerCoverInput = useRef(null);
   const logoSelection = useRef(0);
   const logoOverride = useRef(false);
   const [accountId, setAccountId] = useState("");
@@ -508,7 +509,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setSaving(false);
     }
   }
-  async function downloadNative(format, saved) {
+  async function downloadNative(format, saved, flyerCover) {
     try {
       setExporting(true);
       setError("");
@@ -530,7 +531,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       if (!source) return;
       const { exportMarketingDocument } = await import("./lib/marketingNativeExports");
       const model = marketingDocumentModel(source, { approved: Boolean(saved) });
-      const blob = await exportMarketingDocument(model, format, resolveDocumentImage);
+      const blob = await exportMarketingDocument(model, format, resolveDocumentImage, { flyerCover });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -744,6 +745,18 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
+      {guide.template === "brochure-schools" && <>
+        <input ref={flyerCoverInput} type="file" accept="application/pdf,.pdf" hidden onChange={event => {
+          event.stopPropagation();
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) downloadNative("pdf", null, file);
+        }} />
+        <button type="button" className="sc-btn" disabled={exporting} onClick={() => flyerCoverInput.current?.click()}>
+          Download PDF with original flyer cover
+        </button>
+        <small>Choose a one-page letter-size PDF. Check the flyer’s prices, fundraising examples and contact details before sharing.</small>
+      </>}
     </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>
     {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use as document description</button></div>}
     </>

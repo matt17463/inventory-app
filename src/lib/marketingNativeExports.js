@@ -104,8 +104,8 @@ function word(model, images) {
   }));
 }
 
-function pdf(model, images) {
-  const brochure = model.schoolBrochure;
+function pdf(model, images, { afterFlyerCover = false } = {}) {
+  const brochure = model.schoolBrochure && !afterFlyerCover;
   const document = new jsPDF({ unit: 'pt', format: 'letter', compress: true });
   document.setProperties({ title: model.title, subject: model.organization, author: 'Skilled Crafting' });
   let y = 54;
@@ -133,11 +133,11 @@ function pdf(model, images) {
   document.setFontSize(9);
   document.setTextColor(red,green,blue);
   document.text('SKILLED CRAFTING  /  CLIENT MARKETING',54,35);
-  write(model.title, brochure ? 30 : 24, { bold: true, keepNext: true, color: model.headingColor || model.accent });
+  write(afterFlyerCover ? 'School spirit wear program details' : model.title, brochure ? 30 : 24, { bold: true, keepNext: true, color: model.headingColor || model.accent });
   write(model.organization, 13);
   if (status(model)) write(status(model), 10, { bold: true, color: '#A82135' });
   for (const [index, block] of model.blocks.entries()) {
-    if (block.pageBreakBefore && y > 54) {
+    if (!afterFlyerCover && block.pageBreakBefore && y > 54) {
       document.addPage();
       y = 54;
       write(model.organization, 13, { bold: true, color: model.headingColor });
@@ -195,7 +195,7 @@ function pdf(model, images) {
     document.setFont('helvetica', 'normal');
     document.setFontSize(9);
     document.setTextColor('#44546A');
-    document.text(footer + '  |  ' + page, 54, 763);
+    document.text(footer + '  |  ' + (afterFlyerCover ? page + 1 : page), 54, 763);
   }
   return document.output('blob');
 }
@@ -203,8 +203,12 @@ function pdf(model, images) {
 export async function exportMarketingDocument(model, format, resolveImage = async source => {
   if (!/^data:image\/(png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(source)) throw Error('Choose a verified document image.');
   return (await fetch(source)).blob();
-}) {
+}, { flyerCover } = {}) {
   if (!['docx', 'pdf'].includes(format)) throw Error('Choose Word or PDF.');
   const images = await prepareImages(model, resolveImage);
-  return format === 'docx' ? word(model, images) : pdf(model, images);
+  if (!flyerCover) return format === 'docx' ? word(model, images) : pdf(model, images);
+  if (format !== 'pdf' || !model.schoolBrochure) throw Error('Flyer covers are available for school brochure PDFs.');
+  const { addMarketingFlyerCover } = await import('./marketingFlyerCover.js');
+  const details = pdf(model, images, { afterFlyerCover: true });
+  return addMarketingFlyerCover(flyerCover, details, model.title);
 }

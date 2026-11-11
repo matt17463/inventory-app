@@ -130,3 +130,24 @@ test('shared client review assets require matching customer, approval and projec
   asset = { ...asset, approval_status: 'customer_approved', storage_path: ownerId + '/' + assetId + '/outputs/view.png' };
   assert.equal(await signedSharedReviewAsset(db, reference, 'customer-a', sign), null);
 });
+
+test('school brochure PDF keeps the supplied flyer as page one with generated details on page two', async () => {
+  const { PDFDocument } = await import('pdf-lib');
+  const cover = await PDFDocument.create();
+  cover.addPage([612, 792]).drawText('Original illustrated flyer');
+  const flyerCover = new Blob([await cover.save()], { type: 'application/pdf' });
+  const model = marketingDocumentModel({
+    template: 'brochure-schools', contentVersion: 2, organization: 'Example School',
+    sectionContent: { 'School benefits': 'School pride and participation', 'Fundraising options': 'Terms require approval' },
+  });
+  const output = await exportMarketingDocument(model, 'pdf', undefined, { flyerCover });
+  const combined = await PDFDocument.load(await output.arrayBuffer());
+  assert.equal(combined.getPageCount(), 2);
+  assert.deepEqual(combined.getPage(0).getSize(), { width: 612, height: 792 });
+
+  await assert.rejects(exportMarketingDocument(model, 'pdf', undefined, { flyerCover: new Blob(['not a PDF']) }),
+    /readable, unencrypted flyer PDF/);
+  cover.addPage([612, 792]);
+  await assert.rejects(exportMarketingDocument(model, 'pdf', undefined, { flyerCover: new Blob([await cover.save()]) }),
+    /exactly one page/);
+});
