@@ -7,7 +7,7 @@ const TYPES = new Set(["outreach", "brand", "brand-guide", "artwork", "color", "
   "fundraiser", "quote", "sample", "intake", "onboarding"]);
 const TONES = new Set(["professional", "friendly", "persuasive", "concise", "warm", "energetic"]);
 const clean = (value, limit = 1000) => String(value ?? "").trim().slice(0, limit);
-const FIELDS = ["style", "sku", "sizes", "productColors", "retailPrice", "quantity", "placement", "terms", "cta", "products"];
+const FIELDS = ["audience", "style", "sku", "sizes", "productColors", "retailPrice", "quantity", "placement", "terms", "cta", "products"];
 function safeContext(input) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   return Object.fromEntries(FIELDS.map(field => [field, clean(source[field], field === "terms" ? 800 : 240)]).filter(([,v])=>v));
@@ -22,6 +22,7 @@ function draftPrompt({kind, organization, segment, brief, tone, context}) {
     "For artwork/brand/color materials, explain that submitted logos and swatches require client approval and physical color verification; never claim an exact Pantone or CMYK production match.",
     "For catalog/mockup/product copy, explain products and decoration concept without implying unprovided images, stock or approved proofs exist.",
     "For outreach, provide a suitable subject, personalized opening, concise benefit and opt-in next step; do not imply prior consent to contact.",
+    "Tailor the benefits to the stated audience: PTO leaders prioritize fundraising and volunteer effort; athletic directors prioritize branding and program coordination; coaches prioritize team identity and family ordering; student leaders prioritize participation and design options. Do not presume the organization has approved any proposal.",
     "For fundraising and package content, address ordering, customization, fulfillment and proceeds as items to confirm, not promises.",
     "For store concept, clearly label a proposal rather than a published storefront.",
     "Generate approximately 150-300 words of clean plain-text sections with headings, appropriate for this document; no HTML, code fences or fabricated placeholders masquerading as real facts.",
