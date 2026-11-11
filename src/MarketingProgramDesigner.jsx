@@ -1,3 +1,5 @@
+import { PDFDocument } from "pdf-lib";
+import { schoolFlyerPng } from "./lib/marketingIllustratedFlyer";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
@@ -162,13 +164,23 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   }catch(e){setError(e.message||"Could not reopen school flyer.");}
   finally{setSavingDraft(false);}
  }
- function preview(){
+ async function preview(){
   try{
    setBusy(true);setError("");
-   if(!logo)throw Error("Select the school\'s approved logo in Step 1 before creating a flyer.");
+   if(!logo)throw Error("Select the school's approved logo in Step 1 before creating a flyer.");
    if(!actualColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
-   const file=buildSchoolProgramPdf(brochureData());
-   setPreviewBlob(file.output("blob"));
+   const data=brochureData();
+   // The exact illustrated SVG design is rasterized at 216 dpi for a print-safe cover.
+   // The program-details page remains editable and generated from verified inputs.
+   const coverPng=await schoolFlyerPng(data);
+   const original=buildSchoolProgramPdf(data);
+   const document=await PDFDocument.load(original.output("arraybuffer"));
+   document.removePage(0);
+   const page=document.insertPage(0,[612,792]);
+   const art=await document.embedPng(coverPng);
+   page.drawImage(art,{x:0,y:0,width:612,height:792});
+   const bytes=await document.save();
+   setPreviewBlob(new Blob([bytes],{type:"application/pdf"}));
   }catch(e){setPreviewBlob(null);setError(e.message||"Could not preview flyer.");}
   finally{setBusy(false);}
  }
@@ -247,7 +259,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   </div>}
   {brochure&&<h4>Step 4 — Preview the actual PDF, then download</h4>}
   {brochure&&<div className="growth-actions">
-   <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={preview}>{busy?"Rendering flyer…":"Preview finished two-page flyer"}</button>
+   <button type="button" className="sc-btn sc-btn-primary" disabled={busy} onClick={preview}>{busy?"Rendering flyer…":"Preview illustrated two-page flyer"}</button>
    <button type="button" className="sc-btn" disabled={busy||!previewBlob} onClick={download}>Download this PDF</button>
   </div>}
   {brochure&&previewUrl&&<div className="growth-subcard">
