@@ -37,3 +37,15 @@ test("dynamic content is XML escaped and never injected as SVG markup",()=>{
  assert.ok(!svg.includes("<script>"));
  assert.ok(svg.includes("&lt;SCRIPT&gt;BAD&lt;/SCRIPT&gt;"));
 });
+
+test("school headings split grade level onto a second athletic line",()=>{
+ const svg=schoolFlyerSvg(school("Sequim High School","#4c187a","#ffdc24"));
+ assert.match(svg,/>SEQUIM<\\/text>/);
+ assert.match(svg,/>HIGH SCHOOL<\\/text>/);
+});
+test("merchandise presentation accepts five approved product mockups",()=>{
+ const data=school("Greywolf Elementary","#06457b","#f4d51a");
+ data.products=Array.from({length:5},(_,i)=>({...data.products[i%2],name:"Product "+i,mockup:"data:image/png;base64,AAAA"+i}));
+ const svg=schoolFlyerSvg(data);
+ assert.equal((svg.match(/filter="url\\(#productShadow\\)"/g)||[]).length,5);
+});
