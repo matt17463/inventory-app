@@ -82,7 +82,7 @@ export function buildSchoolProgramPdf(d){
  };
  const bar=(x,y,w,h,color)=>{pdf.setFillColor(...color);pdf.rect(x,y,w,h,"F");};
  const mix=(a,b,f)=>a.map((v,i)=>Math.round(v*(1-f)+b[i]*f));
- const accentLight=mix(primary,white,.19),accentShade=mix(primary,[0,0,0],.22);
+ const accentLight=mix(primary,white,.10),accentShade=mix(primary,[0,0,0],.12);
  const backdrop=()=>{
   if(typeof pdf.triangle!=="function")return;
   // Geometric mountain and evergreen silhouettes echo the original school flyers.
@@ -116,7 +116,7 @@ export function buildSchoolProgramPdf(d){
  write("CUSTOM APPAREL  /  PRINTING  /  PERSONALIZATION",119,54,8,contrastText);
  write("YOUR LOCAL SPIRIT WEAR PARTNER",410,66,8,contrastText,true);
  // The school artwork is prominently displayed, never reduced to a document thumbnail.
- pdf.setFillColor(...mix(primary,secondary,.36));
+ pdf.setFillColor(...mix(primary,white,.24));
  if(typeof pdf.ellipse==="function")pdf.ellipse(121,183,104,103,"F");
  if(d.heroArtwork)image(pdf,d.heroArtwork,27,98,188,170);
  wrap(d.organization||"Your School",223,151,353,26,accentShade,1.1,3,true);
@@ -131,18 +131,17 @@ export function buildSchoolProgramPdf(d){
  wrap(title,231,267,335,17,dark(secondary)?white:ink,1.13,2,"display");
  wrap(subtitle,223,316,344,11,contrastText,1.35,3);
  write("A COLLECTION MADE FOR YOUR SCHOOL",32,389,15,primary,true);
- // Use prominent genuine product mockups, placed on a clean stage.
+ // Merchandise showcase inspired by the original full-page flyers:
+ // large overlapping garment art rather than retail shopping cards.
+ if(typeof pdf.ellipse==="function"){
+  pdf.setFillColor(225,233,240);
+  pdf.ellipse(306,623,279,11,"F");
+ }
  featured.forEach((product,i)=>{
-  const count=featured.length;
-  const width=count===1?260:count===2?254:174;
-  const gap=count===1?0:count===2?25:15;
-  const x=count===1?176:count===2?37+i*(width+gap):30+i*(width+gap);
-  pdf.setFillColor(245,247,250);
-  pdf.roundedRect(x,407,width,222,12,12,"F");
-  image(pdf,product.mockup,x+9,415,width-18,153);
-  wrap(product.name,x+12,589,width-24,11,ink,1.14,2,true);
-  const tier=programPriceRows(product)[0];
-  write("RETAIL  "+money(tier.retail),x+12,614,10,primary,true);
+  const n=featured.length;
+  const x=n===1?166:n===2?78+i*266:22+i*187;
+  const width=n===1?280:n===2?240:210;
+  image(pdf,product.mockup,x,408,width,213);
  });
  // Three strong value pillars reflect the original school's promotional flyer.
  const highlights=[
