@@ -1,3 +1,4 @@
+import { technicalGuideMissing } from "./marketingTechnicalGuide.js";
 import { marketingSectionMissing } from "./marketingDocumentModel.js";
 import { escapeGrowthHtml } from "./growthPricing.js";
 import { marketingTemplates } from "./marketingCatalogPolicy.js";
@@ -75,7 +76,7 @@ export function marketingDocumentMissing(doc) {
     ? ["style", "sizes", "productColors", "retailPrice", "productImage", "description"]
     : requirements[doc.template] || defaults[kind] || ["description"];
   const multiple=Array.isArray(doc.productRows) && doc.productRows.length>0;
-  const missing = marketingSectionMissing(doc);
+  const missing = [...marketingSectionMissing(doc), ...technicalGuideMissing(doc)];
   if (!has(doc.organization)) missing.push("client or prospect name");
   fields.forEach(key => {
     if(key==="productImage" && doc.template==="product-catalog" && doc.productRows?.length>1) {

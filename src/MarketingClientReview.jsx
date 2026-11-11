@@ -45,12 +45,21 @@ export default function MarketingClientReview(){
    {(reviewData.content.sections || []).map(({heading,value}) => <section key={heading}>
      <h3>{heading}</h3><p style={{whiteSpace:"pre-wrap"}}>{value}</p>
    </section>)}
+   {reviewData.content.technical && <section>
+     <h3>{reviewData.content.technical.heading}</h3>
+     <p>{reviewData.content.technical.revision}</p>
+     <div style={{overflowX:"auto"}}><table>
+       <thead><tr>{reviewData.content.technical.columns.map(label=><th key={label} scope="col">{label}</th>)}</tr></thead>
+       <tbody>{reviewData.content.technical.rows.map((row,i)=><tr key={i}>
+         {row.map((cell,j)=><td key={j}>{cell}</td>)}</tr>)}</tbody>
+     </table></div>
+   </section>}
    {reviewData.content.aiText && <section><h3>Document copy</h3><p style={{whiteSpace:"pre-wrap"}}>{reviewData.content.aiText}</p></section>}
    {(reviewData.content.product_image_urls||[]).length>0 && <section><h3>Product catalog photographs</h3>
      <div style={{display:"flex",flexWrap:"wrap",gap:14}}>
        {reviewData.content.product_image_urls.map((url,i)=><figure key={i} style={{margin:0,padding:8,border:"1px solid #ccd5d9"}}>
          <img src={url} alt={"Catalog product "+(i+1)} style={{maxWidth:200,maxHeight:190,objectFit:"contain",display:"block"}}/>
-         <figcaption>{reviewData.content.productRows?.[i]?.name||"Product "+(i+1)}</figcaption>
+         <figcaption>{reviewData.content.product_images?.[i]?.label||reviewData.content.productRows?.[i]?.name||"Product "+(i+1)}</figcaption>
        </figure>)}
      </div>
    </section>}
@@ -59,9 +68,11 @@ export default function MarketingClientReview(){
    {(reviewData.content.logo_option_urls||[]).length>0 && <section><h3>Artwork options</h3><div style={{display:"flex",flexWrap:"wrap",gap:16}}>
      {reviewData.content.logo_option_urls.map((url,i)=><figure key={i} style={{margin:0,padding:12,border:"1px solid #ccd5d9",borderRadius:8}}>
        <img src={url} alt={"Artwork option "+(i+1)} style={{maxWidth:230,maxHeight:170,objectFit:"contain",display:"block"}}/>
-       <figcaption><label><input type="radio" name="approved-logo-option" value={String(i+1)}
-         checked={selectedLogoOption===String(i+1)} onChange={()=>setSelectedLogoOption(String(i+1))}/>
-         Select option {i+1}</label></figcaption></figure>)}
+       <figcaption>{reviewData.template_id==="brand-guide" ? (reviewData.content.logo_options?.[i]?.label || "Approved mark") :
+       <label><input type="radio" name="approved-logo-option" value={String(i+1)}
+         checked={selectedLogoOption===String((reviewData.content.logo_options?.[i]?.index ?? i)+1)}
+         onChange={()=>setSelectedLogoOption(String((reviewData.content.logo_options?.[i]?.index ?? i)+1))}/>
+         Select option {i+1}</label>}</figcaption></figure>)}
    </div></section>}
    {(reviewData.content.productRows||[]).length>0 && <section><h3>Proposed products and client pricing</h3><div style={{overflowX:"auto"}}>
      <table style={{borderCollapse:"collapse",width:"100%"}}><thead><tr>{["Product","SKU","Sizes","Colors","Quantity","Client unit price","Line total"].map(h=><th key={h} scope="col" style={{textAlign:"left",padding:8,borderBottom:"1px solid #9ba8ad"}}>{h}</th>)}</tr></thead>

@@ -45,3 +45,36 @@ test('fails closed for a selected product without a matching customer project or
   await assert.rejects(loadMarketingAssortment(database({ ...tables, sc_team_store_products: [{ ...product, woo_product_id: 30 }] }), 'account-a'), /no matching Mockup Studio project/);
   await assert.rejects(loadMarketingAssortment(database({ ...tables, sc_team_store_products: [{ ...product, display_price: null }] }), 'account-a'), /selling price/);
 });
+
+test('uses sellable Woo variations and requires approved mockups in every offered color', async () => {
+  const store = { sku: 'WOO', specifications: [{ label: 'Fabric', value: 'Cotton' }], variants: [{ size: 'XL', color: 'BLUE', sku: 'WOO-B', price: 24 }] };
+  const [product] = await loadMarketingAssortment(database(), 'account-a', async id => {
+    assert.equal(id, 22);
+    return store;
+  });
+  assert.equal(product.sizes, 'XL');
+  assert.equal(product.colors, 'BLUE');
+  assert.deepEqual(product.images, [{ color: 'BLUE', assetId: 'blue' }]);
+  assert.deepEqual(product.variants, store.variants);
+  await assert.rejects(loadMarketingAssortment(database(), 'account-a', async () => ({
+    ...store, variants: [{ color: 'Red' }],
+  })), /missing a selected and approved mockup/);
+});
+
+test('Woo projection ignores private fields and filters unavailable variations', async () => {
+  const { readMarketingStoreProduct } = await import('../../netlify/functions/marketing-store-assortment.js');
+  const product = {
+    id: 22, status: 'publish', type: 'variable', sku: 'TEE', wholesale: 'PRIVATE',
+    price: '26.50', permalink: 'https://shop.example.com/tee',
+    attributes: [{ visible: true, name: 'Fabric', options: ['Cotton'] }, { visible: true, name: 'Supplier cost', options: ['PRIVATE'] }],
+  };
+  const variant = { sku: 'TEE-B', status: 'publish', purchasable: true, stock_status: 'instock', price: '26.50',
+    attributes: [{ name: 'Size', option: 'XL' }, { name: 'Color', option: 'Blue' }], cost: 'PRIVATE' };
+  const request = async path => path.includes('variations') ? [variant, { ...variant, stock_status: 'outofstock' }] : product;
+  assert.deepEqual(await readMarketingStoreProduct(22, request, 'https://shop.example.com'), {
+    sku: 'TEE', specifications: [{ label: 'Fabric', value: 'Cotton' }],
+    livePrice: 26.5, orderUrl: 'https://shop.example.com/tee',
+    variants: [{ size: 'XL', color: 'Blue', sku: 'TEE-B', price: 26.5 }],
+  });
+  await assert.rejects(readMarketingStoreProduct(22, async () => ({ ...product, status: 'draft' }), 'https://shop.example.com'), /published and visible/);
+});

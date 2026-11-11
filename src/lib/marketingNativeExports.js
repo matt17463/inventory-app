@@ -35,7 +35,7 @@ async function prepareImages(model, resolveImage) {
 }
 
 function imageSize(image, thumbnail) {
-  const scale = Math.min((thumbnail ? 120 : 390) / image.width, (thumbnail ? 85 : 255) / image.height);
+  const scale = Math.min((thumbnail ? 120 : 390) / image.width, (thumbnail ? 85 : 225) / image.height);
   return { width: Math.max(1, Math.round(image.width * scale)), height: Math.max(1, Math.round(image.height * scale)) };
 }
 

@@ -8,7 +8,7 @@ async function pages(query) {
   }
 }
 
-export async function loadMarketingAssortment(supabase, accountId) {
+export async function loadMarketingAssortment(supabase, accountId, readStoreProduct) {
   const { data: account, error } = await supabase.from('sc_growth_accounts')
     .select('customer_id').eq('id', accountId).single();
   if (error) throw error;
@@ -70,11 +70,26 @@ export async function loadMarketingAssortment(supabase, accountId) {
         color: variant.color, assetId: variant.assetId,
       });
     }
+    const store = readStoreProduct ? await readStoreProduct(product.woo_product_id) : null;
+    const offered = store?.variants || [];
+    if (store && !offered.length && Number(product.display_price) !== store.livePrice)
+      throw Error('Confirm the USD selling price in the selected store. The published price has changed.');
+    const names = values => [...new Set(values.filter(Boolean))];
+    const offeredColors = names(offered.map(variant => variant.color));
+    const offeredSizes = names(offered.map(variant => variant.size));
+    const normalizeColor = color => String(color || '').trim().toLowerCase();
+    const offeredByColor = new Map(offeredColors.map(color => [normalizeColor(color), color]));
+    const images = offeredColors.length
+      ? [...colorImages.values()].filter(image => offeredByColor.has(normalizeColor(image.color)))
+        .map(image => ({ ...image, color: offeredByColor.get(normalizeColor(image.color)) }))
+      : [...colorImages.values()];
+    if (offeredColors.some(color => !images.some(image => image.color === color)))
+      throw Error('An offered color is missing a selected and approved mockup.');
     result.push({
-      name: product.product_name, sku: distinct('sku'), type: distinct('type'),
-      sizes: distinct('size'), colors: distinct('color'),
-      retailPrice: Number(product.display_price), orderUrl: product.product_permalink,
-      images: [...colorImages.values()],
+      name: product.product_name, sku: store?.sku || distinct('sku'), type: distinct('type'),
+      sizes: offeredSizes.join(', ') || distinct('size'), colors: offeredColors.join(', ') || distinct('color'),
+      retailPrice: Number(product.display_price), orderUrl: store?.orderUrl || product.product_permalink,
+      images, specifications: store?.specifications || [], variants: offered,
     });
   }
   return result.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));

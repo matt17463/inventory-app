@@ -68,3 +68,51 @@ test('approved export includes a native quote table without the draft label', as
     assert.doesNotMatch(output, /FOR INTERNAL REVIEW/);
   }
 });
+
+test('technical guides require image captions and confirmed specifications, and include native tables', async () => {
+  const { parseTechnicalGuideRows, technicalGuideMissing } = await import('../../src/lib/marketingTechnicalGuide.js');
+  for (const [template, row, heading] of [
+    ['brand-guide', 'DTF | Primary | White | 2 in | Keep approved colors', 'Brand application matrix'],
+    ['product-placement-guide', 'Tee S-L | Front | 3 in below collar | 8 by 9 in | 0.25 in tolerance | DTF', 'Placement specifications'],
+  ]) {
+    assert.throws(() => parseTechnicalGuideRows(template, 'Incomplete |'));
+    const source = {
+      template, contentVersion: 2, technicalRows: parseTechnicalGuideRows(template, row),
+      technicalRevision: 'v2 - Sample approval', technicalImageLabels: ['Approved image'],
+      ...(template === 'brand-guide' ? { logoOptions: ['logo'] } : { productImages: ['view'] }),
+    };
+    assert.deepEqual(technicalGuideMissing(source), []);
+    assert.deepEqual(technicalGuideMissing({ ...source, technicalImageLabels: [] }), ['a caption for each approved image']);
+    const model = marketingDocumentModel(source);
+    assert(model.blocks.some(block => block.type === 'image' && block.label === 'Approved image'));
+    assert(model.blocks.some(block => block.type === 'table'));
+    const withoutImages = { ...model, blocks: model.blocks.filter(block => block.type !== 'image') };
+    const [docx, pdf] = await Promise.all(['docx', 'pdf'].map(format => exportMarketingDocument(withoutImages, format)));
+    const xml = new AdmZip(Buffer.from(await docx.arrayBuffer())).readAsText('word/document.xml');
+    assert.match(xml, /<w:tbl>/);
+    for (const output of [xml, pdfText(Buffer.from(await pdf.arrayBuffer()))]) {
+      assert.match(output, new RegExp(heading));
+      assert.match(output, /Sample approval/);
+    }
+  }
+});
+
+test('shared client review assets require matching customer, approval and project storage path', async () => {
+  const { signedSharedReviewAsset } = await import('../../netlify/functions/marketing-review-link.js');
+  const assetId = '10000000-0000-4000-8000-000000000001';
+  const projectId = '10000000-0000-4000-8000-000000000002';
+  const ownerId = '10000000-0000-4000-8000-000000000003';
+  const reference = { source: 'mockup_outputs', asset_id: assetId };
+  let asset = { project_id: projectId, approval_status: 'customer_approved', storage_path: ownerId + '/' + projectId + '/outputs/view.png' };
+  const db = { from(table) { return { select() { return this; }, eq() { return this; }, maybeSingle() {
+    return { data: table === 'mockup_projects' ? { customer_id_text: 'customer-a' } : asset };
+  } }; } };
+  const sign = async () => 'private-signed-url';
+  assert.equal(await signedSharedReviewAsset(db, reference, 'customer-a', sign), 'private-signed-url');
+  assert.equal(await signedSharedReviewAsset(db, reference, 'customer-b', sign), null);
+  assert.equal(await signedSharedReviewAsset(db, { ...reference, source: 'mockup_blank_assets' }, 'customer-a', sign), null);
+  asset = { ...asset, approval_status: 'pending' };
+  assert.equal(await signedSharedReviewAsset(db, reference, 'customer-a', sign), null);
+  asset = { ...asset, approval_status: 'customer_approved', storage_path: ownerId + '/' + assetId + '/outputs/view.png' };
+  assert.equal(await signedSharedReviewAsset(db, reference, 'customer-a', sign), null);
+});

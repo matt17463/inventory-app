@@ -1,3 +1,4 @@
+import { technicalGuideFields } from './marketingTechnicalGuide.js';
 import { safeGrowthUrl } from './growthPricing.js';
 import { marketingDocumentBlueprint } from './marketingDocumentBlueprints.js';
 import { marketingTemplates } from './marketingCatalogPolicy.js';
@@ -36,6 +37,20 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
     const value = text(document.sectionContent?.[label]);
     if (value) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value });
   }
+  const technical = technicalGuideFields[document.template];
+  if (technical && document.technicalRevision) blocks.push(field('Revision and approval', document.technicalRevision));
+  if (technical && document.technicalRows?.length) {
+    blocks.push({ type: 'heading', value: technical.heading },
+      { type: 'table', columns: technical.columns, rows: document.technicalRows });
+  }
+  const guideImages = document.template === 'brand-guide' ? document.logoOptions :
+    document.template === 'product-placement-guide' ? document.productImages : null;
+  if (guideImages?.length) {
+    blocks.push({ type: 'heading', value: technical.imageHeading });
+    for (const [index, source] of guideImages.entries()) {
+      if (source) blocks.push(image(source, text(document.technicalImageLabels?.[index]) || 'Reference ' + (index + 1)));
+    }
+  }
   const rows = document.productRows?.length ? document.productRows : document.style ? [{
     name: document.style, sku: document.sku, sizes: document.sizes, colors: document.productColors,
     retailPrice: document.retailPrice, quantity: document.quantity,
@@ -52,7 +67,7 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
           validQuantity && unitPrice ? price(quantity * Number(row.retailPrice)) : ''];
       }),
     });
-  } else if (rows.length) {
+  } else if (rows.length && !technical) {
     blocks.push({ type: 'heading', value: 'Products' });
     let productType;
     rows.forEach((row, index) => {
@@ -61,7 +76,7 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
         blocks.push({ type: 'heading', value: productType });
       }
       blocks.push({ type: 'subheading', value: text(row.name) });
-      const source = document.productImages?.[row.gallery?.[0]?.index ?? index] || (!index && document.productImage);
+      const source = (!guideImages?.length && document.productImages?.[row.gallery?.[0]?.index ?? index]) || (!index && document.productImage);
       if (source) blocks.push(image(source, text(row.name)));
       for (const variant of (row.gallery || []).slice(1)) {
         const source = document.productImages?.[variant.index];
@@ -69,13 +84,27 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
       }
       for (const [label, value] of [
         ['Style code', row.sku], ['Sizes', row.sizes], ['Colors', row.colors],
-        ['Customer unit price', price(row.retailPrice)], ['Quantity', Number.isSafeInteger(Number(row.quantity)) && Number(row.quantity) > 0 ? String(row.quantity) : ''],
+        ['Customer unit price', row.variants?.length ? '' : price(row.retailPrice)], ['Quantity', Number.isSafeInteger(Number(row.quantity)) && Number(row.quantity) > 0 ? String(row.quantity) : ''],
       ]) if (text(value)) blocks.push(field(label, text(value)));
+      for (const specification of (row.specifications || [])) {
+        if (text(specification.label) && text(specification.value)) blocks.push(field(specification.label, specification.value));
+      }
       const orderUrl = safeGrowthUrl(row.orderUrl);
       if (orderUrl?.startsWith('https://')) blocks.push({ type: 'link', label: 'Order ' + text(row.name), url: orderUrl });
+      if (row.variants?.length) {
+        const combinations = new Map();
+        for (const variant of row.variants) {
+          const values = [text(variant.size), text(variant.color), text(variant.sku), price(variant.price)];
+          combinations.set(JSON.stringify(values), values);
+        }
+        blocks.push({ type: 'table', columns: ['Size', 'Color', 'Variant SKU', 'Customer price'], rows: [...combinations.values()] });
+      }
+
     });
-  } else if (document.productImage) blocks.push(image(document.productImage, 'Product image'));
-  for (const [index, source] of (document.logoOptions || []).entries()) blocks.push(image(source, 'Logo option ' + (index + 1), true));
+  } else if (document.productImage && !guideImages?.length) {
+    blocks.push(image(document.productImage, 'Product image'));
+  }
+  for (const [index, source] of (document.template === "brand-guide" ? [] : document.logoOptions || []).entries()) blocks.push(image(source, 'Logo option ' + (index + 1), true));
   for (const swatch of (document.productSwatches || [])) {
     if (hex(swatch.hex)) blocks.push({ type: 'swatch', label: text(swatch.name) + ' · ' + swatch.hex, color: swatch.hex });
   }

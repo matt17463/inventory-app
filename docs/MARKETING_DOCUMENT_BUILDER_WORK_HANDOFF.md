@@ -99,10 +99,14 @@ Select **Generate draft** and check the required-content list. **Download Word d
 
 ### Import troubleshooting
 
-The CRM account must link to a customer record. A live store campaign must link to that customer's Mockup Studio project. Each selected store product must have a WooCommerce product ID linked to a project for the same customer, a confirmed USD selling price, and at least one selected and approved mockup. The import stops if a selected product fails those checks. Review the item's sizes and colors against the store before distribution. The imported size and color fields currently reflect linked mockup blank metadata.
+The CRM account must link to a customer record. A live store campaign must link to that customer's Mockup Studio project. Each selected store product must have a WooCommerce product ID linked to a project for the same customer, a confirmed USD selling price, and at least one selected and approved mockup. The import stops if a selected product fails those checks. Review the item's sizes and colors against the store before distribution. The import verifies the live WooCommerce listing, captures purchasable variants and their customer prices, and matches offered colors to selected and approved mockups. Simple products use verified published pricing and linked blank metadata for size and color. The import includes visible fabric, fit, care, decoration, material and size-chart attributes when the listing provides them.
+
+### Brand and placement guides
+
+Enter the application or placement rows in the order shown, with one row per line. Upload approved examples and enter one caption per image in the same order. Record the revision, date and approving party. For placement, enter the garment and size range, placement, measurement origin and offset, finished artwork dimensions, allowed range or tolerance, and decoration method. For brand use, enter the mark, background, minimum size and applicable restrictions for each verified production method. Confirm any Pantone, CMYK or thread values against the client's source. Both Word and PDF include the specification table and captioned images.
 
 ### Release verification still required
 
 - Verify an isolated storefront with multiple products, decorated color variants and two distinct client accounts through import, saved draft, manager approval, client review and both downloads. Production had no selected storefront product records or customer-linked Mockup Studio projects during the read-only inspection.
-- Finish the specialized brand and placement layouts and verify complete store variant, product specification and image coverage against the authoritative records.
+- Verify store variation, product specification and approved image coverage with a representative live or staging assortment. Verify that shared asset storage paths and R2 access work through a private review and approved export.
 - Verify the new commit's required checks and the production-context Netlify release gate before merging. After release, check the production deploy record and authenticated workflow.

@@ -8,6 +8,7 @@ import MarketingProgramDesigner from "./MarketingProgramDesigner";
 import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingProductRows, renderMarketingDocumentHtml } from "./lib/marketingDocumentContent";
+import { parseTechnicalGuideRows, technicalGuideFields } from "./lib/marketingTechnicalGuide";
 import { marketingDocumentModel } from "./lib/marketingDocumentModel";
 import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
@@ -39,6 +40,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [sourceUrl, setSourceUrl] = useState("");
   const [sizes, setSizes] = useState("");
   const [productColors, setProductColors] = useState("");
+  const [technicalRows, setTechnicalRows] = useState("");
+  const [technicalLabels, setTechnicalLabels] = useState("");
+  const [technicalRevision, setTechnicalRevision] = useState("");
   const [sectionContent, setSectionContent] = useState({});
   const [assortment, setAssortment] = useState([]);
   const [assortmentProduct, setAssortmentProduct] = useState("");
@@ -61,6 +65,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [productSwatchesText,setProductSwatchesText] = useState("");
   const selectedTemplate=marketingTemplates.find(t=>t.id===template);
   const blueprint=marketingDocumentBlueprint(template);
+  const technical = technicalGuideFields[template];
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   useEffect(() => {
@@ -212,8 +217,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     try {
       setImporting(true);
       setError("");
-      const { loadMarketingAssortment } = await import("./lib/marketingStoreAssortment");
-      const products = await loadMarketingAssortment(supabase, accountId);
+      const response = await authenticatedFunctionFetch("/.netlify/functions/marketing-store-assortment?account_id=" + encodeURIComponent(accountId));
+      const { products, message } = await response.json();
+      if (!response.ok) throw Error(message || "Client assortment could not be verified.");
       if (!products.length) throw Error("No live store assortment is linked to this customer's Mockup Studio projects.");
       setAssortment(products);
       setAssortmentProduct("");
@@ -254,7 +260,13 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
       }
       setGuide({ template, segment, organization: organization.trim(), description, logo,
-        contentVersion: 2, sectionContent, confirmedColors: parsedColors.filter(color => /^#[0-9a-f]{6}$/i.test(color)),
+        contentVersion: 2, sectionContent,
+        ...(technical ? {
+          technicalRows: parseTechnicalGuideRows(template, technicalRows),
+          technicalImageLabels: technicalLabels.split(/\r?\n/).map(label => label.trim()).filter(Boolean),
+          technicalRevision: technicalRevision.trim(),
+        } : {}),
+        confirmedColors: parsedColors.filter(color => /^#[0-9a-f]{6}$/i.test(color)),
         branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
         terms, cta, productImage, productImages: gallery, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
       setError("");
@@ -418,6 +430,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     setGuide(null);
     setAiText("");
     setSectionContent({});
+    setTechnicalRows("");
+    setTechnicalLabels("");
+    setTechnicalRevision("");
     setAssortment([]);
     setAssortmentProduct("");
     setLogo("");
@@ -459,7 +474,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     <h2>Marketing Document Builder</h2>
     <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);setAiText("");setSectionContent({});}}>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
@@ -484,6 +499,27 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         </label>)}
       </div>
       <small>Content checklist is guidance for preparing a complete document. Confirm client-specific facts, artwork rights, prices and production specifications before distribution.</small>
+    </div>}
+    {technical && <div className="growth-subcard">
+      <h3>{technical.heading}</h3>
+      <p>{technical.help}</p>
+      <label className="growth-field">
+        <span>{technical.columns.join(" | ")}</span>
+        <textarea rows="5" value={technicalRows} onChange={event => { setTechnicalRows(event.target.value); setGuide(null); }} />
+      </label>
+      <label className="growth-field">
+        <span>Revision, date and approving party</span>
+        <input maxLength={200} value={technicalRevision} onChange={event => { setTechnicalRevision(event.target.value); setGuide(null); }} />
+      </label>
+      <label className="growth-field">
+        <span>{technical.imageHeading}</span>
+        <input type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={event =>
+          template === "brand-guide" ? uploadLogoOptions(event.target.files) : uploadProductImages(event.target.files)} />
+      </label>
+      <label className="growth-field">
+        <span>Image captions in upload order, one per line</span>
+        <textarea rows="3" value={technicalLabels} onChange={event => { setTechnicalLabels(event.target.value); setGuide(null); }} />
+      </label>
     </div>}
     <ClientMarketingStarterKit key={accountId} accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{if (activeAccount.current !== accountId) return;setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{if (activeAccount.current !== accountId) return;setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
     {["product-catalog", "product-description"].includes(template) && accountId && <div className="growth-subcard">
