@@ -40,8 +40,8 @@ test("dynamic content is XML escaped and never injected as SVG markup",()=>{
 
 test("school headings split grade level onto a second athletic line",()=>{
  const svg=schoolFlyerSvg(school("Sequim High School","#4c187a","#ffdc24"));
- assert.match(svg,/>SEQUIM<\\/text>/);
- assert.match(svg,/>HIGH SCHOOL<\\/text>/);
+ assert.ok(svg.includes(">SEQUIM</text>"));
+ assert.ok(svg.includes(">HIGH SCHOOL</text>"));
 });
 test("merchandise presentation accepts five approved product mockups",()=>{
  const data=school("Greywolf Elementary","#06457b","#f4d51a");
