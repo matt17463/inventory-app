@@ -81,7 +81,7 @@ function word(model, images) {
         heading, keepNext: Boolean(heading), spacing: { after: 120 },
         children: [
           ...(block.type === 'swatch' ? [new TextRun({ text: '    ', shading: { fill: block.color.slice(1) } }), new TextRun('  ')] : []),
-          new TextRun({ text: line, ...(heading ? { color: model.accent.slice(1) } : {}) }),
+          new TextRun({ text: line, ...(heading ? { color: (model.headingColor || '#24364A').slice(1) } : {}) }),
         ],
       })));
     }
@@ -166,7 +166,7 @@ function pdf(model, images) {
         }
       }
       write(value(block), block.type === 'heading' ? 15 : block.type === 'subheading' ? 12 : 10.5,
-        { bold: heading, keepNext: heading });
+        { bold: heading, keepNext: heading, ...(heading ? { color: model.headingColor } : {}) });
     }
   }
   for (let page = 1; page <= document.getNumberOfPages(); page++) {

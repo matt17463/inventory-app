@@ -1,22 +1,13 @@
 import { useEffect, useState } from "react";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 
-const endpoint = "/.netlify/functions/marketing-artwork-asset";
-const validTypes = ["image/png", "image/jpeg", "image/webp"];
+import { marketingArtworkEndpoint, marketingImageTypes, marketingLogoImage } from "./lib/marketingArtwork";
 const readBase64 = file => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onerror = () => reject(Error("Unable to read logo image."));
   reader.onload = () => resolve(String(reader.result).split(",")[1]);
   reader.readAsDataURL(file);
 });
-
-export async function marketingLogoRequest(accountId, key) {
-  const url = endpoint + "?account_id=" + encodeURIComponent(accountId) + "&key=" + encodeURIComponent(key);
-  const response = await authenticatedFunctionFetch(url);
-  const result = await response.json();
-  if (!response.ok) throw Error(result.message || "Marketing logo unavailable.");
-  return result.url;
-}
 
 export default function MarketingClientLogo({ accountId, value, onChange }) {
   const [preview, setPreview] = useState("");
@@ -25,7 +16,7 @@ export default function MarketingClientLogo({ accountId, value, onChange }) {
   useEffect(() => {
     let active = true;
     setPreview("");
-    if (accountId && value) marketingLogoRequest(accountId, value)
+    if (accountId && value) marketingLogoImage(accountId, value)
       .then(url => { if (active) setPreview(url); })
       .catch(() => { if (active) setError("Saved marketing logo preview unavailable."); });
     return () => { active = false; };
@@ -35,21 +26,21 @@ export default function MarketingClientLogo({ accountId, value, onChange }) {
     event.target.value = "";
     if (!file) return;
     setError("");
-    if (!validTypes.includes(file.type) || file.size > 2_500_000 || !file.size) {
+    if (!marketingImageTypes.includes(file.type) || file.size > 2_500_000 || !file.size) {
       setError("Choose a PNG, JPEG, or WebP under 2.5 MB.");
       return;
     }
     setUploading(true);
     try {
       const base64 = await readBase64(file);
-      const response = await authenticatedFunctionFetch(endpoint, {
+      const response = await authenticatedFunctionFetch(marketingArtworkEndpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_id: accountId, mime_type: file.type, base64 })
       });
       const result = await response.json();
       if (!response.ok || !result.asset?.key) throw Error(result.message || "Marketing logo upload failed.");
       onChange(result.asset.key);
-      setPreview(await marketingLogoRequest(accountId, result.asset.key));
+
     } catch (e) { setError(e.message || "Unable to upload marketing logo."); }
     finally { setUploading(false); }
   }

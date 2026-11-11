@@ -24,7 +24,19 @@ export async function handler(event){
    const key=String(body.key||"");
    if(!/^marketing\/artwork\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(key)||!key.startsWith("marketing/artwork/"+accountId+"/"))
     return response(400,{message:"Invalid artwork reference."},event);
-   const url=await getSignedUrl(r2Client(),new GetObjectCommand({Bucket:r2BucketName(),Key:key}),{expiresIn:300});
+   const command=new GetObjectCommand({Bucket:r2BucketName(),Key:key});
+   if(body.inline==="1"){
+    const object=await r2Client().send(command);
+    const mime=Object.keys(mimeExt).find(type=>key.endsWith("."+mimeExt[type]));
+    if(!object.Body || !object.ContentLength || object.ContentLength>2_500_000 || (object.ContentType && object.ContentType!==mime))
+     return response(422,{message:"Stored artwork is not a supported raster image."},event);
+    const bytes=await object.Body.transformToByteArray();
+    if(bytes.length!==object.ContentLength)return response(422,{message:"Stored artwork is incomplete."},event);
+    return {statusCode:200,isBase64Encoded:true,body:Buffer.from(bytes).toString("base64"),headers:{
+     ...response(200,{},event).headers,"Content-Type":mime,"X-Content-Type-Options":"nosniff"
+    }};
+   }
+   const url=await getSignedUrl(r2Client(),command,{expiresIn:300});
    return response(200,{url,expires_in:300},event);
   }
   const mime=String(body.mime_type||"");
