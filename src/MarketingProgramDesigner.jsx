@@ -58,6 +58,8 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
  function preview(){
   try{
    setBusy(true);setError("");
+   if(!logo)throw Error("Select the school\'s approved logo in Step 1 before creating a flyer.");
+   if(!confirmedColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
    const file=buildSchoolProgramPdf(brochureData());
    setPreviewBlob(file.output("blob"));
   }catch(e){setPreviewBlob(null);setError(e.message||"Could not preview flyer.");}
