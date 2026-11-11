@@ -11,6 +11,7 @@ import { marketingDocumentMissing, parseMarketingColorSwatches, parseMarketingPr
 import { parseTechnicalGuideRows, technicalGuideFields } from "./lib/marketingTechnicalGuide";
 import { marketingDocumentModel } from "./lib/marketingDocumentModel";
 import { marketingDocumentBlueprint } from "./lib/marketingDocumentBlueprints";
+import { marketingDesigns, marketingAudiences, marketingTheme } from "./lib/marketingDesignSystem";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
 import { marketingImageDataUrl, marketingLogoBlob, marketingLogoImage, marketingSharedImageUrl } from "./lib/marketingArtwork";
 import MarketingAssetImage from "./MarketingAssetImage";
@@ -34,6 +35,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [reviewHistory,setReviewHistory]=useState([]);
   const [historyDocument,setHistoryDocument]=useState(null);
   const [segment, setSegment] = useState("team");
+  const [design, setDesign] = useState("");
+  const [audience, setAudience] = useState("general");
+  const [showPreview, setShowPreview] = useState(false);
   const [logo, setLogo] = useState("");
   const [accountMarketingLogo, setAccountMarketingLogo] = useState(null);
   const [sharedAssetReferences, setSharedAssetReferences] = useState({});
@@ -57,7 +61,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [assortmentProduct, setAssortmentProduct] = useState("");
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [guide, setGuide] = useState(null);
+  const [generatedGuide, setGuide] = useState(null);
   const [error, setError] = useState("");
   const [aiBusy,setAiBusy] = useState(false);
   const [aiText,setAiText] = useState("");
@@ -240,7 +244,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         kind: selectedTemplate?.kind || "outreach",
         organization: organization.trim() || "Prospective client",
         segment, brief:description.trim(),tone:aiTone,
-        context:{style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
+        context:{audience,style,sku,sizes,productColors,retailPrice,quantity,placement,terms,cta,products:productRowsText.slice(0,1100)}
       });
       if (activeAccount.current !== accountId) return;
       setAiText(result);setGuide(null);
@@ -265,44 +269,52 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setImporting(false);
     }
   }
+  function createGuide() {
+    const parsedColors = colors.split(",").map(s => s.trim()).filter(Boolean);
+    let productRows = reopenedRows || parseMarketingProductRows(productRowsText);
+    let gallery = productImages;
+    const imported = template === "product-catalog" ? assortment :
+      template === "product-description" && assortmentProduct !== "" ? [assortment[Number(assortmentProduct)]] : [];
+    if (imported.length) {
+      gallery = [];
+      productRows = imported.map(({ images, ...product }) => ({
+        ...product,
+        gallery: images.map(({ color, assetId }) => {
+          const index = gallery.length;
+          gallery.push({ source: "mockup_outputs", asset_id: assetId });
+          return { index, color };
+        }),
+      }));
+    }
+    const productSwatches=parseMarketingColorSwatches(productSwatchesText);
+    const branding = suggestedBrandGuide(segment, parsedColors);
+    let offer = null;
+    if (template === "product-guide" && (unitCost.trim() || observedAt || sourceUrl)) {
+      if (!sku.trim() || !unitCost.trim() || !observedAt)
+        throw Error("Provide a verified supplier SKU, observed price and price date, or leave the product details blank.");
+      offer = normalizeSupplierOffer({ supplier, sku: sku.trim(), unit_cost: unitCost,
+        observed_at: observedAt, source_url: sourceUrl || undefined });
+      if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
+    }
+    return { template, segment, design, audience, organization: organization.trim(), description, logo,
+      contentVersion: 2, sectionContent,
+      ...(technical ? {
+        technicalRows: parseTechnicalGuideRows(template, technicalRows),
+        technicalImageLabels: technicalLabels.split(/\r?\n/).map(label => label.trim()).filter(Boolean),
+        technicalRevision: technicalRevision.trim(),
+      } : {}),
+      confirmedColors: parsedColors.filter(color => /^#[0-9a-f]{6}$/i.test(color)),
+      branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
+      terms, cta, productImage, productImages: gallery, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() };
+  }
+  let guide = generatedGuide;
+  let previewError = '';
+  if (showPreview && !guide) {
+    try { guide = createGuide(); } catch (error) { previewError = error.message; }
+  }
   function build() {
     try {
-      const parsedColors = colors.split(",").map(s => s.trim()).filter(Boolean);
-      let productRows = reopenedRows || parseMarketingProductRows(productRowsText);
-      let gallery = productImages;
-      const imported = template === "product-catalog" ? assortment :
-        template === "product-description" && assortmentProduct !== "" ? [assortment[Number(assortmentProduct)]] : [];
-      if (imported.length) {
-        gallery = [];
-        productRows = imported.map(({ images, ...product }) => ({
-          ...product,
-          gallery: images.map(({ color, assetId }) => {
-            const index = gallery.length;
-            gallery.push({ source: "mockup_outputs", asset_id: assetId });
-            return { index, color };
-          }),
-        }));
-      }
-      const productSwatches=parseMarketingColorSwatches(productSwatchesText);
-      const branding = suggestedBrandGuide(segment, parsedColors);
-      let offer = null;
-      if (template === "product-guide" && (unitCost.trim() || observedAt || sourceUrl)) {
-        if (!sku.trim() || !unitCost.trim() || !observedAt)
-          throw Error("Provide a verified supplier SKU, observed price and price date, or leave the product details blank.");
-        offer = normalizeSupplierOffer({ supplier, sku: sku.trim(), unit_cost: unitCost,
-          observed_at: observedAt, source_url: sourceUrl || undefined });
-        if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
-      }
-      setGuide({ template, segment, organization: organization.trim(), description, logo,
-        contentVersion: 2, sectionContent,
-        ...(technical ? {
-          technicalRows: parseTechnicalGuideRows(template, technicalRows),
-          technicalImageLabels: technicalLabels.split(/\r?\n/).map(label => label.trim()).filter(Boolean),
-          technicalRevision: technicalRevision.trim(),
-        } : {}),
-        confirmedColors: parsedColors.filter(color => /^#[0-9a-f]{6}$/i.test(color)),
-        branding, offer, style, sku, sizes, productColors, retailPrice, quantity, placement,
-        terms, cta, productImage, productImages: gallery, logoOptions, productRows, productSwatches, aiText, generated_at: new Date().toISOString() });
+      setGuide(createGuide());
       setError("");
     } catch (e) { setError(e.message); }
   }
@@ -457,6 +469,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setTemplate(data.template_id);
       setOrganization(restored.organization || "");
       setSegment(restored.segment || "team");
+      setDesign(restored.design || "");
+      setAudience(restored.audience || "general");
       setColors((restored.confirmedColors || restored.branding?.colors || []).join(", "));
       setDescription(restored.description || "");
       setStyle(restored.style || "");
@@ -535,6 +549,9 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     logoOverride.current = false;
     setPaletteBusy(false);
     setAccountId(id);
+    setShowPreview(false);
+    setDesign("");
+    setAudience("general");
     setSavedDrafts([]);
     setEditingDraft(null);
     setRevisionOf(null);
@@ -592,13 +609,15 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     <h2>Marketing Document Builder</h2>
     <p>Choose a starting template, add the client's details and generate a printable draft. AI-assisted copy is available for all templates when a server-side provider is configured. Uploaded artwork stays out of AI requests. Preview and resolve required fields before client approval.</p>
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
       <label className="growth-field"><span>Save under client</span><select value={accountId} disabled={saving || exporting || importing} onChange={event => selectAccount(event.target.value)}><option value="">Select existing client</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.organization}</option>)}</select></label>
       <label className="growth-field"><span>Client name</span><input value={organization} onChange={e=>{setOrganization(e.target.value);setGuide(null);setAiText("");}} list="marketing-studio-clients"/><datalist id="marketing-studio-clients">{organizations.map(o=><option key={o.id} value={o.organization}/>)}</datalist></label>
-      <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
+      <label className="growth-field"><span>Client type</span><select value={segment} onChange={e=>{setSegment(e.target.value);setAiText("");setGuide(null);}}>{["team","school","business","event","nonprofit"].map(t=><option key={t}>{t}</option>)}</select></label>
+      <label className="growth-field"><span>Audience</span><select value={audience} onChange={e=>{setAudience(e.target.value);setGuide(null);}}>{Object.entries(marketingAudiences).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <label className="growth-field"><span>Document design</span><select value={design} onChange={e=>{setDesign(e.target.value);setGuide(null);}}><option value="">Automatic for client type</option>{Object.entries(marketingDesigns).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></label>
       <label className="growth-field"><span>Upload client artwork</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo}/></label>
       {logo && <img src={logo} alt="Selected client marketing artwork" style={{maxWidth:180,maxHeight:110,objectFit:"contain"}} />}
       <label className="growth-field"><span>Verified brand colors (HEX values separated by commas)</span><input value={colors} onChange={e=>{setColors(e.target.value);setGuide(null);}} placeholder="#008000, #000000"/>
@@ -618,9 +637,10 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
           <button type="button" className="sc-btn" onClick={()=>{setColors([...new Set([...colors.split(",").map(color => color.trim().toUpperCase()).filter(Boolean), ...paletteSuggestions])].join(", "));setGuide(null);}}>Use these colors after checking against the client's approved brand guide</button>
         </div>}
       </label>
+      <p style={{margin:0,alignSelf:"center"}}><strong>Theme preview:</strong> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).primary}}/> <span style={{display:"inline-block",width:22,height:22,verticalAlign:"middle",background:marketingTheme({design,segment,confirmedColors:colors.split(",").map(c=>c.trim())}).accent}}/> Suggested colors require client confirmation.</p>
       <label className="growth-field"><span>Client notes or product purpose</span><textarea value={description} onChange={e=>setDescription(e.target.value)}/></label>
     </div>
-    {blueprint && <div className="growth-subcard" aria-label="Document purpose and content checklist">
+    {blueprint && <details className="growth-subcard" aria-label="Document purpose and content checklist"><summary><strong>Document content</strong> · {blueprint.sections.filter(section => sectionContent[section]?.trim()).length}/{blueprint.sections.length} sections filled</summary>
       <h3>{blueprint.stage} · {selectedTemplate?.label}</h3>
       <p><strong>Purpose:</strong> {blueprint.purpose}</p>
       <div className="growth-grid">
@@ -634,8 +654,8 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         </label>)}
       </div>
       <small>Content checklist is guidance for preparing a complete document. Confirm client-specific facts, artwork rights, prices and production specifications before distribution.</small>
-    </div>}
-    {technical && <div className="growth-subcard">
+    </details>}
+    {technical && <details className="growth-subcard"><summary><strong>Technical specifications and approvals</strong></summary>
       <h3>{technical.heading}</h3>
       <p>{technical.help}</p>
       <label className="growth-field">
@@ -655,8 +675,10 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         <span>Image captions in upload order, one per line</span>
         <textarea rows="3" value={technicalLabels} onChange={event => { setTechnicalLabels(event.target.value); setGuide(null); }} />
       </label>
-    </div>}
+    </details>}
+    <details className="growth-subcard"><summary><strong>Client artwork and reusable assets</strong></summary>
     <ClientMarketingStarterKit key={accountId} accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{if (activeAccount.current !== accountId) return;selectAlternateLogo(image,reference);}} onSelectProduct={(image,reference)=>{if (activeAccount.current !== accountId) return;setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
+    </details>
     {["product-catalog", "product-description"].includes(template) && accountId && <div className="growth-subcard">
       <button type="button" className="sc-btn" disabled={importing || saving} onClick={importAssortment}>
         {importing ? "Importing…" : "Import client store products and approved mockups"}
@@ -684,6 +706,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     {["brochure-schools","product-catalog"].includes(template) &&
       <MarketingProgramDesigner key={template+"-"+accountId} mode={template} organization={organization} schoolLogo={logo} selectedProductImage={productImage}/>}
     <>
+    <details className="growth-subcard"><summary><strong>Products, pricing and optional settings</strong></summary>
     {needsProductFields && template!=="product-guide" && <div className="growth-grid">
       <label className="growth-field"><span>Client-facing product / style name</span><input value={style} onChange={e=>{setStyle(e.target.value);setGuide(null);}}/></label>
       <label className="growth-field"><span>Verified product SKU (optional)</span><input value={sku} onChange={e=>setSku(e.target.value)}/></label>
@@ -714,26 +737,29 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       </label>}
       <label className="growth-field"><span>AI copy tone</span><select value={aiTone} onChange={e=>setAiTone(e.target.value)}>{["professional","friendly","persuasive","concise","warm","energetic"].map(t=><option key={t}>{t}</option>)}</select></label>
     </div>
+    </details>
         <div className="growth-actions">
       <button type="button" className="sc-btn" disabled={aiBusy} onClick={assistWithAI}>{aiBusy?"Generating…":"AI-assisted copy"}</button>
-      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{guide && <>
+      <button className="sc-btn sc-btn-primary" onClick={build}>Generate draft</button>{(guide || showPreview) && <button type="button" className="sc-btn" onClick={()=>setShowPreview(value=>!value)}>{showPreview?"Hide page preview":"Preview letter-size pages"}</button>}{guide && <>
       <button className="sc-btn" onClick={printGuide}>Download printable HTML</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx")}>Download Word draft</button>
       <button className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf")}>Download PDF draft</button>
     </>}{guide && <button className="sc-btn" disabled={saving || !accountId} onClick={saveDraft}>{saving?"Saving…":editingDraft?"Save draft changes":"Save client draft"}</button>}</div>
-    {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>setDescription(aiText)}>Use as document description</button></div>}
+    {aiText && <div className="growth-subcard"><h3>AI copy — review before sharing</h3><textarea aria-label="Edit AI generated copy" rows="14" style={{width:"100%"}} value={aiText} onChange={e=>setAiText(e.target.value)}/><button type="button" className="sc-btn" onClick={()=>{setDescription(aiText);setGuide(null);}}>Use as document description</button></div>}
     </>
     {reviewLink && <p role="status">Review URL: <input aria-label="Private client review URL" readOnly value={reviewLink} onFocus={e=>e.target.select()}/></p>}
     {error && <p role="alert">{error}</p>}{saveStatus && <p role="status">{saveStatus}</p>}
     {template==="store-preview" && <MarketingStorePreview organization={organization} logo={logo} colors={colors.split(",").map(x=>x.trim())} products={style?[{name:style,colors:productColors.split(",").map(x=>x.trim()).filter(Boolean)}]:[]}/>}
     {manager && reviewHistory.length>0 && <div className="growth-subcard"><h3>Client review history</h3>{reviewHistory.map(r=><p key={r.id}>{r.decision||"Awaiting response"} · {r.revoked_at?"Revoked":new Date(r.expires_at)<new Date()?"Expired":"Link active"} {r.feedback&&" — "+r.feedback} {!r.decision&&!r.revoked_at&&<button className="sc-btn" onClick={()=>revokeReviewLink(r.id,historyDocument)}>Revoke link</button>}</p>)}</div>}
-    {accountId && <div className="growth-subcard"><h3>Saved client documents</h3>{savedDrafts.length ?
+    {accountId && <details className="growth-subcard"><summary><strong>Saved client documents</strong> · {savedDrafts.length} recent</summary>{savedDrafts.length ?
       <ul>{savedDrafts.map(d=><li key={d.id}>{d.title} · {d.status} · Version {d.version} · {new Date(d.created_at).toLocaleDateString()} {d.content?.marketing_artwork?.key&&<button type="button" className="sc-btn" onClick={()=>openSavedArtwork(d)}>View stored logo</button>} {d.status==="draft" && <button type="button" className="sc-btn" disabled={saving || importing || exporting} onClick={()=>reopenDraft(d)}>Reopen draft</button>} {manager && d.status==="draft" && <button type="button" className="sc-btn" disabled={saving} onClick={()=>approveDocument(d)}>Approve</button>}{d.status === "approved" && <button type="button" className="sc-btn" disabled={saving || importing || exporting}
       onClick={()=>reopenDraft(d,true)}>Start revision</button>}{d.status === "approved" && d.content?.contentVersion === 2 && <>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("docx", d)}>Download approved Word</button>
       <button type="button" className="sc-btn" disabled={exporting} onClick={() => downloadNative("pdf", d)}>Download approved PDF</button>
     </>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>createReviewLink(d)}>Create client review link</button>}{manager && d.status==="approved" && <button type="button" className="sc-btn" onClick={()=>loadReviewHistory(d)}>View client feedback</button>}</li>)}</ul> :
-      <p>No saved documents found for this client.</p>}</div>}
+      <p>No saved documents found for this client.</p>}</details>}
+    {showPreview && previewError && <p role="alert">{previewError}</p>}
+    {guide && showPreview && <section className="growth-subcard" aria-label="Letter size document preview"><h3>Print-layout preview (draft)</h3><p>Review content, spacing and page breaks before export. Browser preview may differ from native Word/PDF.</p><iframe title="Marketing document print preview" sandbox="" srcDoc={renderMarketingDocumentHtml(guide)} style={{width:"100%",height:780,border:"1px solid #b7c5d0",background:"#fff"}}/></section>}
     {guide && <article className="growth-subcard" aria-live="polite">
       {marketingDocumentMissing(guide).length>0 ?
         <div role="alert"><strong>Draft incomplete — resolve before manager approval:</strong><ul>{marketingDocumentMissing(guide).map(x=><li key={x}>{x}</li>)}</ul></div>:

@@ -2,6 +2,7 @@ import { technicalGuideFields } from './marketingTechnicalGuide.js';
 import { safeGrowthUrl } from './growthPricing.js';
 import { marketingDocumentBlueprint } from './marketingDocumentBlueprints.js';
 import { marketingTemplates } from './marketingCatalogPolicy.js';
+import { marketingTheme } from './marketingDesignSystem.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const hex = value => /^#[0-9a-f]{6}$/i.test(value || '');
@@ -32,17 +33,35 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   const brandColors = Array.isArray(document.confirmedColors) ? document.confirmedColors.filter(hex) : [];
   const eventTheme = document.template.includes('wedding') ? 'wedding' : document.template === 'coach-recognition' ?
     'sports' : document.template === 'employee-recognition' ? 'recognition' : 'business';
-  const accent = palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || brandColors[0] || '#284A65';
+  const accent = (document.design || ['school','team'].includes(document.segment)) ? marketingTheme(document).primary :
+    palette[blueprint.theme === 'event-theme' ? eventTheme : blueprint.theme] || brandColors[0] || '#284A65';
   const blocks = [];
+  const schoolTeamDocuments = new Set(['brochure-schools','brochure-sports','fundraising-proposal','store-launch','proposal','coach-recognition','product-catalog','package-comparison']);
+  if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
+    const school = document.segment === 'school';
+    const message = school ? 'More school pride. More ways to support your programs.' :
+      'Build team identity on and off the field.';
+    blocks.push({type:'heading',value:message});
+    blocks.push({type:'paragraph',value:school ?
+      'Explore coordinated spirit wear, staff apparel, branded merchandise and convenient family ordering with Skilled Crafting.' :
+      'Explore coordinated team merchandise, family apparel, coach recognition and ordering options designed around your club.'});
+  }
   if (document.logo) blocks.push(image(document.logo, 'Client logo', true));
   if (text(document.description)) blocks.push({ type: 'paragraph', value: text(document.description) });
   for (const color of (document.template === "brand-guide" ? brandColors : [])) {
     const rgb = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
     blocks.push({ type: 'swatch', label: color + ' · RGB ' + rgb.join(', '), color });
   }
+  const schoolBrochure = document.template === 'brochure-schools';
+  const secondPageSection = schoolBrochure && blueprint.sections.slice(2).find(label => text(document.sectionContent?.[label]));
   for (const label of blueprint.sections) {
     const value = text(document.sectionContent?.[label]);
-    if (value) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value });
+    if (value) blocks.push({ type: 'heading', value: label, pageBreakBefore: label === secondPageSection }, { type: 'paragraph', value });
+  }
+  if (['school','team'].includes(document.segment) && schoolTeamDocuments.has(document.template)) {
+    blocks.push({type:'heading',value:'How the partnership works'});
+    blocks.push({type:'paragraph',value:'1. Discuss your audience and program goals.\n2. Select products and confirm artwork.\n3. Review selling prices, ordering and fulfillment details.\n4. Approve the program before launch.'});
+    if(document.template === 'fundraising-proposal') blocks.push({type:'paragraph',value:'Fundraising proceeds depend on verified selling prices, decorated costs, taxes, fees, returns and agreed payout terms. No proceeds are guaranteed.'});
   }
   const technical = technicalGuideFields[document.template];
   if (technical && document.technicalRevision) blocks.push(field('Revision and approval', document.technicalRevision));
@@ -118,5 +137,5 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   for (const [label, value] of [['Artwork placement', document.placement], ['Terms', document.terms], ['Next step', document.cta]]) {
     if (text(value)) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value: text(value) });
   }
-  return { title: template.label, organization: text(document.organization), accent, headingColor: headingColor(accent), approved, blocks };
+  return { title: template.label, organization: text(document.organization), accent, headingColor: headingColor(accent), schoolBrochure, approved, blocks };
 }
