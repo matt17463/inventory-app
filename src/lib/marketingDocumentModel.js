@@ -28,6 +28,10 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
   const blocks = [];
   if (document.logo) blocks.push(image(document.logo, 'Client logo', true));
   if (text(document.description)) blocks.push({ type: 'paragraph', value: text(document.description) });
+  for (const color of (document.template === "brand-guide" ? brandColors : [])) {
+    const rgb = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
+    blocks.push({ type: 'swatch', label: color + ' · RGB ' + rgb.join(', '), color });
+  }
   for (const label of blueprint.sections) {
     const value = text(document.sectionContent?.[label]);
     if (value) blocks.push({ type: 'heading', value: label }, { type: 'paragraph', value });
@@ -72,10 +76,6 @@ export function marketingDocumentModel(document, { approved = false } = {}) {
     });
   } else if (document.productImage) blocks.push(image(document.productImage, 'Product image'));
   for (const [index, source] of (document.logoOptions || []).entries()) blocks.push(image(source, 'Logo option ' + (index + 1), true));
-  for (const color of brandColors) {
-    const rgb = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
-    blocks.push({ type: 'swatch', label: color + ' · RGB ' + rgb.join(', '), color });
-  }
   for (const swatch of (document.productSwatches || [])) {
     if (hex(swatch.hex)) blocks.push({ type: 'swatch', label: text(swatch.name) + ' · ' + swatch.hex, color: swatch.hex });
   }

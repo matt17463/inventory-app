@@ -52,11 +52,11 @@ function word(model, images) {
   for (const block of model.blocks) {
     if (block.type === 'image') {
       const image = images.get(block.source);
-      children.push(new Paragraph({ children: [new ImageRun({
+      children.push(new Paragraph({ keepNext: true, children: [new ImageRun({
         type: 'png', data: image.bytes, transformation: imageSize(image, block.thumbnail),
         altText: { title: block.label, description: block.label, name: block.label },
       })] }));
-      children.push(new Paragraph({ children: [new TextRun({ text: block.label, italics: true, size: 18 })] }));
+      children.push(new Paragraph({ children: [new TextRun({ text: block.label, italics: true, size: 18 })], spacing: { after: 130 } }));
     } else if (block.type === 'table') {
       children.push(new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
@@ -88,6 +88,11 @@ function word(model, images) {
   }
   return Packer.toBlob(new Document({
     title: model.title, creator: 'Skilled Crafting', subject: model.organization,
+    styles: { default: {
+      document: { run: { font: 'Arial', size: 22, color: '24364A' } },
+      title: { run: { font: 'Arial', size: 48, bold: true, color: '24364A' }, paragraph: { spacing: { after: 160 } } },
+      subtitle: { run: { font: 'Arial', size: 26, color: '44546A' }, paragraph: { spacing: { after: 160 } } },
+    } },
     sections: [{
       footers: { default: new Footer({ children: [new Paragraph({ children: [new TextRun(footer + '  |  '), new TextRun({ children: [PageNumber.CURRENT] })] })] }) },
       children,
@@ -120,7 +125,7 @@ function pdf(model, images) {
   write(model.title, 24, { bold: true, keepNext: true });
   write(model.organization, 13);
   if (status(model)) write(status(model), 10, { bold: true, color: '#A82135' });
-  for (const block of model.blocks) {
+  for (const [index, block] of model.blocks.entries()) {
     if (block.type === 'image') {
       const image = images.get(block.source);
       const size = imageSize(image, block.thumbnail);
@@ -151,6 +156,15 @@ function pdf(model, images) {
       write(block.label, 10, { inset: 23 });
     } else {
       const heading = ['heading', 'subheading'].includes(block.type);
+      if (heading) {
+        let next = index + 1;
+        while (['heading', 'subheading'].includes(model.blocks[next]?.type)) next++;
+        const following = model.blocks[next];
+        if (following?.type === 'image') {
+          const dimensions = imageSize(images.get(following.source), following.thumbnail);
+          reserve((next - index) * 32 + dimensions.height + 30);
+        }
+      }
       write(value(block), block.type === 'heading' ? 15 : block.type === 'subheading' ? 12 : 10.5,
         { bold: heading, keepNext: heading });
     }
