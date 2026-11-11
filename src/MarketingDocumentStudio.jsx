@@ -77,7 +77,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     if (!accountId || !marketingLogoKey) return () => { active = false; };
     marketingLogoRequest(accountId, marketingLogoKey)
       .then(url => { if (active && activeAccount.current === accountId) {
-        setLogo(url); setAccountMarketingLogo({storage_provider:"r2",key:marketingLogoKey}); setGuide(null);
+        setLogo(url); setPaletteSuggestions([]); setAccountMarketingLogo({storage_provider:"r2",key:marketingLogoKey}); setGuide(null);
       } })
       .catch(() => { if (active) setError("Client marketing-only logo could not be loaded. Upload a local copy or check its private storage."); });
     return () => { active = false; };
@@ -159,6 +159,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       if (activeAccount.current !== accountId) return;
       const url = String(reader.result || "");
       setLogo(url);
+      setPaletteSuggestions([]);
       setAccountMarketingLogo(null);
       setGuide(null);
       setError("");
@@ -539,7 +540,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         <textarea rows="3" value={technicalLabels} onChange={event => { setTechnicalLabels(event.target.value); setGuide(null); }} />
       </label>
     </div>}
-    <ClientMarketingStarterKit key={accountId} accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{if (activeAccount.current !== accountId) return;setAccountMarketingLogo(null);setLogo(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{if (activeAccount.current !== accountId) return;setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
+    <ClientMarketingStarterKit key={accountId} accountId={accountId} organizations={organizations} onSelectLogo={(image,reference)=>{if (activeAccount.current !== accountId) return;setAccountMarketingLogo(null);setLogo(image);setPaletteSuggestions([]);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} onSelectProduct={(image,reference)=>{if (activeAccount.current !== accountId) return;setProductImage(image);if(reference)setSharedAssetReferences(prev=>({...prev,[image]:reference}));setGuide(null);}} />
     {["product-catalog", "product-description"].includes(template) && accountId && <div className="growth-subcard">
       <button type="button" className="sc-btn" disabled={importing || saving} onClick={importAssortment}>
         {importing ? "Importing…" : "Import client store products and approved mockups"}
