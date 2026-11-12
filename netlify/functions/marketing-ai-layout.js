@@ -25,7 +25,7 @@ export async function handler(event){
   const {data:account,error}=await auth.supabase.from("sc_growth_accounts").select("id").eq("id",input.account_id).maybeSingle();
   if(error||!account)return respond(404,{message:"Client not found."},event);
   if(!process.env.OPENAI_API_KEY)return respond(503,{message:"OPENAI_API_KEY is not configured."},event);
-  const prompt=bounded(input.prompt,6000);
+  const prompt=bounded(input.prompt,12000);
   if(!prompt.trim())return respond(400,{message:"Provide design direction."},event);
   const response=await fetch("https://api.openai.com/v1/responses",{
    method:"POST",headers:{"Authorization":"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},
