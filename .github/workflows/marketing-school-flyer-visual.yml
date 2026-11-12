@@ -10,6 +10,9 @@ on:
       - 'src/lib/marketingCampaignProfiles.js'
       - 'src/lib/marketingSchoolProgram.js'
       - 'src/lib/marketingFlyerChecks.js'
+      - 'scripts/local-ai/mac-layout-bridge.py'
+      - 'src/lib/localAiGateway.js'
+      - 'scripts/tests/test_mac_layout_bridge.py'
       - 'scripts/render-marketing-design-studio-proofs.mjs'
       - 'scripts/tests/marketing-school-creative-system.test.mjs'
       - 'scripts/tests/marketing-campaign-profiles.test.mjs'
@@ -40,6 +43,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_mac_layout_bridge.py'
       - run: node --test scripts/tests/marketing-illustrated-flyer.test.mjs scripts/tests/marketing-visual-brief.test.mjs scripts/tests/marketing-school-creative-system.test.mjs scripts/tests/marketing-campaign-profiles.test.mjs
       - run: node scripts/render-marketing-flyer-fixtures.mjs
       - run: npx playwright install --with-deps chromium
