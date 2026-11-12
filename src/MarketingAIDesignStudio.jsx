@@ -192,8 +192,30 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
   finally{setBusy(false);}
  }
+ function checkPrintReady(){
+  const readiness=studioExportReadiness({client:organization,category,logo,headline,contact:contactText,productImages:mergedProductImages});
+  if(!readiness.ready){setError("Client-ready export blocked: "+readiness.errors.join(" "));return false;}
+  return true;
+ }
+ function moveSectionFirst(section){
+  if(lockedSections.includes(section)){setError("Unlock this section before changing its position.");return;}
+  setPlans(current=>current.map((plan,i)=>i!==selected?plan:{...plan,sections:["hero",section,...studioLayoutSections(plan,selected).filter(k=>k!==section),"cta"]}));
+ }
+ async function regenerateSelected(){
+  if(!concepts[selected]||busy)return;
+  if(lockedSections.length){setError("Unlock layout sections before regenerating the selected concept.");return;}
+  setBusy(true);setError("");
+  try{
+   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,colors,concept:selected+1,prompt:visualPrompt,offline:true})});
+   const result=await response.json();if(!response.ok||!result.plan)throw Error(result.message||"Unable to regenerate selected layout.");
+   const artwork=await renderOfflineArtwork(offlineStudioArtwork({concept:selected+1,colors,style}));
+   setPlans(old=>old.map((v,i)=>i===selected?result.plan:v));setConcepts(old=>old.map((v,i)=>i===selected?artwork:v));
+   setProgress("Only concept "+(selected+1)+" was regenerated. Approved copy and other concepts are unchanged.");
+  }catch(e){setError(e.message||"Could not regenerate selected concept.");}finally{setBusy(false);}
+ }
  function printFlyer(){
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
+  if(!checkPrintReady())return;
   // The HTML is created by the same safe compositor as the live proof.
   const html=previewHtml(selected);
   const popup=window.open("","_blank");
@@ -212,6 +234,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  }
  function exportHtml(){
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
+  if(!checkPrintReady())return;
   const html=previewHtml(selected);
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});
   const url=URL.createObjectURL(blob);
