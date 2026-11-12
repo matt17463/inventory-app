@@ -35,4 +35,9 @@ export const SCHOOL_CAMPAIGN_CSS=String.raw`/* User-provided Sequim flyer is a q
 .category-school .artwork-copy p{font-size:8.7pt!important;line-height:1.3}
 .category-school .option-pills span{font-size:7.5pt;padding:4px 6px}
 .category-school footer{min-height:.7in!important;padding:.10in .40in!important;background:#17142d}
-.category-school footer strong{font-size:19pt!important}`;
+.category-school footer strong{font-size:19pt!important}
+.category-school .hero .client-logo{position:absolute;right:.22in;top:0;width:1.26in;height:1.26in;padding:6px;background:#fff}
+.category-school .hero .identity{min-height:.58in;display:block}
+.category-school .hero .identity>div{padding-top:.04in}
+.category-school .hero .client{font-size:16pt!important;text-transform:uppercase;letter-spacing:.7px;font-family:Impact,Arial Black,Arial,sans-serif}
+.category-school .hero .hero-text{max-width:6.5in}`;
