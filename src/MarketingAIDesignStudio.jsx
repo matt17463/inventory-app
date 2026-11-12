@@ -151,7 +151,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  }
  const print=()=>{
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
-  const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],image:concepts[selected],logo,headline,description:body,
+  const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],logo,headline,description:body,
    benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText,productImages,image:""});
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-ai-"+category+"-flyer.html";a.click();
