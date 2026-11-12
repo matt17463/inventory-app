@@ -54,3 +54,14 @@ test("visual design prompt can be edited, reset, saved and used by the server",(
  assert.ok(endpoint.includes("customPrompt||brief"));
  assert.ok(endpoint.includes("customPrompt.length>14000"));
 });
+
+test("AI Studio premium background is opt-in and uses landscape scene without identity assets",()=>{
+ const studio=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
+ const endpoint=readFileSync(new URL("../../netlify/functions/marketing-ai-visual.js",import.meta.url),"utf8");
+ assert.ok(studio.includes("onClick={generatePremiumSelected}"));
+ assert.ok(studio.includes("paid API credits"));
+ assert.ok(studio.includes('aspect_ratio:"landscape"'));
+ assert.ok(studio.includes("setConcepts(current=>current.map((old,i)=>i===selected?result.image:old))"));
+ assert.ok(endpoint.includes('input.aspect_ratio==="landscape"?"1536x1024":"1024x1536"'));
+ assert.ok(studio.includes("renderOfflineArtwork(offlineStudioArtwork("));
+});
