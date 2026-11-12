@@ -76,6 +76,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [heroImage,setHeroImage]=useState("");
  const [heroInfo,setHeroInfo]=useState("");
  const [sceneCandidate,setSceneCandidate]=useState("");
+ const [benchmarkReference,setBenchmarkReference]=useState(null);
  const [sceneBusy,setSceneBusy]=useState(false);
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
  const [candidatePreview,setCandidatePreview]=useState(null);
@@ -89,6 +90,16 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setMockupRecipes([]);setRecipeToEdit(null);setHeroImage("");setHeroInfo("");setSceneCandidate("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
+ useEffect(()=>{const current=benchmarkReference;return()=>{if(current?.url)URL.revokeObjectURL(current.url);};},[benchmarkReference]);
+ function loadBenchmarkReference(event){
+  const file=event.target.files?.[0];event.target.value="";
+  if(!file)return;
+  if(!["image/png","image/jpeg","image/webp","application/pdf"].includes(file.type)||file.size>15_000_000){
+   setError("Choose a PDF, PNG, JPEG or WebP reference under 15 MB.");return;
+  }
+  setBenchmarkReference({url:URL.createObjectURL(file),type:file.type,name:file.name});
+  setError("");
+ }
  async function findApprovedPhotos(){
   if(!accountId)return;
   setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
@@ -463,6 +474,16 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
    <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Product showcase","Editorial story","Bold brand statement"][i]}</strong>
   </button>)}</div>}
+  <section className="growth-subcard" aria-label="Side-by-side design reference">
+   <h4>Visual quality benchmark (optional, operator-only)</h4>
+   <p>Upload a design-reference PDF or image, such as your original premium school flyer, to compare composition, visual depth, density, merchandising and typography. This local comparison is not uploaded, saved with a client's draft, or used as reusable logo artwork.</p>
+   <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" aria-label="Select an art direction reference PDF or image" onChange={loadBenchmarkReference}/>
+   {benchmarkReference&&<p><strong>Reference:</strong> {benchmarkReference.name} <button type="button" className="sc-btn" onClick={()=>setBenchmarkReference(null)}>Clear reference</button></p>}
+   {!!benchmarkReference&&!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,alignItems:"start"}}>
+    <div><h5>Operator reference (not part of client output)</h5>{benchmarkReference.type==="application/pdf"?<iframe src={benchmarkReference.url} title="Reference design PDF" style={{width:"100%",aspectRatio:"816 / 1056",border:"1px solid #ddd"}}/>:<img src={benchmarkReference.url} alt="Reference design for visual comparison" style={{display:"block",width:"100%",maxHeight:750,objectFit:"contain"}}/>}</div>
+    <div><h5>Generated Concept {selected+1}</h5><FlyerFrame html={previewHtml(selected)} label="Flyer for side-by-side visual comparison"/></div>
+   </div>}
+  </section>
   {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
   <section className="growth-subcard" aria-label="Private AI copy suggestions">
