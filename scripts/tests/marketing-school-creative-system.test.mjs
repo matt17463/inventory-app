@@ -17,7 +17,7 @@ test("school program is client adaptive, not a Sequim recolor",()=>{
  assert.doesNotMatch(html,/SEQUIM|WOLVES|253\.432/i);
  for(let concept=0;concept<3;concept++){
   const item=studioPrintHtml({...params,concept});
-  assert.match(item,/YOUR LOGO\. MORE POSSIBILITIES/);
+  assert.match(item,/ARTWORK MODERNIZATION &amp; SEASONAL DESIGNS/);
   assert.match(item,/Example Community School/);
  }
 });
@@ -49,7 +49,7 @@ test("local AI layout suggestions reorder verified blocks but cannot remove logo
  assert.ok(html.indexOf('<section class="benefits">')<html.indexOf('<div class="gallery'));
  assert.match(html,/focus-benefits/);
  assert.match(html,/align-center/);
- assert.match(html,/YOUR LOGO\. MORE POSSIBILITIES/);
+ assert.match(html,/ARTWORK MODERNIZATION &amp; SEASONAL DESIGNS/);
  assert.doesNotMatch(html,/<style>[^]*--primary:#ff0000/);
 });
 
