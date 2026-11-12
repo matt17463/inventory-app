@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,inspectStudioPrintDom,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
@@ -67,4 +68,13 @@ test('DOM print preflight catches clipped body and hero headline',()=>{
  const issues=inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null});
  assert.match(issues.join(' '),/clipped|Headline/);
  assert.deepEqual(inspectStudioPrintDom({querySelector:()=>null}),['Print page is missing.']);
+});
+
+test('studio export and release confirmation gates are connected in the UI',()=>{
+ const ui=readFileSync(new URL('../../src/MarketingAIDesignStudio.jsx',import.meta.url),'utf8');
+ assert.match(ui,/checkPrintReady\(\)/);
+ assert.match(ui,/releaseConfirmed/);
+ assert.match(ui,/inspectStudioPrintDom\(popup\.document\)/);
+ assert.match(ui,/image:concepts\[i\]/);
+ assert.match(ui,/setLockedSections/);
 });
