@@ -43,3 +43,12 @@ test("only approved image data can become a hero, and untrusted content is escap
  assert.match(html,/&lt;script&gt;/);
  assert.match(html,/&lt;b&gt;sports&lt;\/b&gt;/);
 });
+
+test("local AI layout suggestions reorder verified blocks but cannot remove logo options",()=>{
+ const html=studioPrintHtml({client:"Demo Academy",category:"school",logo:art,productImages:[art],colors:["#162c52","#f7c02a"],benefits:["Online orders"],steps:["Review choices"],artworkOptions:schoolArtworkServiceOptions(),plan:{sections:["hero","benefits","products","steps","cta"],composition:"editorial",emphasis:"benefits",align:"center",accent:"#ff0000"}});
+ assert.ok(html.indexOf('<section class="benefits">')<html.indexOf('<div class="gallery'));
+ assert.match(html,/focus-benefits/);
+ assert.match(html,/align-center/);
+ assert.match(html,/YOUR LOGO\. MORE POSSIBILITIES/);
+ assert.doesNotMatch(html,/<style>[^]*--primary:#ff0000/);
+});
