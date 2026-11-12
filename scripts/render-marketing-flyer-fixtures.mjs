@@ -56,7 +56,7 @@ for(const s of schools){
  * category-specific language and optional school fundraising. Synthetic imagery
  * remains clearly marked and cannot be distributed as approved merchandise.
  */
-const previewGarment=await png(garment({primary:"#243F6E",secondary:"#E6B93E",short:"TEST"},"TEST",0));
+const previewGarments=await Promise.all([0,1,2].map(i=>png(garment({primary:"#243F6E",secondary:"#E6B93E",short:"TEST"},"TEST",i))));
 const businessCategories=["school","team","business","nonprofit","wedding","general"];
 for(const category of businessCategories){
  const variants=category==="school"?3:1;
@@ -66,10 +66,10 @@ for(const category of businessCategories){
    client:category==="school"?"Synthetic Example School":"Synthetic "+category.toUpperCase()+" Client",
    category,concept,image:artwork,logo:brand,headline:"SAMPLE DESIGN — NOT CLIENT APPROVED",
    description:"Print layout test with synthetic branding and merchandise. Do not distribute.",
-   benefits:["Illustrative collection","Client artwork required","Review all merchandise","Confirm final terms"],
-   steps:["Plan together","Approve proof","Confirm the details","Share the result"],
+   benefits:["SCHOOL PRIDE — coordinated community spirit wear","PROGRAM FUNDING — approved wholesale-to-retail plans","EASY ONLINE ORDERING — dedicated client storefront","LOCAL SUPPORT — art prep and order fulfillment"],
+   steps:["Plan together with your coordinator","Choose approved designs and prices","Supporters order through your shop","Review program proceeds and results"],
    cta:"CONTACT FOR AN APPROVED CLIENT PROOF",contact:"preview@example.invalid",
-   productImages:[previewGarment],
+   productImages:previewGarments,productLabels:["Sample spirit tee","Sample hoodie","Sample warm-up top"],
    colors:["#1F4369","#E6B93E"],
    schoolFundraising:category==="school"?{enabled:true,wholesale:"18.25",retail:"29.75",quantity:"75"}:{enabled:false}
   });
