@@ -1,6 +1,7 @@
 import {useEffect,useState} from "react";
 import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 import {supabase} from "./supabaseClient";
+import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
 import {marketingLogoImage} from "./lib/marketingArtwork";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {buildStudioPdf} from "./lib/marketingDesignStudioPdf";
@@ -95,8 +96,13 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   setBusy(true);setError("");setConcepts([]);setPlans([]);setSelected(0);
   const created=[],layouts=[];
   try{
+   let localEnabled=false;
+   try{const connection=await loadLocalAiConnection();localEnabled=connection.configured;}catch{localEnabled=false;}
    for(let i=0;i<3;i++){
-    setProgress("Creating offline design concept "+(i+1)+" of 3…");
+    setProgress("Creating design concept "+(i+1)+" of 3…");
+    let localPlan=null;
+    if(localEnabled){try{const result=await localAiCall("/layout",{organization,category,colors,concept:i+1,prompt:visualPrompt});if(result?.plan&&Array.isArray(result.plan.sections))localPlan=result.plan;}catch{localEnabled=false;}}
+    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt,offline:true})
@@ -107,7 +113,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));
     created.push(image);setPlans([...layouts]);setConcepts([...created]);
    }
-   setProgress("Three zero-API concepts ready. No AI credits were used.");
+   setProgress("Three zero-paid-API concepts ready. Local Ollama was used when available; otherwise the offline layout fallback was used.");
   }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
   finally{setBusy(false);}
  }
@@ -162,7 +168,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={downloadPdf}>Download selected one-page PDF</button>
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={print}>Export selected print layout (HTML → Print to PDF)</button>
-  <p>Offline concepts use original abstract branded backgrounds, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
+  <p>When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
  </section>;
 }

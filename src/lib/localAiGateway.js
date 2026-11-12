@@ -20,7 +20,7 @@ export async function saveLocalAiConnection(endpoint,enabled){
  cached=r.data;return loadLocalAiConnection();
 }
 export async function localAiCall(path,payload){
- if(!['/ask','/package-copy'].includes(path))throw Error('Unsupported local AI action.');
+ if(!['/ask','/package-copy','/layout'].includes(path))throw Error('Unsupported local AI action.');
  const config=await loadLocalAiConnection();
  const endpoint=cached?.enabled&&allowed(cached.endpoint_url)?cached.endpoint_url:allowed(fallback)?fallback:'';
  if(!endpoint)throw Error('Private Tailscale AI gateway is not yet configured or enabled.');
