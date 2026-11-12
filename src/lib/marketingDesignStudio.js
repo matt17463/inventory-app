@@ -63,3 +63,22 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  const content=ordered.map(x=>x==="hero"||x==="cta"?blocks[x]:'<main>'+blocks[x]+'</main>').join("");
  return '<!doctype html><html><head><meta charset="utf-8"><title>'+safeText(client)+' — Skilled Crafting</title><style>@page{size:letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#1c2b39;background:#fff}.page{width:8.5in;min-height:11in;margin:auto}.hero{background:'+accent+';color:white;position:relative;min-height:3.4in;overflow:hidden;padding:.35in}.hero>img.scene{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.7}.hero .content{position:relative;z-index:1;text-shadow:0 2px 7px #000b}.logo{max-width:1.2in;max-height:.9in;object-fit:contain;background:#fff;border-radius:8px;padding:5px}.hero h1{font-size:32pt;line-height:1.03;max-width:6.5in;margin:.24in 0 .12in}.hero p{font-size:13pt;max-width:5.6in}.brand{font-weight:800;letter-spacing:2px;font-size:10pt}main{padding:.12in .36in}section{margin:0 0 .1in}h2{font-size:15pt;color:'+accent+';margin:0 0 .08in;text-transform:uppercase}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.1in}.grid>div{background:#eef2f7;border-radius:8px;padding:.1in;font-size:10pt}ol{columns:2;font-size:10pt;line-height:1.5;padding-left:.24in;margin:.05in 0}table{width:100%;border-collapse:collapse;font-size:9pt}th,td{text-align:left;border-bottom:1px solid #ddd;padding:5px}footer{background:'+accent+';color:#fff;padding:.22in .36in}footer strong{font-size:16pt}footer p{margin:.08in 0;font-size:10pt}small{font-size:8pt}'+variantCss+artworkCss+planCss+'@media print{.page{margin:0}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="page">'+content+'</div></body></html>';
 }
+
+/** Deterministic, text-free SVG art for offline-first marketing layouts.
+ * No remote images, untrusted markup, paid services, or invented merchandise.
+ * Product photos and verified client identity remain separate editorial layers.
+ */
+export function offlineStudioArtwork({concept=1,colors=[],style="athletic"}={}){
+ const index=Math.min(2,Math.max(0,Number(concept)-1||0));
+ const valid=Array.isArray(colors)?colors.filter(c=>/^#[0-9a-f]{6}$/i.test(c)):[];
+ const primary=valid[0]||"#173a61",secondary=valid[1]||"#335d83",accent=valid[2]||"#e9b653";
+ const palettes=[[primary,secondary,accent],[secondary,primary,accent],["#111d33",primary,accent]];
+ const [a,b,c]=palettes[index];
+ const graphics=[
+  '<path d="M-120 800L590-120 960-120 250 1040Z" fill="url(#shine)" opacity=".62"/><path d="M560-80L960 340 960 690 300-80Z" fill="'+c+'" opacity=".18"/><circle cx="710" cy="570" r="310" fill="none" stroke="'+c+'" stroke-width="18" opacity=".36"/>',
+  '<circle cx="510" cy="460" r="355" fill="url(#glow)" opacity=".72"/><path d="M0 190L960 0V130L0 330ZM0 670L960 480V600L0 790Z" fill="'+c+'" opacity=".24"/><path d="M100 980L860 100" stroke="white" stroke-width="7" opacity=".19"/>',
+  '<path d="M0 0H960V330L0 600Z" fill="url(#shine)" opacity=".45"/><rect x="500" y="70" width="340" height="900" rx="38" fill="white" opacity=".07" transform="rotate(13 670 520)"/><circle cx="180" cy="730" r="290" fill="none" stroke="'+c+'" stroke-width="12" opacity=".4"/>'
+ ][index];
+ const texture=style==="editorial"?.12:style==="expressive"?.3:.2;
+ return '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient><linearGradient id="shine" x2="1" y2="1"><stop stop-color="white" stop-opacity=".38"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient><radialGradient id="glow"><stop stop-color="'+c+'" stop-opacity=".65"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient><pattern id="grain" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M0 35L35 0" stroke="white" stroke-opacity="'+texture+'" stroke-width="1"/></pattern></defs><rect width="960" height="1200" fill="url(#bg)"/>'+graphics+'<rect width="960" height="1200" fill="url(#grain)" opacity=".35"/><rect y="950" width="960" height="250" fill="#0b1728" opacity=".42"/></svg>';
+}
