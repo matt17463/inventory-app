@@ -104,6 +104,8 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  const secondary=palette[1]&&palette[1].toLowerCase()!==primary.toLowerCase()?palette[1]:"#d4a94a";
  const variant=Math.max(0,Math.min(2,Number(concept)||0));
  const photos=(Array.isArray(productImages)?productImages:[]).map(safeImage).filter(Boolean).slice(0,4);
+ const safeLayout=normalizeStudioLayout(layoutAdjustments);
+ const pageStyle=studioLayoutStyle(safeLayout);
  const brand=safeImage(logo);
  const scene=safeImage(image);
  const sceneHtml=scene?'<div class="hero-scenery" aria-hidden="true" style="background-image:url(&quot;'+scene+'&quot;)"></div>':"";
@@ -127,8 +129,7 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  const footer='<footer><strong>'+safeCta+'</strong><p>'+safeText(contact)+'</p><small>'+safeText(copy.footer)+'</small></footer>';
  const commonHeader='<div class="identity">'+logoHtml+'<div><span class="kicker">'+safeText(heroLabel)+'</span><span class="client">'+safeClient+'</span></div></div>';
  const orderedBlocks=studioLayoutSections(plan,variant).map(key=>({products:gallery,benefits:benefitsBlock,steps:stepsBlock})[key]).join("");
- const safeLayout=normalizeStudioLayout(layoutAdjustments);
- const pageStyle=studioLayoutStyle(safeLayout);
+
  const themes=[
   '<div class="page campaign athletic" style="'+pageStyle+'">'+banner+'<header class="hero">'+sceneHtml+commonHeader+'<div class="hero-text"><div class="slanted">WEAR YOUR PRIDE</div><h1>'+safeHeadline+'</h1><p>'+safeDescription+'</p></div><div class="stripe"></div></header><main><div class="section-heading"><span>01 / FEATURED MERCHANDISE</span><h2>'+safeText(copy.collection)+'</h2></div>'+orderedBlocks+'</main>'+footer+'</div>',
   '<div class="page campaign editorial" style="'+pageStyle+'">'+banner+'<header class="hero">'+sceneHtml+commonHeader+'<div class="editorial-head"><span class="issue">'+safeText(copy.label)+'</span><h1>'+safeHeadline+'</h1><p>'+safeDescription+'</p></div></header><main><div class="section-heading"><span>THE COLLECTION / 01</span><h2>'+safeText(copy.collection)+'</h2></div>'+orderedBlocks+'</main>'+footer+'</div>',
