@@ -77,13 +77,14 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [heroImage,setHeroImage]=useState("");
  const [heroInfo,setHeroInfo]=useState("");
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
+ const [candidatePreview,setCandidatePreview]=useState(null);
  const [approvedPhotoBusy,setApprovedPhotoBusy]=useState(false);
  const [approvedPhotoStatus,setApprovedPhotoStatus]=useState("");
  useEffect(()=>{
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -100,25 +101,33 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setApprovedPhotoStatus("Could not load approved client imagery: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
  }
- async function importApprovedPhoto(item){
-  if(mergedProductImages.length>=5)return;
-  setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
+ async function loadApprovedCandidate(item){
+  let blob;
+  if(item.reference.key)blob=await marketingLogoBlob(accountId,item.reference.key);
+  else{
+   const url=await marketingSharedImageUrl(accountId,item.reference);
+   const response=await fetch(url,{cache:"no-store",referrerPolicy:"no-referrer"});
+   if(!response.ok)throw Error("Approved image download failed.");
+   blob=await response.blob();
+  }
+  if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||!blob.size||blob.size>2500000)throw Error("Approved image must be PNG, JPEG or WebP under 2.5 MB.");
+  return marketingImageDataUrl(blob);
+ }
+ async function previewApprovedCandidate(item){
+  setApprovedPhotoBusy(true);setApprovedPhotoStatus("");setCandidatePreview(null);
   try{
-   let blob;
-   if(item.reference.key)blob=await marketingLogoBlob(accountId,item.reference.key);
-   else{
-    const url=await marketingSharedImageUrl(accountId,item.reference);
-    const response=await fetch(url,{cache:"no-store",referrerPolicy:"no-referrer"});
-    if(!response.ok)throw Error("Approved image download failed.");
-    blob=await response.blob();
-   }
-   if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||!blob.size||blob.size>2500000)throw Error("Approved image must be PNG, JPEG or WebP under 2.5 MB.");
-   const image=await marketingImageDataUrl(blob);
-   setProductImages(current=>[...current,image].slice(0,5));
-   setApprovedPhotoCandidates(current=>current.filter(x=>x.id!==item.id));
-   setApprovedPhotoStatus("Approved client image added. Verify the product and decoration before sharing.");
-  }catch(e){setApprovedPhotoStatus("Could not import image: "+e.message);}
+   const image=await loadApprovedCandidate(item);
+   setCandidatePreview({id:item.id,image,title:item.title});
+   setApprovedPhotoStatus("Review garment identity, decoration, and client before adding this image.");
+  }catch(e){setApprovedPhotoStatus("Could not preview image: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
+ }
+ function importApprovedPhoto(){
+  if(!candidatePreview||mergedProductImages.length>=5)return;
+  setProductImages(current=>[...current,candidatePreview.image].slice(0,5));
+  setApprovedPhotoCandidates(current=>current.filter(x=>x.id!==candidatePreview.id));
+  setCandidatePreview(null);
+  setApprovedPhotoStatus("Approved client image added. Verify its product and decoration before sharing.");
  }
  async function addApprovedLogoVariant(event){
   const file=event.target.files?.[0];event.target.value="";
@@ -286,7 +295,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
    <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=5} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
    {!!approvedPhotoStatus&&<p role="status">{approvedPhotoStatus}</p>}
-   {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=5} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
+   {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=5} onClick={()=>previewApprovedCandidate(item)}>Preview image</button></div>)}</div>}
+   {candidatePreview&&<div className="growth-subcard" style={{marginTop:8}}><h5>Preview from {candidatePreview.title}</h5><img src={candidatePreview.image} alt="Client-approved merchandise candidate — verify before use" style={{maxWidth:280,maxHeight:280,objectFit:"contain"}}/><p>This image must match the selected client, product and approved logo decoration.</p><button type="button" className="sc-btn" onClick={importApprovedPhoto} disabled={mergedProductImages.length>=5}>Confirm and add to flyer</button><button type="button" className="sc-btn" onClick={()=>setCandidatePreview(null)}>Cancel</button></div>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=5} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
