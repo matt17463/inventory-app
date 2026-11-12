@@ -271,6 +271,18 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
    <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
   </button>)}</div>}
+  {!!concepts.length&&<section className="growth-subcard" aria-label="Selective layout editor">
+   <h4>Selected concept layout and section locks</h4>
+   <p>Reorder the merchandise, benefits and process sections without replacing approved artwork or text. Lock a section to protect its position.</p>
+   <div className="growth-grid">
+    {studioLayoutSections(plans[selected],selected).map(section=><div key={section} className="growth-field">
+     <strong style={{textTransform:"capitalize"}}>{section}</strong>
+     <label><input type="checkbox" checked={lockedSections.includes(section)} onChange={e=>setLockedSections(v=>e.target.checked?[...v,section]:v.filter(x=>x!==section))}/> Lock placement</label>
+     <button type="button" className="sc-btn" disabled={lockedSections.includes(section)} onClick={()=>moveSectionFirst(section)}>Move first</button>
+    </div>)}
+   </div>
+   <button type="button" className="sc-btn" disabled={busy||draftBusy||lockedSections.length>0} onClick={regenerateSelected}>Regenerate selected concept only</button>
+  </section>}
   {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
   {mode==="hybrid"&&<div className="growth-grid">
