@@ -131,7 +131,7 @@ test('client draft persists approved-product labels and restores them as editabl
 test('school hero reuses the exact approved client logo as a decorative mascot layer',()=>{
  const school=studioPrintHtml({category:'school',client:'Elementary School',logo:sample,productImages:[sample]});
  assert.match(school,/class="school-mascot-hero"/);
- assert.match(school,/class="school-layout"/);
+ assert.match(school,/class="page campaign athletic school-layout"/);
  assert.ok(school.includes('<img class="school-mascot-hero" src="'+sample+'"'));
  const business=studioPrintHtml({category:'business',client:'Client',logo:sample,productImages:[sample]});
  assert.ok(!business.includes('class="school-mascot-hero"'));
