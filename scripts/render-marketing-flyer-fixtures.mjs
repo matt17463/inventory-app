@@ -62,7 +62,7 @@ const businessCategories=["school","team","business","nonprofit","wedding","gene
 for(const category of businessCategories){
  const variants=category==="school"?3:1;
  for(let concept=0;concept<variants;concept++){
-  const artwork=await png(offlineStudioHeroArtwork({category,concept:concept+1,colors:["#1F4369","#E6B93E"]}));
+  const artwork="data:image/png;base64,"+(await sharp(Buffer.from(offlineStudioHeroArtwork({category,concept:concept+1,colors:["#1F4369","#E6B93E"]}))).resize({width:2550,height:1150,fit:"fill"}).png().toBuffer()).toString("base64");
   const html=studioPrintHtml({
    client:category==="school"?"Synthetic Example School":"Synthetic "+category.toUpperCase()+" Client",
    category,concept,image:artwork,logo:category==="school"?syntheticSchoolCrest:brand,headline:"SAMPLE DESIGN — NOT CLIENT APPROVED",
