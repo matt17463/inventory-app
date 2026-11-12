@@ -105,21 +105,20 @@ export default function MaterialSettings(){
   }
   async function saveRecord(){
     if(!canWrite)return setMessage('Read-only access.');
-    if(safety.blocked)return setMessage(safety.reason);
-    if(!form.material_name.trim()||!form.machine_model.trim()||!form.machine_configuration.trim())return setMessage('Complete the material, exact model and machine configuration.');
+    if(form.material_name.trim() && safety.blocked)return setMessage(safety.reason);
     setBusy(true);setMessage('');
     try{
       const settings=normalizeSettingsJson(form.settings);
       if(form.machine_type==='roland_bn2'){
         const heater=Number(settings.print_heater_c),dryer=Number(settings.dryer_c);
-        if(!Number.isFinite(heater)||heater<30||heater>35||!Number.isFinite(dryer)||dryer<30||dryer>38)
-          throw Error('BN2-30 supports 30–35°C print heater and 30–38°C dryer; enter a value within each range.');
+        if((settings.print_heater_c !== undefined && settings.print_heater_c !== '' && (!Number.isFinite(heater)||heater<30||heater>35)) || (settings.dryer_c !== undefined && settings.dryer_c !== '' && (!Number.isFinite(dryer)||dryer<30||dryer>38)))
+          throw Error('BN2-30 print heater must be 30–35°C and dryer 30–38°C when provided. Leave unknown values blank in drafts.');
       }
       const payload={
         machine_type:form.machine_type,machine_model:form.machine_model.trim(),machine_configuration:form.machine_configuration.trim(),
-        operation:form.operation,material_name:form.material_name.trim(),material_brand:form.material_brand,material_sku:form.material_sku,
+        operation:form.operation,material_name:form.material_name.trim() || `Untitled ${machine.label} recipe`,material_brand:form.material_brand,material_sku:form.material_sku,
         material_finish:form.material_finish,material_notes:form.material_notes,safety_notes:form.safety_notes,
-        thickness_mm:form.thickness_mm?Number(form.thickness_mm):null,settings,
+        thickness_mm:form.thickness_mm && Number(form.thickness_mm) !== 0 ? Number(form.thickness_mm) : null,settings,
         source_type:form.source_type,source_url:form.source_url,
         status:'draft',approved_by:null,approved_at:null,updated_at:new Date().toISOString(),
       };
@@ -223,7 +222,7 @@ export default function MaterialSettings(){
         <td><button type="button" className="secondary-button" onClick={()=>edit(r)}>Open</button></td></tr>)}</tbody></table>
       {!visible.length&&<p>No matching recipes. Create an experimental recipe or import verified settings manually.</p>}</div></section>:
     <div className="sc-material-layout"><section className="card sc-material-editor">
-      <h2>{form.id?'Edit material recipe':'Create material recipe'}</h2>
+      <h2>{form.id?'Edit material recipe':'Create material recipe'}</h2><p className="sc-material-help">All recipe details below are optional for saving a draft. Empty recipe names receive an “Untitled” name you can edit later. Testing and manager approval are still required before production.</p>
       <div className="sc-material-grid"><label>Equipment type<select value={form.machine_type} onChange={e=>{const m=machineFor(e.target.value);setForm(p=>({...p,machine_type:m.id,operation:m.modes[0]}));}}>
         {MACHINE_TYPES.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></label>
         <label>Process<select value={form.operation} onChange={e=>set('operation',e.target.value)}>{machine.modes.map(m=><option key={m} value={m}>{OPERATION_LABELS[m]}</option>)}</select></label>
@@ -233,14 +232,14 @@ export default function MaterialSettings(){
         <label>Evidence classification<select value={form.source_type} onChange={e=>set('source_type',e.target.value)}>{['manual','manufacturer','supplier','ai_suggested','prior_test'].map(x=><option key={x} value={x}>{x}</option>)}</select></label>
       </div>
       <p className="sc-material-help">{machine.note}</p>
-      {safety.blocked?<p className="sc-material-danger" role="alert">{safety.reason}</p>:<p className="sc-material-warning">{safety.warning}</p>}
+      {form.material_name.trim() && safety.blocked?<p className="sc-material-danger" role="alert">{safety.reason}</p>:<p className="sc-material-help">{form.material_name.trim()?safety.warning:'Add a material name when known. Safety checks apply before using this recipe in production.'}</p>}
       <h3>Machine-specific settings</h3><p className="sc-material-help">Enter verified manufacturer values or values from your own test coupon. Leave unknown values empty. No fields are automatically assumed safe.</p>
       <div className="sc-material-grid">
       {(SETTING_FIELDS[form.machine_type]||[]).map(([key,label])=><label key={key}>{label}
         <input type="text" value={String(currentValues[key]??'')} onChange={e=>setMachineSetting(key,e.target.value)}/></label>)}
       </div>
       <details><summary>Advanced settings JSON (optional)</summary><label className="sc-material-json">Editable machine settings (JSON — include units)<textarea rows={8} spellCheck={false} value={form.settings} onChange={e=>set('settings',e.target.value)}/></label></details>
-      <div className="sc-material-actions"><button className="primary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={saveRecord}>Save experimental draft</button>
+      <div className="sc-material-actions"><button className="primary-button" type="button" disabled={busy||!canWrite||(!!form.material_name.trim()&&safety.blocked)} onClick={saveRecord}>Save experimental draft</button>
        <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={suggest}>AI test plan</button>
        <button className="secondary-button" type="button" disabled={busy||!canWrite||safety.blocked} onClick={researchSources}>Research manufacturer settings online</button>
        {admin&&form.id&&form.status!=='approved'&&<button className="secondary-button" type="button" disabled={busy||!trialRows.some(x=>x.result==='pass' && x.recipe_version===form.version)} onClick={approve}>Approve tested recipe</button>}</div>
