@@ -199,13 +199,13 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    setError("The browser blocked the print window. Enable pop-ups for Skilled Crafting and retry.");
    return;
   }
+  popup.addEventListener("load",()=>{
+   Promise.all(Array.from(popup.document.images).map(img=>img.decode().catch(()=>{})))
+    .then(()=>{if(!popup.closed){popup.focus();popup.print();}});
+  },{once:true});
   popup.document.open();
   popup.document.write(html);
   popup.document.close();
-  popup.addEventListener("load",()=>{
-   Promise.all(Array.from(popup.document.images).map(img=>img.decode().catch(()=>{})))
-    .then(()=>{popup.focus();popup.print();});
-  },{once:true});
   setProgress("Choose Save as PDF in the browser's print dialog. US Letter, scale 100%, no margins, background graphics enabled.");
  }
  function exportHtml(){
