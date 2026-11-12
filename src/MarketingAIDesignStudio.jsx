@@ -1,10 +1,9 @@
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 import {supabase} from "./supabaseClient";
 import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
 import {marketingLogoImage} from "./lib/marketingArtwork";
 import {growthWriteAllowed} from "./lib/marketingApi";
-import {buildStudioPdf} from "./lib/marketingDesignStudioPdf";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
 
 const defaults={
@@ -24,6 +23,21 @@ async function renderOfflineArtwork(svg){
   context.drawImage(img,0,0,960,1200);
   return canvas.toDataURL("image/jpeg",0.86);
  }finally{URL.revokeObjectURL(url);}
+}
+function FlyerFrame({html,label}){
+ const ref=useRef(null);
+ const [scale,setScale]=useState(0.35);
+ useEffect(()=>{
+  if(!ref.current)return;
+  const update=()=>setScale(Math.max(0.1,ref.current.clientWidth/816));
+  update();
+  const observer=new ResizeObserver(update);
+  observer.observe(ref.current);
+  return ()=>observer.disconnect();
+ },[]);
+ return <div ref={ref} style={{width:"100%",aspectRatio:"816 / 1056",position:"relative",overflow:"hidden",background:"#fff",boxShadow:"0 5px 20px #1b3e591f",border:"1px solid #d4dee7"}}>
+  <iframe title={label} srcDoc={html} sandbox="" tabIndex={-1} loading="lazy" style={{width:816,height:1056,transform:`scale(${scale})`,transformOrigin:"top left",pointerEvents:"none",border:0,display:"block"}}/>
+ </div>;
 }
 export default function MarketingAIDesignStudio({accountId="",organization="",template="",segment="",logo="",colors=[],description="",contact="",approvedProductImages=[],onUseLegacy}){
  const category=designCategory(template,segment);
@@ -66,7 +80,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -134,31 +148,19 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));
     created.push(image);setPlans([...layouts]);setConcepts([...created]);
    }
-   setProgress("Three zero-paid-API concepts ready. Local Ollama was used when available; otherwise the offline layout fallback was used.");
+   setProgress("Three branded concepts ready without paid APIs. Local Ollama was used for layout planning when available; otherwise the offline fallback was used.");
   }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
   finally{setBusy(false);}
  }
- async function pdfCompatibleLogo(value){
-  if(!/^data:image\/webp;base64,/i.test(value||""))return value;
-  const img=new Image();img.src=value;await img.decode();
-  const canvas=document.createElement("canvas");canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
-  canvas.getContext("2d").drawImage(img,0,0);
-  return canvas.toDataURL("image/png");
- }
- async function downloadPdf(){
-  if(!concepts[selected]){setError("Generate a concept first.");return;}
-  try{
-   if(mergedProductImages.length){print();setProgress("Product-image layout exported as HTML. Open it in your browser and Print → Save as PDF to retain the product imagery.");return;}
-   const bytes=await buildStudioPdf({image:concepts[selected],logo:await pdfCompatibleLogo(logo),headline,description:body,benefits:benefits.split("\n").map(x=>x.trim()).filter(Boolean),steps:steps.split("\n").map(x=>x.trim()).filter(Boolean),cta,contact:contactText,plan:plans[selected],mode});
-   const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
-   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-"+category+"-concept-"+(selected+1)+".pdf";a.click();
-   setTimeout(()=>URL.revokeObjectURL(url),10000);
-  }catch(e){setError(e.message||"PDF export failed.");}
+ function downloadPdf(){
+  if(!concepts[selected]){setError("Generate and select a concept first.");return;}
+  print();
+  setProgress("Full-color print layout exported. Open the HTML file and choose Print → Save as PDF. Enable background graphics and select US Letter.");
  }
  const print=()=>{
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
   const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],logo,headline,description:body,
-   benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,image:""});
+   benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,image:"",colors});
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-ai-"+category+"-flyer.html";a.click();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
@@ -184,12 +186,11 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
-  {!!concepts.length&&<div className="growth-grid">{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
-   <div style={{width:"100%",aspectRatio:"8.5 / 11",overflow:"hidden",position:"relative",background:"white"}}>
-    <iframe title={"Complete flyer concept "+(i+1)} srcDoc={previewHtml(i)} sandbox="" tabIndex={-1} style={{width:"850px",height:"1100px",border:0,transform:"scale(0.35)",transformOrigin:"top left",pointerEvents:"none"}}/>
-   </div>
-   <strong>Concept {i+1}{selected===i?" — selected":""} · {["Product showcase","Program benefits","School pride"][i]}</strong>
+  {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
+   <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
+   <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
   </button>)}</div>}
+  {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
   {mode==="hybrid"&&<div className="growth-grid">
    <label className="growth-field"><span>Verified headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)}/></label>
@@ -202,9 +203,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
-  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={downloadPdf}>{mergedProductImages.length?"Download full flyer HTML (Print → Save as PDF)":"Download selected one-page PDF (legacy layout)"}</button>
-  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={print}>Export selected print layout (HTML → Print to PDF)</button>
-  <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. The native PDF button currently uses the legacy export when no product images are provided; for exact visual fidelity use HTML → Print to PDF. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={downloadPdf}>{"Export selected flyer — print-quality HTML / Save as PDF"}</button>
+  <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. The full-color export opens as printable HTML; use your browser to save a PDF with background graphics enabled. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
  </section>;
 }
