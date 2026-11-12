@@ -7,6 +7,22 @@ on:
       - 'src/lib/marketingIllustratedFlyer.js'
       - 'src/lib/marketingVisualBrief.js'
       - 'src/lib/marketingDesignStudio.js'
+      - 'src/lib/marketingCampaignProfiles.js'
+      - 'src/lib/marketingCategoryVisualSystem.js'
+      - 'src/lib/marketingSchoolVisualSystem.js'
+      - 'src/lib/marketingPrintPreflight.js'
+      - 'src/MarketingApparelComposer.jsx'
+      - 'src/lib/marketingApparelComposite.js'
+      - 'scripts/tests/marketing-print-preflight.test.mjs'
+      - 'src/lib/marketingSchoolProgram.js'
+      - 'src/lib/marketingFlyerChecks.js'
+      - 'scripts/local-ai/mac-layout-bridge.py'
+      - 'src/lib/localAiGateway.js'
+      - 'scripts/tests/test_mac_layout_bridge.py'
+      - 'scripts/render-marketing-design-studio-proofs.mjs'
+      - 'scripts/tests/marketing-school-creative-system.test.mjs'
+      - 'scripts/tests/marketing-campaign-profiles.test.mjs'
+      - 'scripts/tests/marketing-print-preflight.test.mjs'
       - 'src/MarketingAIDesignStudio.jsx'
       - 'src/lib/marketingDesignStudioPdf.js'
       - 'netlify/functions/marketing-ai-layout.js'
@@ -34,12 +50,17 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test scripts/tests/marketing-illustrated-flyer.test.mjs scripts/tests/marketing-visual-brief.test.mjs
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_mac_layout_bridge.py'
+      - run: node --test scripts/tests/marketing-illustrated-flyer.test.mjs scripts/tests/marketing-visual-brief.test.mjs scripts/tests/marketing-school-creative-system.test.mjs scripts/tests/marketing-campaign-profiles.test.mjs
       - run: node scripts/render-marketing-flyer-fixtures.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/render-marketing-design-studio-proofs.mjs
       - run: node_modules/.bin/vite build --config scripts/marketing-flyer-visual.vite.config.js
       - run: mv artifacts/marketing-flyers/marketingProgramPdf.bundle.js artifacts/marketing-flyers/marketingProgramPdf.bundle.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: school-flyer-layout-samples
-          path: artifacts/marketing-flyers/*
+          path: |
+            artifacts/marketing-flyers/*
+            artifacts/marketing-ai-design-studio/*
           if-no-files-found: error
