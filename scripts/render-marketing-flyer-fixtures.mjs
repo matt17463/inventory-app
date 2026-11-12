@@ -13,7 +13,7 @@ const schools = [
   { key:"sequim", school:"Sequim High School", primary:"#4E176B", secondary:"#F4D514", initials:"SH", short:"SEQUIM" },
 ];
 const png=async svg=>"data:image/png;base64,"+(await sharp(Buffer.from(svg)).png().toBuffer()).toString("base64");
-const brand=await png('<svg xmlns="http://www.w3.org/2000/svg" width="330" height="150"><text x="12" y="60" font-size="54" fill="white" font-family="Arial" font-weight="bold">SC</text><text x="13" y="95" font-size="22" fill="white" font-family="Arial">SKILLED CRAFTING</text></svg>');
+const brand=await png('<svg xmlns="http://www.w3.org/2000/svg" width="330" height="150"><text x="12" y="60" font-size="54" fill="#173A61" font-family="Arial" font-weight="bold">SC</text><text x="13" y="95" font-size="22" fill="#173A61" font-family="Arial">SKILLED CRAFTING</text></svg>');
 function badge(s){return '<svg xmlns="http://www.w3.org/2000/svg" width="450" height="450"><circle cx="225" cy="225" r="196" fill="'+s.primary+'" stroke="'+s.secondary+'" stroke-width="24"/><text x="225" y="260" text-anchor="middle" font-size="132" font-family="Arial" font-weight="bold" fill="white">'+s.initials+'</text><text x="225" y="340" text-anchor="middle" font-size="27" font-family="Arial" fill="white">TEST ART</text></svg>';}
 function garment(s,name,index){
  const body=index===2?'#2A2D35':index===1?'#E3E3E3':s.primary;
