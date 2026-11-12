@@ -63,5 +63,5 @@ test("AI Studio premium background is opt-in and uses landscape scene without id
  assert.ok(studio.includes('aspect_ratio:"landscape"'));
  assert.ok(studio.includes("setConcepts(current=>current.map((old,i)=>i===selected?result.image:old))"));
  assert.ok(endpoint.includes('input.aspect_ratio==="landscape"?"1536x1024":"1024x1536"'));
- assert.ok(studio.includes("renderOfflineArtwork(offlineStudioArtwork("));
+ assert.ok(studio.includes("renderOfflineArtwork(offlineStudioHeroArtwork("));
 });
