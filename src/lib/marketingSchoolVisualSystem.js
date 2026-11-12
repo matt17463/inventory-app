@@ -40,4 +40,9 @@ export const SCHOOL_CAMPAIGN_CSS=String.raw`/* User-provided flyer references ar
 .category-school .hero .identity{min-height:.58in;display:block}
 .category-school .hero .identity>div{padding-top:.04in}
 .category-school .hero .client{font-size:16pt!important;text-transform:uppercase;letter-spacing:.7px;font-family:Impact,Arial Black,Arial,sans-serif}
-.category-school .hero .hero-text{max-width:6.5in}`;
+.category-school .hero .hero-text{max-width:6.5in}
+.category-school .gallery{flex:0 0 2.70in;min-height:2.70in}
+.category-school .benefits .benefit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.category-school .benefits .benefit{display:flex;flex-direction:row!important;min-height:0!important}
+.category-school .program-row,.category-school .artwork-options{flex-shrink:0}
+`;
