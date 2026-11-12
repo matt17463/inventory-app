@@ -9,8 +9,8 @@ import {pathToFileURL} from "node:url";
 import {chromium} from "@playwright/test";
 
 const output="artifacts/marketing-flyers";
-const files=readdirSync(output).filter(name=>/^(?:school|team|business|nonprofit|wedding|general)-ai-studio-concept-[123]\.html$/.test(name));
-if(files.length!==8)throw Error("Expected exactly eight audience/concept fixture documents; found "+files.length);
+const files=readdirSync(output).filter(name=>/^(?:school|team|business|nonprofit|wedding|event|general)-ai-studio-concept-[123]\.html$/.test(name));
+if(files.length!==9)throw Error("Expected exactly nine audience/concept fixture documents; found "+files.length);
 const browser=await chromium.launch({headless:true});
 const report=[];
 try{
