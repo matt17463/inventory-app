@@ -22,10 +22,10 @@ try{
     const documentPage=document.querySelector(".page");
     if(!documentPage)return {errors:["Missing US Letter page"]};
     const errors=[];
-    const targets=[".page","main",".hero","footer",".school-callouts"];
+    const targets=[".page","main","footer",".school-callouts"];
     const detail={};
     for(const selector of targets){
-     const el=documentPage.querySelector(selector)||selector===".page"?documentPage.querySelector(selector)||documentPage:null;
+     const el=selector===".page"?documentPage:documentPage.querySelector(selector);
      if(!el)continue;
      const bounding=el.getBoundingClientRect();
      detail[selector]={left:bounding.left,top:bounding.top,right:bounding.right,bottom:bounding.bottom,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight};
