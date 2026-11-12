@@ -17,6 +17,7 @@ const defaults={
  team:{headline:"TEAM PRIDE STARTS HERE",description:"Custom gear for players, coaches and fans.",benefits:"Coordinated team apparel\nFan merchandise\nCoach recognition\nFundraising opportunities",steps:"Choose your gear\nApprove the design\nOpen ordering\nCelebrate your team"},
  nonprofit:{headline:"MERCHANDISE WITH A MISSION",description:"Build awareness and support your community.",benefits:"Mission-driven designs\nSupporter merchandise\nFlexible fundraising\nLocal fulfillment",steps:"Plan your campaign\nApprove artwork\nInvite supporters\nReview results"},
  wedding:{headline:"PERSONALIZED MOMENTS",description:"Custom gifts, keepsakes and event details.",benefits:"Personalized glassware\nEngraved keepsakes\nCustom signage\nCoordinated gifts",steps:"Share your vision\nSelect products\nApprove proofs\nCelebrate"},
+ event:{headline:"MAKE YOUR EVENT UNFORGETTABLE",description:"Custom merchandise and meaningful details for your next gathering.",benefits:"Event-branded apparel\nPersonalized keepsakes\nSigns and giveaways\nPlanning and production support",steps:"Plan the event\nSelect products\nApprove proof\nCoordinate delivery"},
  general:{headline:"BRING YOUR BRAND TO LIFE",description:"Distinctive custom merchandise and promotional products.",benefits:"Personalized products\nProfessional artwork\nFlexible ordering\nLocal support",steps:"Plan\nDesign\nApprove\nProduce"}
 };
 async function renderOfflineArtwork(svg){
@@ -45,8 +46,11 @@ function FlyerFrame({html,label}){
  </div>;
 }
 export default function MarketingAIDesignStudio({accountId="",organization="",template="",segment="",logo="",colors=[],description="",contact="",approvedProductImages=[],onUseLegacy}){
- const category=designCategory(template,segment);
+ const detectedCategory=designCategory(template,segment);
+ const [categoryOverride,setCategoryOverride]=useState("");
+ const category=categoryOverride||detectedCategory;
  const [style,setStyle]=useState("athletic");
+ useEffect(()=>setCategoryOverride(""),[accountId,template,segment]);
  const [mode,setMode]=useState("hybrid");
  const [prompt,setPrompt]=useState("");
  const [concepts,setConcepts]=useState([]);
@@ -327,6 +331,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   <h3>AI Document Design Studio</h3>
   <p>Primary creative workflow · {DESIGN_CATEGORIES[category].label}. Generate three branded concepts without paid image APIs, choose your favorite, and review verified text before export. The classic document builder remains available below.</p>
   <div className="growth-grid">
+   <label className="growth-field"><span>Campaign audience</span><select aria-label="Campaign audience" value={category} onChange={e=>setCategoryOverride(e.target.value)}>{Object.entries(DESIGN_CATEGORIES).map(([key,info])=><option key={key} value={key}>{info.label}</option>)}</select></label>
    <label className="growth-field"><span>Creative style</span><select value={style} onChange={e=>setStyle(e.target.value)}>{DESIGN_STYLES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
    <label className="growth-field"><span>Document editing mode</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="hybrid">Hybrid — editable text and AI artwork</option><option value="artwork">Artwork-first — AI illustration with verified overlays</option></select></label>
   </div>
