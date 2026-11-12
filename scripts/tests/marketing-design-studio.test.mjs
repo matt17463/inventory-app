@@ -27,7 +27,7 @@ test("new studio is primary, classic builder remains available",()=>{
  const ai=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
  assert.ok(studio.includes("MarketingAIDesignStudio"));
  assert.ok(studio.includes("showClassicBuilder"));
- assert.ok(ai.includes("Generate 3 design concepts"));
+ assert.ok(ai.includes("Generate 3 design concepts — no API credits"));
  assert.ok(ai.includes('value="hybrid"'));
  assert.ok(ai.includes('value="artwork"'));
  assert.ok(ai.includes("studioPrintHtml"));
@@ -67,4 +67,16 @@ test("layout quota fallback is deterministic and concept-specific",async()=>{
  assert.notEqual(second.composition,third.composition);
  assert.equal(first.sections[0],"hero");
  assert.equal(third.sections.at(-1),"cta");
+});
+
+test("offline artwork is distinct, branded, safe, and requires no API",async()=>{
+ const {offlineStudioArtwork}=await import("../../src/lib/marketingDesignStudio.js");
+ const images=[1,2,3].map(concept=>offlineStudioArtwork({concept,colors:["#112233","#445566","#aabbcc"]}));
+ assert.equal(new Set(images).size,3);
+ for(const svg of images){assert.match(svg,/^<svg /);assert.match(svg,/#112233|#445566/);assert.ok(!svg.includes("<script"));assert.ok(!svg.includes("http://")&&!svg.includes("https://"));}
+ const invalid=offlineStudioArtwork({colors:['"><script>alert(1)</script>']});
+ assert.ok(!invalid.includes("<script")&&!invalid.includes("alert(1)"));
+ const studio=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
+ assert.match(studio,/offline:true/);
+ assert.doesNotMatch(studio,/marketing-ai-visual/);
 });
