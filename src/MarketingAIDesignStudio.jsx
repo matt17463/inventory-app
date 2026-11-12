@@ -6,6 +6,7 @@ import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingShar
 import MarketingApparelComposer from "./MarketingApparelComposer";
 import {marketingFlyerChecks} from "./lib/marketingFlyerChecks";
 import {schoolArtworkServiceOptions,verifiedFundraisingRows} from "./lib/marketingSchoolProgram";
+import {marketingCampaignProfile,marketingCampaignMood} from "./lib/marketingCampaignProfiles";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
@@ -45,7 +46,11 @@ function FlyerFrame({html,label}){
 }
 export default function MarketingAIDesignStudio({accountId="",organization="",template="",segment="",logo="",colors=[],description="",contact="",approvedProductImages=[],onUseLegacy}){
  const category=designCategory(template,segment);
+ const campaign=marketingCampaignProfile(category);
  const [style,setStyle]=useState("athletic");
+ const [brandMood,setBrandMood]=useState("auto");
+ const [brandReviewed,setBrandReviewed]=useState(false);
+ const [assetsReviewed,setAssetsReviewed]=useState(false);
  const [mode,setMode]=useState("hybrid");
  const [prompt,setPrompt]=useState("");
  const [concepts,setConcepts]=useState([]);
@@ -78,7 +83,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setArtworkMessage(category==="school"?"Create coordinated versions of your approved school logo for teams, clubs, seasons and special events. We can also refresh existing artwork.":"");setArtworkOptions(category==="school"?schoolArtworkServiceOptions().join("\n"):"");setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -96,7 +101,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   finally{setApprovedPhotoBusy(false);}
  }
  async function importApprovedPhoto(item){
-  if(mergedProductImages.length>=4)return;
+  if(mergedProductImages.length>=5)return;
   setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
   try{
    let blob;
@@ -109,7 +114,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    }
    if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||!blob.size||blob.size>2500000)throw Error("Approved image must be PNG, JPEG or WebP under 2.5 MB.");
    const image=await marketingImageDataUrl(blob);
-   setProductImages(current=>[...current,image].slice(0,4));
+   setProductImages(current=>[...current,image].slice(0,5));
    setApprovedPhotoCandidates(current=>current.filter(x=>x.id!==item.id));
    setApprovedPhotoStatus("Approved client image added. Verify the product and decoration before sharing.");
   }catch(e){setApprovedPhotoStatus("Could not import image: "+e.message);}
@@ -143,7 +148,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setHeroInfo(e.message||"Could not prepare campaign scene.");}
  }
  async function addProductPhotos(event){
-  const files=Array.from(event.target.files||[]).slice(0,4-mergedProductImages.length);
+  const files=Array.from(event.target.files||[]).slice(0,5-mergedProductImages.length);
   try{
    const images=await Promise.all(files.map(file=>new Promise((resolve,reject)=>{
     if(!file.type.match(/^image\/(png|jpeg|webp)$/)||file.size>5000000)return reject(Error("Use PNG, JPEG or WebP images under 5 MB."));
@@ -151,11 +156,11 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     img.onload=()=>{try{const canvas=document.createElement("canvas");const scale=Math.min(1,900/Math.max(img.width,img.height));canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/jpeg",.85));}catch(e){reject(e)}finally{URL.revokeObjectURL(url)}};
     img.onerror=()=>{URL.revokeObjectURL(url);reject(Error("Image could not be opened."))};img.src=url;
    })));
-   setProductImages(v=>[...v,...images].slice(0,4));setError("");
+   setProductImages(v=>[...v,...images].slice(0,5));setError("");
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows,artworkVariantImage});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows,artworkVariantImage,brandMood});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -176,7 +181,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
    const heroReference=heroImage?await storeImage(heroImage):null;
    const logoVariantReference=artworkVariantImage?await storeImage(artworkVariantImage):null;
-   const content={studioVersion:4,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
+   const content={studioVersion:5,organization,category,style,brandMood,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -194,17 +199,17 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(const ref of d.references){if(!ref?.key)throw Error("Missing private image reference.");images.push(await marketingLogoImage(accountId,ref.key));}
    setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
    const products=[];
-   if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
-   else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
+   if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,5)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
+   else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,5).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
    const restoredHero=d.heroReference?.key?await marketingLogoImage(accountId,d.heroReference.key):"";
    setHeroImage(restoredHero);setHeroInfo(restoredHero?"Approved hero scene restored from private storage.":"");
    setArtworkVariantImage(d.logoVariantReference?.key?await marketingLogoImage(accountId,d.logoVariantReference.key):"");
-   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setArtworkMessage(d.artworkMessage||"");setArtworkOptions(d.artworkOptions||"");setFundraisingNote(d.fundraisingNote||"");setFundraisingRows(Array.isArray(d.fundraisingRows)&&d.fundraisingRows.length?d.fundraisingRows.slice(0,3):[{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setProductImages(products);
+   setStyle(d.style||"athletic");setBrandMood(d.brandMood||"auto");setBrandReviewed(false);setAssetsReviewed(false);setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setArtworkMessage(d.artworkMessage||"");setArtworkOptions(d.artworkOptions||"");setFundraisingNote(d.fundraisingNote||"");setFundraisingRows(Array.isArray(d.fundraisingRows)&&d.fundraisingRows.length?d.fundraisingRows.slice(0,3):[{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setProductImages(products);
    setDraftMessage("Saved concepts and design instructions restored.");
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
  }
- const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,4);
+ const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,5);
  const flyerReview=marketingFlyerChecks({organization,logo,colors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage,category,artworkOptions:artworkOptions.split("\n").filter(Boolean)});
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function generate(){
@@ -264,6 +269,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   <h3>AI Document Design Studio</h3>
   <p>Primary creative workflow · {DESIGN_CATEGORIES[category].label}. Generate three branded concepts without paid image APIs, choose your favorite, and review verified text before export. The classic document builder remains available below.</p>
   <div className="growth-grid">
+   <label className="growth-field"><span>Approved brand mood</span><select value={brandMood} onChange={e=>setBrandMood(e.target.value)}><option value="auto">Automatic — {marketingCampaignMood(category,organization)}</option><option value="collegiate">Collegiate</option><option value="playful">Playful and friendly</option><option value="professional">Professional</option><option value="athletic">Athletic</option><option value="welcoming">Community-focused</option><option value="elegant">Elegant</option><option value="expressive">Bold and expressive</option></select></label>
    <label className="growth-field"><span>Creative style</span><select value={style} onChange={e=>setStyle(e.target.value)}>{DESIGN_STYLES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
    <label className="growth-field"><span>Document editing mode</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="hybrid">Hybrid — editable text and AI artwork</option><option value="artwork">Artwork-first — AI illustration with verified overlays</option></select></label>
   </div>
@@ -274,14 +280,14 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {draftMessage&&<p role="status">{draftMessage}</p>}
   {error&&<p role="alert">{error}</p>}
   <div className="growth-subcard">
-   <h4>Approved product photography — up to four</h4>
+   <h4>Approved product photography — up to five</h4>
    <p>Use approved decorated mockups, choose imagery from this client\u0027s approved documents, or create a garment proof with the composer below. No fabricated products or pricing.</p>
    {!mergedProductImages.length&&<p role="status"><strong>Draft preview only:</strong> add approved merchandise images before sharing a client-ready flyer.</p>}
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
-   <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
+   <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=5} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
    {!!approvedPhotoStatus&&<p role="status">{approvedPhotoStatus}</p>}
-   {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
-   <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
+   {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=5} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
+   <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=5} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
   <section className="growth-subcard" aria-label="Approved campaign scenery">
@@ -297,20 +303,21 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <ul>{flyerReview.checks.map(check=><li key={check.id}>{check.pass?"✓ ":"• "}{check.message}</li>)}</ul>
    <p>Photo resolution, supplier garment identity, logo permissions and exact production placement require human verification; this checklist does not certify them.</p>
   </section>
-  {category==="school"&&<section className="growth-subcard" aria-label="School program and seasonal logo options">
-   <h4>School spirit-wear program content</h4>
-   <p>The design benchmark includes program benefits, ordering steps, fundraising, and an artwork modernization panel. These editable details apply to any selected school, never just the reference school.</p>
+  <section className="growth-subcard" aria-label="Client campaign and creative options">
+   <h4>{campaign.artworkEyebrow} — {campaign.artwork}</h4>
+   <p>{category==="school"?"As in the reference, include benefits, ordering steps, the optional fundraising illustration and seasonal or team-specific design options. The content is adapted to each selected school.":"Select category-appropriate artwork extensions and marketing messages for this client. These appear as a graphic section near the bottom of the flyer."}</p>
    <div className="growth-grid">
-    <label className="growth-field"><span>Fundraising program explanation (without guaranteed profits)</span><textarea rows={3} value={fundraisingNote} onChange={e=>setFundraisingNote(e.target.value)}/></label>
-    <label className="growth-field"><span>Artwork modernization and alternate logo versions</span><textarea rows={3} value={artworkMessage} onChange={e=>setArtworkMessage(e.target.value)}/></label>
-    <label className="growth-field"><span>Seasonal, sports, club & event options — one per line</span><textarea rows={5} value={artworkOptions} onChange={e=>setArtworkOptions(e.target.value)}/></label>
+    {["school","team","nonprofit"].includes(category)&&<label className="growth-field"><span>Fundraising or campaign program explanation (without guaranteed returns)</span><textarea rows={3} value={fundraisingNote} onChange={e=>setFundraisingNote(e.target.value)}/></label>}
+    <label className="growth-field"><span>Approved brand artwork and alternate versions</span><textarea rows={3} value={artworkMessage} onChange={e=>setArtworkMessage(e.target.value)}/></label>
+    <label className="growth-field"><span>Customized collections and creative options — one per line</span><textarea rows={5} value={artworkOptions} onChange={e=>setArtworkOptions(e.target.value)}/></label>
    </div>
    <div className="growth-subcard" style={{marginTop:10}}>
     <h4>Optional example of alternate logo artwork</h4>
-    <p>Upload a second, approved school logo version or seasonal treatment to demonstrate the artwork modernization service. Without an approved second image, the flyer will describe the options without inventing a before-and-after image.</p>
+    <p>Upload an existing approved alternative identity treatment to demonstrate your creative services. Without a second approved image, the flyer describes the options without inventing a before-and-after image.</p>
     <input aria-label="Upload an approved alternate logo" type="file" accept="image/png,image/jpeg,image/webp" onChange={addApprovedLogoVariant}/>
     {artworkVariantImage&&<div style={{display:"flex",gap:12,alignItems:"center",marginTop:8}}><img src={artworkVariantImage} alt="Approved alternate school logo example" style={{width:90,height:90,objectFit:"contain"}}/><button type="button" className="sc-btn" onClick={()=>setArtworkVariantImage("")}>Remove alternate version</button></div>}
    </div>
+   {["school","team","nonprofit"].includes(category)&&<>
    <h4>Verified fundraising illustration (optional)</h4>
    <p>Enter actual, confirmed figures to display a wholesale/retail comparison like the reference. These are illustrative gross margins, not a profit guarantee or an invoice.</p>
    {fundraisingRows.map((row,i)=><div key={i} className="growth-grid" style={{marginBottom:9}}>
@@ -321,11 +328,12 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    </div>)}
    <button type="button" className="sc-btn" disabled={fundraisingRows.length>=3} onClick={()=>setFundraisingRows(rows=>[...rows,{product:"",wholesale:"",retail:"",quantity:"",verified:false}])}>Add fundraising product</button>
    {!!verifiedFundraisingRows(fundraisingRows).length&&<p role="status">{verifiedFundraisingRows(fundraisingRows).length} confirmed example row(s) will appear in the flyer with a clear illustrative-margin disclaimer.</p>}
-  </section>}
-  <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
+   </>}
+  </section>
+  <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=5} onAdd={image=>setProductImages(current=>[...current,image].slice(0,5))}/>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
-   <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
+   <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Product showcase","Editorial story","Bold brand statement"][i]}</strong>
   </button>)}</div>}
   {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
@@ -340,7 +348,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
-  <button type="button" className="sc-btn" disabled={!concepts.length||busy||!flyerReview.passed} onClick={printFlyer}>Print client-ready flyer / Save as PDF</button>
+  <section className="growth-subcard" aria-label="Client-ready verification"><h4>Final visual and factual review</h4><label><input type="checkbox" checked={brandReviewed} onChange={e=>setBrandReviewed(e.target.checked)}/> I have checked the selected client identity, logo, approved colors, contact details, and all factual copy.</label><label style={{display:"block",marginTop:8}}><input type="checkbox" checked={assetsReviewed} onChange={e=>setAssetsReviewed(e.target.checked)}/> I have reviewed merchandise identity, artwork permissions, photo quality, positioning, and any fundraising examples.</label><p>These are operator attestations, not an automated client approval or production certificate.</p></section>
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy||!flyerReview.passed||!brandReviewed||!assetsReviewed} onClick={printFlyer}>Print client-ready flyer / Save as PDF</button>
   {!flyerReview.passed&&<p role="status">Complete the client-ready checklist to enable print export. Saved drafts remain available.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={exportHtml}>Download editable print HTML</button>
   <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. Client-ready export requires verified branding and image inputs. The Print / Save as PDF button opens the browser print dialog using the exact preview layout. For high-quality results, choose US Letter, 100% scale, no margins and background graphics. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
