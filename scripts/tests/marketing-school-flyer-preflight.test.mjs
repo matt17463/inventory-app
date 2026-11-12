@@ -5,7 +5,7 @@ import {schoolFlyerPreflight} from '../../src/lib/marketingSchoolFlyerPreflight.
 const valid=()=>({
  organization:'Example School',schoolLogo:'data:image/png;base64,approved',
  businessLogo:'data:image/png;base64,approved',colors:['#1A326A'],
- contact:{website:'https://example.org'},
+ contact:{website:'https://example.org',email:'info@example.org'},
  products:[{name:'School hoodie',mockup:'data:image/png;base64,approved',tiers:[{min:1,wholesale:'20.00',retail:'30.00'}]}]
 });
 test('verified school flyer can proceed to human review',()=>{
@@ -39,4 +39,11 @@ test('school illustrated cover refuses products it cannot display',()=>{
  const d=valid();d.products=Array.from({length:6},()=>structuredClone(valid().products[0]));
  assert.equal(schoolFlyerPreflight(d).ready,false);
  assert.match(schoolFlyerPreflight(d).errors.join(' '),/at most five/i);
+});
+
+test('business site alone is insufficient for PDF contact information',()=>{
+ const d=valid();d.contact={website:'https://example.org'};
+ assert.equal(schoolFlyerPreflight(d).ready,false);
+ d.contact={email:'info@example.org'};
+ assert.equal(schoolFlyerPreflight(d).ready,false);
 });
