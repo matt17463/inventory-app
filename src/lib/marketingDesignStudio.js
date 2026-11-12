@@ -30,7 +30,7 @@ export function designStudioPrompt({category="general",style="athletic",client="
  "Art direction: "+st.direction+". Palette: "+(palette||"use approved client branding")+".",
  "Create one distinctive concept with sophisticated composition, depth, real-looking products, and strong visual hierarchy.",
  "Concept variation "+(Number(variation)+1)+": "+["cinematic, product-led composition","illustrative, identity-led composition","editorial, benefit-led composition"][Number(variation)%3]+".",
- "Client instructions: "+String(instructions||"").slice(0,4000),
+ "Client instructions: "+String(instructions||"").slice(0,12000),
  "Return a text-free background/hero illustration. Do not render copy, numbers, prices, phone numbers, logos or factual claims into the image. Verified editable content and the actual approved logo are composited separately."
  ].join("\n");
 }
