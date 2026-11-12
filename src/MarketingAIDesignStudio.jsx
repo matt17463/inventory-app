@@ -8,6 +8,7 @@ import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAsse
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {DEFAULT_STUDIO_LAYOUT,normalizeStudioLayout} from "./lib/marketingStudioLayoutControls";
 import {schoolFundraisingExample} from "./lib/marketingSchoolFundraising";
+import {checkStudioPrintImages} from "./lib/marketingStudioPrintImages";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork,studioLayoutSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
 
 const defaults={
@@ -296,9 +297,11 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const backdrop=concepts[selected] ? new Promise((resolve,reject)=>{
     const img=new Image();img.onload=resolve;img.onerror=()=>reject(Error("The concept background could not be loaded for printing."));img.src=concepts[selected];
    }):Promise.resolve();
-   Promise.all([fonts,backdrop,...images]).then(()=>{
+   Promise.all([fonts,backdrop,...images]).then(async()=>{
     if(popup.closed)return;
-    const issues=inspectStudioPrintDom(popup.document);
+    const layoutIssues=inspectStudioPrintDom(popup.document);
+    const photoChecks=await checkStudioPrintImages(popup.document,{scene:concepts[selected]||""});
+    const issues=[...layoutIssues,...photoChecks.errors];
     if(issues.length){setError("Print blocked: "+issues.join(" "));popup.close();return;}
     popup.focus();popup.print();
    }).catch(e=>{setError(e.message||"Print assets could not be prepared.");if(!popup.closed)popup.close();});
