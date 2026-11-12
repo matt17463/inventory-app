@@ -85,7 +85,7 @@ test("offline artwork is distinct, branded, safe, and requires no API",async()=>
 
 test("credit-free landscape hero scenery is distinct, category-specific, and logo-safe",async()=>{
  const {offlineStudioHeroArtwork}=await import("../../src/lib/marketingDesignStudio.js");
- const kinds=["school","team","business","nonprofit","wedding","general"];
+ const kinds=["school","team","business","nonprofit","wedding","event","general"];
  const outputs=kinds.map(category=>offlineStudioHeroArtwork({category,colors:["#114477","#ebb64c"],concept:1}));
  assert.equal(new Set(outputs).size,kinds.length);
  for(const result of outputs){
