@@ -56,3 +56,15 @@ test("school prompt tokens use verified values and leave no invented contact",()
  assert.match(output,/#123456/);
  assert.match(output,/not supplied; do not invent/);
 });
+
+test("layout quota fallback is deterministic and concept-specific",async()=>{
+ const {fallbackPlan}=await import("../../netlify/functions/marketing-ai-layout.js");
+ const first=fallbackPlan({concept:1,colors:["#112233"]});
+ const second=fallbackPlan({concept:2,colors:["#112233"]});
+ const third=fallbackPlan({concept:3,colors:["#112233"]});
+ assert.equal(first.accent,"#112233");
+ assert.notEqual(first.composition,second.composition);
+ assert.notEqual(second.composition,third.composition);
+ assert.equal(first.sections[0],"hero");
+ assert.equal(third.sections.at(-1),"cta");
+});
