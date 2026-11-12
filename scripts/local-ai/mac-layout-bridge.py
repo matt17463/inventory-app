@@ -112,7 +112,7 @@ def validate_copy(value):
         if not isinstance(v, str):
             raise ValueError("Invalid copy field")
         result = " ".join(v.split())[:limit]
-        if not result or re.search(r"\$|\b\d{3}[-.]\d{3}[-.]\d{4}\b|\b\d+(?:\.\d+)?%\b", result):
+        if not result or re.search(r"\$|\b\d{3}[-.]\d{3}[-.]\d{4}\b|\b\d+(?:\.\d+)?%", result):
             raise ValueError("Unverifiable numeric or contact claim")
         return result
     benefits = value.get("benefits")
