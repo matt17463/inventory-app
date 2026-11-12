@@ -1,3 +1,4 @@
+/* global document */
 // Layout regression proofs are synthetic: NEVER approved client artworks.
 import {mkdirSync,writeFileSync} from "node:fs";
 import sharp from "sharp";
