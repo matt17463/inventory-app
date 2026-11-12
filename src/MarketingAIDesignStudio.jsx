@@ -22,9 +22,9 @@ async function renderOfflineArtwork(svg){
  const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml"}));
  try{
   const img=new Image();img.src=url;await img.decode();
-  const canvas=document.createElement("canvas");canvas.width=960;canvas.height=1200;
+  const canvas=document.createElement("canvas");canvas.width=2550;canvas.height=3300;
   const context=canvas.getContext("2d");if(!context)throw Error("Canvas rendering is unavailable.");
-  context.drawImage(img,0,0,960,1200);
+  context.drawImage(img,0,0,2550,3300);
   return canvas.toDataURL("image/jpeg",0.86);
  }finally{URL.revokeObjectURL(url);}
 }
