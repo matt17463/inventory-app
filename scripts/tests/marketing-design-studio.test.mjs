@@ -27,7 +27,7 @@ test("new studio is primary, classic builder remains available",()=>{
  const ai=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
  assert.ok(studio.includes("MarketingAIDesignStudio"));
  assert.ok(studio.includes("showClassicBuilder"));
- assert.ok(ai.includes("Generate 3 design concepts — no API credits"));
+ assert.ok(ai.includes("Generate 3 complete design concepts — no API credits"));
  assert.ok(ai.includes('value="hybrid"'));
  assert.ok(ai.includes('value="artwork"'));
  assert.ok(ai.includes("studioPrintHtml"));
