@@ -256,6 +256,30 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    setProgress("Only concept "+(selected+1)+" was regenerated. Approved copy and other concepts are unchanged.");
   }catch(e){setError(e.message||"Could not regenerate selected concept.");}finally{setBusy(false);}
  }
+ async function generatePremiumSelected(){
+  if(!accountId||!concepts[selected]||busy){setError("Select a saved client and a design concept first.");return;}
+  setBusy(true);setError("");setProgress("Generating a premium background for the selected concept using the configured paid image API…");
+  try{
+   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+     account_id:accountId,
+     organization,segment:category,template_id:category+"-studio-flyer",
+     template_label:"AI Studio "+category+" visual background",
+     colors,style,description:body,
+     purpose:"Create a text-free scene for the selected Skilled Crafting marketing flyer. All logos, merchandise mockups, and verified copy are separate editable overlays.",
+     visual_prompt:visualPrompt
+    })
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(result.message||"Premium artwork generation failed.");
+   if(!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(result.image||""))throw Error("Image service returned an invalid background image.");
+   setConcepts(current=>current.map((old,i)=>i===selected?result.image:old));
+   setReleaseConfirmed(false);
+   setProgress("Premium scene added to concept "+(selected+1)+". Review generated scenery before sharing; approved client identity and products remain independent.");
+  }catch(e){setError(e.message||"Premium background unavailable. Offline concepts remain usable.");setProgress("");}
+  finally{setBusy(false);}
+ }
  function printFlyer(){
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
   if(!checkPrintReady())return;
@@ -340,6 +364,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     </div>)}
    </div>
    <button type="button" className="sc-btn" disabled={busy||draftBusy||lockedSections.length>0} onClick={regenerateSelected}>Regenerate selected concept only</button>
+   <button type="button" className="sc-btn" disabled={busy||draftBusy||!accountId} onClick={generatePremiumSelected}>Generate premium AI scenery for selected concept — paid API credits</button>
+   <p><small>Optional. Uses the configured OpenAI image-generation API and may incur charges. Only the decorative background is generated; the app does not send logos or product mockup imagery to this request. Review the result before sharing.</small></p>
   </section>}
   {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
