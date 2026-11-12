@@ -117,7 +117,7 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  * No remote images, untrusted markup, paid services, or invented merchandise.
  * Product photos and verified client identity remain separate editorial layers.
  */
-export function offlineStudioArtwork({concept=1,colors=[],style="athletic"}={}){
+export function offlineStudioArtwork({concept=1,colors=[],style="athletic",category="general"}={}){
  const index=Math.min(2,Math.max(0,Number(concept)-1||0));
  const valid=Array.isArray(colors)?colors.filter(c=>/^#[0-9a-f]{6}$/i.test(c)):[];
  const primary=valid[0]||"#173a61",secondary=valid[1]||"#335d83",accent=valid[2]||"#e9b653";
@@ -128,6 +128,15 @@ export function offlineStudioArtwork({concept=1,colors=[],style="athletic"}={}){
   '<circle cx="510" cy="460" r="355" fill="url(#glow)" opacity=".72"/><path d="M0 190L960 0V130L0 330ZM0 670L960 480V600L0 790Z" fill="'+c+'" opacity=".24"/><path d="M100 980L860 100" stroke="white" stroke-width="7" opacity=".19"/>',
   '<path d="M0 0H960V330L0 600Z" fill="url(#shine)" opacity=".45"/><rect x="500" y="70" width="340" height="900" rx="38" fill="white" opacity=".07" transform="rotate(13 670 520)"/><circle cx="180" cy="730" r="290" fill="none" stroke="'+c+'" stroke-width="12" opacity=".4"/>'
  ][index];
+ const motifs={
+  school:'<path d="M0 790L170 470 295 670 490 355 690 625 850 450 960 680V930H0Z" fill="white" opacity=".12"/><path d="M0 880l50-110 50 110m60 0 70-150 70 150m150 0 70-180 70 180m130 0 60-145 60 145" fill="none" stroke="white" stroke-width="16" opacity=".2"/>',
+  team:'<path d="M-40 940Q480 140 1000 940M-40 1040Q480 240 1000 1040" fill="none" stroke="white" stroke-width="40" opacity=".18"/><circle cx="760" cy="260" r="165" fill="none" stroke="white" stroke-width="12" opacity=".2"/>',
+  business:'<path d="M80 910V420h125v490m60 0V240h180v670m40 0V500h145v410m40 0V330h195v580" fill="none" stroke="white" stroke-width="16" opacity=".14"/>',
+  nonprofit:'<circle cx="410" cy="610" r="220" fill="none" stroke="white" stroke-width="35" opacity=".15"/><circle cx="600" cy="570" r="160" fill="none" stroke="white" stroke-width="26" opacity=".17"/>',
+  wedding:'<path d="M0 850Q130 320 340 470T740 390Q840 260 960 180" fill="none" stroke="white" stroke-width="14" opacity=".2"/><circle cx="280" cy="260" r="145" fill="none" stroke="white" stroke-width="24" opacity=".14"/>',
+  general:'<path d="M120 720L850 140M280 960L960 300" stroke="white" stroke-width="50" opacity=".12"/>'
+ };
+ const motif=motifs[category]||motifs.general;
  const texture=style==="editorial"?.12:style==="expressive"?.3:.2;
- return '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient><linearGradient id="shine" x2="1" y2="1"><stop stop-color="white" stop-opacity=".38"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient><radialGradient id="glow"><stop stop-color="'+c+'" stop-opacity=".65"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient><pattern id="grain" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M0 35L35 0" stroke="white" stroke-opacity="'+texture+'" stroke-width="1"/></pattern></defs><rect width="960" height="1200" fill="url(#bg)"/>'+graphics+'<rect width="960" height="1200" fill="url(#grain)" opacity=".35"/><rect y="950" width="960" height="250" fill="#0b1728" opacity=".42"/></svg>';
+ return '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient><linearGradient id="shine" x2="1" y2="1"><stop stop-color="white" stop-opacity=".38"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient><radialGradient id="glow"><stop stop-color="'+c+'" stop-opacity=".65"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient><pattern id="grain" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M0 35L35 0" stroke="white" stroke-opacity="'+texture+'" stroke-width="1"/></pattern></defs><rect width="960" height="1200" fill="url(#bg)"/>'+graphics+motif+'<rect width="960" height="1200" fill="url(#grain)" opacity=".35"/><rect y="950" width="960" height="250" fill="#0b1728" opacity=".42"/></svg>';
 }
