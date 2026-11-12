@@ -56,6 +56,7 @@ try{
   if(check.footer.bottom>1057||check.footer.top<0)throw Error(category+" footer exceeds Letter page: "+JSON.stringify(check));
   if(check.options.bottom>check.footer.top+3)throw Error(category+" options overlap CTA footer: "+JSON.stringify(check));
   if(check.pageScroll>1085)throw Error(category+" overflow inside fixed letter page: "+JSON.stringify(check));
+  if(category==="school" && check.footer.top-check.options.bottom>45)throw Error("School flyer has excessive empty space before its call to action: "+JSON.stringify(check));
   const name=category+"-"+concept;
   await page.screenshot({path:out+"/"+name+".png"});
   const pdf=await page.pdf({printBackground:true,preferCSSPageSize:true,scale:1});
