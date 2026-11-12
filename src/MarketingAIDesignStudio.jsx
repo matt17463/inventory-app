@@ -67,13 +67,14 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [contactText,setContactText]=useState("");
  const [productImages,setProductImages]=useState([]);
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
+ const [approvedStoreProducts,setApprovedStoreProducts]=useState([]);
  const [approvedPhotoBusy,setApprovedPhotoBusy]=useState(false);
  const [approvedPhotoStatus,setApprovedPhotoStatus]=useState("");
  useEffect(()=>{
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedStoreProducts([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -197,6 +198,33 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
   finally{setBusy(false);}
  }
+ async function findApprovedStoreMockups(){
+  if(!accountId)return;
+  setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
+  try{
+   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-store-assortment?account_id="+encodeURIComponent(accountId));
+   const result=await response.json();
+   if(!response.ok)throw Error(result.message||"No verified store assortment is available.");
+   const products=(Array.isArray(result.products)?result.products:[]).slice(0,30);
+   setApprovedStoreProducts(products);
+   setApprovedPhotoStatus(products.length?"Select a verified, approved decorated mockup from this client's active storefront.":"No eligible published storefront products were found.");
+  }catch(e){setApprovedStoreProducts([]);setApprovedPhotoStatus("Approved store mockups unavailable: "+e.message);}
+  finally{setApprovedPhotoBusy(false);}
+ }
+ async function importStoreMockup(assetId){
+  if(!accountId||mergedProductImages.length>=4)return;
+  setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
+  try{
+   const url=await marketingSharedImageUrl(accountId,{source:"mockup_outputs",asset_id:assetId});
+   const response=await fetch(url,{cache:"no-store",referrerPolicy:"no-referrer"});
+   if(!response.ok)throw Error("Selected approved mockup download failed.");
+   const blob=await response.blob();
+   if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||blob.size>5_000_000||!blob.size)throw Error("Approved mockup must be PNG, JPEG or WebP under 5 MB.");
+   setProductImages(previous=>[...previous,await marketingImageDataUrl(blob)].slice(0,4));
+   setApprovedPhotoStatus("Approved decorated mockup added. Confirm product and color before export.");
+  }catch(e){setApprovedPhotoStatus("Approved mockup could not be loaded: "+e.message);}
+  finally{setApprovedPhotoBusy(false);}
+ }
  function checkPrintReady(){
   const readiness=studioExportReadiness({client:organization,category,logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages});
   if(!readiness.ready){setError("Client-ready export blocked: "+readiness.errors.join(" "));return false;}
@@ -272,6 +300,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
    <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
    {!!approvedPhotoStatus&&<p role="status">{approvedPhotoStatus}</p>}
+   <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedStoreMockups}>Find approved decorated mockups from this client's active store</button>
+   {!!approvedStoreProducts.length&&<div className="growth-grid">{approvedStoreProducts.flatMap(product=>(product.images||[]).map(image=>({key:product.name+":"+image.assetId,name:product.name,color:image.color,assetId:image.assetId}))).map(item=><div className="growth-field" key={item.key}><strong>{item.name}</strong><small>Approved color: {item.color||"Not specified"}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importStoreMockup(item.assetId)}>Use approved store mockup</button></div>)}</div>}
    {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
