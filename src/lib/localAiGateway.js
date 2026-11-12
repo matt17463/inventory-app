@@ -20,13 +20,13 @@ export async function saveLocalAiConnection(endpoint,enabled){
  cached=r.data;return loadLocalAiConnection();
 }
 export async function localAiCall(path,payload){
- if(!['/ask','/package-copy','/layout','/copy'].includes(path))throw Error('Unsupported local AI action.');
+ if(!['/ask','/package-copy','/layout','/copy','/image'].includes(path))throw Error('Unsupported local AI action.');
  const config=await loadLocalAiConnection();
  const endpoint=cached?.enabled&&allowed(cached.endpoint_url)?cached.endpoint_url:allowed(fallback)?fallback:'';
  if(!endpoint)throw Error('Private Tailscale AI gateway is not yet configured or enabled.');
  const {data,error}=await supabase.auth.getSession();
  if(error||!data?.session?.access_token)throw Error('Please sign in again to use local AI.');
- const response=await fetch(endpoint+path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+data.session.access_token},body:JSON.stringify(payload),signal:AbortSignal.timeout(60000)});
+ const response=await fetch(endpoint+path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+data.session.access_token},body:JSON.stringify(payload),signal:AbortSignal.timeout(path==='/image'?140000:60000)});
  const result=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(result.error||'Private AI service unavailable. Check Tailscale and Ollama.');
  return result;
