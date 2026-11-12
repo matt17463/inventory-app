@@ -59,6 +59,18 @@ export function studioLayoutSections(plan,variant=0){
  const sections=[...new Set(source.filter(x=>allowed.includes(x)))];
  return [...sections,...defaults[Math.max(0,Math.min(2,Number(variant)||0))].filter(x=>!sections.includes(x))];
 }
+export function studioExportReadiness({client="",logo="",headline="",contact="",productImages=[],category="general"}={}){
+ const errors=[];
+ const isImage=value=>/^data:image\/(?:png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(value||"");
+ if(!String(client).trim())errors.push("Select a named client.");
+ if(!isImage(logo))errors.push("Provide the client-approved logo.");
+ if(!String(headline).trim())errors.push("Enter a verified headline.");
+ if(String(headline).length>85)errors.push("Shorten the headline to avoid print clipping (85 characters maximum).");
+ if(!String(contact).trim())errors.push("Enter verified contact details.");
+ if(!Array.isArray(productImages)||!productImages.some(isImage))errors.push("Add at least one approved merchandise photograph.");
+ if(!Object.hasOwn(DESIGN_CATEGORIES,category))errors.push("Select a supported document category.");
+ return {ready:errors.length===0,errors};
+}
 export function studioPrintHtml({client="",category="general",style="athletic",image="",logo="",headline="",description="",benefits=[],steps=[],cta="",contact="",prices=[],concept=0,mode="hybrid",plan=null,productImages=[],colors=[]}={}){
  // The LLM is allowed to suggest composition, never authoritative brand colors or facts.
  const safeImage=x=>/^data:image\/(png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(x||"")?x:"";
