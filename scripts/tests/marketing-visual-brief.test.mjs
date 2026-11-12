@@ -52,5 +52,5 @@ test("visual design prompt can be edited, reset, saved and used by the server",(
  assert.ok(studio.includes("setVisualPromptOverride(restored.visualPromptOverride??null)"));
  assert.ok(endpoint.includes("input.visual_prompt"));
  assert.ok(endpoint.includes("customPrompt||brief"));
- assert.ok(endpoint.includes("customPrompt.length>6000"));
+ assert.ok(endpoint.includes("customPrompt.length>14000"));
 });
