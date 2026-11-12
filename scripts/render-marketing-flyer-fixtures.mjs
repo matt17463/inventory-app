@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import sharp from "sharp";
 import { buildSchoolProgramPdf } from "../src/lib/marketingProgramPdf.js";
 import { schoolFlyerSvg } from "../src/lib/marketingIllustratedFlyer.js";
-import {studioPrintHtml,offlineStudioArtwork} from "../src/lib/marketingDesignStudio.js";
+import {studioPrintHtml,offlineStudioHeroArtwork} from "../src/lib/marketingDesignStudio.js";
 
 const output = "artifacts/marketing-flyers";
 mkdirSync(output, { recursive: true });
@@ -62,7 +62,7 @@ const businessCategories=["school","team","business","nonprofit","wedding","gene
 for(const category of businessCategories){
  const variants=category==="school"?3:1;
  for(let concept=0;concept<variants;concept++){
-  const artwork=await png(offlineStudioArtwork({category,concept:concept+1,colors:["#1F4369","#E6B93E"]}));
+  const artwork=await png(offlineStudioHeroArtwork({category,concept:concept+1,colors:["#1F4369","#E6B93E"]}));
   const html=studioPrintHtml({
    client:category==="school"?"Synthetic Example School":"Synthetic "+category.toUpperCase()+" Client",
    category,concept,image:artwork,logo:category==="school"?syntheticSchoolCrest:brand,headline:"SAMPLE DESIGN — NOT CLIENT APPROVED",
