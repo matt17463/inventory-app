@@ -491,7 +491,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
    <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
   </button>)}</div>}
-  {!!concepts.length&&<section className="growth-subcard" aria-label="Selective layout editor">
+  {!!concepts.length&&<details className="growth-subcard" aria-label="Selective layout editor">
+   <summary><strong>Advanced: fine-tune layout, regenerate, and lock approved sections</strong></summary>
    <h4>Selected concept layout and section locks</h4>
    <p>Reorder the merchandise, benefits and process sections without replacing approved artwork or text. Lock a section to protect its position.</p>
    <label className="growth-field"><input type="checkbox" checked={lockedSections.includes("hero")} onChange={e=>setLockedSections(v=>e.target.checked?[...v,"hero"]:v.filter(x=>x!=="hero"))}/> Lock hero headline placement</label>
@@ -517,7 +518,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <button type="button" className="sc-btn" disabled={busy||draftBusy} onClick={regenerateSelected}>Regenerate selected concept only</button>
    <button type="button" className="sc-btn" disabled={busy||draftBusy||!accountId} onClick={generatePremiumSelected}>Generate premium AI scenery for selected concept — paid API credits</button>
    <p><small>Optional. Uses the configured OpenAI image-generation API and may incur charges. Only the decorative background is generated; the app does not send logos or product mockup imagery to this request. Review the result before sharing.</small></p>
-  </section>}
+  </details>}
   {!!concepts.length&&<section id="studio-review" className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
