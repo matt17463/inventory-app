@@ -171,6 +171,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
+   if(d.category&&Object.hasOwn(DESIGN_CATEGORIES,d.category))setCategoryOverride(d.category);
    setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductLabels(Array.isArray(d.productLabels)?[...d.productLabels.slice(0,4).map(x=>String(x||"").slice(0,60)),"","","",""].slice(0,4):["","","",""]);setSchoolFundraising(d.schoolFundraising&&typeof d.schoolFundraising==="object"?{enabled:d.schoolFundraising.enabled===true,wholesale:String(d.schoolFundraising.wholesale??""),retail:String(d.schoolFundraising.retail??""),quantity:String(d.schoolFundraising.quantity??"75")}:{enabled:false,wholesale:"",retail:"",quantity:"75"});setProductImages(products);
    setReleaseConfirmed(false);
    setDraftMessage("Saved concepts and design instructions restored. Confirm artwork and copy again before export.");
