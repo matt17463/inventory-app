@@ -5,6 +5,7 @@ import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
 import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingSharedImageUrl} from "./lib/marketingArtwork";
 import MarketingApparelComposer from "./MarketingApparelComposer";
 import {marketingFlyerChecks} from "./lib/marketingFlyerChecks";
+import {marketingPrintImageCheck,marketingPrintPreflightSummary} from "./lib/marketingPrintPreflight";
 import {schoolArtworkServiceOptions,verifiedFundraisingRows} from "./lib/marketingSchoolProgram";
 import {marketingCampaignProfile,marketingCampaignMood} from "./lib/marketingCampaignProfiles";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
@@ -51,6 +52,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [brandMood,setBrandMood]=useState("auto");
  const [brandReviewed,setBrandReviewed]=useState(false);
  const [assetsReviewed,setAssetsReviewed]=useState(false);
+ const [imageQuality,setImageQuality]=useState({checked:false,passed:false,errors:[]});
  const [mode,setMode]=useState("hybrid");
  const [prompt,setPrompt]=useState("");
  const [concepts,setConcepts]=useState([]);
@@ -152,10 +154,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    finally{URL.revokeObjectURL(url);}
    if(img.naturalWidth<1000||img.naturalHeight<600)throw Error("Campaign scene must be at least 1000 × 600 pixels.");
    const canvas=document.createElement("canvas");
-   const scale=Math.min(1,2200/Math.max(img.naturalWidth,img.naturalHeight));
+   const scale=Math.min(1,2700/Math.max(img.naturalWidth,img.naturalHeight));
    canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
    canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
-   const result=canvas.toDataURL("image/jpeg",0.82);
+   const result=canvas.toDataURL("image/jpeg",0.79);
    if(result.length>3_200_000)throw Error("Scene is too large for private storage. Choose a simpler photo.");
    setHeroImage(result);
    setHeroInfo("Approved scene added for the hero. Check that the school identity, location and license are accurate.");
@@ -254,6 +256,21 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   setAssetsReviewed(false);
  }
  const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,5);
+ useEffect(()=>{
+  let active=true;
+  setImageQuality({checked:false,passed:false,errors:[]});
+  const images=[{src:logo,type:"logo",label:"Approved client logo"},
+   ...[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].slice(0,5).map((src,i)=>({src,type:"product",label:"Merchandise mockup "+(i+1)})),
+   ...(heroImage?[{src:heroImage,type:"hero",label:"Campaign scenic background"}]:[])
+  ].filter(item=>/^data:image\/(?:png|jpeg|webp);base64,/i.test(item.src||""));
+  Promise.all(images.map(item=>new Promise(resolve=>{
+   const img=new Image();
+   img.onload=()=>resolve(marketingPrintImageCheck({type:item.type,width:img.naturalWidth,height:img.naturalHeight,label:item.label}));
+   img.onerror=()=>resolve({ok:false,message:item.label+" could not be decoded."});
+   img.src=item.src;
+  }))).then(results=>{if(active)setImageQuality({checked:true,...marketingPrintPreflightSummary(results)});});
+  return()=>{active=false};
+ },[logo,heroImage,productImages,approvedProductImages]);
  const flyerReview=marketingFlyerChecks({organization,logo,colors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage,category,artworkOptions:artworkOptions.split("\n").filter(Boolean)});
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function suggestLocalCopy(){
@@ -423,8 +440,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
-  <section className="growth-subcard" aria-label="Client-ready verification"><h4>Final visual and factual review</h4><label><input type="checkbox" checked={brandReviewed} onChange={e=>setBrandReviewed(e.target.checked)}/> I have checked the selected client identity, logo, approved colors, contact details, and all factual copy.</label><label style={{display:"block",marginTop:8}}><input type="checkbox" checked={assetsReviewed} onChange={e=>setAssetsReviewed(e.target.checked)}/> I have reviewed merchandise identity, artwork permissions, photo quality, positioning, and any fundraising examples.</label><p>These are operator attestations, not an automated client approval or production certificate.</p></section>
-  <button type="button" className="sc-btn" disabled={!concepts.length||busy||!flyerReview.passed||!brandReviewed||!assetsReviewed} onClick={printFlyer}>Print client-ready flyer / Save as PDF</button>
+  <section className="growth-subcard" aria-label="Client-ready verification"><h4>Final visual and factual review</h4><label><input type="checkbox" checked={brandReviewed} onChange={e=>setBrandReviewed(e.target.checked)}/> I have checked the selected client identity, logo, approved colors, contact details, and all factual copy.</label><label style={{display:"block",marginTop:8}}><input type="checkbox" checked={assetsReviewed} onChange={e=>setAssetsReviewed(e.target.checked)}/> I have reviewed merchandise identity, artwork permissions, photo quality, positioning, and any fundraising examples.</label><p>These are operator attestations, not an automated client approval or production certificate.</p><p><strong>Print image resolution check:</strong> {imageQuality.checked?(imageQuality.passed?"Passed for supplied raster assets.":"Needs attention"):"Checking supplied imagery…"}</p>{imageQuality.errors.length>0&&<ul>{imageQuality.errors.map((message,i)=><li key={i}>{message}</li>)}</ul>}<p>Raster size alone does not verify print colors, embedded profiles, subject licensing, or artwork correctness.</p></section>
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy||!flyerReview.passed||!imageQuality.checked||!imageQuality.passed||!brandReviewed||!assetsReviewed} onClick={printFlyer}>Print client-ready flyer / Save as PDF</button>
   {!flyerReview.passed&&<p role="status">Complete the client-ready checklist to enable print export. Saved drafts remain available.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={exportHtml}>Download editable print HTML</button>
   <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. Client-ready export requires verified branding and image inputs. The Print / Save as PDF button opens the browser print dialog using the exact preview layout. For high-quality results, choose US Letter, 100% scale, no margins and background graphics. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
