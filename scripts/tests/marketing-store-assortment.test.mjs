@@ -78,3 +78,22 @@ test('Woo projection ignores private fields and filters unavailable variations',
   });
   await assert.rejects(readMarketingStoreProduct(22, async () => ({ ...product, status: 'draft' }), 'https://shop.example.com'), /published and visible/);
 });
+
+test('separate CRM customers receive only their approved WooCommerce merchandise',async()=>{
+ const dual={
+  ...tables,
+  sc_growth_accounts:[...tables.sc_growth_accounts,{id:'account-b',customer_id:'b'}],
+  sc_team_store_workflows:[...tables.sc_team_store_workflows,{id:'store-b',mockup_project_id_text:'b-project',stage:'live'}],
+  sc_team_store_products:[...tables.sc_team_store_products,{id:'product-b',campaign_id:'store-b',woo_product_id:22,product_name:'B-only Tee',display_price:24,currency:'USD'}],
+ };
+ const first=await loadMarketingAssortment(database(dual),'account-a');
+ const second=await loadMarketingAssortment(database(dual),'account-b');
+ assert.equal(first.length,1);
+ assert.equal(second.length,1);
+ assert.equal(first[0].name,'Tee');
+ assert.equal(second[0].name,'B-only Tee');
+ assert.deepEqual(first[0].images,[{color:'Blue',assetId:'blue'}]);
+ assert.deepEqual(second[0].images,[{color:'Red',assetId:'red'}]);
+ assert.ok(!JSON.stringify(first).includes('B-only'));
+ assert.ok(!JSON.stringify(second).includes('"assetId":"blue"'));
+});
