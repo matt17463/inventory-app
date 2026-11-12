@@ -17,11 +17,12 @@ test('missing logo, mockup, price, and contact cannot silently render',()=>{
  assert.equal(r.ready,false);
  assert.match(r.errors.join(' '),/logo|mockup|prices|contact/i);
 });
-test('cover image may supply product imagery but not unverified prices',()=>{
+test('an uploaded cover does not waive required program-detail mockups and prices',()=>{
  const d=valid();d.products[0].mockup='';
- assert.equal(schoolFlyerPreflight(d,{approvedCover:true}).ready,true);
+ assert.equal(schoolFlyerPreflight(d).ready,false);
+ d.products[0].mockup='data:image/png;base64,approved';
  d.products[0].tiers[0].retail='2.00';
- assert.equal(schoolFlyerPreflight(d,{approvedCover:true}).ready,false);
+ assert.equal(schoolFlyerPreflight(d).ready,false);
 });
 test('invalid tier minimum, negative values and fabricated numeric values fail',()=>{
  for(const tier of [{min:0,wholesale:1,retail:2},{min:1,wholesale:-2,retail:3},{min:1,wholesale:'x',retail:3},{min:1,wholesale:4,retail:3}]){
@@ -32,4 +33,10 @@ test('invalid tier minimum, negative values and fabricated numeric values fail',
 test('no merchandise and missing color both fail',()=>{
  const d=valid();d.products=[];d.colors=[];
  assert.equal(schoolFlyerPreflight(d).ready,false);
+});
+
+test('school illustrated cover refuses products it cannot display',()=>{
+ const d=valid();d.products=Array.from({length:6},()=>structuredClone(valid().products[0]));
+ assert.equal(schoolFlyerPreflight(d).ready,false);
+ assert.match(schoolFlyerPreflight(d).errors.join(' '),/at most five/i);
 });
