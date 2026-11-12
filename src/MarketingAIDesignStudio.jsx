@@ -359,8 +359,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   </div>
   <label className="growth-field"><span>Editable creative direction (up to 12,000 characters)</span><textarea rows={9} maxLength={12000} value={visualPrompt} onChange={e=>setPrompt(e.target.value)} /></label>
   <button type="button" className="sc-btn" onClick={()=>setPrompt("")}>Reset to category prompt</button>
-  <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts — no API credits"}</button>
-  {progress&&<p role="status">{progress}</p>}
+}
   {draftMessage&&<p role="status">{draftMessage}</p>}
   {error&&<p role="alert">{error}</p>}
   <div className="growth-subcard">
@@ -416,6 +415,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    </>}
   </section>
   <MarketingApparelComposer key={accountId+"-composer-"+(recipeToEdit?recipeToEdit.productIndex:"new")} accountId={accountId} logo={logo} recipeToEdit={recipeToEdit} disabled={busy||draftBusy||(mergedProductImages.length>=5&&!recipeToEdit)} onAdd={addComposedProduct}/>
+  <section className="growth-subcard" aria-label="Generate complete marketing concepts"><h4>Generate complete branded marketing concepts</h4><p>{mergedProductImages.length?"Your chosen approved merchandise images will appear in each flyer.":"Add approved decorated merchandise mockups above for a finished product-led design. Without them, this generates draft layout proofs only."} Confirm the selected logo, colors and category before generating three visual directions.</p><button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:mergedProductImages.length?"Generate 3 complete design concepts — no API credits":"Generate 3 draft design concepts — merchandise still needed"}</button>{progress&&<p role="status">{progress}</p>}</section>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
    <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Product showcase","Editorial story","Bold brand statement"][i]}</strong>
