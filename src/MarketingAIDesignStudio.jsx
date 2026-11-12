@@ -57,6 +57,9 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [plans,setPlans]=useState([]);
  const [savedDesigns,setSavedDesigns]=useState([]);
  const [draftBusy,setDraftBusy]=useState(false);
+ const [copyBusy,setCopyBusy]=useState(false);
+ const [copySuggestion,setCopySuggestion]=useState(null);
+ const [copyMessage,setCopyMessage]=useState("");
  const [draftMessage,setDraftMessage]=useState("");
  const [selected,setSelected]=useState(0);
  const [busy,setBusy]=useState(false);
@@ -84,7 +87,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -221,6 +224,29 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,5);
  const flyerReview=marketingFlyerChecks({organization,logo,colors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage,category,artworkOptions:artworkOptions.split("\n").filter(Boolean)});
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
+ async function suggestLocalCopy(){
+  if(!accountId){setCopyMessage("Select a client before requesting suggestions.");return;}
+  setCopyBusy(true);setCopySuggestion(null);setCopyMessage("");
+  try{
+   const result=await localAiCall("/copy",{organization,category,prompt:visualPrompt,current:{description:body}});
+   const draft=result?.draft;
+   if(!draft||typeof draft.headline!=="string"||!Array.isArray(draft.benefits)||!Array.isArray(draft.steps))throw Error("The local model did not return a usable copy draft.");
+   setCopySuggestion(draft);
+   setCopyMessage("Unverified wording suggestions from local Ollama. Check each statement before applying.");
+  }catch(e){setCopyMessage("Local copy assistant unavailable. Your existing verified content was not changed: "+e.message);}
+  finally{setCopyBusy(false);}
+ }
+ function useLocalCopy(){
+  if(!copySuggestion)return;
+  setHeadline(copySuggestion.headline.slice(0,160));
+  setBody(String(copySuggestion.description||"").slice(0,500));
+  setBenefits(copySuggestion.benefits.filter(v=>typeof v==="string").slice(0,4).join("\\n"));
+  setSteps(copySuggestion.steps.filter(v=>typeof v==="string").slice(0,4).join("\\n"));
+  setCta(String(copySuggestion.cta||"").slice(0,160));
+  setBrandReviewed(false);
+  setCopyMessage("Draft ideas applied. Review and verify every claim before printing.");
+  setCopySuggestion(null);
+ }
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
   setBusy(true);setError("");setConcepts([]);setPlans([]);setSelected(0);
@@ -347,6 +373,13 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   </button>)}</div>}
   {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
 
+  <section className="growth-subcard" aria-label="Private AI copy suggestions">
+   <h4>Local Ollama copywriting assistant</h4>
+   <p>Generate suggested headlines, program benefits, ordering steps and a call to action without paid APIs. Suggestions are never automatically approved or sent to customers.</p>
+   <button type="button" className="sc-btn" onClick={suggestLocalCopy} disabled={copyBusy||busy||!accountId}>{copyBusy?"Consulting local Ollama…":"Suggest marketing copy (private Ollama)"}</button>
+   {copyMessage&&<p role="status">{copyMessage}</p>}
+   {copySuggestion&&<div className="growth-subcard"><h5>{copySuggestion.headline}</h5><p>{copySuggestion.description}</p><strong>Benefits</strong><ul>{copySuggestion.benefits.map((text,i)=><li key={i}>{text}</li>)}</ul><strong>Ordering steps</strong><ol>{copySuggestion.steps.map((text,i)=><li key={i}>{text}</li>)}</ol><p><strong>Suggested CTA:</strong> {copySuggestion.cta}</p><button type="button" className="sc-btn" onClick={useLocalCopy}>Use suggestions as unverified editable draft</button><button type="button" className="sc-btn" onClick={()=>setCopySuggestion(null)}>Discard</button></div>}
+  </section>
   {mode==="hybrid"&&<div className="growth-grid">
    <label className="growth-field"><span>Verified headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)}/></label>
    <label className="growth-field"><span>Verified description</span><textarea value={body} onChange={e=>setBody(e.target.value)}/></label>
