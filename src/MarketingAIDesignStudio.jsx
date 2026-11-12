@@ -3,6 +3,7 @@ import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 import {supabase} from "./supabaseClient";
 import {marketingLogoImage} from "./lib/marketingArtwork";
 import {growthWriteAllowed} from "./lib/marketingApi";
+import {buildStudioPdf} from "./lib/marketingDesignStudioPdf";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,studioPrintHtml} from "./lib/marketingDesignStudio";
 
 const defaults={
@@ -103,6 +104,15 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to generate artwork.");setProgress(created.length+" concept(s) generated.");}
   finally{setBusy(false);}
  }
+ async function downloadPdf(){
+  if(!concepts[selected]){setError("Generate a concept first.");return;}
+  try{
+   const bytes=await buildStudioPdf({image:concepts[selected],logo,headline,description:body,benefits:benefits.split("\\n").map(x=>x.trim()).filter(Boolean),steps:steps.split("\\n").map(x=>x.trim()).filter(Boolean),cta,contact:contactText,plan:plans[selected],mode});
+   const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
+   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-"+category+"-concept-"+(selected+1)+".pdf";a.click();
+   setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }catch(e){setError(e.message||"PDF export failed.");}
+ }
  const print=()=>{
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
   const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],image:concepts[selected],logo,headline,description:body,
@@ -136,6 +146,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={downloadPdf}>Download selected one-page PDF</button>
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={print}>Export selected print layout (HTML → Print to PDF)</button>
   <p>Generated images are not automatically approved. Review logo fidelity, product imagery and any visual artifacts. The printable layout keeps business claims separate from AI-generated pixels.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
