@@ -198,7 +198,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   return true;
  }
  function moveSectionFirst(section){
-  if(lockedSections.includes(section)){setError("Unlock this section before changing its position.");return;}
+  if(lockedSections.length){setError("Unlock section placements before rearranging the page.");return;}
   setPlans(current=>current.map((plan,i)=>i!==selected?plan:{...plan,sections:["hero",section,...studioLayoutSections(plan,selected).filter(k=>k!==section),"cta"]}));
  }
  async function regenerateSelected(){
@@ -278,7 +278,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     {studioLayoutSections(plans[selected],selected).map(section=><div key={section} className="growth-field">
      <strong style={{textTransform:"capitalize"}}>{section}</strong>
      <label><input type="checkbox" checked={lockedSections.includes(section)} onChange={e=>setLockedSections(v=>e.target.checked?[...v,section]:v.filter(x=>x!==section))}/> Lock placement</label>
-     <button type="button" className="sc-btn" disabled={lockedSections.includes(section)} onClick={()=>moveSectionFirst(section)}>Move first</button>
+     <button type="button" className="sc-btn" disabled={lockedSections.length>0} onClick={()=>moveSectionFirst(section)}>Move first</button>
     </div>)}
    </div>
    <button type="button" className="sc-btn" disabled={busy||draftBusy||lockedSections.length>0} onClick={regenerateSelected}>Regenerate selected concept only</button>
