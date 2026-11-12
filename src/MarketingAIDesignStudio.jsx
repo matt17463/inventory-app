@@ -342,7 +342,22 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }
   popup.addEventListener("load",()=>{
    Promise.all(Array.from(popup.document.images).map(img=>img.decode().catch(()=>{})))
-    .then(()=>{if(!popup.closed){popup.focus();popup.print();}});
+    .then(async()=>{
+     if(popup.closed)return;
+     await popup.document.fonts.ready;
+     const page=popup.document.querySelector(".page");
+     const main=popup.document.querySelector("main");
+     const options=popup.document.querySelector(".artwork-options");
+     const footer=popup.document.querySelector("footer");
+     const overlaps=options&&footer&&options.getBoundingClientRect().bottom>footer.getBoundingClientRect().top+3;
+     const clipped=(page&&page.scrollHeight>page.clientHeight+4)||(main&&main.scrollHeight>main.clientHeight+5)||(options&&options.scrollHeight>options.clientHeight+5);
+     if(!page||!footer||overlaps||clipped){
+      setError("This flyer is too dense for one US Letter page. Shorten the copy, reduce the number of examples, or change the concept before printing.");
+      setProgress("Print blocked to avoid clipping. The proof remains available in the new window.");
+      return;
+     }
+     popup.focus();popup.print();
+    });
   },{once:true});
   popup.document.open();
   popup.document.write(html);
