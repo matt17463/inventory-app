@@ -68,6 +68,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const [aiText,setAiText] = useState("");
   const [visualBackground,setVisualBackground]=useState("");
   const [visualBusy,setVisualBusy]=useState(false);
+  const [visualPromptOverride,setVisualPromptOverride]=useState(null);
   const [aiTone,setAiTone] = useState("professional");
   const [retailPrice,setRetailPrice] = useState("");
   const [quantity,setQuantity] = useState("");
@@ -84,6 +85,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   const technical = technicalGuideFields[template];
   const schoolFlyer = template === "brochure-schools";
   const visualBrief=marketingVisualBrief({templateId:template,templateLabel:selectedTemplate?.label,organization,segment:segment==="team"&&selectedTemplate?.segment!=="all"?selectedTemplate.segment:segment,colors:colors.split(","),purpose:blueprint?.purpose,description,products:productRowsText||style,style:design||"premium editorial",audience});
+  const effectiveVisualPrompt=visualPromptOverride===null?visualBrief:visualPromptOverride;
   const needsProductFields=["product","catalog","mockup","description","pricing","proposal","package","fundraiser","quote","store","color","artwork","sample","brochure"].includes(selectedTemplate?.kind);
 
   const marketingLogoKey = organizations.find(a => a.id === accountId)?.marketing_logo_key || "";
@@ -248,7 +250,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setVisualBusy(true);setError("");
       const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({account_id:accountId,template_id:template,template_label:selectedTemplate?.label,organization,segment,colors:colors.split(","),purpose:blueprint?.purpose,description,products:productRowsText||style,style:design,audience,logo:logo&&logo.length<1_000_000?logo:""})
+        body:JSON.stringify({account_id:accountId,template_id:template,template_label:selectedTemplate?.label,organization,segment,colors:colors.split(","),purpose:blueprint?.purpose,description,products:productRowsText||style,style:design,audience,visual_prompt:effectiveVisualPrompt,logo:logo&&logo.length<1_000_000?logo:""})
       });
       const result=await response.json();
       if(!response.ok||!result.image)throw Error(result.message||"Image generation failed.");
@@ -324,7 +326,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
         observed_at: observedAt, source_url: sourceUrl || undefined });
       if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) throw Error("Provide an HTTPS supplier product URL.");
     }
-    return { template, segment, design, audience, organization: organization.trim(), description, logo, visualBackground,
+    return { template, segment, design, audience, organization: organization.trim(), description, logo, visualBackground, visualPromptOverride,
       contentVersion: 2, sectionContent,
       ...(technical ? {
         technicalRows: parseTechnicalGuideRows(template, technicalRows),
@@ -517,6 +519,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       setCta(restored.cta || "");
       setAiText(restored.aiText || "");
       setVisualBackground(restored.visualBackground||"");
+      setVisualPromptOverride(restored.visualPromptOverride??null);
       setSectionContent(restored.sectionContent || {});
       setTechnicalRows((restored.technicalRows || []).map(row => row.join(" | ")).join("\n"));
       setTechnicalLabels((restored.technicalImageLabels || []).join("\n"));
@@ -643,7 +646,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       : "Choose a template, add client details, preview the draft, and export the completed document. Uploaded artwork stays out of AI requests."}</p>
     {schoolFlyer && <h3>Step 1 — School and approved branding</h3>}
     <div className="growth-grid">
-      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setVisualBackground("");if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
+      <label className="growth-field"><span>Template</span><select value={template} onChange={e=>{setTemplate(e.target.value);setVisualBackground("");setVisualPromptOverride(null);if(e.target.value==="brochure-schools")setSegment("school");setShowPreview(false);setEditingDraft(null);setRevisionOf(null);setReopenedRows(null);setGuide(null);setAiText("");setSectionContent({});setTechnicalRows("");setTechnicalLabels("");setTechnicalRevision("");setProductImages([]);setLogoOptions([]);}}>
         {[...new Set(marketingTemplates.map(t=>t.category))].map(category=>
           <optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=>
             <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
@@ -676,11 +679,12 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
     </div>
     <details className="growth-subcard" aria-label="AI visual design direction for all marketing templates">
       <summary><strong>AI visual design direction</strong> — {selectedTemplate?.label||"Marketing document"}</summary>
-      <p>Use this client-specific creative brief with an image-generation tool to produce a professional, illustrated background or hero image. This is a design prompt, not an image-generation button: the current AI writing assistant cannot render images. Keep pricing, contact details, and other verified content in editable document fields.</p>
-      <textarea readOnly rows="11" aria-label="Client-specific visual generation prompt" value={visualBrief} style={{width:"100%"}}/>
+      <p>Edit the instructions below before generating. Your changes are sent to the AI image generator and saved with the document draft. Reset to regenerate the default prompt from the current client and template. Pricing, contact details and verified content remain separate editable fields.</p>
+      <textarea rows="11" maxLength={6000} aria-label="Client-specific visual generation prompt" value={effectiveVisualPrompt} onChange={e=>{setVisualPromptOverride(e.target.value);setGuide(null);}} style={{width:"100%"}}/>
+      <button type="button" className="sc-btn" disabled={visualPromptOverride===null} onClick={()=>{setVisualPromptOverride(null);setGuide(null);}}>Reset to suggested prompt</button>
       <button type="button" className="sc-btn" disabled={visualBusy||!accountId} onClick={generateVisual}>{visualBusy?"Generating illustrated artwork…":"Generate AI illustrated artwork"}</button>
       {visualBackground&&<div><img src={visualBackground} alt="Generated campaign illustration awaiting approval" style={{width:260,maxWidth:"100%",height:"auto"}}/><button type="button" className="sc-btn" onClick={()=>{setVisualBackground("");setGuide(null);}}>Remove generated artwork</button></div>}
-      <button type="button" className="sc-btn" onClick={()=>navigator.clipboard.writeText(visualBrief).then(()=>setSaveStatus("Visual design prompt copied.")).catch(()=>setError("Copy failed; select the prompt text manually."))}>Copy AI visual design prompt</button>
+      <button type="button" className="sc-btn" onClick={()=>navigator.clipboard.writeText(effectiveVisualPrompt).then(()=>setSaveStatus("Visual design prompt copied.")).catch(()=>setError("Copy failed; select the prompt text manually."))}>Copy AI visual design prompt</button>
     </details>
     {schoolFlyer && <details className="growth-subcard">
       <summary><strong>Optional AI writing assistant</strong> — generate and review program copy</summary>

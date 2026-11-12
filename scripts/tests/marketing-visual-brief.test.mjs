@@ -41,3 +41,16 @@ test("school flyer and general documents expose actual image generation controls
  assert.ok(studio.includes("marketing_visual_background"));
  assert.ok(renderer.includes("visual-hero"));
 });
+
+test("visual design prompt can be edited, reset, saved and used by the server",()=>{
+ const studio=readFileSync(new URL("../../src/MarketingDocumentStudio.jsx",import.meta.url),"utf8");
+ const endpoint=readFileSync(new URL("../../netlify/functions/marketing-ai-visual.js",import.meta.url),"utf8");
+ assert.ok(studio.includes('setVisualPromptOverride(e.target.value)'));
+ assert.ok(studio.includes("Reset to suggested prompt"));
+ assert.ok(studio.includes("visual_prompt:effectiveVisualPrompt"));
+ assert.ok(studio.includes("visualPromptOverride,"));
+ assert.ok(studio.includes("setVisualPromptOverride(restored.visualPromptOverride??null)"));
+ assert.ok(endpoint.includes("input.visual_prompt"));
+ assert.ok(endpoint.includes("customPrompt||brief"));
+ assert.ok(endpoint.includes("customPrompt.length>6000"));
+});
