@@ -8,6 +8,8 @@ on:
       - 'src/lib/marketingVisualBrief.js'
       - 'src/lib/marketingDesignStudio.js'
       - 'src/MarketingAIDesignStudio.jsx'
+      - 'src/lib/marketingDesignStudioPdf.js'
+      - 'netlify/functions/marketing-ai-layout.js'
       - 'scripts/tests/marketing-design-studio.test.mjs'
       - 'netlify/functions/marketing-ai-visual.js'
       - 'scripts/tests/marketing-visual-brief.test.mjs'
