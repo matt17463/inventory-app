@@ -155,3 +155,13 @@ test('print gate detects school feature ribbon overlapping headline',()=>{
  const failures=inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null});
  assert.match(failures.join(' '),/School program highlights overlap/);
 });
+
+test('long school campaign headline uses compact print treatment without affecting business flyers',()=>{
+ const heading='SAMPLE DESIGN — NOT CLIENT APPROVED';
+ const school=studioPrintHtml({category:'school',headline:heading});
+ assert.match(school,/class="page campaign athletic school-layout long-headline"/);
+ const shorter=studioPrintHtml({category:'school',headline:'SCHOOL SPIRIT WEAR'});
+ assert.ok(!shorter.includes('class="page campaign athletic school-layout long-headline"'));
+ const business=studioPrintHtml({category:'business',headline:heading});
+ assert.ok(!business.includes(' long-headline"'));
+});
