@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,studioPrintHtml} from "../../src/lib/marketingDesignStudio.js";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml} from "../../src/lib/marketingDesignStudio.js";
 test("all marketing categories have specific design guidance",()=>{
  for(const name of ["school","business","team","nonprofit","wedding","general"])assert.ok(DESIGN_CATEGORIES[name].brief.length>60);
  assert.equal(DESIGN_STYLES.length,3);
@@ -48,4 +48,11 @@ test("server layout validation restricts section names and colors",async()=>{
  const plan=validatePlan({sections:["steps","malicious","benefits","steps"],emphasis:"other",composition:"editorial",align:"left",accent:"not-color"});
  assert.deepEqual(plan.sections,["hero","steps","benefits","cta"]);
  assert.equal(plan.accent,"#234667");
+});
+
+test("school prompt tokens use verified values and leave no invented contact",()=>{
+ const output=resolveDesignTokens("School {{school_name}} · {{primary_color}} · Phone {{business_phone}}",{school_name:"Greywolf Elementary",primary_color:"#123456"});
+ assert.match(output,/Greywolf Elementary/);
+ assert.match(output,/#123456/);
+ assert.match(output,/not supplied; do not invent/);
 });
