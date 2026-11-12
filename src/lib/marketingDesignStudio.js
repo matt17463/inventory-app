@@ -98,7 +98,7 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  const layoutAlign=["left","center","right"].includes(plan?.align)?plan.align:"left";
  const layoutEmphasis=["hero","benefits","steps","products"].includes(plan?.emphasis)?plan.emphasis:"hero";
  const compositionClass=["split","full-bleed","editorial"].includes(plan?.composition)?plan.composition:"split";
- const editorialTags=' align-'+layoutAlign+' focus-'+layoutEmphasis+' composition-'+compositionClass+' category-'+category+' mood-'+mood;
+ const editorialTags=' align-'+layoutAlign+' focus-'+layoutEmphasis+' composition-'+compositionClass+' category-'+category+' mood-'+mood+(quotedRows.length?' has-fundraiser-table':'');
  const themes=[
   '<div class="page campaign athletic'+editorialTags+'">'+banner+'<header class="hero">'+heroPhotoLayer+heroMotif+commonHeader+'<div class="hero-text"><div class="slanted">'+safeText(profile.slogan)+'</div><h1>'+safeHeadline+'</h1><p>'+safeDescription+'</p></div><div class="stripe"></div></header>'+mainWithHeading(safeText(profile.collectionEyebrow),safeText(profile.collection))+footer+'</div>',
   '<div class="page campaign editorial'+editorialTags+'">'+banner+'<header class="hero">'+heroPhotoLayer+heroMotif+commonHeader+'<div class="editorial-head"><span class="issue">'+safeText(profile.slogan)+'</span><h1>'+safeHeadline+'</h1><p>'+safeDescription+'</p></div></header>'+mainWithHeading(safeText(profile.collectionEyebrow),safeText(profile.editorialTitle))+footer+'</div>',
