@@ -24,7 +24,7 @@ test("browser preflight checks approved art and scenic background independently"
  const doc={querySelector:s=>s===".page"?page:null,defaultView:{Image}};
  const result=await checkStudioPrintImages(doc,{scene:"data:image/jpeg;base64,AAAA"});
  assert.equal(result.ready,true);assert.equal(result.checks.length,3);
- const bad={...doc,querySelector:()=>({...page,querySelector:s=>s===".client-logo"?{...logo,naturalWidth:50}:page.querySelector(s)})};
+ const bad={...doc,querySelector:()=>({...page,querySelector:s=>s===".client-logo"?{...logo,naturalWidth:50,naturalHeight:50}:page.querySelector(s)})};
  const fail=await checkStudioPrintImages(bad,{scene:""});
  assert.equal(fail.ready,false);
  assert.match(fail.errors.join(" "),/client logo/);
