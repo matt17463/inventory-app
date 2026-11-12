@@ -120,7 +120,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:concepts[i]||"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -177,7 +177,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     setProgress("Creating design concept "+(i+1)+" of 3…");
     let localPlan=null;
     if(localEnabled){try{const result=await localAiCall("/layout",{organization,category,colors,concept:i+1,prompt:visualPrompt});if(result?.plan&&Array.isArray(result.plan.sections))localPlan=result.plan;}catch{localEnabled=false;}}
-    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
+    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style,category}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt,offline:true})
@@ -185,7 +185,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     const data=await response.json();
     if(!response.ok||!data.plan)throw Error(data.message||"Unable to prepare layout.");
     layouts.push(data.plan);
-    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));
+    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style,category}));
     created.push(image);setPlans([...layouts]);setConcepts([...created]);
    }
    setProgress("Three branded concepts ready without paid APIs. Local Ollama was used for layout planning when available; otherwise the offline fallback was used.");
@@ -208,7 +208,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   try{
    const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,colors,concept:selected+1,prompt:visualPrompt,offline:true})});
    const result=await response.json();if(!response.ok||!result.plan)throw Error(result.message||"Unable to regenerate selected layout.");
-   const artwork=await renderOfflineArtwork(offlineStudioArtwork({concept:selected+1,colors,style}));
+   const artwork=await renderOfflineArtwork(offlineStudioArtwork({concept:selected+1,colors,style,category}));
    setPlans(old=>old.map((v,i)=>i===selected?result.plan:v));setConcepts(old=>old.map((v,i)=>i===selected?artwork:v));
    setProgress("Only concept "+(selected+1)+" was regenerated. Approved copy and other concepts are unchanged.");
   }catch(e){setError(e.message||"Could not regenerate selected concept.");}finally{setBusy(false);}
