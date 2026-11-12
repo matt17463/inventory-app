@@ -122,7 +122,7 @@ test('verified product captions appear with markup safely escaped',()=>{
 });
 test('client draft persists approved-product labels and restores them as editable overlays',()=>{
  const ui=readFileSync(new URL('../../src/MarketingAIDesignStudio.jsx',import.meta.url),'utf8');
- assert.match(ui,/studioVersion:6/);
+ assert.match(ui,/studioVersion:7/);
  assert.match(ui,/productLabels,organization/);
  assert.match(ui,/setProductLabels\(Array\.isArray\(d\.productLabels\)/);
  assert.match(ui,/productLabels,approvedProductImages/);
