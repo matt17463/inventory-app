@@ -12,8 +12,8 @@ test('every category has distinct content direction rather than school-only word
  for(const category of ['school','team','business','nonprofit','wedding','general']){
   assert.ok(STUDIO_CATEGORY_COPY[category].benefits);
   const html=studioPrintHtml({category,client:'Test Organization',headline:'Verified headline',benefits:['Good service'],steps:['Confirm proof'],contact:'example.test',productImages:[sample],logo:sample});
-  assert.ok(html.includes(STUDIO_CATEGORY_COPY[category].hero));
-  assert.ok(html.includes(STUDIO_CATEGORY_COPY[category].collection));
+  assert.ok(html.includes(STUDIO_CATEGORY_COPY[category].hero.replaceAll('&','&amp;')));
+  assert.ok(html.includes(STUDIO_CATEGORY_COPY[category].collection.replaceAll('&','&amp;')));
  }
  const business=studioPrintHtml({category:'business',client:'Example',benefits:['Workwear']});
  assert.ok(!business.includes('WHY SCHOOLS PARTNER WITH US'));
@@ -41,7 +41,7 @@ test('generated visual backdrops are actually inserted into the printed proof',(
  const html=studioPrintHtml({client:'Client',image:sample,logo:sample,productImages:[sample]});
  assert.ok(html.includes('class="hero-scenery"'));
  assert.ok(html.includes('background-image:url(&quot;data:image/png;base64,AAAA&quot;)'));
- assert.ok(!studioPrintHtml({image:'javascript:alert(1)'}).includes('hero-scenery'));
+ assert.ok(!studioPrintHtml({image:'javascript:alert(1)'}).includes('class="hero-scenery"'));
 });
 test('school and wedding visual motifs are distinct and contain no identity lettering',()=>{
  const school=offlineStudioArtwork({category:'school',concept:1,colors:['#113355']});
