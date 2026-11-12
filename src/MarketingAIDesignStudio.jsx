@@ -2,7 +2,8 @@ import {useEffect,useRef,useState} from "react";
 import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 import {supabase} from "./supabaseClient";
 import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
-import {marketingLogoImage} from "./lib/marketingArtwork";
+import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingSharedImageUrl} from "./lib/marketingArtwork";
+import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
 
@@ -60,13 +61,50 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [cta,setCta]=useState("");
  const [contactText,setContactText]=useState("");
  const [productImages,setProductImages]=useState([]);
+ const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
+ const [approvedPhotoBusy,setApprovedPhotoBusy]=useState(false);
+ const [approvedPhotoStatus,setApprovedPhotoStatus]=useState("");
  useEffect(()=>{
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);
+  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
+ async function findApprovedPhotos(){
+  if(!accountId)return;
+  setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
+  try{
+   const {data,error}=await supabase.from("sc_growth_documents")
+    .select("id,title,status,content").eq("account_id",accountId)
+    .eq("status","approved").order("updated_at",{ascending:false}).limit(30);
+   if(error)throw Error(error.message);
+   const results=approvedMarketingPhotoCandidates(data,20);
+   setApprovedPhotoCandidates(results);
+   setApprovedPhotoStatus(results.length?results.length+" approved document image(s) found. Review and select only the applicable merchandise.":"No reusable approved merchandise images were found for this client.");
+  }catch(e){setApprovedPhotoStatus("Could not load approved client imagery: "+e.message);}
+  finally{setApprovedPhotoBusy(false);}
+ }
+ async function importApprovedPhoto(item){
+  if(mergedProductImages.length>=4)return;
+  setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
+  try{
+   let blob;
+   if(item.reference.key)blob=await marketingLogoBlob(accountId,item.reference.key);
+   else{
+    const url=await marketingSharedImageUrl(accountId,item.reference);
+    const response=await fetch(url,{cache:"no-store",referrerPolicy:"no-referrer"});
+    if(!response.ok)throw Error("Approved image download failed.");
+    blob=await response.blob();
+   }
+   if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||!blob.size||blob.size>2500000)throw Error("Approved image must be PNG, JPEG or WebP under 2.5 MB.");
+   const image=await marketingImageDataUrl(blob);
+   setProductImages(current=>[...current,image].slice(0,4));
+   setApprovedPhotoCandidates(current=>current.filter(x=>x.id!==item.id));
+   setApprovedPhotoStatus("Approved client image added. Verify the product and decoration before sharing.");
+  }catch(e){setApprovedPhotoStatus("Could not import image: "+e.message);}
+  finally{setApprovedPhotoBusy(false);}
+ }
  async function addProductPhotos(event){
   const files=Array.from(event.target.files||[]).slice(0,4-mergedProductImages.length);
   try{
@@ -152,19 +190,33 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
   finally{setBusy(false);}
  }
- function downloadPdf(){
+ function printFlyer(){
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
-  print();
-  setProgress("Full-color print layout exported. Open the HTML file and choose Print → Save as PDF. Enable background graphics and select US Letter.");
+  // The HTML is created by the same safe compositor as the live proof.
+  const html=previewHtml(selected);
+  const popup=window.open("","_blank");
+  if(!popup){
+   setError("The browser blocked the print window. Enable pop-ups for Skilled Crafting and retry.");
+   return;
+  }
+  popup.addEventListener("load",()=>{
+   Promise.all(Array.from(popup.document.images).map(img=>img.decode().catch(()=>{})))
+    .then(()=>{if(!popup.closed){popup.focus();popup.print();}});
+  },{once:true});
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
+  setProgress("Choose Save as PDF in the browser's print dialog. US Letter, scale 100%, no margins, background graphics enabled.");
  }
- const print=()=>{
+ function exportHtml(){
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
-  const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],logo,headline,description:body,
-   benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,image:"",colors});
-  const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");a.href=url;a.download="skilled-crafting-ai-"+category+"-flyer.html";a.click();
+  const html=previewHtml(selected);
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="skilled-crafting-"+category+"-flyer.html";a.click();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
- };
+ }
+
  return <section className="growth-subcard" aria-label="AI Document Design Studio">
   <h3>AI Document Design Studio</h3>
   <p>Primary creative workflow · {DESIGN_CATEGORIES[category].label}. Generate three branded concepts without paid image APIs, choose your favorite, and review verified text before export. The classic document builder remains available below.</p>
@@ -183,6 +235,9 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <p>Use photos or mockups you own or are licensed to use. They will appear in every complete flyer preview. No fabricated products or pricing.</p>
    {!mergedProductImages.length&&<p role="status"><strong>Draft preview only:</strong> add approved merchandise images before sharing a client-ready flyer.</p>}
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
+   <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
+   {!!approvedPhotoStatus&&<p role="status">{approvedPhotoStatus}</p>}
+   {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
@@ -203,8 +258,9 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
-  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={downloadPdf}>{"Export selected flyer — print-quality HTML / Save as PDF"}</button>
-  <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. The full-color export opens as printable HTML; use your browser to save a PDF with background graphics enabled. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={printFlyer}>Print selected flyer / Save as PDF</button>
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={exportHtml}>Download editable print HTML</button>
+  <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. The Print / Save as PDF button opens the browser print dialog using the exact preview layout. For high-quality results, choose US Letter, 100% scale, no margins and background graphics. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
  </section>;
 }
