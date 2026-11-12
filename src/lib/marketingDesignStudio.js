@@ -65,6 +65,20 @@ export function studioLayoutSections(plan,variant=0){
  const sections=[...new Set(source.filter(x=>allowed.includes(x)))];
  return [...sections,...defaults[Math.max(0,Math.min(2,Number(variant)||0))].filter(x=>!sections.includes(x))];
 }
+/** Keep locked sections at their current indices, moving only unlocked sections. */
+export function studioMergeLockedSections(previousPlan,nextPlan,locked=[],concept=0){
+ const current=studioLayoutSections(previousPlan,concept);
+ const proposed=studioLayoutSections(nextPlan,concept);
+ const locks=new Set((Array.isArray(locked)?locked:[]).filter(x=>current.includes(x)));
+ const free=proposed.filter(x=>!locks.has(x));
+ let n=0;
+ return current.map(section=>locks.has(section)?section:free[n++]);
+}
+export function studioMoveSectionFirst(plan,section,locked=[],concept=0){
+ const current=studioLayoutSections(plan,concept);
+ if(!current.includes(section)||(Array.isArray(locked)&&locked.includes(section)))return current;
+ return studioMergeLockedSections(plan,{sections:[section,...current.filter(x=>x!==section)]},locked,concept);
+}
 /** Rectangular overlap detection for critical editable regions (not decorative photos). */
 export function studioRectanglesOverlap(first,second,padding=2){
  if(!first||!second)return false;
