@@ -9,7 +9,7 @@ import {growthWriteAllowed} from "./lib/marketingApi";
 import {DEFAULT_STUDIO_LAYOUT,normalizeStudioLayout} from "./lib/marketingStudioLayoutControls";
 import {schoolFundraisingExample} from "./lib/marketingSchoolFundraising";
 import {checkStudioPrintImages} from "./lib/marketingStudioPrintImages";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioHeroArtwork,studioLayoutSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioHeroArtwork,studioLayoutSections,studioMoveSectionFirst,studioMergeLockedSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
 
 const defaults={
  school:{headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Build school pride. Support your programs. Make ordering easier.",benefits:"SCHOOL PRIDE — Quality school-branded apparel\nPROGRAM FUNDING — Support school activities\nEASY ONLINE ORDERS — Dedicated storefront\nLOCAL SUPPORT — Artwork and fulfillment",steps:"Plan together\nWe build your store\nSupporters order\nYour program benefits"},
@@ -167,7 +167,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    if(!Array.isArray(d.references)||d.references.length>3)throw Error("Invalid saved design.");
    const images=[];
    for(const ref of d.references){if(!ref?.key)throw Error("Missing private image reference.");images.push(await marketingLogoImage(accountId,ref.key));}
-   setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setLayoutAdjustments(d.layoutAdjustments&&typeof d.layoutAdjustments==="object"?Object.fromEntries(Object.entries(d.layoutAdjustments).filter(([key])=>/^[012]$/.test(key)).map(([key,value])=>[key,normalizeStudioLayout(value)])):{});setLockedSections(Array.isArray(d.lockedSections)?d.lockedSections.filter(x=>["products","benefits","steps"].includes(x)):[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
+   setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setLayoutAdjustments(d.layoutAdjustments&&typeof d.layoutAdjustments==="object"?Object.fromEntries(Object.entries(d.layoutAdjustments).filter(([key])=>/^[012]$/.test(key)).map(([key,value])=>[key,normalizeStudioLayout(value)])):{});setLockedSections(Array.isArray(d.lockedSections)?d.lockedSections.filter(x=>["hero","products","benefits","steps"].includes(x)):[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
@@ -245,22 +245,24 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   return true;
  }
  function updateSelectedLayout(name,value){
-  if(lockedSections.length){setError("Unlock placements before changing page geometry.");return;}
+  const lockedProperty=lockedSections.includes("hero")&&["headlineX","headlineY","heroHeight","mascotSide","mascotSize","mascotOpacity","sceneOpacity"].includes(name)||lockedSections.includes("products")&&["galleryX","galleryY","galleryHeight","presentation"].includes(name);
+  if(lockedProperty){setError("Unlock this element before changing its position or appearance.");return;}
   setLayoutAdjustments(previous=>({...previous,[selected]:normalizeStudioLayout({...previous[selected],[name]:value})}));
  }
  function moveSectionFirst(section){
-  if(lockedSections.length){setError("Unlock section placements before rearranging the page.");return;}
-  setPlans(current=>current.map((plan,i)=>i!==selected?plan:{...plan,sections:["hero",section,...studioLayoutSections(plan,selected).filter(k=>k!==section),"cta"]}));
+  if(lockedSections.includes(section)){setError("Unlock this section before changing its position.");return;}
+  setPlans(current=>current.map((plan,i)=>i!==selected?plan:{...plan,sections:["hero",...studioMoveSectionFirst(plan,section,lockedSections,selected),"cta"]}));
  }
  async function regenerateSelected(){
   if(!concepts[selected]||busy)return;
-  if(lockedSections.length){setError("Unlock layout sections before regenerating the selected concept.");return;}
+  // Locked positions survive regeneration. A locked hero also retains its artwork.
   setBusy(true);setError("");
   try{
    const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,colors,concept:selected+1,prompt:visualPrompt,offline:true})});
    const result=await response.json();if(!response.ok||!result.plan)throw Error(result.message||"Unable to regenerate selected layout.");
    const artwork=await renderOfflineArtwork(offlineStudioHeroArtwork({concept:selected+1,colors,style,category}));
-   setPlans(old=>old.map((v,i)=>i===selected?result.plan:v));setConcepts(old=>old.map((v,i)=>i===selected?artwork:v));
+   setPlans(old=>old.map((v,i)=>i===selected?{...result.plan,sections:["hero",...studioMergeLockedSections(v,result.plan,lockedSections,selected),"cta"]}:v));
+   if(!lockedSections.includes("hero"))setConcepts(old=>old.map((v,i)=>i===selected?artwork:v));
    setProgress("Only concept "+(selected+1)+" was regenerated. Approved copy and other concepts are unchanged.");
   }catch(e){setError(e.message||"Could not regenerate selected concept.");}finally{setBusy(false);}
  }
@@ -366,10 +368,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <p>Reorder the merchandise, benefits and process sections without replacing approved artwork or text. Lock a section to protect its position.</p>
    <label className="growth-field"><input type="checkbox" checked={lockedSections.includes("hero")} onChange={e=>setLockedSections(v=>e.target.checked?[...v,"hero"]:v.filter(x=>x!=="hero"))}/> Lock hero headline placement</label>
    <div className="growth-grid">
-    <label className="growth-field"><span>Hero area height (inches)</span><input type="range" min="2.8" max="3.65" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("heroHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Merchandise display height (inches)</span><input type="range" min="1.5" max="2.5" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("galleryHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Section spacing (inches)</span><input type="range" min=".06" max=".22" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("spacing",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Merchandise arrangement</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).presentation} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("presentation",e.target.value)}><option value="overlap">Layered merchandise</option><option value="grid">Clean catalog grid</option></select></label>
+    <label className="growth-field"><span>Hero area height (inches)</span><input type="range" min="2.8" max="3.65" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("heroHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise display height (inches)</span><input type="range" min="1.5" max="2.5" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Section spacing (inches)</span><input type="range" min=".06" max=".22" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing} disabled={false} onChange={e=>updateSelectedLayout("spacing",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise arrangement</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).presentation} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("presentation",e.target.value)}><option value="overlap">Layered merchandise</option><option value="grid">Clean catalog grid</option></select></label>
     <label className="growth-field"><span>Headline position: horizontal</span><input type="range" min="-.2" max=".2" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineX} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("headlineX",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineX.toFixed(2)} in</small></label>
     <label className="growth-field"><span>Headline position: vertical</span><input type="range" min="-.2" max=".2" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineY} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("headlineY",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineY.toFixed(2)} in</small></label>
     <label className="growth-field"><span>Merchandise position: horizontal</span><input type="range" min="-.15" max=".15" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryX} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryX",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryX.toFixed(2)} in</small></label>
@@ -381,10 +383,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     {studioLayoutSections(plans[selected],selected).map(section=><div key={section} className="growth-field">
      <strong style={{textTransform:"capitalize"}}>{section}</strong>
      <label><input type="checkbox" checked={lockedSections.includes(section)} onChange={e=>setLockedSections(v=>e.target.checked?[...v,section]:v.filter(x=>x!==section))}/> Lock placement</label>
-     <button type="button" className="sc-btn" disabled={lockedSections.length>0} onClick={()=>moveSectionFirst(section)}>Move first</button>
+     <button type="button" className="sc-btn" disabled={lockedSections.includes(section)} onClick={()=>moveSectionFirst(section)}>Move first</button>
     </div>)}
    </div>
-   <button type="button" className="sc-btn" disabled={busy||draftBusy||lockedSections.length>0} onClick={regenerateSelected}>Regenerate selected concept only</button>
+   <button type="button" className="sc-btn" disabled={busy||draftBusy} onClick={regenerateSelected}>Regenerate selected concept only</button>
    <button type="button" className="sc-btn" disabled={busy||draftBusy||!accountId} onClick={generatePremiumSelected}>Generate premium AI scenery for selected concept — paid API credits</button>
    <p><small>Optional. Uses the configured OpenAI image-generation API and may incur charges. Only the decorative background is generated; the app does not send logos or product mockup imagery to this request. Review the result before sharing.</small></p>
   </section>}
