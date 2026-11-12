@@ -79,9 +79,8 @@ export function schoolFlyerSvg(d){
  ${txt("ARTWORK MODERNIZATION & YEARLY DESIGNS",306,655,15,"#fff",900,"middle",'font-style="italic"')}
  <rect x="18" y="669" width="575" height="71" fill="#fff" rx="8"/>
  ${img(d.schoolLogo,31,671,80,64)}
- ${txt("»",125,718,39,s,900)}
- ${img(d.heroArtwork||d.schoolLogo,148,671,80,64)}
- ${txt("✓  Refresh and modernize school artwork",248,690,11,"#102640",800,"start")}
+ ${d.heroArtwork&&d.heroArtwork!==d.schoolLogo?txt("»",125,718,39,s,900)+img(d.heroArtwork,148,671,80,64):txt("SCHOOL",149,698,11,p,900)+txt("IDENTITY",149,714,11,p,900)}
+ ${txt(d.heroArtwork&&d.heroArtwork!==d.schoolLogo?"✓  Explore an approved logo refresh":"✓  Preserve and extend approved school identity",248,690,11,"#102640",800,"start")}
  ${txt("✓  Create seasonal, sport and event designs",248,708,11,"#102640",800,"start")}
  ${txt("✓  Support student and staff collections",248,726,11,"#102640",800,"start")}
  <rect x="0" y="744" width="612" height="48" fill="${p}"/>

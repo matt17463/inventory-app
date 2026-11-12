@@ -78,5 +78,37 @@ test("offline artwork is distinct, branded, safe, and requires no API",async()=>
  assert.ok(!invalid.includes("<script")&&!invalid.includes("alert(1)"));
  const studio=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
  assert.match(studio,/offline:true/);
- assert.doesNotMatch(studio,/marketing-ai-visual/);
+ assert.ok(studio.includes("onClick={generatePremiumSelected}"));
+ assert.match(studio,/paid API credits/);
+ assert.match(studio,/marketing-ai-visual/);
+});
+
+test("credit-free landscape hero scenery is distinct, category-specific, and logo-safe",async()=>{
+ const {offlineStudioHeroArtwork}=await import("../../src/lib/marketingDesignStudio.js");
+ const kinds=["school","team","business","nonprofit","wedding","event","general"];
+ const outputs=kinds.map(category=>offlineStudioHeroArtwork({category,colors:["#114477","#ebb64c"],concept:1}));
+ assert.equal(new Set(outputs).size,kinds.length);
+ for(const result of outputs){
+  assert.match(result,/width="1200" height="540"/);
+  assert.match(result,/viewBox="0 0 1200 540"/);
+  assert.ok(!result.includes("<text"));
+  assert.ok(!result.includes("<script"));
+ }
+ const variants=[1,2,3].map(concept=>offlineStudioHeroArtwork({category:"school",concept,colors:["#114477"]}));
+ assert.equal(new Set(variants).size,3);
+ const unsafe=offlineStudioHeroArtwork({colors:['"><script>bad()</script>']});
+ assert.ok(!unsafe.includes("bad()"));
+});
+
+test("event campaigns use distinct category, messaging and landscape imagery from weddings",async()=>{
+ const {designCategory,STUDIO_CATEGORY_COPY,studioPrintHtml,offlineStudioHeroArtwork}=await import("../../src/lib/marketingDesignStudio.js");
+ assert.equal(designCategory("event-merchandise","all"),"event");
+ assert.equal(designCategory("wedding-package","all"),"wedding");
+ assert.equal(designCategory("brochure-schools","school"),"school");
+ assert.notEqual(STUDIO_CATEGORY_COPY.event.collection,STUDIO_CATEGORY_COPY.wedding.collection);
+ assert.match(studioPrintHtml({category:"event",headline:"Event Merchandise"}),/CUSTOM MERCHANDISE FOR YOUR EVENT/);
+ assert.notEqual(offlineStudioHeroArtwork({category:"event"}),offlineStudioHeroArtwork({category:"wedding"}));
+ const ui=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
+ assert.match(ui,/Campaign audience/);
+ assert.match(ui,/setCategoryOverride\(d\.category\)/);
 });

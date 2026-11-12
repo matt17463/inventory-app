@@ -3,6 +3,13 @@ import { authorizeEmployee, jsonResponse } from './_shared/security.js';
 
 const TABLES = new Set(['mockup_artwork_assets', 'mockup_blank_assets', 'mockup_outputs']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CUSTOMER_SCOPED_PATHS = new Map([['mockup_outputs','outputs'],['mockup_artwork_assets','artwork']]);
+export function marketingSharedAssetPathAllowed(source,asset){
+ const required=CUSTOMER_SCOPED_PATHS.get(source);
+ if(!required)return source==='mockup_blank_assets'&&asset?.storage_provider==='r2'&&Boolean(asset.storage_bucket&&asset.storage_path);
+ const [owner,project,directory]=String(asset?.storage_path||'').split('/');
+ return UUID.test(owner)&&project===String(asset?.project_id||'')&&directory===required;
+}
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return jsonResponse(204, {}, event);
   if (event.httpMethod !== 'POST') return jsonResponse(405, { message: 'Method not allowed' }, event);
@@ -35,6 +42,7 @@ export async function handler(event) {
     const reusableBlank = body.source === 'mockup_blank_assets' && asset.storage_provider === 'r2' && !!asset.storage_bucket && !!asset.storage_path;
     if (String(project.customer_id_text) !== String(account.customer_id) && !reusableBlank) return jsonResponse(403, { message: 'Asset is not linked to this customer' }, event);
     if (body.source === 'mockup_outputs' && !['internal_approved', 'customer_approved'].includes(asset.approval_status)) return jsonResponse(403, { message: 'Mockup is not approved' }, event);
+    if (!marketingSharedAssetPathAllowed(body.source,asset)) return jsonResponse(403, { message: 'Asset storage does not belong to the approved project' }, event);
     let url;
     if (body.sign_download) {
       try {

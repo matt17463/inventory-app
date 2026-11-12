@@ -1,5 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import { schoolFlyerPng } from "./lib/marketingIllustratedFlyer";
+import { schoolFlyerPreflight } from "./lib/marketingSchoolFlyerPreflight";
+import { checkFlyerRasterAssets } from "./lib/marketingFlyerPrintPreflight";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
@@ -184,6 +186,10 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    if(!logo)throw Error("Select the school's approved logo in Step 1 before creating a flyer.");
    if(!actualColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
    const data=brochureData();
+   const preflight=schoolFlyerPreflight(data);
+   if(!preflight.ready)throw Error("Flyer needs corrections: "+preflight.errors.join(" "));
+   const printCheck=await checkFlyerRasterAssets(data,{approvedCover});
+   if(!printCheck.ready)throw Error("Print quality check failed: "+printCheck.errors.join(" "));
    // Preserve the exact approved original design when supplied; otherwise use the editable 300-dpi illustrated cover.
    // The program-details page remains editable and generated from verified inputs.
    const coverPng=approvedCover||await schoolFlyerPng(data);
@@ -261,7 +267,8 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    <button type="button" className="sc-btn" disabled={p.tiers.length>=7} onClick={()=>patch(p.id,{tiers:[...p.tiers,{min:24,wholesale:"",retail:""}]})}>Add quantity tier</button>
    <button type="button" className="sc-btn" disabled={products.length===1} onClick={()=>setProducts(ps=>ps.filter(x=>x.id!==p.id))}>Remove product</button>
   </article>)}
-  <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
+  <button type="button" className="sc-btn" disabled={products.length>=(brochure?5:25)} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
+  {brochure&&<p><small>The illustrated flyer showcases up to five approved products. Use the separate client catalog for larger assortments.</small></p>}
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
   {brochure&&<div className="growth-subcard">
    <h4>Save or reopen this client's editable flyer</h4>
