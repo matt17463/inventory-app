@@ -14,7 +14,7 @@ export function approvedMarketingPhotoCandidates(documents,limit=16){
   for(const reference of refs){
    if(!reference||typeof reference!=="object")continue;
    const key=typeof reference.key==="string" && /^marketing\/artwork\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/i.test(reference.key)?reference.key:"";
-   const source=["mockup_outputs","client_artwork","artwork_vault"].includes(reference.source)?reference.source:"";
+   const source=["mockup_outputs"].includes(reference.source)?reference.source:"";
    const assetId=typeof reference.asset_id==="string"&&/^[0-9a-f-]{36}$/i.test(reference.asset_id)?reference.asset_id:"";
    if(!key&&!(source&&assetId))continue;
    const id=key||source+":"+assetId;
