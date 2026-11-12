@@ -9,6 +9,7 @@ import {growthWriteAllowed} from "./lib/marketingApi";
 import {DEFAULT_STUDIO_LAYOUT,normalizeStudioLayout} from "./lib/marketingStudioLayoutControls";
 import {schoolFundraisingExample,defaultSchoolFundraising,normalizeSchoolFundraising,blankFundraisingProduct,MAX_FUNDRAISING_PRODUCTS} from "./lib/marketingSchoolFundraising";
 import {defaultStudioServices,normalizeStudioServices,validateStudioServices} from "./lib/marketingStudioServices";
+import {marketingStudioWorkflow} from "./lib/marketingStudioDocumentWorkflow";
 import {checkStudioPrintImages} from "./lib/marketingStudioPrintImages";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioHeroArtwork,studioLayoutSections,studioMoveSectionFirst,studioMergeLockedSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
 
@@ -50,6 +51,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const detectedCategory=designCategory(template,segment);
  const [categoryOverride,setCategoryOverride]=useState("");
  const category=categoryOverride||detectedCategory;
+ const workflow=marketingStudioWorkflow(template);
  const [style,setStyle]=useState("athletic");
  useEffect(()=>setCategoryOverride(""),[accountId,template,segment]);
  const [mode,setMode]=useState("hybrid");
@@ -371,14 +373,22 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <label className="growth-field"><span>Creative style</span><select value={style} onChange={e=>setStyle(e.target.value)}>{DESIGN_STYLES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
    <label className="growth-field"><span>Document editing mode</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="hybrid">Hybrid — editable text and AI artwork</option><option value="artwork">Artwork-first — AI illustration with verified overlays</option></select></label>
   </div>
-  <label className="growth-field"><span>Editable creative direction (up to 12,000 characters)</span><textarea rows={9} maxLength={12000} value={visualPrompt} onChange={e=>setPrompt(e.target.value)} /></label>
-  <button type="button" className="sc-btn" onClick={()=>setPrompt("")}>Reset to category prompt</button>
-  <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts — no API credits"}</button>
-  {progress&&<p role="status">{progress}</p>}
-  {draftMessage&&<p role="status">{draftMessage}</p>}
-  {error&&<p role="alert">{error}</p>}
-  <div className="growth-subcard">
-   <h4>Approved product photography — up to four</h4>
+  <nav aria-label="Flyer creation steps" style={{display:"flex",gap:10,flexWrap:"wrap",padding:"10px 0"}}>
+   <a href="#studio-assets">1. Merchandise &amp; identity</a>
+   <a href="#studio-message">2. Campaign message</a>
+   <a href="#studio-services">3. Services &amp; pricing</a>
+   <a href="#studio-concepts">4. Design concepts</a>
+   <a href="#studio-review">5. Review &amp; export</a>
+  </nav>
+  <div className="growth-subcard" role="note">
+   <h4>{workflow.label} — {workflow.purpose}</h4>
+   <p>{workflow.description}</p>
+   {!workflow.allowsPromotionalFlyer&&<p><strong>This one-page flyer is a visual companion, not the complete formal document.</strong> Use the full builder for authoritative fields, approval records and editable Word/PDF exports.</p>}
+   <p><small>All 35 document types use approved identity, merchandise photography, editable wording, purpose-specific artwork services and print checks. Formal multi-page files remain available through the full document builder.</small></p>
+   {!accountId&&<p role="status">Start by selecting a client above. Artwork, storefront items and saved drafts stay linked to that client.</p>}
+  </div>
+  <div id="studio-assets" className="growth-subcard">
+   <h4>Step 1 — Choose approved merchandise and branding</h4><p>Approved product photography — up to four images. These images are used in the final client flyer.</p>
    <p>Use approved decorated mockups, choose imagery from this client\u0027s approved documents, or create a garment proof with the composer below. No fabricated products or pricing.</p>
    {!mergedProductImages.length&&<p role="status"><strong>Draft preview only:</strong> add approved merchandise images before sharing a client-ready flyer.</p>}
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
@@ -392,39 +402,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>removeProductImage(i)}>Remove</button></div>)}</div>}
   </div>
   <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
-  {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
-   <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
-   <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
-  </button>)}</div>}
-  {!!concepts.length&&<section className="growth-subcard" aria-label="Selective layout editor">
-   <h4>Selected concept layout and section locks</h4>
-   <p>Reorder the merchandise, benefits and process sections without replacing approved artwork or text. Lock a section to protect its position.</p>
-   <label className="growth-field"><input type="checkbox" checked={lockedSections.includes("hero")} onChange={e=>setLockedSections(v=>e.target.checked?[...v,"hero"]:v.filter(x=>x!=="hero"))}/> Lock hero headline placement</label>
-   <div className="growth-grid">
-    <label className="growth-field"><span>Hero area height (inches)</span><input type="range" min="2.8" max="3.65" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("heroHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Merchandise display height (inches)</span><input type="range" min="1.5" max="2.5" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Section spacing (inches)</span><input type="range" min=".06" max=".22" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing} disabled={false} onChange={e=>updateSelectedLayout("spacing",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Merchandise arrangement</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).presentation} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("presentation",e.target.value)}><option value="overlap">Layered merchandise</option><option value="grid">Clean catalog grid</option></select></label>
-    <label className="growth-field"><span>Headline position: horizontal</span><input type="range" min="-.2" max=".2" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineX} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("headlineX",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineX.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Headline position: vertical</span><input type="range" min="-.2" max=".2" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineY} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("headlineY",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineY.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Merchandise position: horizontal</span><input type="range" min="-.15" max=".15" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryX} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryX",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryX.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Merchandise position: vertical</span><input type="range" min="-.15" max=".15" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryY} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryY",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryY.toFixed(2)} in</small></label>
-    <label className="growth-field"><span>Scenery visibility</span><input type="range" min=".08" max=".5" step=".02" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).sceneOpacity} onChange={e=>updateSelectedLayout("sceneOpacity",Number(e.target.value))}/><small>{Math.round((layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).sceneOpacity*100)}% opacity</small></label>
-    {category==="school"&&<label className="growth-field"><span>Decorative approved crest position</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotSide} onChange={e=>updateSelectedLayout("mascotSide",e.target.value)}><option value="right">Right side</option><option value="left">Left side</option></select></label>}
-    {category==="school"&&<label className="growth-field"><span>Decorative approved crest size</span><input type="range" min="1.5" max="3.1" step=".1" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotSize} onChange={e=>updateSelectedLayout("mascotSize",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotSize.toFixed(1)} in</small></label>}
-    {category==="school"&&<label className="growth-field"><span>Decorative approved crest visibility</span><input type="range" min=".08" max=".25" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotOpacity} onChange={e=>updateSelectedLayout("mascotOpacity",Number(e.target.value))}/><small>{Math.round((layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotOpacity*100)}% opacity</small></label>}
-    {studioLayoutSections(plans[selected],selected).map(section=><div key={section} className="growth-field">
-     <strong style={{textTransform:"capitalize"}}>{section}</strong>
-     <label><input type="checkbox" checked={lockedSections.includes(section)} onChange={e=>setLockedSections(v=>e.target.checked?[...v,section]:v.filter(x=>x!==section))}/> Lock placement</label>
-     <button type="button" className="sc-btn" disabled={lockedSections.includes(section)} onClick={()=>moveSectionFirst(section)}>Move first</button>
-    </div>)}
-   </div>
-   <button type="button" className="sc-btn" disabled={busy||draftBusy} onClick={regenerateSelected}>Regenerate selected concept only</button>
-   <button type="button" className="sc-btn" disabled={busy||draftBusy||!accountId} onClick={generatePremiumSelected}>Generate premium AI scenery for selected concept — paid API credits</button>
-   <p><small>Optional. Uses the configured OpenAI image-generation API and may incur charges. Only the decorative background is generated; the app does not send logos or product mockup imagery to this request. Review the result before sharing.</small></p>
-  </section>}
-  {!!concepts.length&&<section className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
-
+  <h4 id="studio-message">Step 2 — Customize verified headline, benefits and contact</h4>
   {mode==="hybrid"&&<div className="growth-grid">
    <label className="growth-field"><span>Verified headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)}/></label>
    <label className="growth-field"><span>Verified description</span><textarea value={body} onChange={e=>setBody(e.target.value)}/></label>
@@ -463,6 +441,51 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     </>}
    </div>}
   </section>
+  <section id="studio-concepts" className="growth-subcard">
+   <h4>Step 4 — Generate and compare three design concepts</h4>
+   <p>Use the approved imagery and information above. Generation uses the credit-free layout option unless you explicitly request premium scenery.</p>
+   <details><summary><strong>Advanced: edit the design instructions (optional)</strong></summary>
+    <label className="growth-field"><span>Visual and layout direction (up to 12,000 characters)</span><textarea rows={6} maxLength={12000} value={visualPrompt} onChange={e=>setPrompt(e.target.value)} /></label>
+    <button type="button" className="sc-btn" onClick={()=>setPrompt("")}>Reset to suggested direction</button>
+   </details>
+   <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts — no API credits"}</button>
+   {progress&&<p role="status">{progress}</p>}
+   {draftMessage&&<p role="status">{draftMessage}</p>}
+   {error&&<p role="alert">{error}</p>}
+  </section>
+  {!!concepts.length&&<div aria-label="Generated design concepts" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
+   <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
+   <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
+  </button>)}</div>}
+  {!!concepts.length&&<section className="growth-subcard" aria-label="Selective layout editor">
+   <h4>Selected concept layout and section locks</h4>
+   <p>Reorder the merchandise, benefits and process sections without replacing approved artwork or text. Lock a section to protect its position.</p>
+   <label className="growth-field"><input type="checkbox" checked={lockedSections.includes("hero")} onChange={e=>setLockedSections(v=>e.target.checked?[...v,"hero"]:v.filter(x=>x!=="hero"))}/> Lock hero headline placement</label>
+   <div className="growth-grid">
+    <label className="growth-field"><span>Hero area height (inches)</span><input type="range" min="2.8" max="3.65" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("heroHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise display height (inches)</span><input type="range" min="1.5" max="2.5" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Section spacing (inches)</span><input type="range" min=".06" max=".22" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing} disabled={false} onChange={e=>updateSelectedLayout("spacing",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise arrangement</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).presentation} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("presentation",e.target.value)}><option value="overlap">Layered merchandise</option><option value="grid">Clean catalog grid</option></select></label>
+    <label className="growth-field"><span>Headline position: horizontal</span><input type="range" min="-.2" max=".2" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineX} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("headlineX",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineX.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Headline position: vertical</span><input type="range" min="-.2" max=".2" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineY} disabled={lockedSections.includes("hero")} onChange={e=>updateSelectedLayout("headlineY",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).headlineY.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise position: horizontal</span><input type="range" min="-.15" max=".15" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryX} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryX",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryX.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise position: vertical</span><input type="range" min="-.15" max=".15" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryY} disabled={lockedSections.includes("products")} onChange={e=>updateSelectedLayout("galleryY",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryY.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Scenery visibility</span><input type="range" min=".08" max=".5" step=".02" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).sceneOpacity} onChange={e=>updateSelectedLayout("sceneOpacity",Number(e.target.value))}/><small>{Math.round((layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).sceneOpacity*100)}% opacity</small></label>
+    {category==="school"&&<label className="growth-field"><span>Decorative approved crest position</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotSide} onChange={e=>updateSelectedLayout("mascotSide",e.target.value)}><option value="right">Right side</option><option value="left">Left side</option></select></label>}
+    {category==="school"&&<label className="growth-field"><span>Decorative approved crest size</span><input type="range" min="1.5" max="3.1" step=".1" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotSize} onChange={e=>updateSelectedLayout("mascotSize",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotSize.toFixed(1)} in</small></label>}
+    {category==="school"&&<label className="growth-field"><span>Decorative approved crest visibility</span><input type="range" min=".08" max=".25" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotOpacity} onChange={e=>updateSelectedLayout("mascotOpacity",Number(e.target.value))}/><small>{Math.round((layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).mascotOpacity*100)}% opacity</small></label>}
+    {studioLayoutSections(plans[selected],selected).map(section=><div key={section} className="growth-field">
+     <strong style={{textTransform:"capitalize"}}>{section}</strong>
+     <label><input type="checkbox" checked={lockedSections.includes(section)} onChange={e=>setLockedSections(v=>e.target.checked?[...v,section]:v.filter(x=>x!==section))}/> Lock placement</label>
+     <button type="button" className="sc-btn" disabled={lockedSections.includes(section)} onClick={()=>moveSectionFirst(section)}>Move first</button>
+    </div>)}
+   </div>
+   <button type="button" className="sc-btn" disabled={busy||draftBusy} onClick={regenerateSelected}>Regenerate selected concept only</button>
+   <button type="button" className="sc-btn" disabled={busy||draftBusy||!accountId} onClick={generatePremiumSelected}>Generate premium AI scenery for selected concept — paid API credits</button>
+   <p><small>Optional. Uses the configured OpenAI image-generation API and may incur charges. Only the decorative background is generated; the app does not send logos or product mockup imagery to this request. Review the result before sharing.</small></p>
+  </section>}
+  {!!concepts.length&&<section id="studio-review" className="growth-subcard" aria-label="Selected flyer proof"><h4>Selected full-page flyer proof — Concept {selected+1}</h4><p>Preview uses the same HTML, branding and approved merchandise images as the print export. The product-image placeholder means the flyer is not ready for client sharing.</p><div style={{maxWidth:640,margin:"0 auto"}}><FlyerFrame html={previewHtml(selected)} label="Large selected flyer proof"/></div></section>}
+
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
