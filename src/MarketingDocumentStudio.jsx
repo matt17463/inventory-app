@@ -5,6 +5,7 @@ import { marketingTemplates, marketingSuppliers, suggestedBrandGuide, normalizeS
 import MarketingSupplierCompare from "./MarketingSupplierCompare";
 import MarketingStorePreview from "./MarketingStorePreview";
 import MarketingProgramDesigner from "./MarketingProgramDesigner";
+import MarketingAIDesignStudio from "./MarketingAIDesignStudio";
 import ClientMarketingStarterKit from "./ClientMarketingStarterKit";
 import { generateMarketingDraft } from "./lib/marketingAI";
 import { marketingVisualBrief } from "./lib/marketingVisualBrief";
@@ -20,7 +21,8 @@ import { suggestMarketingLogoPalette } from "./lib/marketingLogoPalette";
 
 /** Client-side printable draft; no uploads or external supplier requests. */
 export default function MarketingDocumentStudio({ organizations = [], manager = false }) {
-  const [template, setTemplate] = useState("brand-guide");
+  const [template, setTemplate] = useState("brochure-schools");
+  const [showClassicBuilder,setShowClassicBuilder]=useState(false);
   const [organization, setOrganization] = useState("");
   const activeAccount = useRef("");
   const logoSelection = useRef(0);
@@ -641,6 +643,15 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   }
   return <section className="sc-panel" onChange={() => setGuide(null)}>
     <h2>Marketing Document Builder</h2>
+    <p>AI Document Design Studio is the primary experience. The classic builder remains available for existing workflows, technical guides and draft management.</p>
+    <div className="growth-grid">
+      <label className="growth-field"><span>Client</span><select value={accountId} onChange={e=>selectAccount(e.target.value)}><option value="">Select existing client</option>{organizations.map(a=><option key={a.id} value={a.id}>{a.organization}</option>)}</select></label>
+      <label className="growth-field"><span>Marketing document type</span><select value={template} onChange={e=>{setTemplate(e.target.value);setVisualBackground("");setVisualPromptOverride(null);}}>{[...new Set(marketingTemplates.map(t=>t.category))].map(category=><optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
+    </div>
+    <MarketingAIDesignStudio key={accountId+"-"+template} accountId={accountId} organization={organization} template={template} segment={segment} logo={logo} colors={colors.split(",").map(c=>c.trim())} description={description} onUseLegacy={()=>setShowClassicBuilder(true)}/>
+    <button type="button" className="sc-btn" onClick={()=>setShowClassicBuilder(v=>!v)}>{showClassicBuilder?"Hide classic document builder":"Classic document builder and existing drafts"}</button>
+    <div style={{display:showClassicBuilder?"block":"none"}}>
+
     <p>{schoolFlyer
       ? "Build a school spirit-wear flyer in one workflow: select the school and approved colors; add mascot artwork and apparel mockups; confirm prices; preview the actual two-page PDF; then download."
       : "Choose a template, add client details, preview the draft, and export the completed document. Uploaded artwork stays out of AI requests."}</p>
@@ -839,5 +850,6 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       {guide.retailPrice && <p>Client unit price: ${Number(guide.retailPrice).toFixed(2)} {guide.quantity && " · Quantity: "+guide.quantity}</p>}
       {guide.offer && <p>{guide.offer.supplier_name} · {guide.offer.sku} · source price verified {guide.offer.observed_at.slice(0,10)}</p>}
     </article>}
+    </div>
   </section>;
 }
