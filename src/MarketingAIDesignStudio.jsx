@@ -114,7 +114,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  async function downloadPdf(){
   if(!concepts[selected]){setError("Generate a concept first.");return;}
   try{
-   const bytes=await buildStudioPdf({image:concepts[selected],logo:await pdfCompatibleLogo(logo),headline,description:body,benefits:benefits.split("\\n").map(x=>x.trim()).filter(Boolean),steps:steps.split("\\n").map(x=>x.trim()).filter(Boolean),cta,contact:contactText,plan:plans[selected],mode});
+   const bytes=await buildStudioPdf({image:concepts[selected],logo:await pdfCompatibleLogo(logo),headline,description:body,benefits:benefits.split("\n").map(x=>x.trim()).filter(Boolean),steps:steps.split("\n").map(x=>x.trim()).filter(Boolean),cta,contact:contactText,plan:plans[selected],mode});
    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
    const a=document.createElement("a");a.href=url;a.download="skilled-crafting-"+category+"-concept-"+(selected+1)+".pdf";a.click();
    setTimeout(()=>URL.revokeObjectURL(url),10000);
