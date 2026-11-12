@@ -49,3 +49,12 @@ No production deployment is authorized by this document.
 - An earlier CI run reported two incorrect assertion failures in `marketing-ai-layout-editing.test.mjs` (escaped HTML and a CSS class selector); both were corrected and committed, but the latest full CI result must still be verified.
 
 **Open release blockers:** True rich mascot-led school renderings with approved photorealistic merchandise, granular collision-aware element positioning, authenticated real-client R2/store integration verification and security, and visual comparisons at print resolution. There is still no production release.
+
+## School flyer content parity — verified illustrative fundraising and annual design options
+- Each of the three school concept HTML variants now includes a visible artwork refresh, seasonal collection, and sport-/club-specific design options strip. These are offered as possibilities, not AI-generated representations of existing approved logos.
+- A school-only opt-in fundraising illustration reads operator-verified decorated wholesale, approved retail and illustrative unit quantity. It calculates the retail-minus-decorated-wholesale difference in integer cents and includes tax, transaction, shipping, refund and approval caveats.
+- The flyer does not silently populate or infer prices. Invalid opt-in inputs block client export, and unapproved values are not printed.
+- The optional inputs are stored with a private Studio draft (v5) and reopening invalidates staff approval for export.
+- Unit cases are in `scripts/tests/marketing-school-fundraising.test.mjs`.
+- `scripts/render-marketing-flyer-fixtures.mjs` now emits synthetic Studio HTML for the three school variants plus team, business, nonprofit, wedding and general designs. These are test fixtures, not permitted client-ready exports. Review their typography, spacing and full-page overflow alongside the earlier PDF reference fixtures.
+- The Product & Event Center workflow previously failed downloading `onnxruntime-node` (external network timeout before tests). A failed-job rerun was requested; do not represent this as passing until it completes.
