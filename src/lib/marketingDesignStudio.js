@@ -34,6 +34,15 @@ export function designStudioPrompt({category="general",style="athletic",client="
  "Return a text-free background/hero illustration. Do not render copy, numbers, prices, phone numbers, logos or factual claims into the image. Verified editable content and the actual approved logo are composited separately."
  ].join("\n");
 }
+export function resolveDesignTokens(prompt,values={}){
+ const known=new Set(["school_name","school_mascot","school_logo","primary_color","secondary_color","accent_color","school_level","business_phone","business_email","business_website","client_name","client_logo"]);
+ return String(prompt||"").replace(/\\{\\{([a-z_]+)\\}\\}/gi,(whole,key)=>{
+  const id=key.toLowerCase();
+  if(!known.has(id))return whole;
+  const value=String(values[id]||"").trim();
+  return value||"[not supplied; do not invent]";
+ });
+}
 export function safeText(value){return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));}
 export function studioPrintHtml({client="",category="general",style="athletic",image="",logo="",headline="",description="",benefits=[],steps=[],cta="",contact="",prices=[],concept=0,mode="hybrid",plan=null}={}){
  const safeImage=x=>/^data:image\/(png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(x||"")?x:"";
