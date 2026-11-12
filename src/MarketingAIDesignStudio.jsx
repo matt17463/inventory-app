@@ -193,7 +193,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   finally{setBusy(false);}
  }
  function checkPrintReady(){
-  const readiness=studioExportReadiness({client:organization,category,logo,headline,contact:contactText,productImages:mergedProductImages});
+  const readiness=studioExportReadiness({client:organization,category,logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages});
   if(!readiness.ready){setError("Client-ready export blocked: "+readiness.errors.join(" "));return false;}
   return true;
  }
