@@ -43,7 +43,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function storeImage(image){
   if(!image)return null;
-  const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
+  const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
   if(!match)throw Error("Generated artwork is not a valid image.");
   const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,mime_type:match[1],base64:match[2]})});
   const data=await response.json();
@@ -105,7 +105,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   finally{setBusy(false);}
  }
  async function pdfCompatibleLogo(value){
-  if(!/^data:image\\/webp;base64,/i.test(value||""))return value;
+  if(!/^data:image\/webp;base64,/i.test(value||""))return value;
   const img=new Image();img.src=value;await img.decode();
   const canvas=document.createElement("canvas");canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
   canvas.getContext("2d").drawImage(img,0,0);
