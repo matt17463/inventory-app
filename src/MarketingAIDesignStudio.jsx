@@ -83,8 +83,17 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
   setContactText(contact);setSchoolFundraising({enabled:false,wholesale:"",retail:"",quantity:"75"});setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setProductLabels(["","","",""]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedStoreProducts([]);setApprovedPhotoStatus("");
- },[accountId,category,organization]);
+ },[accountId,detectedCategory,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
+ function changeCampaignCategory(next){
+  if(!Object.hasOwn(DESIGN_CATEGORIES,next))return;
+  setCategoryOverride(next);
+  const d=defaults[next]||defaults.general;
+  setHeadline(d.headline);setBody(d.description);setBenefits(d.benefits);setSteps(d.steps);
+  setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setLockedSections([]);
+  setSchoolFundraising({enabled:false,wholesale:"",retail:"",quantity:"75"});
+  setReleaseConfirmed(false);setProgress("");
+ }
  async function findApprovedPhotos(){
   if(!accountId)return;
   setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
@@ -171,7 +180,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
-   if(d.category&&Object.hasOwn(DESIGN_CATEGORIES,d.category))setCategoryOverride(d.category);
+   setCategoryOverride(d.category&&Object.hasOwn(DESIGN_CATEGORIES,d.category)?d.category:detectedCategory);
    setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductLabels(Array.isArray(d.productLabels)?[...d.productLabels.slice(0,4).map(x=>String(x||"").slice(0,60)),"","","",""].slice(0,4):["","","",""]);setSchoolFundraising(d.schoolFundraising&&typeof d.schoolFundraising==="object"?{enabled:d.schoolFundraising.enabled===true,wholesale:String(d.schoolFundraising.wholesale??""),retail:String(d.schoolFundraising.retail??""),quantity:String(d.schoolFundraising.quantity??"75")}:{enabled:false,wholesale:"",retail:"",quantity:"75"});setProductImages(products);
    setReleaseConfirmed(false);
    setDraftMessage("Saved concepts and design instructions restored. Confirm artwork and copy again before export.");
@@ -334,7 +343,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   <h3>AI Document Design Studio</h3>
   <p>Primary creative workflow · {DESIGN_CATEGORIES[category].label}. Generate three branded concepts without paid image APIs, choose your favorite, and review verified text before export. The classic document builder remains available below.</p>
   <div className="growth-grid">
-   <label className="growth-field"><span>Campaign audience</span><select aria-label="Campaign audience" value={category} onChange={e=>setCategoryOverride(e.target.value)}>{Object.entries(DESIGN_CATEGORIES).map(([key,info])=><option key={key} value={key}>{info.label}</option>)}</select></label>
+   <label className="growth-field"><span>Campaign audience</span><select aria-label="Campaign audience" value={category} onChange={e=>changeCampaignCategory(e.target.value)}>{Object.entries(DESIGN_CATEGORIES).map(([key,info])=><option key={key} value={key}>{info.label}</option>)}</select></label>
    <label className="growth-field"><span>Creative style</span><select value={style} onChange={e=>setStyle(e.target.value)}>{DESIGN_STYLES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
    <label className="growth-field"><span>Document editing mode</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="hybrid">Hybrid — editable text and AI artwork</option><option value="artwork">Artwork-first — AI illustration with verified overlays</option></select></label>
   </div>
