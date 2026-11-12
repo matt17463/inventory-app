@@ -14,12 +14,12 @@ import urllib.error
 import urllib.request
 
 ALLOWED_CATEGORIES = {"school", "team", "business", "nonprofit", "wedding", "general"}
-ALLOWED_COMPOSITIONS = {"diagonal", "centered", "split"}
+ALLOWED_COMPOSITIONS = {"split", "full-bleed", "editorial"}
 SYSTEM = (
     "You are a design assistant for a custom apparel business. Return ONLY a JSON object "
     "with keys headline, subheadline, benefits, composition, art_direction. "
     "benefits must be a list of exactly three short strings. "
-    "composition must be one of diagonal, centered, split. "
+    "composition must be one of split, full-bleed, editorial. "
     "Do not invent prices, fundraising percentages, contacts, official logos, product claims, "
     "or school-specific facts. Do not embed text or logos in generated imagery. "
     "Copy is a draft and requires human approval."
