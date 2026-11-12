@@ -88,16 +88,17 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(let i=0;i<3;i++){
     setProgress("Generating concept "+(i+1)+" of 3…");
     const promptText=designStudioPrompt({category,style,client:organization,colors,instructions:visualPrompt,variation:i});
-    const layoutResponse=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,concept:i+1,prompt:visualPrompt})});
+    const layoutResponse=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt})});
     const layoutData=await layoutResponse.json();
     if(!layoutResponse.ok||!layoutData.plan)throw Error(layoutData.message||"AI layout generation failed.");
     layouts.push(layoutData.plan);setPlans([...layouts]);
+    if(layoutData.source==="local")setProgress("AI layout quota reached; using distinct local layouts. Generating artwork concept "+(i+1)+" of 3…");
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({account_id:accountId,template_id:template,template_label:DESIGN_CATEGORIES[category].label,organization,segment,colors,description,visual_prompt:promptText,logo:logo.length<1000000?logo:""})
     });
     const data=await response.json();
-    if(!response.ok||!data.image)throw Error(data.message||"Artwork generation failed.");
+    if(!response.ok||!data.image)throw Error((data.message||"Artwork generation failed.")+(response.status===429?" OpenAI API billing or rate limits must be resolved to generate new artwork. Your ChatGPT plan does not cover API usage.":""));
     created.push(data.image);setConcepts([...created]);
    }
    setProgress("Three concepts ready for review.");
