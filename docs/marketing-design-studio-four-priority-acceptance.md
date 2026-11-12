@@ -40,3 +40,12 @@ This branch is a **draft**. Do not merge or deploy it until CI, visual review, a
 7. Merge to `main` only after the broader project completes, with safe rollback and post-deploy smoke tests. Do not treat a green CI job as visual approval.
 
 No production deployment is authorized by this document.
+
+## Follow-up development: bounded layout and approved store assets
+- Operators can adjust hero height (2.80–3.65 in), merchandise gallery height (1.50–2.50 in), vertical gap (0.06–0.22 in), and layered vs grid product placement independently for each concept. Values are normalized; raw CSS and unbounded model coordinates are rejected. Settings persist with v4 client drafts.
+- The AI Studio can load verified products from the marketing account's live WooCommerce assortment and pick approved Mockup Studio output images. `marketing-store-assortment` verifies linked customer, live product, availability, customer prices and approved matching colors; `marketing-shared-asset` rechecks customer ownership/approval before signing each download. An operator must still review the image and final copy.
+- Print prepares embedded assets, generated scene and fonts before checking layout clipping. Contrast-safe brand colors protect white-on-light text.
+- New regression tests: `marketing-studio-layout-controls.test.mjs`; additional layout, approval, storefront and contrast checks in `marketing-ai-layout-editing.test.mjs`.
+- An earlier CI run reported two incorrect assertion failures in `marketing-ai-layout-editing.test.mjs` (escaped HTML and a CSS class selector); both were corrected and committed, but the latest full CI result must still be verified.
+
+**Open release blockers:** True rich mascot-led school renderings with approved photorealistic merchandise, granular collision-aware element positioning, authenticated real-client R2/store integration verification and security, and visual comparisons at print resolution. There is still no production release.
