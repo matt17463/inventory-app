@@ -40,6 +40,8 @@ try{
    contact:"preview@example.invalid · example.invalid",
    fundraisingNote:["school","team","nonprofit"].includes(category)?"Supporter merchandise can help fund programs based on approved terms.":"",
    artworkOptions:profile.defaultOptions,artworkMessage:profile.defaultMessage,
+   artworkVariantImage:category==="school"?badge:"",
+   fundraisingRows:category==="school"?[{product:"TEST School Tee",wholesale:10,retail:18,quantity:50,verified:true},{product:"TEST School Hoodie",wholesale:22,retail:38,quantity:30,verified:true}]:[],
    plan:{sections:["hero","products","benefits","steps","cta"],align:"left",emphasis:"hero",composition:"split"}});
   const page=await browser.newPage({viewport:{width:816,height:1056},deviceScaleFactor:1});
   await page.setContent(html,{waitUntil:"load"});
