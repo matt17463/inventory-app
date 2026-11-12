@@ -55,7 +55,7 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  const secondary=palette[1]&&palette[1].toLowerCase()!==primary.toLowerCase()?palette[1]:"#d4a94a";
  const variant=Math.max(0,Math.min(2,Number(concept)||0));
  const profile=marketingCampaignProfile(category);
- const mood=marketingCampaignMood(category,client,brandMood);
+ const mood=marketingCampaignMood(category,client,brandMood,colors);
  const heroMotif=marketingCampaignMotif(category);
  const photos=(Array.isArray(productImages)?productImages:[]).map(safeImage).filter(Boolean).slice(0,5);
  const brand=safeImage(logo);
