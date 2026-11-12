@@ -52,3 +52,13 @@ test("local AI layout suggestions reorder verified blocks but cannot remove logo
  assert.match(html,/YOUR LOGO\. MORE POSSIBILITIES/);
  assert.doesNotMatch(html,/<style>[^]*--primary:#ff0000/);
 });
+
+test("artwork modernization only shows before/variant comparison with a supplied approved variant",()=>{
+ const without=studioPrintHtml({category:"school",logo:art,artworkOptions:schoolArtworkServiceOptions()});
+ assert.doesNotMatch(without,/Approved logo variation/);
+ const withVariant=studioPrintHtml({category:"school",logo:art,artworkVariantImage:art,artworkOptions:schoolArtworkServiceOptions()});
+ assert.match(withVariant,/Original approved school crest/);
+ assert.match(withVariant,/Approved logo variation/);
+ assert.match(withVariant,/ORIGINAL/);
+ assert.match(withVariant,/VARIANT/);
+});
