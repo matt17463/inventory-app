@@ -59,6 +59,24 @@ export function studioLayoutSections(plan,variant=0){
  const sections=[...new Set(source.filter(x=>allowed.includes(x)))];
  return [...sections,...defaults[Math.max(0,Math.min(2,Number(variant)||0))].filter(x=>!sections.includes(x))];
 }
+/** Browser-only final proof check; do not rely on CSS overflow:hidden to mask errors. */
+export function inspectStudioPrintDom(doc){
+ const issues=[];
+ const page=doc?.querySelector?.(".page");
+ if(!page){issues.push("Print page is missing.");return issues;}
+ const overflow=element=>element&&element.scrollHeight>element.clientHeight+3;
+ if(overflow(page))issues.push("Page content exceeds US Letter dimensions.");
+ for(const selector of ["main",".campaign footer",".hero-text",".editorial-head"]){
+  const element=page.querySelector(selector);
+  if(overflow(element))issues.push(selector+" contains clipped content.");
+ }
+ const hero=page.querySelector(".hero"),headline=page.querySelector("h1");
+ if(hero&&headline&&typeof headline.getBoundingClientRect==="function"){
+  const heading=headline.getBoundingClientRect(),boundary=hero.getBoundingClientRect();
+  if(heading.right>boundary.right+2||heading.bottom>boundary.bottom+2||heading.left<boundary.left-2)issues.push("Headline extends outside its hero area.");
+ }
+ return issues;
+}
 export function studioExportReadiness({client="",logo="",headline="",description="",benefits=[],steps=[],cta="",contact="",productImages=[],category="general"}={}){
  const errors=[];
  const isImage=value=>/^data:image\/(?:png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(value||"");
