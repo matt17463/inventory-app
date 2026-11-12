@@ -75,3 +75,10 @@ No production deployment is authorized by this document.
 - Operators may attach verified captions for merchandise photos, with store-derived product and color as suggestions. Captions remain editable, escaped and client-draft scoped (v6); any edits invalidate prior export confirmation.
 - School campaigns may use the supplied, unmodified approved school logo as a low-opacity hero decorative layer. No AI reinterpretation of a logo or mascot is implied. Synthetic fixture logos contain explicit TEST markings.
 - A visual audit of the generated fixture montage still found generic backgrounds and limited information density compared with the desired Sequim reference standard. **Chromium success is structural, not artistic approval.** Continue improving image selection, realistic approved product photography, composition quality, accessibility and client-specific final-copy hierarchy before merge.
+
+## Art-directed school hero and bounded identity placement
+- Each school concept now includes a four-column graphical highlights ribbon inside the branded hero, summarizing school pride, verified fundraising choices, online storefront and local artwork/production support. This does not imply a guaranteed fundraising amount or an already-active storefront.
+- Print collision checks detect highlight-card overlap against the editable campaign headline/description. A Chromium run caught this in the longer synthetic fixture; a density-aware headline treatment was added, preserving large typography for shorter client headlines. Browser CI must still pass after the change.
+- Editors can adjust the supplied exact school crest placement (left/right), its dimension and opacity, along with decorative scenery visibility, using bounded numeric controls. These are saved in per-concept private draft layout settings; arbitrary CSS or AI-supplied pixels are not accepted.
+- Layout controls do not authorize redrawing or modifying the school identity. Raster DPI, approval and print collision checks still apply.
+- All improvements remain isolated in draft PR #246; **production is not changed**.
