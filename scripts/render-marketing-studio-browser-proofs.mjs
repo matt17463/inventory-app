@@ -1,3 +1,4 @@
+/* global document */
 /**
  * Render synthetic (never client-approved) flyer HTML in Chromium at print size.
  * Screenshots and PDFs are visual review artifacts, not proof of client approval.
