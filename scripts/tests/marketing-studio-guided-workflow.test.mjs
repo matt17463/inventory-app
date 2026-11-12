@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {marketingTemplates} from "../../src/lib/marketingCatalogPolicy.js";
 import {marketingStudioWorkflow} from "../../src/lib/marketingStudioDocumentWorkflow.js";
-import {STUDIO_SERVICE_DEFAULTS} from "../../src/lib/marketingStudioServices.js";
+import {STUDIO_SERVICE_DEFAULTS,defaultStudioServices} from "../../src/lib/marketingStudioServices.js";
 test("all 35 document templates have documented, relevant flyer and native-export workflows",()=>{
  assert.equal(marketingTemplates.length,35);
  for(const template of marketingTemplates){
@@ -34,4 +34,17 @@ test("guided flow asks for approved imagery and verified copy before generating 
  assert.match(ui,/Add product pricing option/);
  assert.match(ui,/MAX_FUNDRAISING_PRODUCTS/);
  assert.match(ui,/setStudioServices\(normalizeStudioServices\(d\.studioServices/);
+});
+
+test("each of 35 document types receives relevant artwork-service guidance",()=>{
+ for(const document of marketingTemplates){
+  const audience=document.segment==="team"?"team":document.segment==="school"?"school":document.segment==="business"?"business":"general";
+  const suggestion=defaultStudioServices(audience,document.id);
+  assert.ok(suggestion.heading.length>=8);
+  assert.ok(suggestion.description.length>=40);
+ }
+ assert.match(defaultStudioServices("business","brand-guide").heading,/BRAND GUIDE/);
+ assert.match(defaultStudioServices("team","product-catalog").heading,/MERCHANDISE COLLECTIONS/);
+ assert.match(defaultStudioServices("school","fundraising-proposal").heading,/FUNDRAISING/);
+ assert.match(defaultStudioServices("school","brochure-schools").heading,/SPORT-SPECIFIC/);
 });
