@@ -58,7 +58,7 @@ for(const s of schools){
  */
 const previewGarments=await Promise.all([0,1,2].map(i=>png(garment({primary:"#243F6E",secondary:"#E6B93E",short:"TEST"},"TEST",i))));
 const syntheticSchoolCrest=await png(badge({primary:"#1F4369",secondary:"#E6B93E",initials:"TS"}));
-const businessCategories=["school","team","business","nonprofit","wedding","general"];
+const businessCategories=["school","team","business","nonprofit","wedding","event","general"];
 for(const category of businessCategories){
  const variants=category==="school"?3:1;
  for(let concept=0;concept<variants;concept++){
