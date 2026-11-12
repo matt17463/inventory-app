@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {studioLayoutSections,studioExportReadiness,studioPrintHtml,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
+import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
 
 const sample='data:image/png;base64,AAAA';
 test('validated layout plan reorders only supported modules and preserves each exactly once',()=>{
@@ -34,4 +34,26 @@ test('layout plan ordering affects printed section order',()=>{
  const html=studioPrintHtml({category:'nonprofit',plan:{sections:['hero','steps','benefits','products','cta']},benefits:['Benefit A'],steps:['Step A'],productImages:[sample],logo:sample});
  assert.ok(html.indexOf('Step A')<html.indexOf('Benefit A'));
  assert.ok(html.indexOf('Benefit A')<html.indexOf('Approved merchandise photo 1'));
+});
+
+test('generated visual backdrops are actually inserted into the printed proof',()=>{
+ const html=studioPrintHtml({client:'Client',image:sample,logo:sample,productImages:[sample]});
+ assert.ok(html.includes('class="hero-scenery"'));
+ assert.ok(html.includes('background-image:url(&quot;data:image/png;base64,AAAA&quot;)'));
+ assert.ok(!studioPrintHtml({image:'javascript:alert(1)'}).includes('hero-scenery'));
+});
+test('school and wedding visual motifs are distinct and contain no identity lettering',()=>{
+ const school=offlineStudioArtwork({category:'school',concept:1,colors:['#113355']});
+ const wedding=offlineStudioArtwork({category:'wedding',concept:1,colors:['#113355']});
+ assert.notEqual(school,wedding);
+ assert.ok(school.includes('M0 790L170'));
+ assert.ok(wedding.includes('M0 850Q130'));
+ assert.ok(!school.includes('<text'));
+});
+test('lengthy copy cannot pass export gate while shorter copy can',()=>{
+ const base={client:'Client',category:'business',logo:sample,headline:'Ready',contact:'sales@example.test',productImages:[sample]};
+ assert.equal(studioExportReadiness({...base,description:'a'.repeat(281)}).ready,false);
+ assert.equal(studioExportReadiness({...base,benefits:['a'.repeat(101)]}).ready,false);
+ assert.equal(studioExportReadiness({...base,steps:['a'.repeat(86)]}).ready,false);
+ assert.equal(studioExportReadiness({...base,description:'Short approved copy',benefits:['Benefit'],steps:['Step']}).ready,true);
 });
