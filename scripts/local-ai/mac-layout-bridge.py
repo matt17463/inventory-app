@@ -3,7 +3,7 @@
 
 Run on the Mac, bound to loopback only. Expose HTTPS to your *tailnet only*
 using Tailscale Serve; do not use Tailscale Funnel or public port forwarding.
-Requires SUPABASE_URL and SUPABASE_ANON_KEY environment variables.
+Employee authorization is verified by the hosted application.
 """
 import json
 import os
@@ -13,8 +13,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ORIGINS = {"https://inventory.skilledcrafting.com", "https://app.skilledcrafting.com"}
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+AUTH_URL = "https://inventory.skilledcrafting.com/.netlify/functions/marketing-local-ai-authorize"
 MODEL = os.environ.get("SC_OLLAMA_MODEL", "qwen2.5:7b")
 MAX_BYTES = 16000
 SECTIONS = {"hero", "benefits", "steps", "pricing", "products", "cta"}
@@ -32,17 +31,16 @@ SYSTEM = (
 
 
 def check_user(token):
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise RuntimeError("Missing Supabase configuration")
+    """Verify the caller is an active employee with a permitted role."""
     request = urllib.request.Request(
-        SUPABASE_URL + "/auth/v1/user",
-        headers={"apikey": SUPABASE_KEY, "Authorization": "Bearer " + token},
+        AUTH_URL, data=b"{}", method="POST",
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
     )
     with urllib.request.urlopen(request, timeout=12) as response:
-        user = json.load(response)
-    if not user.get("id"):
-        raise ValueError("Invalid user")
-    return user["id"]
+        result = json.load(response)
+    if result.get("authorized") is not True:
+        raise ValueError("Employee authorization denied")
+    return True
 
 
 def validate_plan(value):
@@ -142,7 +140,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if not SUPABASE_URL.startswith("https://") or not SUPABASE_KEY:
-        raise SystemExit("Set SUPABASE_URL and SUPABASE_ANON_KEY before starting")
     print("Private Ollama bridge on 127.0.0.1:8765 (Tailscale Serve only)", flush=True)
     ThreadingHTTPServer(("127.0.0.1", 8765), Handler).serve_forever()
