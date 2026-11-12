@@ -18,3 +18,18 @@ test("does not implicitly accept arbitrary embedded photos",()=>{
  const result=approvedMarketingPhotoCandidates([{status:"approved",content:{productImages:["data:image/png;base64,abcd"]}}]);
  assert.deepEqual(result,[]);
 });
+
+test("private shared marketing signing validates tenant project storage paths",async()=>{
+ const {marketingSharedAssetPathAllowed}=await import('../../netlify/functions/marketing-shared-asset.js');
+ const project='22222222-2222-4222-8222-222222222222';
+ const owner='11111111-1111-4111-8111-111111111111';
+ const asset={project_id:project,storage_provider:'r2',storage_bucket:'mockups',storage_path:owner+'/'+project+'/outputs/sample.webp'};
+ assert.equal(marketingSharedAssetPathAllowed('mockup_outputs',asset),true);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_outputs',{...asset,storage_path:owner+'/33333333-3333-4333-8333-333333333333/outputs/sample.webp'}),false);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_outputs',{...asset,storage_path:owner+'/'+project+'/artwork/file.png'}),false);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_outputs',{...asset,storage_path:'../../'+project+'/outputs/sample.webp'}),false);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_artwork_assets',{...asset,storage_path:owner+'/'+project+'/artwork/logo.png'}),true);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_artwork_assets',asset),false);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_blank_assets',{...asset,storage_path:'blanks/sample.webp'}),true);
+ assert.equal(marketingSharedAssetPathAllowed('mockup_blank_assets',{...asset,storage_provider:'external'}),false);
+});
