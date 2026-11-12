@@ -184,3 +184,11 @@ test('editor exposes bounded per-element offsets, independent placement locks, a
  assert.match(html,/--studio-headline-x:0\.15in/);
  assert.match(html,/--studio-gallery-y:0\.15in/);
 });
+
+test('deleting an approved merchandise image also shifts its caption and invalidates approval',()=>{
+ const ui=readFileSync(new URL('../../src/MarketingAIDesignStudio.jsx',import.meta.url),'utf8');
+ assert.match(ui,/function removeProductImage\(index\)/);
+ assert.match(ui,/setProductLabels\(previous=>\[\.\.\.previous\.filter\(\(_,i\)=>i!==index\),""\]\.slice\(0,4\)\)/);
+ assert.match(ui,/onClick=\{\(\)=>removeProductImage\(i\)\}/);
+ assert.match(ui,/\[\.\.\.new Set\(\[\.\.\.productImages/);
+});
