@@ -23,13 +23,17 @@ export async function checkFlyerRasterAssets(d,{approvedCover=""}={}){
   i.onerror=()=>reject(Error("Could not read print asset for resolution check."));
   i.src=src;
  });
- const items=approvedCover
-  ?[{label:"Approved full-page cover",src:approvedCover,boxWidthPt:612,boxHeightPt:792,minDpi:300}]
-  :[
-    {label:"School mascot / logo",src:d.heroArtwork||d.schoolLogo,boxWidthPt:172,boxHeightPt:152,minDpi:200},
-    {label:"Illustrated scenery",src:d.backgroundArtwork,boxWidthPt:612,boxHeightPt:331,minDpi:150},
-    ...(d.products||[]).slice(0,5).map((p,i)=>({label:`Product ${i+1} mockup`,src:p.mockup,boxWidthPt:183,boxHeightPt:130,minDpi:200}))
-   ];
+ const items=[
+  {label:"Skilled Crafting logo",src:d.businessLogo,boxWidthPt:82,boxHeightPt:43,minDpi:200},
+  {label:"School mascot / logo",src:d.heroArtwork||d.schoolLogo,boxWidthPt:172,boxHeightPt:152,minDpi:200},
+  {label:"School logo for details",src:d.schoolLogo,boxWidthPt:80,boxHeightPt:76,minDpi:200},
+  ...(approvedCover?[
+   {label:"Approved full-page cover",src:approvedCover,boxWidthPt:612,boxHeightPt:792,minDpi:300}
+  ]:[
+   {label:"Illustrated scenery",src:d.backgroundArtwork,boxWidthPt:612,boxHeightPt:331,minDpi:150}
+  ]),
+  ...(d.products||[]).map((p,i)=>({label:`Product ${i+1} mockup`,src:p.mockup,boxWidthPt:210,boxHeightPt:213,minDpi:200}))
+ ];
  const checks=[];
  for(const item of items){
   if(!item.src)continue; 
