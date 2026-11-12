@@ -7,6 +7,7 @@ export function verifiedFundraisingRows(rows){
  for(const row of rows.slice(0,5)){
   if(row?.verified!==true)continue;
   const product=String(row.product||"").trim().slice(0,80);
+  if(row.wholesale===""||row.wholesale==null||row.retail===""||row.retail==null||row.quantity===""||row.quantity==null)continue;
   const cost=Number(row.wholesale),retail=Number(row.retail),qty=Number(row.quantity);
   if(!product||!Number.isFinite(cost)||!Number.isFinite(retail)||!Number.isSafeInteger(qty)||qty<1||qty>100000||cost<0||retail<cost||retail>100000||cost>100000)continue;
   const profitCents=Math.round((retail-cost)*100)*qty;
