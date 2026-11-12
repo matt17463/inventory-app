@@ -4,7 +4,7 @@ import {supabase} from "./supabaseClient";
 import {marketingLogoImage} from "./lib/marketingArtwork";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {buildStudioPdf} from "./lib/marketingDesignStudioPdf";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,studioPrintHtml} from "./lib/marketingDesignStudio";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml} from "./lib/marketingDesignStudio";
 
 const defaults={
  school:{headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Build school pride. Support your programs. Make ordering easier.",benefits:"SCHOOL PRIDE — Quality school-branded apparel\nPROGRAM FUNDING — Support school activities\nEASY ONLINE ORDERS — Dedicated storefront\nLOCAL SUPPORT — Artwork and fulfillment",steps:"Plan together\nWe build your store\nSupporters order\nYour program benefits"},
@@ -79,7 +79,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
  }
- const visualPrompt=prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description});
+ const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
   setBusy(true);setError("");setConcepts([]);setPlans([]);setSelected(0);
