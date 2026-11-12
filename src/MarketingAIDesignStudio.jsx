@@ -69,6 +69,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [contactText,setContactText]=useState("");
  const [schoolFundraising,setSchoolFundraising]=useState({enabled:false,wholesale:"",retail:"",quantity:"75"});
  const [productImages,setProductImages]=useState([]);
+ const [productLabels,setProductLabels]=useState(["","","",""]);
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
  const [approvedStoreProducts,setApprovedStoreProducts]=useState([]);
  const [approvedPhotoBusy,setApprovedPhotoBusy]=useState(false);
@@ -77,7 +78,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setSchoolFundraising({enabled:false,wholesale:"",retail:"",quantity:"75"});setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedStoreProducts([]);setApprovedPhotoStatus("");
+  setContactText(contact);setSchoolFundraising({enabled:false,wholesale:"",retail:"",quantity:"75"});setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setProductLabels(["","","",""]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedStoreProducts([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -127,7 +128,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],layoutAdjustments:layoutAdjustments[i]||DEFAULT_STUDIO_LAYOUT,image:concepts[i]||"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,schoolFundraising});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],layoutAdjustments:layoutAdjustments[i]||DEFAULT_STUDIO_LAYOUT,image:concepts[i]||"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,productLabels,colors,schoolFundraising});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -146,7 +147,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(const image of concepts)references.push(await storeImage(image));
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
-   const content={studioVersion:5,lockedSections,layoutAdjustments,schoolFundraising,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,headline,body,benefits,steps,cta,contactText};
+   const content={studioVersion:6,lockedSections,layoutAdjustments,schoolFundraising,productLabels,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,headline,body,benefits,steps,cta,contactText};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -166,14 +167,14 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
-   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setSchoolFundraising(d.schoolFundraising&&typeof d.schoolFundraising==="object"?{enabled:d.schoolFundraising.enabled===true,wholesale:String(d.schoolFundraising.wholesale??""),retail:String(d.schoolFundraising.retail??""),quantity:String(d.schoolFundraising.quantity??"75")}:{enabled:false,wholesale:"",retail:"",quantity:"75"});setProductImages(products);
+   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductLabels(Array.isArray(d.productLabels)?[...d.productLabels.slice(0,4).map(x=>String(x||"").slice(0,60)),"","","",""].slice(0,4):["","","",""]);setSchoolFundraising(d.schoolFundraising&&typeof d.schoolFundraising==="object"?{enabled:d.schoolFundraising.enabled===true,wholesale:String(d.schoolFundraising.wholesale??""),retail:String(d.schoolFundraising.retail??""),quantity:String(d.schoolFundraising.quantity??"75")}:{enabled:false,wholesale:"",retail:"",quantity:"75"});setProductImages(products);
    setReleaseConfirmed(false);
    setDraftMessage("Saved concepts and design instructions restored. Confirm artwork and copy again before export.");
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
  }
  const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,4);
- useEffect(()=>{setReleaseConfirmed(false);},[selected,headline,body,benefits,steps,cta,contactText,productImages,approvedProductImages,plans,concepts,layoutAdjustments,schoolFundraising,logo,style,mode,category,colors.join(",")]);
+ useEffect(()=>{setReleaseConfirmed(false);},[selected,headline,body,benefits,steps,cta,contactText,productImages,productLabels,approvedProductImages,plans,concepts,layoutAdjustments,schoolFundraising,logo,style,mode,category,colors.join(",")]);
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
@@ -214,7 +215,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setApprovedStoreProducts([]);setApprovedPhotoStatus("Approved store mockups unavailable: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
  }
- async function importStoreMockup(assetId){
+ async function importStoreMockup(assetId,displayName=""){
   if(!accountId||mergedProductImages.length>=4)return;
   setApprovedPhotoBusy(true);setApprovedPhotoStatus("");
   try{
@@ -225,6 +226,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||blob.size>5_000_000||!blob.size)throw Error("Approved mockup must be PNG, JPEG or WebP under 5 MB.");
    const image=await marketingImageDataUrl(blob);
    setProductImages(previous=>[...previous,image].slice(0,4));
+   setProductLabels(previous=>previous.map((text,i)=>i===productImages.length?String(displayName).slice(0,60):text));
    setApprovedPhotoStatus("Approved decorated mockup added. Confirm product and color before export.");
   }catch(e){setApprovedPhotoStatus("Approved mockup could not be loaded: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
@@ -342,9 +344,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
    {!!approvedPhotoStatus&&<p role="status">{approvedPhotoStatus}</p>}
    <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedStoreMockups}>Find approved decorated mockups from this client's active store</button>
-   {!!approvedStoreProducts.length&&<div className="growth-grid">{approvedStoreProducts.flatMap(product=>(product.images||[]).map(image=>({key:product.name+":"+image.assetId,name:product.name,color:image.color,assetId:image.assetId}))).map(item=><div className="growth-field" key={item.key}><strong>{item.name}</strong><small>Approved color: {item.color||"Not specified"}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importStoreMockup(item.assetId)}>Use approved store mockup</button></div>)}</div>}
+   {!!approvedStoreProducts.length&&<div className="growth-grid">{approvedStoreProducts.flatMap(product=>(product.images||[]).map(image=>({key:product.name+":"+image.assetId,name:product.name,color:image.color,assetId:image.assetId}))).map(item=><div className="growth-field" key={item.key}><strong>{item.name}</strong><small>Approved color: {item.color||"Not specified"}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importStoreMockup(item.assetId,item.name+(item.color?" · "+item.color:""))}>Use approved store mockup</button></div>)}</div>}
    {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
+   <div className="growth-grid">{mergedProductImages.map((src,i)=><label className="growth-field" key={"caption-"+i}><span>Verified caption for merchandise {i+1}</span><input maxLength={60} placeholder="e.g., School hoodie · Heather Grey" value={productLabels[i]||""} onChange={e=>setProductLabels(v=>v.map((text,j)=>j===i?e.target.value:text))}/></label>)}</div>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
   <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
