@@ -7,6 +7,7 @@ import {readdirSync,writeFileSync} from "node:fs";
 import path from "node:path";
 import {pathToFileURL} from "node:url";
 import {chromium} from "@playwright/test";
+import {PDFDocument} from "pdf-lib";
 
 const output="artifacts/marketing-flyers";
 const files=readdirSync(output).filter(name=>/^(?:school|team|business|nonprofit|wedding|event|general)-ai-studio-concept-[123]\.html$/.test(name));
@@ -54,7 +55,12 @@ try{
    });
    const base=name.slice(0,-5);
    await page.screenshot({path:path.join(output,base+".png"),fullPage:false});
-   await page.pdf({path:path.join(output,base+".pdf"),format:"Letter",printBackground:true,preferCSSPageSize:true});
+   const pdfBytes=await page.pdf({path:path.join(output,base+".pdf"),format:"Letter",printBackground:true,preferCSSPageSize:true});
+   const printed=await PDFDocument.load(pdfBytes);
+   const count=printed.getPageCount();
+   const size=printed.getPage(0).getSize();
+   if(count!==1)results.errors.push("Print-to-PDF created "+count+" pages, not one US Letter page");
+   if(Math.abs(size.width-612)>1||Math.abs(size.height-792)>1)results.errors.push("Printed PDF is not US Letter in portrait orientation");
    report.push({file:name,errors:results.errors,layout:results.detail});
   }finally{await page.close();}
  }
