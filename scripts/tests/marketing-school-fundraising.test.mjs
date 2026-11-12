@@ -38,6 +38,6 @@ test("school flyer renders both yearly artwork options and reviewed money only",
 test("editor persists school fundraising and blocks export on invalid entries",()=>{
  const ui=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
  assert.match(ui,/schoolFundraisingExample\(schoolFundraising\)/);
- assert.match(ui,/studioVersion:5/);
+ assert.match(ui,/studioVersion:6/);
  assert.match(ui,/schoolFundraising,organization/);
 });
