@@ -7,7 +7,8 @@ export const DESIGN_CATEGORIES={
  business:{label:"Business apparel",brief:"Create a premium commercial campaign with realistic embroidered workwear, custom uniforms, branded gifts, product photography, compelling business benefits and a polished contact section. Additional creative requirements: Premium commercial US Letter flyer; real business identity, professional embroidered uniforms, workwear, branded gifts, product showcase, consultation and proofing steps, clear benefits and verified contact. Adapt to client's industry; no invented prices."},
  team:{label:"Sports teams and clubs",brief:"Create an energetic athletic campaign with team crest, stadium atmosphere, jerseys, fan merchandise, coach recognition and team ordering options. Additional creative requirements: Dynamic sports club US Letter flyer; preserve approved crest and colors; realistic jerseys, fan hoodies, caps, coach gifts, stadium imagery, team benefits, ordering, fundraising, product showcase and strong call to action."},
  nonprofit:{label:"Nonprofit fundraising",brief:"Create a community-focused fundraising campaign with organization branding, tasteful emotional storytelling, realistic merchandise, donation or program support messaging and a clear call to action. Additional creative requirements: Mission-driven nonprofit US Letter campaign; authentic community imagery, approved organization identity, merchandise fundraising, supporter benefits, ordering steps and clear contact. Never invent impact figures."},
- wedding:{label:"Weddings and events",brief:"Create an elegant event marketing piece with personalized glassware, engraved gifts, signage, coordinated keepsakes, atmospheric photography and refined typography. Additional creative requirements: Elegant event US Letter flyer; atmospheric engraved glassware, keepsakes, gifts, signage, refined typography, product showcase, consultation and approval process, verified contact."},
+ wedding:{label:"Weddings",brief:"Elegant weddings, ceremonies and receptions with verified personalized glassware, engraved keepsakes, table signage and coordinated gifts. Refined floral/typographic atmosphere and approved client imagery; no unapproved dates or claims."},
+ event:{label:"Events and celebrations",brief:"Celebrate a verified festival, fundraiser, reunion, conference, graduation or community event with dynamic merchandise, customized signage, practical event ordering, and audience-specific design. Do not imply an unverified event date, attendance or beneficiary."},
  general:{label:"Other promotional materials",brief:"Create a striking premium editorial advertising design with realistic products, strong brand identity, visual storytelling, and a clear call to action. Additional creative requirements: Distinctive premium US Letter marketing flyer; cinematic realistic products, approved branding, layered depth, benefits, process, product showcase, verified terms and strong call to action."}
 };
 export const DESIGN_STYLES=[
@@ -18,7 +19,8 @@ export const DESIGN_STYLES=[
 export function designCategory(template="",segment=""){
  const s=(template+" "+segment).toLowerCase();
  if(/school/.test(s))return "school";
- if(/wedding|event/.test(s))return "wedding";
+ if(/wedding|bridal|reception|marriage/.test(s))return "wedding";
+ if(/event|festival|reunion|graduation|conference|celebration/.test(s))return "event";
  if(/sport|team|coach|club/.test(s))return "team";
  if(/nonprofit|fundrais|charit|pta|pto/.test(s))return "nonprofit";
  if(/business|uniform|corporate|workwear/.test(s))return "business";
@@ -52,7 +54,8 @@ export const STUDIO_CATEGORY_COPY=Object.freeze({
  team:{hero:"GEAR FOR YOUR TEAM",benefits:"BUILT FOR PLAYERS AND SUPPORTERS",collection:"YOUR TEAM. YOUR COLORS.",label:"THE TEAM GEAR COLLECTION",eyebrow:"FROM DESIGN TO GAME DAY",footer:"Team ordering, artwork and program terms require confirmation."},
  business:{hero:"BRANDED APPAREL FOR YOUR BUSINESS",benefits:"ELEVATE YOUR BUSINESS IDENTITY",collection:"MAKE YOUR BRAND VISIBLE.",label:"PROFESSIONAL WORKWEAR & GIFTS",eyebrow:"A CLEAR PROJECT PROCESS",footer:"Product pricing, decoration and delivery terms require confirmation."},
  nonprofit:{hero:"MERCHANDISE FOR YOUR MISSION",benefits:"SUPPORT YOUR COMMUNITY",collection:"MAKE EVERY MESSAGE COUNT.",label:"MISSION-DRIVEN MERCHANDISE",eyebrow:"PLAN YOUR CAMPAIGN",footer:"Any fundraising proceeds and impact claims require written verification."},
- wedding:{hero:"PERSONALIZED EVENTS AND GIFTS",benefits:"DETAILS WORTH REMEMBERING",collection:"MADE FOR YOUR CELEBRATION.",label:"THE PERSONALIZED EVENT COLLECTION",eyebrow:"FROM IDEA TO CELEBRATION",footer:"Personalization proofs, quantities, prices and delivery dates require confirmation."},
+ wedding:{hero:"PERSONALIZED WEDDINGS AND GIFTS",benefits:"DETAILS WORTH REMEMBERING",collection:"MADE FOR YOUR CELEBRATION.",label:"THE WEDDING COLLECTION",eyebrow:"FROM IDEA TO CELEBRATION",footer:"Personalization proofs, quantities, prices and delivery dates require confirmation."},
+ event:{hero:"CUSTOM MERCHANDISE FOR YOUR EVENT",benefits:"MAKE YOUR EVENT MEMORABLE",collection:"YOUR EVENT. YOUR IDENTITY.",label:"THE EVENT COLLECTION",eyebrow:"FROM PLANNING TO CELEBRATION",footer:"Event timing, ordering, personalization and product availability require confirmation."},
  general:{hero:"CUSTOM APPAREL & MERCHANDISE",benefits:"WHY WORK WITH SKILLED CRAFTING",collection:"MADE FOR YOUR MOMENT.",label:"THE CUSTOM COLLECTION",eyebrow:"SIMPLE FROM START TO FINISH",footer:"Product availability, pricing and program terms require confirmation."}
 });
 export function studioLayoutSections(plan,variant=0){
@@ -204,6 +207,7 @@ export function offlineStudioArtwork({concept=1,colors=[],style="athletic",categ
   business:'<path d="M80 910V420h125v490m60 0V240h180v670m40 0V500h145v410m40 0V330h195v580" fill="none" stroke="white" stroke-width="16" opacity=".14"/>',
   nonprofit:'<circle cx="410" cy="610" r="220" fill="none" stroke="white" stroke-width="35" opacity=".15"/><circle cx="600" cy="570" r="160" fill="none" stroke="white" stroke-width="26" opacity=".17"/>',
   wedding:'<path d="M0 850Q130 320 340 470T740 390Q840 260 960 180" fill="none" stroke="white" stroke-width="14" opacity=".2"/><circle cx="280" cy="260" r="145" fill="none" stroke="white" stroke-width="24" opacity=".14"/>',
+  event:'<path d="M50 390L195 150 340 390M440 390L610 125 785 390M760 760l110-260 110 260" fill="none" stroke="white" stroke-width="15" opacity=".17"/><circle cx="525" cy="615" r="170" stroke="white" stroke-width="14" fill="none" opacity=".16"/>',
   general:'<path d="M120 720L850 140M280 960L960 300" stroke="white" stroke-width="50" opacity=".12"/>'
  };
  const motif=motifs[category]||motifs.general;
@@ -227,6 +231,7 @@ export function offlineStudioHeroArtwork({concept=1,colors=[],category="general"
   business:'<path d="M585 500V265h95v235m40 0V135h125v365m50 0V230h115v270m45 0V90h135v410" fill="none" stroke="#fff" stroke-width="13" opacity=".15"/><path d="M550 515h650" stroke="'+gold+'" stroke-width="20" opacity=".15"/>',
   nonprofit:'<circle cx="875" cy="335" r="190" fill="none" stroke="#fff" stroke-width="33" opacity=".13"/><circle cx="1065" cy="300" r="160" fill="none" stroke="'+gold+'" stroke-width="24" opacity=".17"/><path d="M625 470Q850 275 1210 445" stroke="#fff" stroke-width="25" fill="none" opacity=".12"/>',
   wedding:'<path d="M615 550Q705 80 970 230T1230 90" fill="none" stroke="#fff" stroke-width="12" opacity=".22"/><path d="M780 460q-90-70 0-140q90 70 0 140m185-80q-88-70 0-140q88 70 0 140" fill="none" stroke="'+gold+'" stroke-width="12" opacity=".26"/><circle cx="1080" cy="225" r="130" fill="none" stroke="#fff" stroke-width="16" opacity=".13"/>',
+  event:'<path d="M560 445L680 150 805 445M780 485L940 85 1100 485M1030 370L1175 150 1260 325" fill="none" stroke="#fff" stroke-width="16" opacity=".18"/><circle cx="920" cy="260" r="190" stroke="'+gold+'" stroke-width="21" fill="none" opacity=".16"/><path d="M560 530H1200" stroke="#fff" stroke-width="14" opacity=".16"/>',
   general:'<path d="M500 540L990 30M690 570L1210 130" stroke="#fff" stroke-width="62" opacity=".09"/><circle cx="970" cy="310" r="245" fill="none" stroke="'+gold+'" stroke-width="20" opacity=".2"/>'
  };
  const overlay=families[category]||families.general;
