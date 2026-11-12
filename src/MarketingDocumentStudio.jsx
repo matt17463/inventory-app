@@ -648,7 +648,7 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
       <label className="growth-field"><span>Client</span><select value={accountId} onChange={e=>selectAccount(e.target.value)}><option value="">Select existing client</option>{organizations.map(a=><option key={a.id} value={a.id}>{a.organization}</option>)}</select></label>
       <label className="growth-field"><span>Marketing document type</span><select value={template} onChange={e=>{setTemplate(e.target.value);setVisualBackground("");setVisualPromptOverride(null);}}>{[...new Set(marketingTemplates.map(t=>t.category))].map(category=><optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
     </div>
-    <MarketingAIDesignStudio key={accountId+"-"+template} accountId={accountId} organization={organization} template={template} segment={segment} logo={logo} colors={colors.split(",").map(c=>c.trim())} description={description} onUseLegacy={()=>setShowClassicBuilder(true)}/>
+    <MarketingAIDesignStudio key={accountId+"-"+template} accountId={accountId} organization={organization} template={template} segment={segment} logo={logo} colors={colors.split(",").map(c=>c.trim())} description={description} approvedProductImages={productImages} onUseLegacy={()=>setShowClassicBuilder(true)}/>
     <button type="button" className="sc-btn" onClick={()=>setShowClassicBuilder(v=>!v)}>{showClassicBuilder?"Hide classic document builder":"Classic document builder and existing drafts"}</button>
     <div style={{display:showClassicBuilder?"block":"none"}}>
 
