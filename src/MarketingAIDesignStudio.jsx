@@ -6,6 +6,7 @@ import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingShar
 import MarketingApparelComposer from "./MarketingApparelComposer";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
+import {DEFAULT_STUDIO_LAYOUT,normalizeStudioLayout} from "./lib/marketingStudioLayoutControls";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork,studioLayoutSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
 
 const defaults={
@@ -48,6 +49,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [prompt,setPrompt]=useState("");
  const [concepts,setConcepts]=useState([]);
  const [plans,setPlans]=useState([]);
+ const [layoutAdjustments,setLayoutAdjustments]=useState({});
  const [lockedSections,setLockedSections]=useState([]);
  const [releaseConfirmed,setReleaseConfirmed]=useState(false);
  const [savedDesigns,setSavedDesigns]=useState([]);
@@ -71,7 +73,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -121,7 +123,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:concepts[i]||"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],layoutAdjustments:layoutAdjustments[i]||DEFAULT_STUDIO_LAYOUT,image:concepts[i]||"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -140,7 +142,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(const image of concepts)references.push(await storeImage(image));
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
-   const content={studioVersion:3,lockedSections,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,headline,body,benefits,steps,cta,contactText};
+   const content={studioVersion:4,lockedSections,layoutAdjustments,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,headline,body,benefits,steps,cta,contactText};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -156,7 +158,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    if(!Array.isArray(d.references)||d.references.length>3)throw Error("Invalid saved design.");
    const images=[];
    for(const ref of d.references){if(!ref?.key)throw Error("Missing private image reference.");images.push(await marketingLogoImage(accountId,ref.key));}
-   setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setLockedSections(Array.isArray(d.lockedSections)?d.lockedSections.filter(x=>["products","benefits","steps"].includes(x)):[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
+   setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setLayoutAdjustments(d.layoutAdjustments&&typeof d.layoutAdjustments==="object"?Object.fromEntries(Object.entries(d.layoutAdjustments).filter(([key])=>/^[012]$/.test(key)).map(([key,value])=>[key,normalizeStudioLayout(value)])):{});setLockedSections(Array.isArray(d.lockedSections)?d.lockedSections.filter(x=>["products","benefits","steps"].includes(x)):[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
@@ -171,7 +173,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
-  setBusy(true);setError("");setConcepts([]);setPlans([]);setSelected(0);
+  setBusy(true);setError("");setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);
   const created=[],layouts=[];
   try{
    let localEnabled=false;
@@ -200,6 +202,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   if(!readiness.ready){setError("Client-ready export blocked: "+readiness.errors.join(" "));return false;}
   if(!releaseConfirmed){setError("Confirm client artwork, factual copy and merchandise approval before exporting.");return false;}
   return true;
+ }
+ function updateSelectedLayout(name,value){
+  if(lockedSections.length){setError("Unlock placements before changing page geometry.");return;}
+  setLayoutAdjustments(previous=>({...previous,[selected]:normalizeStudioLayout({...previous[selected],[name]:value})}));
  }
  function moveSectionFirst(section){
   if(lockedSections.length){setError("Unlock section placements before rearranging the page.");return;}
@@ -279,6 +285,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <h4>Selected concept layout and section locks</h4>
    <p>Reorder the merchandise, benefits and process sections without replacing approved artwork or text. Lock a section to protect its position.</p>
    <div className="growth-grid">
+    <label className="growth-field"><span>Hero area height (inches)</span><input type="range" min="2.8" max="3.65" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("heroHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).heroHeight.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise display height (inches)</span><input type="range" min="1.5" max="2.5" step=".05" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("galleryHeight",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).galleryHeight.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Section spacing (inches)</span><input type="range" min=".06" max=".22" step=".01" value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("spacing",Number(e.target.value))}/><small>{(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).spacing.toFixed(2)} in</small></label>
+    <label className="growth-field"><span>Merchandise arrangement</span><select value={(layoutAdjustments[selected]||DEFAULT_STUDIO_LAYOUT).presentation} disabled={lockedSections.length>0} onChange={e=>updateSelectedLayout("presentation",e.target.value)}><option value="overlap">Layered merchandise</option><option value="grid">Clean catalog grid</option></select></label>
     {studioLayoutSections(plans[selected],selected).map(section=><div key={section} className="growth-field">
      <strong style={{textTransform:"capitalize"}}>{section}</strong>
      <label><input type="checkbox" checked={lockedSections.includes(section)} onChange={e=>setLockedSections(v=>e.target.checked?[...v,section]:v.filter(x=>x!==section))}/> Lock placement</label>
