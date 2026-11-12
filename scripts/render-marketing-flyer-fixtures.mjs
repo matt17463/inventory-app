@@ -72,7 +72,8 @@ for(const category of businessCategories){
    cta:"CONTACT FOR AN APPROVED CLIENT PROOF",contact:"preview@example.invalid",
    productImages:previewGarments,productLabels:["Sample spirit tee","Sample hoodie","Sample warm-up top"],
    colors:["#1F4369","#E6B93E"],
-   schoolFundraising:category==="school"?{enabled:true,products:[{title:"Gildan 18500 hoodie",wholesale:"18.25",retail:"29.75",quantity:"75"},{title:"Gildan 5000 tee",wholesale:"8.50",retail:"16.00",quantity:"100"},{title:"School cap",wholesale:"12.00",retail:"22.00",quantity:"40"},{title:"Crewneck sweatshirt",wholesale:"16.00",retail:"28.00",quantity:"50"}]}:{enabled:false}
+   schoolFundraising:category==="school"?{enabled:true,products:[{title:"Gildan 18500 hoodie",wholesale:"18.25",retail:"29.75",quantity:"75"},{title:"Gildan 5000 tee",wholesale:"8.50",retail:"16.00",quantity:"100"},{title:"School cap",wholesale:"12.00",retail:"22.00",quantity:"40"},{title:"Crewneck sweatshirt",wholesale:"16.00",retail:"28.00",quantity:"50"}]}:{enabled:false},
+   retailPricing:category==="event"?{enabled:true,products:[{title:"Commemorative shirt",retail:"25",quantity:"25"},{title:"Event tumbler",retail:"19",quantity:"30"},{title:"Personalized badge",retail:"8",quantity:"50"},{title:"Gift bag",retail:"12",quantity:"20"}]}:{enabled:false}
   });
   writeFileSync(output+"/"+category+"-ai-studio-concept-"+(concept+1)+".html",html);
   if(!html.includes("SAMPLE DESIGN")||category==="school"&&!html.includes("ARTWORK REFRESH"))throw Error("Invalid marketing design fixture: "+category);
