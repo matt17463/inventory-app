@@ -104,10 +104,17 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to generate artwork.");setProgress(created.length+" concept(s) generated.");}
   finally{setBusy(false);}
  }
+ async function pdfCompatibleLogo(value){
+  if(!/^data:image\\/webp;base64,/i.test(value||""))return value;
+  const img=new Image();img.src=value;await img.decode();
+  const canvas=document.createElement("canvas");canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+  canvas.getContext("2d").drawImage(img,0,0);
+  return canvas.toDataURL("image/png");
+ }
  async function downloadPdf(){
   if(!concepts[selected]){setError("Generate a concept first.");return;}
   try{
-   const bytes=await buildStudioPdf({image:concepts[selected],logo,headline,description:body,benefits:benefits.split("\\n").map(x=>x.trim()).filter(Boolean),steps:steps.split("\\n").map(x=>x.trim()).filter(Boolean),cta,contact:contactText,plan:plans[selected],mode});
+   const bytes=await buildStudioPdf({image:concepts[selected],logo:await pdfCompatibleLogo(logo),headline,description:body,benefits:benefits.split("\\n").map(x=>x.trim()).filter(Boolean),steps:steps.split("\\n").map(x=>x.trim()).filter(Boolean),cta,contact:contactText,plan:plans[selected],mode});
    const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
    const a=document.createElement("a");a.href=url;a.download="skilled-crafting-"+category+"-concept-"+(selected+1)+".pdf";a.click();
    setTimeout(()=>URL.revokeObjectURL(url),10000);
