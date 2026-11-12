@@ -6,15 +6,13 @@ This is an **opt-in private connection**. The app's existing deterministic gener
 - Ollama running locally on the Mac, with `ollama pull qwen2.5:7b` completed.
 - Tailscale installed and signed into the same tailnet as the browser that opens Skilled Crafting.
 - Python 3 (standard library only).
-- Supabase project URL and **public anon/publishable key**. Never use a service-role key on the Mac.
+- The hosted application must have the `marketing-local-ai-authorize` Netlify function deployed. The bridge uses it to verify employee roles. No Supabase credentials are stored on the Mac.
 
 ## Mac setup
 1. Download the repository and open Terminal in its root folder.
-2. Supply the existing Supabase project URL and public key through environment variables, without committing them to Git:
+2. Start the private local bridge:
 
 ```sh
-export SUPABASE_URL='https://YOUR_PROJECT.supabase.co'
-export SUPABASE_ANON_KEY='YOUR_PUBLIC_ANON_KEY'
 python3 scripts/local-ai/mac-layout-bridge.py
 ```
 
@@ -31,9 +29,9 @@ tailscale serve status
 ## Security boundaries
 - The Python service listens only on `127.0.0.1:8765`.
 - Only the two approved Skilled Crafting web origins can make browser requests.
-- Each request must contain a valid signed-in Supabase access token, verified against Supabase Auth.
+- Each request must contain a valid signed-in Supabase access token. The hosted application verifies the user is an **active employee** with an approved role before the bridge calls Ollama.
 - Request body size is limited; local Ollama is accessed only on `127.0.0.1:11434`.
-- This version validates **authentication**, not employee authorization roles. Keep Tailscale access restricted to trusted users and do not expose the service to untrusted accounts. Employee-role authorization is required before broader deployment.
+- The bridge depends on the hosted authorization endpoint; if that endpoint is unavailable, requests fail closed and the app uses its deterministic fallback.
 - Model output is a layout plan only; the app continues to use its approved logo and editable verified copy overlays.
 - This design requires the *viewing browser* to have tailnet access. It is not a cloud outbound-only worker queue.
 
