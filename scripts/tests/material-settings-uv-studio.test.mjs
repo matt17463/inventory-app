@@ -117,3 +117,15 @@ test('live AI research uses current source citations without certifying machine 
  assert.match(ai,/url_citation/);
  assert.match(ai,/confidence:'unverified'/);
 });
+
+test('material recipe editor accepts incomplete experimental drafts without bypassing safety',()=>{
+ const editor=fs.readFileSync('src/MaterialSettings.jsx','utf8');
+ assert.match(editor,/material_name:form\.material_name\.trim\(\) \|\| `Untitled/);
+ assert.doesNotMatch(editor,/Complete the material, exact model and machine configuration/);
+ assert.match(editor,/form\.material_name\.trim\(\) && safety\.blocked/);
+ assert.match(editor,/thickness_mm:form\.thickness_mm && Number\(form\.thickness_mm\) !== 0/);
+ assert.match(editor,/status:'draft',approved_by:null,approved_at:null/);
+ assert.match(editor,/settings\.print_heater_c !== undefined/);
+ assert.match(editor,/settings\.dryer_c !== undefined/);
+ assert.match(editor,/All recipe details below are optional/);
+});
