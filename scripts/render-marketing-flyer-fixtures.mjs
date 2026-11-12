@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import sharp from "sharp";
 import { buildSchoolProgramPdf } from "../src/lib/marketingProgramPdf.js";
 import { schoolFlyerSvg } from "../src/lib/marketingIllustratedFlyer.js";
+import {studioPrintHtml,offlineStudioArtwork} from "../src/lib/marketingDesignStudio.js";
 
 const output = "artifacts/marketing-flyers";
 mkdirSync(output, { recursive: true });
@@ -48,4 +49,31 @@ for(const s of schools){
  writeFileSync(output+"/"+s.key+".pdf",bytes);
  console.log(s.school,bytes.length,"bytes",file.getNumberOfPages(),"pages");
  if(file.getNumberOfPages()!==2)throw Error(s.school+" was not exactly two pages");
+}
+
+/**
+ * HTML fixture proofs exercise the AI Studio print compositor directly, including
+ * category-specific language and optional school fundraising. Synthetic imagery
+ * remains clearly marked and cannot be distributed as approved merchandise.
+ */
+const previewGarment=await png(garment({primary:"#243F6E",secondary:"#E6B93E",short:"TEST"},"TEST",0));
+const businessCategories=["school","team","business","nonprofit","wedding","general"];
+for(const category of businessCategories){
+ const variants=category==="school"?3:1;
+ for(let concept=0;concept<variants;concept++){
+  const artwork=await png(offlineStudioArtwork({category,concept:concept+1,colors:["#1F4369","#E6B93E"]}));
+  const html=studioPrintHtml({
+   client:category==="school"?"Synthetic Example School":"Synthetic "+category.toUpperCase()+" Client",
+   category,concept,image:artwork,logo:brand,headline:"SAMPLE DESIGN — NOT CLIENT APPROVED",
+   description:"Print layout test with synthetic branding and merchandise. Do not distribute.",
+   benefits:["Illustrative collection","Client artwork required","Review all merchandise","Confirm final terms"],
+   steps:["Plan together","Approve proof","Confirm the details","Share the result"],
+   cta:"CONTACT FOR AN APPROVED CLIENT PROOF",contact:"preview@example.invalid",
+   productImages:[previewGarment],
+   colors:["#1F4369","#E6B93E"],
+   schoolFundraising:category==="school"?{enabled:true,wholesale:"18.25",retail:"29.75",quantity:"75"}:{enabled:false}
+  });
+  writeFileSync(output+"/"+category+"-ai-studio-concept-"+(concept+1)+".html",html);
+  if(!html.includes("SAMPLE DESIGN")||category==="school"&&!html.includes("ARTWORK REFRESH"))throw Error("Invalid marketing design fixture: "+category);
+ }
 }
