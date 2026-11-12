@@ -4,6 +4,7 @@ import {supabase} from "./supabaseClient";
 import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
 import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingSharedImageUrl} from "./lib/marketingArtwork";
 import MarketingApparelComposer from "./MarketingApparelComposer";
+import {marketingFlyerChecks} from "./lib/marketingFlyerChecks";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
@@ -62,6 +63,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [cta,setCta]=useState("");
  const [contactText,setContactText]=useState("");
  const [productImages,setProductImages]=useState([]);
+ const [heroImage,setHeroImage]=useState("");
+ const [heroInfo,setHeroInfo]=useState("");
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
  const [approvedPhotoBusy,setApprovedPhotoBusy]=useState(false);
  const [approvedPhotoStatus,setApprovedPhotoStatus]=useState("");
@@ -69,7 +72,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -106,6 +109,27 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setApprovedPhotoStatus("Could not import image: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
  }
+ async function addHeroScene(event){
+  const file=event.target.files?.[0];
+  event.target.value="";
+  if(!file)return;
+  if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>5_000_000){setHeroInfo("Choose a licensed PNG, JPEG or WebP scene under 5 MB.");return;}
+  try{
+   const url=URL.createObjectURL(file);
+   let img;
+   try{img=await new Promise((resolve,reject)=>{const loaded=new Image();loaded.onload=()=>resolve(loaded);loaded.onerror=()=>reject(Error("The photo could not be opened."));loaded.src=url;});}
+   finally{URL.revokeObjectURL(url);}
+   if(img.naturalWidth<1000||img.naturalHeight<600)throw Error("Campaign scene must be at least 1000 × 600 pixels.");
+   const canvas=document.createElement("canvas");
+   const scale=Math.min(1,2200/Math.max(img.naturalWidth,img.naturalHeight));
+   canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
+   canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+   const result=canvas.toDataURL("image/jpeg",0.82);
+   if(result.length>3_200_000)throw Error("Scene is too large for private storage. Choose a simpler photo.");
+   setHeroImage(result);
+   setHeroInfo("Approved scene added for the hero. Check that the school identity, location and license are accurate.");
+  }catch(e){setHeroInfo(e.message||"Could not prepare campaign scene.");}
+ }
  async function addProductPhotos(event){
   const files=Array.from(event.target.files||[]).slice(0,4-mergedProductImages.length);
   try{
@@ -119,7 +143,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -138,7 +162,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(const image of concepts)references.push(await storeImage(image));
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
-   const content={studioVersion:2,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,headline,body,benefits,steps,cta,contactText};
+   const heroReference=heroImage?await storeImage(heroImage):null;
+   const content={studioVersion:3,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,headline,body,benefits,steps,cta,contactText};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -158,12 +183,15 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
+   const restoredHero=d.heroReference?.key?await marketingLogoImage(accountId,d.heroReference.key):"";
+   setHeroImage(restoredHero);setHeroInfo(restoredHero?"Approved hero scene restored from private storage.":"");
    setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductImages(products);
    setDraftMessage("Saved concepts and design instructions restored.");
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
  }
  const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,4);
+ const flyerReview=marketingFlyerChecks({organization,logo,colors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage});
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
@@ -242,6 +270,19 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
+  <section className="growth-subcard" aria-label="Approved campaign scenery">
+   <h4>School-specific campaign scenery</h4>
+   <p>Use an approved school or community landscape, licensed campus photograph, or background art. The scene stays separate from the school logo and editable text. No location or mascot is invented.</p>
+   <input aria-label="Upload approved campaign hero scene" type="file" accept="image/png,image/jpeg,image/webp" onChange={addHeroScene} disabled={busy||draftBusy}/>
+   {heroImage&&<div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginTop:10}}><img src={heroImage} alt="Approved campaign background" style={{width:210,maxHeight:150,objectFit:"cover"}}/><button type="button" className="sc-btn" onClick={()=>{setHeroImage("");setHeroInfo("Campaign image removed.");}}>Remove scene</button></div>}
+   {heroInfo&&<p role="status">{heroInfo}</p>}
+  </section>
+  <section className="growth-subcard" aria-label="Client-ready flyer checks">
+   <h4>Client-ready review</h4>
+   <p>{flyerReview.passed?"All required content fields are present. Verify the actual artwork, claims and print proof before sharing.":"This is a draft proof. Complete the missing details before distributing it to the client."}</p>
+   <ul>{flyerReview.checks.map(check=><li key={check.id}>{check.pass?"✓ ":"• "}{check.message}</li>)}</ul>
+   <p>Photo resolution, supplier garment identity, logo permissions and exact production placement require human verification; this checklist does not certify them.</p>
+  </section>
   <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
@@ -260,9 +301,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
-  <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={printFlyer}>Print selected flyer / Save as PDF</button>
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy||!flyerReview.passed} onClick={printFlyer}>Print client-ready flyer / Save as PDF</button>
+  {!flyerReview.passed&&<p role="status">Complete the client-ready checklist to enable print export. Saved drafts remain available.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={exportHtml}>Download editable print HTML</button>
-  <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. The Print / Save as PDF button opens the browser print dialog using the exact preview layout. For high-quality results, choose US Letter, 100% scale, no margins and background graphics. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
+  <p>Complete previews use editable approved copy, your approved logo and optional verified merchandise photography. Client-ready export requires verified branding and image inputs. The Print / Save as PDF button opens the browser print dialog using the exact preview layout. For high-quality results, choose US Letter, 100% scale, no margins and background graphics. When your private Tailscale Ollama gateway is configured, layout plans are generated on your Mac; otherwise deterministic offline plans are used. Backgrounds remain original abstract artwork, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
  </section>;
 }
