@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,inspectStudioPrintDom,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
+import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,inspectStudioPrintDom,studioRectanglesOverlap,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
 
 const sample='data:image/png;base64,AAAA';
 test('validated layout plan reorders only supported modules and preserves each exactly once',()=>{
@@ -94,4 +94,21 @@ test('pale brand colors cannot become low-contrast flyer headline backgrounds',(
  assert.ok(html.includes('--primary:#123456')||html.includes('--primary:#233B69'));
  assert.ok(!html.includes('--primary:#FFFF00'));
  assert.ok(html.includes('#FFFF00'));
+});
+
+test('collision preflight rejects overlapping approved identity and headline regions',()=>{
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom});
+ assert.equal(studioRectanglesOverlap(rect(0,0,90,90),rect(45,45,120,120)),true);
+ assert.equal(studioRectanglesOverlap(rect(0,0,90,90),rect(92,92,120,120)),false);
+ const identity={getBoundingClientRect:()=>rect(20,20,150,130)};
+ const heroText={getBoundingClientRect:()=>rect(40,110,400,260)};
+ const page={scrollHeight:1056,clientHeight:1056,querySelector:s=>({'.hero .identity':identity,'.hero-text':heroText})[s]||null};
+ const issues=inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null});
+ assert.match(issues.join(' '),/identity overlaps/);
+});
+test('collision preflight protects school options against merchandising overlap',()=>{
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom});
+ const elements={'.gallery':{getBoundingClientRect:()=>rect(30,330,750,620)},'.school-callouts':{getBoundingClientRect:()=>rect(30,600,750,720)}};
+ const page={scrollHeight:1056,clientHeight:1056,querySelector:s=>elements[s]||null};
+ assert.match(inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null}).join(' '),/Content overlap/);
 });
