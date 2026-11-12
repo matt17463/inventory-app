@@ -77,6 +77,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [fundraisingNote,setFundraisingNote]=useState("");
  const [fundraisingRows,setFundraisingRows]=useState([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);
  const [productImages,setProductImages]=useState([]);
+ const [mockupRecipes,setMockupRecipes]=useState([]);
+ const [recipeToEdit,setRecipeToEdit]=useState(null);
  const [heroImage,setHeroImage]=useState("");
  const [heroInfo,setHeroInfo]=useState("");
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
@@ -87,7 +89,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setMockupRecipes([]);setRecipeToEdit(null);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -191,9 +193,14 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(const image of concepts)references.push(await storeImage(image));
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
+   const mockupRecipeReferences=[];
+   for(const recipe of mockupRecipes){
+    if(!Number.isInteger(recipe.productIndex)||recipe.productIndex<0||recipe.productIndex>=productImages.length||!recipe.blank)continue;
+    mockupRecipeReferences.push({productIndex:recipe.productIndex,blankReference:await storeImage(recipe.blank),blankLabel:String(recipe.blankLabel||"Product blank").slice(0,120),placement:recipe.placement});
+   }
    const heroReference=heroImage?await storeImage(heroImage):null;
    const logoVariantReference=artworkVariantImage?await storeImage(artworkVariantImage):null;
-   const content={studioVersion:5,organization,category,style,brandMood,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
+   const content={studioVersion:5,organization,category,style,brandMood,mode,prompt:visualPrompt,selected,plans,references,productReferences,mockupRecipeReferences,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -216,10 +223,35 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const restoredHero=d.heroReference?.key?await marketingLogoImage(accountId,d.heroReference.key):"";
    setHeroImage(restoredHero);setHeroInfo(restoredHero?"Approved hero scene restored from private storage.":"");
    setArtworkVariantImage(d.logoVariantReference?.key?await marketingLogoImage(accountId,d.logoVariantReference.key):"");
+   const restoredRecipes=[];
+   if(Array.isArray(d.mockupRecipeReferences))for(const recipe of d.mockupRecipeReferences.slice(0,5)){
+    if(Number.isInteger(recipe.productIndex)&&recipe.productIndex>=0&&recipe.productIndex<products.length&&recipe.blankReference?.key){
+     restoredRecipes.push({productIndex:recipe.productIndex,blank:await marketingLogoImage(accountId,recipe.blankReference.key),blankLabel:recipe.blankLabel||"Saved blank",placement:recipe.placement});
+    }
+   }
+   setMockupRecipes(restoredRecipes);setRecipeToEdit(null);
    setStyle(d.style||"athletic");setBrandMood(d.brandMood||"auto");setBrandReviewed(false);setAssetsReviewed(false);setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setArtworkMessage(d.artworkMessage||"");setArtworkOptions(d.artworkOptions||"");setFundraisingNote(d.fundraisingNote||"");setFundraisingRows(Array.isArray(d.fundraisingRows)&&d.fundraisingRows.length?d.fundraisingRows.slice(0,3):[{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setProductImages(products);
    setDraftMessage("Saved concepts and design instructions restored.");
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
+ }
+ function removeProductImage(index){
+  setProductImages(v=>v.filter((_,j)=>j!==index));
+  setMockupRecipes(v=>v.filter(r=>r.productIndex!==index).map(r=>({...r,productIndex:r.productIndex>index?r.productIndex-1:r.productIndex})));
+  setRecipeToEdit(null);setAssetsReviewed(false);
+ }
+ function addComposedProduct(image,recipe){
+  if(Number.isInteger(recipe?.editIndex)&&recipe.editIndex>=0&&recipe.editIndex<productImages.length){
+   const index=recipe.editIndex;
+   setProductImages(v=>v.map((src,i)=>i===index?image:src));
+   setMockupRecipes(v=>[...v.filter(r=>r.productIndex!==index),{productIndex:index,blank:recipe.blank,blankLabel:recipe.blankLabel,placement:recipe.placement}]);
+   setRecipeToEdit(null);
+  }else if(productImages.length<5){
+   const productIndex=productImages.length;
+   setProductImages(v=>[...v,image].slice(0,5));
+   setMockupRecipes(v=>[...v,{productIndex,blank:recipe.blank,blankLabel:recipe.blankLabel,placement:recipe.placement}]);
+  }
+  setAssetsReviewed(false);
  }
  const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,5);
  const flyerReview=marketingFlyerChecks({organization,logo,colors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage,category,artworkOptions:artworkOptions.split("\n").filter(Boolean)});
@@ -324,7 +356,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=5} onClick={()=>previewApprovedCandidate(item)}>Preview image</button></div>)}</div>}
    {candidatePreview&&<div className="growth-subcard" style={{marginTop:8}}><h5>Preview from {candidatePreview.title}</h5><img src={candidatePreview.image} alt="Client-approved merchandise candidate — verify before use" style={{maxWidth:280,maxHeight:280,objectFit:"contain"}}/><p>This image must match the selected client, product and approved logo decoration.</p><button type="button" className="sc-btn" onClick={importApprovedPhoto} disabled={mergedProductImages.length>=5}>Confirm and add to flyer</button><button type="button" className="sc-btn" onClick={()=>setCandidatePreview(null)}>Cancel</button></div>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=5} onChange={addProductPhotos}/>
-   {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
+   {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/>{mockupRecipes.some(r=>r.productIndex===i)&&<button type="button" onClick={()=>setRecipeToEdit({...mockupRecipes.find(r=>r.productIndex===i)})}>Edit placement</button>}<button type="button" onClick={()=>removeProductImage(i)}>Remove</button></div>)}</div>}
   </div>
   <section className="growth-subcard" aria-label="Approved campaign scenery">
    <h4>School-specific campaign scenery</h4>
@@ -366,7 +398,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!verifiedFundraisingRows(fundraisingRows).length&&<p role="status">{verifiedFundraisingRows(fundraisingRows).length} confirmed example row(s) will appear in the flyer with a clear illustrative-margin disclaimer.</p>}
    </>}
   </section>
-  <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=5} onAdd={image=>setProductImages(current=>[...current,image].slice(0,5))}/>
+  <MarketingApparelComposer key={accountId+"-composer-"+(recipeToEdit?recipeToEdit.productIndex:"new")} accountId={accountId} logo={logo} recipeToEdit={recipeToEdit} disabled={busy||draftBusy||(mergedProductImages.length>=5&&!recipeToEdit)} onAdd={addComposedProduct}/>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
    <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Product showcase","Editorial story","Bold brand statement"][i]}</strong>
