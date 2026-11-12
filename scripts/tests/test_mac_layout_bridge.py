@@ -40,6 +40,23 @@ class LocalAiBridgeChecks(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     bridge.validate_copy(data)
 
+    def test_optional_comfyui_is_disabled_without_private_configuration(self):
+        # A missing or public endpoint never calls an image provider.
+        previous = (bridge.COMFY_BASE_URL, bridge.COMFY_WORKFLOW, bridge.COMFY_POSITIVE_NODE)
+        try:
+            bridge.COMFY_BASE_URL = ""
+            bridge.COMFY_WORKFLOW = ""
+            bridge.COMFY_POSITIVE_NODE = ""
+            with self.assertRaises(RuntimeError):
+                bridge.render_comfyui_scene({"prompt": "Original illustrated landscape without logos or text"})
+            bridge.COMFY_BASE_URL = "https://comfyui.public.example"
+            bridge.COMFY_WORKFLOW = "/no/such/file.json"
+            bridge.COMFY_POSITIVE_NODE = "6"
+            with self.assertRaises(RuntimeError):
+                bridge.render_comfyui_scene({"prompt": "Original illustrated landscape without logos or text"})
+        finally:
+            bridge.COMFY_BASE_URL, bridge.COMFY_WORKFLOW, bridge.COMFY_POSITIVE_NODE = previous
+
     def test_copy_rejects_invalid_sections(self):
         with self.assertRaises(ValueError):
             bridge.validate_copy({"headline": "Example", "description": "Example", "benefits": "not a list", "steps": [], "cta": "Contact"})
