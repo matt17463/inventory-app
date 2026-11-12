@@ -136,3 +136,22 @@ test('school hero reuses the exact approved client logo as a decorative mascot l
  const business=studioPrintHtml({category:'business',client:'Client',logo:sample,productImages:[sample]});
  assert.ok(!business.includes('class="school-mascot-hero"'));
 });
+
+test('school hero visually communicates four verified program benefits without school messaging leaking to other audiences',()=>{
+ const school=studioPrintHtml({category:'school',client:'Synthetic',headline:'Build school pride'});
+ for(const label of ['SCHOOL PRIDE','PROGRAM FUNDING','ONLINE STOREFRONT','LOCAL PARTNERSHIP']){
+  assert.ok(school.includes('<strong>'+label+'</strong>'));
+ }
+ assert.ok(school.includes('class="school-highlights"'));
+ assert.ok(!studioPrintHtml({category:'wedding'}).includes('class="school-highlights"'));
+});
+test('print gate detects school feature ribbon overlapping headline',()=>{
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom});
+ const elements={
+  '.school-highlights':{getBoundingClientRect:()=>rect(40,250,760,310)},
+  '.hero-text':{getBoundingClientRect:()=>rect(40,110,720,270)}
+ };
+ const page={scrollHeight:1056,clientHeight:1056,querySelector:s=>elements[s]||null};
+ const failures=inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null});
+ assert.match(failures.join(' '),/School program highlights overlap/);
+});
