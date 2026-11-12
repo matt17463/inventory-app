@@ -210,3 +210,26 @@ export function offlineStudioArtwork({concept=1,colors=[],style="athletic",categ
  const texture=style==="editorial"?.12:style==="expressive"?.3:.2;
  return '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient><linearGradient id="shine" x2="1" y2="1"><stop stop-color="white" stop-opacity=".38"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient><radialGradient id="glow"><stop stop-color="'+c+'" stop-opacity=".65"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient><pattern id="grain" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M0 35L35 0" stroke="white" stroke-opacity="'+texture+'" stroke-width="1"/></pattern></defs><rect width="960" height="1200" fill="url(#bg)"/>'+graphics+motif+'<rect width="960" height="1200" fill="url(#grain)" opacity=".35"/><rect y="950" width="960" height="250" fill="#0b1728" opacity=".42"/></svg>';
 }
+
+/** Landscape-only text-free hero art (1200×540); never synthesizes a client logo. */
+export function offlineStudioHeroArtwork({concept=1,colors=[],category="general",style="athletic"}={}){
+ const id=Math.max(0,Math.min(2,Number(concept)-1||0));
+ const palette=Array.isArray(colors)?colors.filter(color=>/^#[0-9a-f]{6}$/i.test(color)).slice(0,3):[];
+ const a=palette[0]||"#16395f",b=palette[1]||"#34577f",gold=palette[2]||"#e6bb4c";
+ const base=[
+  '<path d="M530-80L1220 480V570L480 100Z" fill="url(#glow)" opacity=".48"/><path d="M720-60L1260 480" stroke="'+gold+'" opacity=".23" stroke-width="90"/>',
+  '<ellipse cx="960" cy="230" rx="460" ry="325" fill="url(#glow)" opacity=".62"/><path d="M570 540Q900 110 1270 400" fill="none" stroke="'+gold+'" stroke-width="46" opacity=".20"/>',
+  '<path d="M660 0L1220 270V520L530 220Z" fill="url(#glow)" opacity=".52"/><circle cx="1050" cy="250" r="235" fill="none" stroke="'+gold+'" stroke-width="25" opacity=".22"/>'
+ ][id];
+ const families={
+  school:'<path d="M440 410L650 205 750 330 870 115 1010 315 1110 200 1230 380V540H440Z" fill="#fff" opacity=".095"/><path d="M450 485L620 285 730 420 890 240 1015 420 1125 305 1220 430V540H450Z" fill="#080f21" opacity=".25"/><path d="M575 530l30-120 30 120m135 0 38-145 38 145m146 0 44-115 44 115" fill="none" stroke="#fff" stroke-width="16" opacity=".16"/>',
+  team:'<path d="M570 560Q870-40 1250 560M690 570Q930 160 1200 550" fill="none" stroke="#fff" stroke-width="24" opacity=".14"/><path d="M885 0v280m-40-240h80" stroke="'+gold+'" stroke-width="14" opacity=".25"/><ellipse cx="1000" cy="360" rx="310" ry="110" fill="none" stroke="#fff" stroke-width="8" opacity=".2"/>',
+  business:'<path d="M585 500V265h95v235m40 0V135h125v365m50 0V230h115v270m45 0V90h135v410" fill="none" stroke="#fff" stroke-width="13" opacity=".15"/><path d="M550 515h650" stroke="'+gold+'" stroke-width="20" opacity=".15"/>',
+  nonprofit:'<circle cx="875" cy="335" r="190" fill="none" stroke="#fff" stroke-width="33" opacity=".13"/><circle cx="1065" cy="300" r="160" fill="none" stroke="'+gold+'" stroke-width="24" opacity=".17"/><path d="M625 470Q850 275 1210 445" stroke="#fff" stroke-width="25" fill="none" opacity=".12"/>',
+  wedding:'<path d="M615 550Q705 80 970 230T1230 90" fill="none" stroke="#fff" stroke-width="12" opacity=".22"/><path d="M780 460q-90-70 0-140q90 70 0 140m185-80q-88-70 0-140q88 70 0 140" fill="none" stroke="'+gold+'" stroke-width="12" opacity=".26"/><circle cx="1080" cy="225" r="130" fill="none" stroke="#fff" stroke-width="16" opacity=".13"/>',
+  general:'<path d="M500 540L990 30M690 570L1210 130" stroke="#fff" stroke-width="62" opacity=".09"/><circle cx="970" cy="310" r="245" fill="none" stroke="'+gold+'" stroke-width="20" opacity=".2"/>'
+ };
+ const overlay=families[category]||families.general;
+ const grain=style==="editorial"?.08:.18;
+ return '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient><radialGradient id="glow"><stop stop-color="'+gold+'" stop-opacity=".62"/><stop offset="1" stop-color="'+gold+'" stop-opacity="0"/></radialGradient><pattern id="texture" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M0 28L28 0" fill="none" stroke="#fff" stroke-width="1" opacity="'+grain+'"/></pattern></defs><rect width="1200" height="540" fill="url(#bg)"/>'+base+overlay+'<rect width="1200" height="540" fill="url(#texture)" opacity=".35"/></svg>';
+}
