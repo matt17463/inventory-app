@@ -30,7 +30,7 @@ test("school flyer renders both yearly artwork options and reviewed money only",
  assert.match(html,/\$843\.75/);
  assert.match(html,/\$11\.25/);
  const unpriced=studioPrintHtml({category:"school",client:"Test School",schoolFundraising:{enabled:true,wholesale:"bad",retail:"999",quantity:75}});
- assert.ok(!unpriced.includes("fundraising-mini"));
+ assert.ok(!unpriced.includes('class="fundraising-mini"'));
  assert.ok(!unpriced.includes("$999"));
  const business=studioPrintHtml({category:"business",schoolFundraising:verified});
  assert.ok(!business.includes('class="school-callouts"'));
