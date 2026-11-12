@@ -128,7 +128,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <label className="growth-field"><span>Creative style</span><select value={style} onChange={e=>setStyle(e.target.value)}>{DESIGN_STYLES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
    <label className="growth-field"><span>Document editing mode</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="hybrid">Hybrid — editable text and AI artwork</option><option value="artwork">Artwork-first — AI illustration with verified overlays</option></select></label>
   </div>
-  <label className="growth-field"><span>Editable creative direction (up to 6,000 characters)</span><textarea rows={9} maxLength={6000} value={visualPrompt} onChange={e=>setPrompt(e.target.value)} /></label>
+  <label className="growth-field"><span>Editable creative direction (up to 12,000 characters)</span><textarea rows={9} maxLength={12000} value={visualPrompt} onChange={e=>setPrompt(e.target.value)} /></label>
   <button type="button" className="sc-btn" onClick={()=>setPrompt("")}>Reset to category prompt</button>
   <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts"}</button>
   {progress&&<p role="status">{progress}</p>}
