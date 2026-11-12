@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,inspectStudioPrintDom,studioRectanglesOverlap,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
+import {studioLayoutSections,studioMoveSectionFirst,studioMergeLockedSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,inspectStudioPrintDom,studioRectanglesOverlap,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
 
 const sample='data:image/png;base64,AAAA';
 test('validated layout plan reorders only supported modules and preserves each exactly once',()=>{
@@ -164,4 +164,23 @@ test('long school campaign headline uses compact print treatment without affecti
  assert.ok(!shorter.includes('class="page campaign athletic school-layout long-headline"'));
  const business=studioPrintHtml({category:'business',headline:heading});
  assert.ok(!business.includes(' long-headline"'));
+});
+
+test('per-section locks preserve the exact placement of each locked section',()=>{
+ const current={sections:['hero','benefits','products','steps','cta']};
+ assert.deepEqual(studioMoveSectionFirst(current,'steps',['benefits'],0),['benefits','steps','products']);
+ assert.deepEqual(studioMoveSectionFirst(current,'benefits',['benefits'],0),['benefits','products','steps']);
+ const proposed={sections:['hero','steps','products','benefits','cta']};
+ assert.deepEqual(studioMergeLockedSections(current,proposed,['benefits'],0),['benefits','steps','products']);
+ assert.deepEqual(studioMergeLockedSections(current,proposed,['benefits','products'],0),['benefits','products','steps']);
+});
+test('editor exposes bounded per-element offsets, independent placement locks, and unlocked regeneration',()=>{
+ const ui=readFileSync(new URL('../../src/MarketingAIDesignStudio.jsx',import.meta.url),'utf8');
+ assert.match(ui,/studioMoveSectionFirst\(plan,section,lockedSections,selected\)/);
+ assert.match(ui,/studioMergeLockedSections\(v,result.plan,lockedSections,selected\)/);
+ assert.match(ui,/if\(!lockedSections.includes\("hero"\)\)setConcepts/);
+ for(const field of ['headlineX','headlineY','galleryX','galleryY'])assert.ok(ui.includes('updateSelectedLayout("'+field+'"'));
+ const html=studioPrintHtml({category:'school',layoutAdjustments:{headlineX:.15,headlineY:-.1,galleryX:-.05,galleryY:.15}});
+ assert.match(html,/--studio-headline-x:0\.15in/);
+ assert.match(html,/--studio-gallery-y:0\.15in/);
 });
