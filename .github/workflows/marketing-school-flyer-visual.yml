@@ -43,6 +43,7 @@ jobs:
       - run: node_modules/.bin/vite build --config scripts/marketing-flyer-visual.vite.config.js
       - run: mv artifacts/marketing-flyers/marketingProgramPdf.bundle.js artifacts/marketing-flyers/marketingProgramPdf.bundle.mjs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: school-flyer-layout-samples
           path: artifacts/marketing-flyers/*
