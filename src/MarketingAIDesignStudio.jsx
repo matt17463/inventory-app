@@ -262,8 +262,17 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    return;
   }
   popup.addEventListener("load",()=>{
-   Promise.all(Array.from(popup.document.images).map(img=>img.decode().catch(()=>{})))
-    .then(()=>{if(!popup.closed){const issues=inspectStudioPrintDom(popup.document);if(issues.length){setError("Print blocked: "+issues.join(" "));popup.close();return;}popup.focus();popup.print();}});
+   const fonts=popup.document.fonts?.ready||Promise.resolve();
+   const images=Array.from(popup.document.images).map(img=>img.decode().catch(()=>{}));
+   const backdrop=concepts[selected] ? new Promise((resolve,reject)=>{
+    const img=new Image();img.onload=resolve;img.onerror=()=>reject(Error("The concept background could not be loaded for printing."));img.src=concepts[selected];
+   }):Promise.resolve();
+   Promise.all([fonts,backdrop,...images]).then(()=>{
+    if(popup.closed)return;
+    const issues=inspectStudioPrintDom(popup.document);
+    if(issues.length){setError("Print blocked: "+issues.join(" "));popup.close();return;}
+    popup.focus();popup.print();
+   }).catch(e=>{setError(e.message||"Print assets could not be prepared.");if(!popup.closed)popup.close();});
   },{once:true});
   popup.document.open();
   popup.document.write(html);
