@@ -58,3 +58,11 @@ No production deployment is authorized by this document.
 - Unit cases are in `scripts/tests/marketing-school-fundraising.test.mjs`.
 - `scripts/render-marketing-flyer-fixtures.mjs` now emits synthetic Studio HTML for the three school variants plus team, business, nonprofit, wedding and general designs. These are test fixtures, not permitted client-ready exports. Review their typography, spacing and full-page overflow alongside the earlier PDF reference fixtures.
 - The Product & Event Center workflow previously failed downloading `onnxruntime-node` (external network timeout before tests). A failed-job rerun was requested; do not represent this as passing until it completes.
+
+## Optional premium scene generation (operator-triggered only)
+- The three default design concepts remain entirely offline/credit-free.
+- The operator may click **Generate premium AI scenery for selected concept — paid API credits**. This uses the existing employee-authorized, CRM-scoped `marketing-ai-visual` endpoint and its server-held OpenAI credential, *only* for the selected decorative scene. This action may incur API costs and is not automatic.
+- The Studio requests a 1536×1024 landscape response for its wide hero; the endpoint's existing 1024×1536 portrait default remains unchanged for other callers.
+- Do not upload the approved client logo or merchandise photos as generation inputs. The original logo, photos and factual copy remain separately composed. Human review and approval confirmation are invalidated when premium artwork replaces a scene.
+- Premium image generation remains conditional on server credentials, provider permissions and function timeouts. No test here claims the external provider generated a successful sample; stage with an authorized test client before production.
+- Until print proofs pass, treat generated scenes as decorative backgrounds, not production decoration art or an approved logo redesign.
