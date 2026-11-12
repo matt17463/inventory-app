@@ -55,7 +55,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  }
  const print=()=>{
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
-  const html=studioPrintHtml({client:organization,category,style,image:concepts[selected],logo,headline,description:body,
+  const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,image:concepts[selected],logo,headline,description:body,
    benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText});
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-ai-"+category+"-flyer.html";a.click();
@@ -82,7 +82,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <label className="growth-field"><span>Call to action</span><input value={cta} onChange={e=>setCta(e.target.value)}/></label>
    <label className="growth-field"><span>Verified business contact details</span><textarea value={contactText} onChange={e=>setContactText(e.target.value)}/></label>
   </div>}
-  {mode==="artwork"&&<p>Artwork-first mode prioritizes the generated composition; the approved logo and factual text are still overlaid separately for accuracy. Switch to Hybrid to edit each text section.</p>}
+  {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={print}>Export selected print layout (HTML → Print to PDF)</button>
   <p>Generated images are not automatically approved. Review logo fidelity, product imagery and any visual artifacts. The printable layout keeps business claims separate from AI-generated pixels.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
