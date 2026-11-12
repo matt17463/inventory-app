@@ -643,14 +643,15 @@ export default function MarketingDocumentStudio({ organizations = [], manager = 
   }
   return <section className="sc-panel" onChange={() => setGuide(null)}>
     <h2>Marketing Document Builder</h2>
-    <p>AI Document Design Studio is the primary experience. The classic builder remains available for existing workflows, technical guides and draft management.</p>
+    <p>Choose a client and document type first. <strong>Design Studio</strong> creates a graphical one-page promotional flyer with editable artwork and customer-safe information. <strong>Full document builder</strong> creates detailed editable Word documents, native PDFs, itemized quotes, approvals and technical guides. Both workflows retain approved client identity and factual product information.</p>
+    <h3>Start here — select a client and document purpose</h3>
     <div className="growth-grid">
       <label className="growth-field"><span>Client</span><select value={accountId} onChange={e=>selectAccount(e.target.value)}><option value="">Select existing client</option>{organizations.map(a=><option key={a.id} value={a.id}>{a.organization}</option>)}</select></label>
       <label className="growth-field"><span>Marketing document type</span><select value={template} onChange={e=>{setTemplate(e.target.value);setVisualBackground("");setVisualPromptOverride(null);}}>{[...new Set(marketingTemplates.map(t=>t.category))].map(category=><optgroup key={category} label={category}>{marketingTemplates.filter(t=>t.category===category).map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
     </div>
-    <MarketingAIDesignStudio key={accountId+"-"+template} accountId={accountId} organization={organization} template={template} segment={segment} logo={logo} colors={colors.split(",").map(c=>c.trim())} description={description} approvedProductImages={productImages} onUseLegacy={()=>setShowClassicBuilder(true)}/>
+    <MarketingAIDesignStudio key={accountId+"-"+template} accountId={accountId} organization={organization} template={template} segment={segment} logo={logo} colors={colors.split(",").map(c=>c.trim())} description={description} approvedProductImages={productImages} onUseLegacy={()=>{setShowClassicBuilder(true);window.setTimeout(()=>document.getElementById("marketing-full-document-builder")?.scrollIntoView({behavior:"smooth",block:"start"}),60);}}/>
     <button type="button" className="sc-btn" onClick={()=>setShowClassicBuilder(v=>!v)}>{showClassicBuilder?"Hide classic document builder":"Classic document builder and existing drafts"}</button>
-    <div style={{display:showClassicBuilder?"block":"none"}}>
+    <div id="marketing-full-document-builder" style={{display:showClassicBuilder?"block":"none"}}>
 
     <p>{schoolFlyer
       ? "Build a school spirit-wear flyer in one workflow: select the school and approved colors; add mascot artwork and apparel mockups; confirm prices; preview the actual two-page PDF; then download."
