@@ -18,7 +18,7 @@ export function schoolFundraisingExample(input={}){
  const quantity=Number(input.quantity);
  if(wholesale===null)errors.push("Enter a verified decorated wholesale price with no more than two decimals.");
  if(retail===null)errors.push("Enter the approved retail price with no more than two decimals.");
- if(!/^[1-9]\\d{0,4}$/.test(String(input.quantity??"").trim())||!Number.isSafeInteger(quantity)||quantity<1||quantity>10000)errors.push("Enter an illustrative quantity of 1–10,000.");
+ if(!/^[1-9]\d{0,4}$/.test(String(input.quantity??"").trim())||!Number.isSafeInteger(quantity)||quantity<1||quantity>10000)errors.push("Enter an illustrative quantity of 1–10,000.");
  if(wholesale!==null&&retail!==null&&retail<wholesale)errors.push("Retail price cannot be below the decorated wholesale price.");
  if(errors.length)return {enabled:true,ready:false,errors,example:null};
  const perItem=retail-wholesale;
