@@ -6,7 +6,7 @@ import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingShar
 import MarketingApparelComposer from "./MarketingApparelComposer";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork,studioLayoutSections,studioExportReadiness} from "./lib/marketingDesignStudio";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork,studioLayoutSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
 
 const defaults={
  school:{headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Build school pride. Support your programs. Make ordering easier.",benefits:"SCHOOL PRIDE — Quality school-branded apparel\nPROGRAM FUNDING — Support school activities\nEASY ONLINE ORDERS — Dedicated storefront\nLOCAL SUPPORT — Artwork and fulfillment",steps:"Plan together\nWe build your store\nSupporters order\nYour program benefits"},
@@ -225,7 +225,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }
   popup.addEventListener("load",()=>{
    Promise.all(Array.from(popup.document.images).map(img=>img.decode().catch(()=>{})))
-    .then(()=>{if(!popup.closed){popup.focus();popup.print();}});
+    .then(()=>{if(!popup.closed){const issues=inspectStudioPrintDom(popup.document);if(issues.length){setError("Print blocked: "+issues.join(" "));popup.close();return;}popup.focus();popup.print();}});
   },{once:true});
   popup.document.open();
   popup.document.write(html);
