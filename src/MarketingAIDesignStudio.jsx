@@ -433,17 +433,36 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <label className="growth-field"><span>Call to action</span><input value={cta} onChange={e=>setCta(e.target.value)}/></label>
    <label className="growth-field"><span>Verified business contact details</span><textarea value={contactText} onChange={e=>setContactText(e.target.value)}/></label>
   </div>}
-  {category==="school"&&<section className="growth-subcard" aria-label="School fundraising and artwork options">
-   <h4>School fundraising example and seasonal artwork</h4>
-   <p>Every school concept includes an invitation to discuss refreshed logos, seasonal artwork, and club or sport-specific designs. Optional fundraising figures must come from verified, approved decorated wholesale and retail prices; they are never AI-generated.</p>
-   <label className="growth-field"><input type="checkbox" checked={schoolFundraising.enabled} onChange={e=>setSchoolFundraising(p=>({...p,enabled:e.target.checked}))}/> Include illustrative school fundraising calculation</label>
-   {schoolFundraising.enabled&&<div className="growth-grid">
-    <label className="growth-field"><span>Approved decorated wholesale ($)</span><input inputMode="decimal" value={schoolFundraising.wholesale} onChange={e=>setSchoolFundraising(p=>({...p,wholesale:e.target.value}))}/></label>
-    <label className="growth-field"><span>Approved retail price ($)</span><input inputMode="decimal" value={schoolFundraising.retail} onChange={e=>setSchoolFundraising(p=>({...p,retail:e.target.value}))}/></label>
-    <label className="growth-field"><span>Illustrative quantity</span><input inputMode="numeric" value={schoolFundraising.quantity} onChange={e=>setSchoolFundraising(p=>({...p,quantity:e.target.value}))}/></label>
+  <section className="growth-subcard" aria-label="Artwork services and optional pricing" id="studio-services">
+   <h4>Step 3 — Tailor artwork services for this {DESIGN_CATEGORIES[category].label.toLowerCase()} campaign</h4>
+   <p>Customize exactly what Skilled Crafting offers this client. These descriptions appear on the finished flyer; no claims, designs, prices or services are generated as verified facts.</p>
+   <label className="growth-field"><input type="checkbox" checked={studioServices.enabled} onChange={e=>setStudioServices(old=>({...old,enabled:e.target.checked}))}/> Show an artwork and special-design services section</label>
+   {studioServices.enabled&&<div className="growth-grid">
+    <label className="growth-field"><span>Section title</span><input maxLength={92} value={studioServices.heading} onChange={e=>setStudioServices(old=>({...old,heading:e.target.value}))}/></label>
+    <label className="growth-field"><span>Description of available services</span><textarea maxLength={280} rows={3} value={studioServices.description} onChange={e=>setStudioServices(old=>({...old,description:e.target.value}))}/></label>
+    <label className="growth-field"><span>Examples or seasonal / sport-specific options (optional)</span><textarea maxLength={125} rows={2} value={studioServices.examples} onChange={e=>setStudioServices(old=>({...old,examples:e.target.value}))}/></label>
+    <button className="sc-btn" type="button" onClick={()=>setStudioServices(defaultStudioServices(category))}>Restore {DESIGN_CATEGORIES[category].label.toLowerCase()} service suggestions</button>
    </div>}
-   {schoolFundraising.enabled&&(()=>{const result=schoolFundraisingExample(schoolFundraising);return result.ready?<p role="status">{result.example.quantity} units at {result.example.perItem} difference each = {result.example.total} illustrative proceeds before taxes, processing, shipping, refunds or other fees.</p>:<p role="alert">{result.errors.join(" ")}</p>})()}
-  </section>}
+   {["school","team","nonprofit"].includes(category)&&<div className="growth-subcard">
+    <h4>{category==="school"?"School":category==="team"?"Team / club":"Nonprofit"} fundraising examples — up to four products</h4>
+    <p>Use approved <strong>decorated wholesale</strong> and retail prices, not internal supplier costs. The calculation shows illustrative gross proceeds before taxes, payment fees, shipping, refunds, and other expenses.</p>
+    <label className="growth-field"><input type="checkbox" checked={schoolFundraising.enabled} onChange={e=>setSchoolFundraising(old=>({...old,enabled:e.target.checked}))}/> Include itemized illustrative fundraising figures in this flyer</label>
+    {schoolFundraising.enabled&&<>
+     {normalizeSchoolFundraising(schoolFundraising).products.map((product,i)=><fieldset key={i} className="growth-subcard" style={{border:"1px solid #bccbd8",padding:12,borderRadius:8}}>
+      <legend><strong>Product {i+1} of {normalizeSchoolFundraising(schoolFundraising).products.length}</strong></legend>
+      <div className="growth-grid">
+       <label className="growth-field"><span>Product title / style (required)</span><input maxLength={80} placeholder="Gildan 18500 hoodie" value={product.title} onChange={e=>updateFundraisingProduct(i,"title",e.target.value)}/></label>
+       <label className="growth-field"><span>Decorated wholesale price ($)</span><input inputMode="decimal" placeholder="17.25" value={product.wholesale} onChange={e=>updateFundraisingProduct(i,"wholesale",e.target.value)}/></label>
+       <label className="growth-field"><span>Approved retail price ($)</span><input inputMode="decimal" placeholder="28.50" value={product.retail} onChange={e=>updateFundraisingProduct(i,"retail",e.target.value)}/></label>
+       <label className="growth-field"><span>Illustrative quantity</span><input inputMode="numeric" placeholder="75" value={product.quantity} onChange={e=>updateFundraisingProduct(i,"quantity",e.target.value)}/></label>
+      </div>
+      {normalizeSchoolFundraising(schoolFundraising).products.length>1&&<button type="button" className="sc-btn" onClick={()=>removeFundraisingProduct(i)}>Remove product {i+1}</button>}
+     </fieldset>)}
+     <button type="button" className="sc-btn" onClick={addFundraisingProduct} disabled={normalizeSchoolFundraising(schoolFundraising).products.length>=MAX_FUNDRAISING_PRODUCTS}>Add product pricing option ({normalizeSchoolFundraising(schoolFundraising).products.length}/{MAX_FUNDRAISING_PRODUCTS})</button>
+     {(()=>{const result=schoolFundraisingExample(schoolFundraising);return result.ready?<div role="status"><strong>Illustrative gross proceeds: {result.grandTotal}</strong><p>{result.examples.map(row=>row.title+": "+row.quantity+" × "+row.perItem+" = "+row.total).join(" | ")}</p></div>:<p role="alert">Verify pricing: {result.errors.join(" ")}</p>})()}
+    </>}
+   </div>}
+  </section>
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
