@@ -266,7 +266,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
      account_id:accountId,
      organization,segment:category,template_id:category+"-studio-flyer",
      template_label:"AI Studio "+category+" visual background",
-     colors,style,description:body,
+     aspect_ratio:"landscape",colors,style,description:body,
      purpose:"Create a text-free scene for the selected Skilled Crafting marketing flyer. All logos, merchandise mockups, and verified copy are separate editable overlays.",
      visual_prompt:visualPrompt
     })
