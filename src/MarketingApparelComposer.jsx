@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useState} from "react";
 import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 import {marketingImageDataUrl,marketingSharedImageUrl} from "./lib/marketingArtwork";
 import {normalizeApparelPlacement,renderApparelComposite} from "./lib/marketingApparelComposite";
@@ -16,7 +16,7 @@ async function readBlankFile(file){
  canvas.getContext("2d").drawImage(image,0,0,canvas.width,canvas.height);
  return canvas.toDataURL("image/jpeg",.86);
 }
-export default function MarketingApparelComposer({accountId,logo,onAdd,disabled=false}){
+export default function MarketingApparelComposer({accountId,logo,onAdd,disabled=false,recipeToEdit=null}){
  const [blank,setBlank]=useState("");
  const [blankLabel,setBlankLabel]=useState("");
  const [placement,setPlacement]=useState({x:50,y:43,width:27});
@@ -26,6 +26,12 @@ export default function MarketingApparelComposer({accountId,logo,onAdd,disabled=
  const [blanks,setBlanks]=useState([]);
  const [page,setPage]=useState(0);
  const [more,setMore]=useState(false);
+ useEffect(()=>{
+  if(!recipeToEdit?.blank)return;
+  setBlank(recipeToEdit.blank);setBlankLabel(recipeToEdit.blankLabel||"Saved blank photo");
+  setPlacement(normalizeApparelPlacement(recipeToEdit.placement));setPreview("");
+  setMessage("Editing a saved marketing placement. Render and replace the mockup to update the flyer.");
+ },[recipeToEdit]);
  async function uploadBlank(event){
   const file=event.target.files?.[0];event.target.value="";
   if(!file)return;
@@ -66,7 +72,7 @@ export default function MarketingApparelComposer({accountId,logo,onAdd,disabled=
    const image=await renderApparelComposite({blank,logo,placement});
    setPreview(image);
    if(addToFlyer){
-    onAdd(image);
+    onAdd(image,{blank,blankLabel,placement:normalizeApparelPlacement(placement),editIndex:Number.isInteger(recipeToEdit?.productIndex)?recipeToEdit.productIndex:null});
     setMessage("Composed mockup added to the flyer. Visual proof only: verify decoration size and placement before production.");
    }else setMessage("Mockup preview generated. Check garment color, logo, alignment and scale, then add it to the flyer.");
   }catch(e){setMessage(e.message);}finally{setBusy(false);}
@@ -86,6 +92,7 @@ export default function MarketingApparelComposer({accountId,logo,onAdd,disabled=
   </div>
   {blank&&<div>
    <p><strong>Selected blank:</strong> {blankLabel}</p>
+   <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}><button type="button" className="sc-btn" disabled={busy||disabled} onClick={()=>{setPlacement({x:50,y:43,width:27});setPreview("");}}>Center front</button><button type="button" className="sc-btn" disabled={busy||disabled} onClick={()=>{setPlacement({x:38,y:33,width:13});setPreview("");}}>Left-chest guide</button><button type="button" className="sc-btn" disabled={busy||disabled} onClick={()=>{setPlacement({x:50,y:53,width:36});setPreview("");}}>Full-front guide</button></div>
    <div className="growth-grid">
     {controls.map(field=><label key={field.id} className="growth-field"><span>{field.label}: {placement[field.id]}%</span><input type="range" min={field.min} max={field.max} step="1" value={placement[field.id]} onChange={e=>{setPlacement(p=>normalizeApparelPlacement({...p,[field.id]:Number(e.target.value)}));setPreview("");}}/></label>)}
    </div>
@@ -99,7 +106,7 @@ export default function MarketingApparelComposer({accountId,logo,onAdd,disabled=
    </div>
    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
     <button type="button" className="sc-btn" onClick={()=>renderPreview(false)} disabled={busy||disabled||!logo}>Render mockup preview</button>
-    <button type="button" className="sc-btn" onClick={()=>renderPreview(true)} disabled={busy||disabled||!logo}>Add decorated mockup to flyer</button>
+    <button type="button" className="sc-btn" onClick={()=>renderPreview(true)} disabled={busy||disabled||!logo}>{recipeToEdit?"Replace saved mockup in flyer":"Add decorated mockup to flyer"}</button>
    </div>
   </div>}
   {message&&<p role="status">{message}</p>}
