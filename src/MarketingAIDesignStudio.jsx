@@ -99,7 +99,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     setProgress("Creating offline design concept "+(i+1)+" of 3…");
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt})
+     body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt,offline:true})
     });
     const data=await response.json();
     if(!response.ok||!data.plan)throw Error(data.message||"Unable to prepare layout.");
