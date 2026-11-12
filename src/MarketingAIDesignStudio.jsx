@@ -50,6 +50,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const campaign=marketingCampaignProfile(category);
  const [style,setStyle]=useState("athletic");
  const [brandMood,setBrandMood]=useState("auto");
+ const [savedBrandLogo,setSavedBrandLogo]=useState("");
+ const [savedBrandPalette,setSavedBrandPalette]=useState(null);
  const [brandReviewed,setBrandReviewed]=useState(false);
  const [assetsReviewed,setAssetsReviewed]=useState(false);
  const [imageQuality,setImageQuality]=useState({checked:false,passed:false,errors:[]});
@@ -91,6 +93,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
+  setSavedBrandLogo("");setSavedBrandPalette(null);
   setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setMockupRecipes([]);setRecipeToEdit(null);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
@@ -200,9 +203,11 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     if(!Number.isInteger(recipe.productIndex)||recipe.productIndex<0||recipe.productIndex>=productImages.length||!recipe.blank)continue;
     mockupRecipeReferences.push({productIndex:recipe.productIndex,blankReference:await storeImage(recipe.blank),blankLabel:String(recipe.blankLabel||"Product blank").slice(0,120),placement:recipe.placement});
    }
+   const brandReference=effectiveLogo?await storeImage(effectiveLogo):null;
+   const brandPalette=effectiveColors.filter(c=>/^#[0-9a-f]{6}$/i.test(c)).slice(0,5);
    const heroReference=heroImage?await storeImage(heroImage):null;
    const logoVariantReference=artworkVariantImage?await storeImage(artworkVariantImage):null;
-   const content={studioVersion:5,organization,category,style,brandMood,mode,prompt:visualPrompt,selected,plans,references,productReferences,mockupRecipeReferences,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
+   const content={studioVersion:5,organization,category,style,brandMood,mode,prompt:visualPrompt,selected,plans,references,productReferences,mockupRecipeReferences,brandReference,brandPalette,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -232,6 +237,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     }
    }
    setMockupRecipes(restoredRecipes);setRecipeToEdit(null);
+   setSavedBrandLogo(d.brandReference?.key?await marketingLogoImage(accountId,d.brandReference.key):"");
+   setSavedBrandPalette(Array.isArray(d.brandPalette)&&d.brandPalette.every(c=>/^#[0-9a-f]{6}$/i.test(c))?d.brandPalette.slice(0,5):null);
    setStyle(d.style||"athletic");setBrandMood(d.brandMood||"auto");setBrandReviewed(false);setAssetsReviewed(false);setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setArtworkMessage(d.artworkMessage||"");setArtworkOptions(d.artworkOptions||"");setFundraisingNote(d.fundraisingNote||"");setFundraisingRows(Array.isArray(d.fundraisingRows)&&d.fundraisingRows.length?d.fundraisingRows.slice(0,3):[{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setProductImages(products);
    setDraftMessage("Saved concepts and design instructions restored.");
   }catch(e){setError(e.message||"Could not reopen design.");}
@@ -255,6 +262,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }
   setAssetsReviewed(false);
  }
+ const effectiveLogo=savedBrandLogo||logo;
+ const effectiveColors=savedBrandPalette||colors;
  const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,5);
  useEffect(()=>{
   let active=true;
