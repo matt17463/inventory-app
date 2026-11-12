@@ -179,7 +179,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows,artworkVariantImage,brandMood});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo:effectiveLogo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors:effectiveColors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows,artworkVariantImage,brandMood});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -268,7 +268,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  useEffect(()=>{
   let active=true;
   setImageQuality({checked:false,passed:false,errors:[]});
-  const images=[{src:logo,type:"logo",label:"Approved client logo"},
+  const images=[{src:effectiveLogo,type:"logo",label:"Approved client logo"},
    ...[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].slice(0,5).map((src,i)=>({src,type:"product",label:"Merchandise mockup "+(i+1)})),
    ...(heroImage?[{src:heroImage,type:"hero",label:"Campaign scenic background"}]:[])
   ].filter(item=>/^data:image\/(?:png|jpeg|webp);base64,/i.test(item.src||""));
@@ -279,9 +279,9 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    img.src=item.src;
   }))).then(results=>{if(active)setImageQuality({checked:true,...marketingPrintPreflightSummary(results)});});
   return()=>{active=false};
- },[logo,heroImage,productImages,approvedProductImages]);
- const flyerReview=marketingFlyerChecks({organization,logo,colors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage,category,artworkOptions:artworkOptions.split("\n").filter(Boolean)});
- const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
+ },[effectiveLogo,heroImage,productImages,approvedProductImages]);
+ const flyerReview=marketingFlyerChecks({organization,logo:effectiveLogo,colors:effectiveColors,productImages:mergedProductImages,headline,cta,contact:contactText,heroImage,category,artworkOptions:artworkOptions.split("\n").filter(Boolean)});
+ const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors:effectiveColors,instructions:description}),{school_name:organization,client_name:organization,school_logo:effectiveLogo?"Approved client logo supplied as image reference":"",client_logo:effectiveLogo?"Approved client logo supplied as image reference":"",primary_color:effectiveColors[0],secondary_color:effectiveColors[1],accent_color:effectiveColors[2],business_website:"skilledcrafting.com"});
  async function suggestLocalCopy(){
   if(!accountId){setCopyMessage("Select a client before requesting suggestions.");return;}
   setCopyBusy(true);setCopySuggestion(null);setCopyMessage("");
@@ -315,16 +315,16 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    for(let i=0;i<3;i++){
     setProgress("Creating design concept "+(i+1)+" of 3…");
     let localPlan=null;
-    if(localEnabled){try{const result=await localAiCall("/layout",{organization,category,colors,concept:i+1,prompt:visualPrompt});if(result?.plan&&Array.isArray(result.plan.sections))localPlan=result.plan;}catch{localEnabled=false;}}
-    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
+    if(localEnabled){try{const result=await localAiCall("/layout",{organization,category,colors:effectiveColors,concept:i+1,prompt:visualPrompt});if(result?.plan&&Array.isArray(result.plan.sections))localPlan=result.plan;}catch{localEnabled=false;}}
+    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors:effectiveColors,style}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt,offline:true})
+     body:JSON.stringify({account_id:accountId,organization,category,colors:effectiveColors,concept:i+1,prompt:visualPrompt,offline:true})
     });
     const data=await response.json();
     if(!response.ok||!data.plan)throw Error(data.message||"Unable to prepare layout.");
     layouts.push(data.plan);
-    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));
+    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors:effectiveColors,style}));
     created.push(image);setPlans([...layouts]);setConcepts([...created]);
    }
    setProgress("Three branded concepts ready without paid APIs. Local Ollama was used for layout planning when available; otherwise the offline fallback was used.");
@@ -383,6 +383,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=5} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/>{mockupRecipes.some(r=>r.productIndex===i)&&<button type="button" onClick={()=>setRecipeToEdit({...mockupRecipes.find(r=>r.productIndex===i)})}>Edit placement</button>}<button type="button" onClick={()=>removeProductImage(i)}>Remove</button></div>)}</div>}
   </div>
+  {(savedBrandLogo||savedBrandPalette)&&<section className="growth-subcard"><p><strong>Saved brand snapshot:</strong> this reopened draft uses the approved logo and colors stored with that version. Check these still match the current client's branding before printing.</p><button type="button" className="sc-btn" onClick={()=>{setSavedBrandLogo("");setSavedBrandPalette(null);setBrandReviewed(false);setAssetsReviewed(false);}}>Use current CRM brand instead</button></section>}
   <section className="growth-subcard" aria-label="Approved campaign scenery">
    <h4>School-specific campaign scenery</h4>
    <p>Use an approved school or community landscape, licensed campus photograph, or background art. The scene stays separate from the school logo and editable text. No location or mascot is invented.</p>
@@ -423,7 +424,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!verifiedFundraisingRows(fundraisingRows).length&&<p role="status">{verifiedFundraisingRows(fundraisingRows).length} confirmed example row(s) will appear in the flyer with a clear illustrative-margin disclaimer.</p>}
    </>}
   </section>
-  <MarketingApparelComposer key={accountId+"-composer-"+(recipeToEdit?recipeToEdit.productIndex:"new")} accountId={accountId} logo={logo} recipeToEdit={recipeToEdit} disabled={busy||draftBusy||(mergedProductImages.length>=5&&!recipeToEdit)} onAdd={addComposedProduct}/>
+  <MarketingApparelComposer key={accountId+"-composer-"+(recipeToEdit?recipeToEdit.productIndex:"new")} accountId={accountId} logo={effectiveLogo} recipeToEdit={recipeToEdit} disabled={busy||draftBusy||(mergedProductImages.length>=5&&!recipeToEdit)} onAdd={addComposedProduct}/>
   <section className="growth-subcard" aria-label="Generate complete marketing concepts"><h4>Generate complete branded marketing concepts</h4><p>{mergedProductImages.length?"Your chosen approved merchandise images will appear in each flyer.":"Add approved decorated merchandise mockups above for a finished product-led design. Without them, this generates draft layout proofs only."} Confirm the selected logo, colors and category before generating three visual directions.</p><button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:mergedProductImages.length?"Generate 3 complete design concepts — no API credits":"Generate 3 draft design concepts — merchandise still needed"}</button>{progress&&<p role="status">{progress}</p>}</section>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
