@@ -57,6 +57,7 @@ for(const s of schools){
  * remains clearly marked and cannot be distributed as approved merchandise.
  */
 const previewGarments=await Promise.all([0,1,2].map(i=>png(garment({primary:"#243F6E",secondary:"#E6B93E",short:"TEST"},"TEST",i))));
+const syntheticSchoolCrest=await png(badge({primary:"#1F4369",secondary:"#E6B93E",initials:"TS"}));
 const businessCategories=["school","team","business","nonprofit","wedding","general"];
 for(const category of businessCategories){
  const variants=category==="school"?3:1;
@@ -64,7 +65,7 @@ for(const category of businessCategories){
   const artwork=await png(offlineStudioArtwork({category,concept:concept+1,colors:["#1F4369","#E6B93E"]}));
   const html=studioPrintHtml({
    client:category==="school"?"Synthetic Example School":"Synthetic "+category.toUpperCase()+" Client",
-   category,concept,image:artwork,logo:brand,headline:"SAMPLE DESIGN — NOT CLIENT APPROVED",
+   category,concept,image:artwork,logo:category==="school"?syntheticSchoolCrest:brand,headline:"SAMPLE DESIGN — NOT CLIENT APPROVED",
    description:"Print layout test with synthetic branding and merchandise. Do not distribute.",
    benefits:["SCHOOL PRIDE — coordinated community spirit wear","PROGRAM FUNDING — approved wholesale-to-retail plans","EASY ONLINE ORDERING — dedicated client storefront","LOCAL SUPPORT — art prep and order fulfillment"],
    steps:["Plan together with your coordinator","Choose approved designs and prices","Supporters order through your shop","Review program proceeds and results"],
