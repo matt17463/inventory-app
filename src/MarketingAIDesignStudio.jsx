@@ -10,7 +10,7 @@ import {schoolArtworkServiceOptions,verifiedFundraisingRows} from "./lib/marketi
 import {marketingCampaignProfile,marketingCampaignMood} from "./lib/marketingCampaignProfiles";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml} from "./lib/marketingDesignStudio";
 
 const defaults={
  school:{headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Build school pride. Support your programs. Make ordering easier.",benefits:"SCHOOL PRIDE — Quality school-branded apparel\nPROGRAM FUNDING — Support school activities\nEASY ONLINE ORDERS — Dedicated storefront\nLOCAL SUPPORT — Artwork and fulfillment",steps:"Plan together\nWe build your store\nSupporters order\nYour program benefits"},
@@ -20,16 +20,6 @@ const defaults={
  wedding:{headline:"PERSONALIZED MOMENTS",description:"Custom gifts, keepsakes and event details.",benefits:"Personalized glassware\nEngraved keepsakes\nCustom signage\nCoordinated gifts",steps:"Share your vision\nSelect products\nApprove proofs\nCelebrate"},
  general:{headline:"BRING YOUR BRAND TO LIFE",description:"Distinctive custom merchandise and promotional products.",benefits:"Personalized products\nProfessional artwork\nFlexible ordering\nLocal support",steps:"Plan\nDesign\nApprove\nProduce"}
 };
-async function renderOfflineArtwork(svg){
- const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml"}));
- try{
-  const img=new Image();img.src=url;await img.decode();
-  const canvas=document.createElement("canvas");canvas.width=960;canvas.height=1200;
-  const context=canvas.getContext("2d");if(!context)throw Error("Canvas rendering is unavailable.");
-  context.drawImage(img,0,0,960,1200);
-  return canvas.toDataURL("image/jpeg",0.86);
- }finally{URL.revokeObjectURL(url);}
-}
 function FlyerFrame({html,label}){
  const ref=useRef(null);
  const [scale,setScale]=useState(0.35);
@@ -215,8 +205,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   if(!accountId||!concepts.length){setError("Select a client and generate concepts before saving.");return;}
   setDraftBusy(true);setError("");setDraftMessage("");
   try{
+   // Layout-only plans no longer upload unused abstract backgrounds to private R2.
    const references=[];
-   for(const image of concepts)references.push(await storeImage(image));
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
    const mockupRecipeReferences=[];
@@ -244,7 +234,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    if(!Array.isArray(d.references)||d.references.length>3)throw Error("Invalid saved design.");
    const images=[];
    for(const ref of d.references){if(!ref?.key)throw Error("Missing private image reference.");images.push(await marketingLogoImage(accountId,ref.key));}
-   setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
+   const savedPlans=Array.isArray(d.plans)?d.plans:[];
+   const restoredConcepts=images.length?images:savedPlans.slice(0,3).map((_,i)=>"layout-ready-"+(i+1));
+   if(!restoredConcepts.length)throw Error("Saved design has no layout plans.");
+   setConcepts(restoredConcepts);setPlans(savedPlans);setSelected(Math.min(restoredConcepts.length-1,Math.max(0,d.selected||0)));
    const products=[];
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,5)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,5).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
@@ -337,7 +330,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     setProgress("Creating design concept "+(i+1)+" of 3…");
     let localPlan=null;
     if(localEnabled){try{const result=await localAiCall("/layout",{organization,category,colors:effectiveColors,concept:i+1,prompt:visualPrompt});if(result?.plan&&Array.isArray(result.plan.sections))localPlan=result.plan;}catch{localEnabled=false;}}
-    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors:effectiveColors,style}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
+    if(localPlan){layouts.push(localPlan);created.push("layout-ready-"+(i+1));setPlans([...layouts]);setConcepts([...created]);continue;}
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({account_id:accountId,organization,category,colors:effectiveColors,concept:i+1,prompt:visualPrompt,offline:true})
@@ -345,8 +338,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     const data=await response.json();
     if(!response.ok||!data.plan)throw Error(data.message||"Unable to prepare layout.");
     layouts.push(data.plan);
-    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors:effectiveColors,style}));
-    created.push(image);setPlans([...layouts]);setConcepts([...created]);
+    created.push("layout-ready-"+(i+1));setPlans([...layouts]);setConcepts([...created]);
    }
    setProgress("Three branded concepts ready without paid APIs. Local Ollama was used for layout planning when available; otherwise the offline fallback was used.");
   }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
