@@ -16,6 +16,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [mode,setMode]=useState("hybrid");
  const [prompt,setPrompt]=useState("");
  const [concepts,setConcepts]=useState([]);
+ const [plans,setPlans]=useState([]);
  const [selected,setSelected]=useState(0);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
@@ -30,17 +31,21 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setConcepts([]);setSelected(0);setPrompt("");
+  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");
  },[accountId,category,organization]);
  const visualPrompt=prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description});
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
-  setBusy(true);setError("");setConcepts([]);setSelected(0);
-  const created=[];
+  setBusy(true);setError("");setConcepts([]);setPlans([]);setSelected(0);
+  const created=[];const layouts=[];
   try{
    for(let i=0;i<3;i++){
     setProgress("Generating concept "+(i+1)+" of 3…");
     const promptText=designStudioPrompt({category,style,client:organization,colors,instructions:visualPrompt,variation:i});
+    const layoutResponse=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,concept:i+1,prompt:visualPrompt})});
+    const layoutData=await layoutResponse.json();
+    if(!layoutResponse.ok||!layoutData.plan)throw Error(layoutData.message||"AI layout generation failed.");
+    layouts.push(layoutData.plan);setPlans([...layouts]);
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({account_id:accountId,template_id:template,template_label:DESIGN_CATEGORIES[category].label,organization,segment,colors,description,visual_prompt:promptText,logo:logo.length<1000000?logo:""})
@@ -55,7 +60,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  }
  const print=()=>{
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
-  const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,image:concepts[selected],logo,headline,description:body,
+  const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],image:concepts[selected],logo,headline,description:body,
    benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText});
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-ai-"+category+"-flyer.html";a.click();
@@ -73,7 +78,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts"}</button>
   {progress&&<p role="status">{progress}</p>}
   {error&&<p role="alert">{error}</p>}
-  {!!concepts.length&&<div className="growth-grid">{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}><img src={src} alt={"AI concept "+(i+1)} style={{width:"100%",maxHeight:290,objectFit:"contain"}}/><strong>Concept {i+1}{selected===i?" — selected":""}</strong></button>)}</div>}
+  {!!concepts.length&&<div className="growth-grid">{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}><img src={src} alt={"AI concept "+(i+1)} style={{width:"100%",maxHeight:290,objectFit:"contain"}}/><strong>Concept {i+1}{selected===i?" — selected":""} · {plans[i]?.composition||"layout"}</strong></button>)}</div>}
   {mode==="hybrid"&&<div className="growth-grid">
    <label className="growth-field"><span>Verified headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)}/></label>
    <label className="growth-field"><span>Verified description</span><textarea value={body} onChange={e=>setBody(e.target.value)}/></label>
