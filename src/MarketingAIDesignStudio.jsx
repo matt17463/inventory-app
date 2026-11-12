@@ -220,7 +220,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    if(!response.ok)throw Error("Selected approved mockup download failed.");
    const blob=await response.blob();
    if(!["image/png","image/jpeg","image/webp"].includes(blob.type)||blob.size>5_000_000||!blob.size)throw Error("Approved mockup must be PNG, JPEG or WebP under 5 MB.");
-   setProductImages(previous=>[...previous,await marketingImageDataUrl(blob)].slice(0,4));
+   const image=await marketingImageDataUrl(blob);
+   setProductImages(previous=>[...previous,image].slice(0,4));
    setApprovedPhotoStatus("Approved decorated mockup added. Confirm product and color before export.");
   }catch(e){setApprovedPhotoStatus("Approved mockup could not be loaded: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
