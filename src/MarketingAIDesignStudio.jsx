@@ -84,7 +84,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const references=[];
    for(const image of concepts)references.push(await storeImage(image));
    const productReferences=[];
-   for(const image of productImages)productReferences.push(await storeImage(image));
+   for(const image of mergedProductImages)productReferences.push(await storeImage(image));
    const content={studioVersion:2,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,headline,body,benefits,steps,cta,contactText};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
@@ -158,7 +158,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const print=()=>{
   if(!concepts[selected]){setError("Generate and select a concept first.");return;}
   const html=studioPrintHtml({client:organization,category,style,concept:selected,mode,plan:plans[selected],logo,headline,description:body,
-   benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText,productImages,image:""});
+   benefits:benefits.split("\n").map(s=>s.trim()).filter(Boolean),steps:steps.split("\n").map(s=>s.trim()).filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,image:""});
   const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download="skilled-crafting-ai-"+category+"-flyer.html";a.click();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
@@ -179,6 +179,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   <div className="growth-subcard">
    <h4>Approved product photography — up to four</h4>
    <p>Use photos or mockups you own or are licensed to use. They will appear in every complete flyer preview. No fabricated products or pricing.</p>
+   {!mergedProductImages.length&&<p role="status"><strong>Draft preview only:</strong> add approved merchandise images before sharing a client-ready flyer.</p>}
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
