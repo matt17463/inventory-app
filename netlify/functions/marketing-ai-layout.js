@@ -37,7 +37,7 @@ export async function handler(event){
   if(!/^[0-9a-f-]{36}$/i.test(input.account_id||""))return respond(400,{message:"Select a CRM client."},event);
   const {data:account,error}=await auth.supabase.from("sc_growth_accounts").select("id").eq("id",input.account_id).maybeSingle();
   if(error||!account)return respond(404,{message:"Client not found."},event);
-  if(!process.env.OPENAI_API_KEY)return respond(200,{plan:fallbackPlan(input),source:"local",warning:"AI layout service is not configured; a local layout was used."},event);
+  if(input.offline===true||!process.env.OPENAI_API_KEY)return respond(200,{plan:fallbackPlan(input),source:"local",warning:"AI layout service is not configured; a local layout was used."},event);
   const prompt=bounded(input.prompt,12000);
   if(!prompt.trim())return respond(400,{message:"Provide design direction."},event);
   const response=await fetch("https://api.openai.com/v1/responses",{
