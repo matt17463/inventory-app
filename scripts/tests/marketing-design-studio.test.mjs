@@ -99,3 +99,16 @@ test("credit-free landscape hero scenery is distinct, category-specific, and log
  const unsafe=offlineStudioHeroArtwork({colors:['"><script>bad()</script>']});
  assert.ok(!unsafe.includes("bad()"));
 });
+
+test("event campaigns use distinct category, messaging and landscape imagery from weddings",async()=>{
+ const {designCategory,STUDIO_CATEGORY_COPY,studioPrintHtml,offlineStudioHeroArtwork}=await import("../../src/lib/marketingDesignStudio.js");
+ assert.equal(designCategory("event-merchandise","all"),"event");
+ assert.equal(designCategory("wedding-package","all"),"wedding");
+ assert.equal(designCategory("brochure-schools","school"),"school");
+ assert.notEqual(STUDIO_CATEGORY_COPY.event.collection,STUDIO_CATEGORY_COPY.wedding.collection);
+ assert.match(studioPrintHtml({category:"event",headline:"Event Merchandise"}),/CUSTOM MERCHANDISE FOR YOUR EVENT/);
+ assert.notEqual(offlineStudioHeroArtwork({category:"event"}),offlineStudioHeroArtwork({category:"wedding"}));
+ const ui=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
+ assert.match(ui,/Campaign audience/);
+ assert.match(ui,/setCategoryOverride\(d\.category\)/);
+});
