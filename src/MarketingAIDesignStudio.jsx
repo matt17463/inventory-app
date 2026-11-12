@@ -85,6 +85,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [recipeToEdit,setRecipeToEdit]=useState(null);
  const [heroImage,setHeroImage]=useState("");
  const [heroInfo,setHeroInfo]=useState("");
+ const [sceneCandidate,setSceneCandidate]=useState("");
+ const [sceneBusy,setSceneBusy]=useState(false);
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
  const [candidatePreview,setCandidatePreview]=useState(null);
  const [approvedPhotoBusy,setApprovedPhotoBusy]=useState(false);
@@ -94,7 +96,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
   setSavedBrandLogo("");setSavedBrandPalette(null);
-  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setMockupRecipes([]);setRecipeToEdit(null);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(campaign.defaultMessage);setArtworkOptions((category==="school"?schoolArtworkServiceOptions():campaign.defaultOptions).join("\n"));setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setBrandMood("auto");setBrandReviewed(false);setAssetsReviewed(false);setCopySuggestion(null);setCopyMessage("");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setMockupRecipes([]);setRecipeToEdit(null);setHeroImage("");setHeroInfo("");setSceneCandidate("");setApprovedPhotoCandidates([]);setCandidatePreview(null);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -144,6 +146,25 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   if(!file)return;
   if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>2_500_000){setError("Select an approved alternate logo as PNG, JPEG or WebP under 2.5 MB.");return;}
   try{setArtworkVariantImage(await marketingImageDataUrl(file));setError("");}catch(e){setError(e.message||"Could not read alternate logo.");}
+ }
+ async function generatePrivateScene(){
+  if(!accountId){setHeroInfo("Select a client first.");return;}
+  setSceneBusy(true);setSceneCandidate("");setHeroInfo("");
+  try{
+   const request=await localAiCall("/image",{
+    prompt:visualPrompt.slice(0,3800),
+    category,organization,
+    instruction:"Text-free original background only. Do not render client names, logos, products or factual claims."
+   });
+   if(request.source!=="local_comfyui"||request.approved!==false||!["image/png","image/jpeg","image/webp"].includes(request.mime_type)||typeof request.image_base64!=="string"||request.image_base64.length>5_400_000)throw Error("Local image generator returned unsupported image data.");
+   const result="data:"+request.mime_type+";base64,"+request.image_base64;
+   const image=new Image();
+   await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error("Local scene could not be decoded."));image.src=result;});
+   if(image.naturalWidth<1000||image.naturalHeight<600)throw Error("Generated scene is too small for a full-page marketing background.");
+   setSceneCandidate(result);
+   setHeroInfo("Local ComfyUI scene generated. Inspect for accidental text, logo artifacts, licensing concerns or incorrect client context. Nothing has been approved or applied.");
+  }catch(e){setHeroInfo("Private image generation unavailable. The existing flyer workflow remains available: "+e.message);}
+  finally{setSceneBusy(false);}
  }
  async function addHeroScene(event){
   const file=event.target.files?.[0];
@@ -398,6 +419,12 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/>{mockupRecipes.some(r=>r.productIndex===i)&&<button type="button" onClick={()=>setRecipeToEdit({...mockupRecipes.find(r=>r.productIndex===i)})}>Edit placement</button>}<button type="button" onClick={()=>removeProductImage(i)}>Remove</button></div>)}</div>}
   </div>
   {(savedBrandLogo||savedBrandPalette)&&<section className="growth-subcard"><p><strong>Saved brand snapshot:</strong> this reopened draft uses the approved logo and colors stored with that version. Check these still match the current client's branding before printing.</p><button type="button" className="sc-btn" onClick={()=>{setSavedBrandLogo("");setSavedBrandPalette(null);setBrandReviewed(false);setAssetsReviewed(false);}}>Use current CRM brand instead</button></section>}
+  <section className="growth-subcard" aria-label="Private local illustration concept">
+    <h4>Optional local scene illustration — ComfyUI</h4>
+    <p>When your Windows workstation has a private ComfyUI workflow connected through the Mac gateway, generate original text-free scenery without paid image APIs. It is an unapproved concept until you inspect and explicitly accept it. This feature remains unavailable until the local workstation is configured.</p>
+    <button type="button" className="sc-btn" onClick={generatePrivateScene} disabled={!accountId||sceneBusy||busy}>{sceneBusy?"Generating private illustration…":"Generate original background with local ComfyUI"}</button>
+    {sceneCandidate&&<div className="growth-subcard"><img alt="Unapproved ComfyUI background concept" src={sceneCandidate} style={{maxWidth:"100%",maxHeight:300,objectFit:"contain"}}/><p>Verify there is no accidentally generated text, logos, incorrect mascot, product representation or factual content. Approved client identity will be overlaid independently.</p><button type="button" className="sc-btn" onClick={()=>{setHeroImage(sceneCandidate);setSceneCandidate("");setAssetsReviewed(false);setHeroInfo("Local background accepted as a draft asset; final client and visual approval still required.");}}>Accept scene as editable flyer background</button><button type="button" className="sc-btn" onClick={()=>{setSceneCandidate("");setHeroInfo("Unapproved scene discarded.");}}>Discard</button></div>}
+   </section>
   <section className="growth-subcard" aria-label="Approved campaign scenery">
    <h4>School-specific campaign scenery</h4>
    <p>Use an approved school or community landscape, licensed campus photograph, or background art. The scene stays separate from the school logo and editable text. No location or mascot is invented.</p>
