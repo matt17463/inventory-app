@@ -112,3 +112,18 @@ test('collision preflight protects school options against merchandising overlap'
  const page={scrollHeight:1056,clientHeight:1056,querySelector:s=>elements[s]||null};
  assert.match(inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null}).join(' '),/Content overlap/);
 });
+
+test('verified product captions appear with markup safely escaped',()=>{
+ const html=studioPrintHtml({category:'school',logo:sample,productImages:[sample,sample],productLabels:['Spirit hoodie · navy','<img src=x onerror=alert(1)>']});
+ assert.match(html,/Spirit hoodie/);
+ assert.match(html,/class="product-tag"/);
+ assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+ assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
+});
+test('client draft persists approved-product labels and restores them as editable overlays',()=>{
+ const ui=readFileSync(new URL('../../src/MarketingAIDesignStudio.jsx',import.meta.url),'utf8');
+ assert.match(ui,/studioVersion:6/);
+ assert.match(ui,/productLabels,organization/);
+ assert.match(ui,/setProductLabels\(Array\.isArray\(d\.productLabels\)/);
+ assert.match(ui,/productLabels,approvedProductImages/);
+});
