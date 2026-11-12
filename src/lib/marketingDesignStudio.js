@@ -62,6 +62,13 @@ export function studioLayoutSections(plan,variant=0){
  const sections=[...new Set(source.filter(x=>allowed.includes(x)))];
  return [...sections,...defaults[Math.max(0,Math.min(2,Number(variant)||0))].filter(x=>!sections.includes(x))];
 }
+/** Rectangular overlap detection for critical editable regions (not decorative photos). */
+export function studioRectanglesOverlap(first,second,padding=2){
+ if(!first||!second)return false;
+ const values=[first.left,first.top,first.right,first.bottom,second.left,second.top,second.right,second.bottom];
+ if(!values.every(Number.isFinite))return false;
+ return first.left<second.right-padding&&first.right>second.left+padding&&first.top<second.bottom-padding&&first.bottom>second.top+padding;
+}
 /** Browser-only final proof check; do not rely on CSS overflow:hidden to mask errors. */
 export function inspectStudioPrintDom(doc){
  const issues=[];
@@ -73,6 +80,18 @@ export function inspectStudioPrintDom(doc){
   const element=page.querySelector(selector);
   if(overflow(element))issues.push(selector+" contains clipped content.");
  }
+ const heroIdentity=page.querySelector(".hero .identity");
+ const heroCopy=page.querySelector(".hero-text")||page.querySelector(".editorial-head");
+ if(heroIdentity&&heroCopy&&studioRectanglesOverlap(heroIdentity.getBoundingClientRect(),heroCopy.getBoundingClientRect()))
+  issues.push("Approved client identity overlaps the campaign headline or description.");
+ const important=[".gallery",".benefits",".steps",".school-callouts"].map(selector=>({selector,element:page.querySelector(selector)})).filter(item=>item.element);
+ for(let i=0;i<important.length;i++)for(let j=i+1;j<important.length;j++){
+  if(studioRectanglesOverlap(important[i].element.getBoundingClientRect(),important[j].element.getBoundingClientRect()))
+   issues.push("Content overlap between "+important[i].selector+" and "+important[j].selector+".");
+ }
+ const main=page.querySelector("main"),footer=page.querySelector("footer");
+ if(main&&footer&&studioRectanglesOverlap(main.getBoundingClientRect(),footer.getBoundingClientRect()))
+  issues.push("Marketing content overlaps the contact footer.");
  const hero=page.querySelector(".hero"),headline=page.querySelector("h1");
  if(hero&&headline&&typeof headline.getBoundingClientRect==="function"){
   const heading=headline.getBoundingClientRect(),boundary=hero.getBoundingClientRect();
