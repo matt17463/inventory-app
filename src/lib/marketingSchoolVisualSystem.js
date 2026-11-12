@@ -1,4 +1,4 @@
-export const SCHOOL_CAMPAIGN_CSS=String.raw`/* User-provided Sequim flyer is a quality benchmark, not a brand template.
+export const SCHOOL_CAMPAIGN_CSS=String.raw`/* User-provided flyer references are quality benchmarks, never branded templates.
    Original scene illustration and approved product photos remain separate. */
 .category-school{background:#f3f1f8}
 .category-school .hero{min-height:2.48in!important;padding:.20in .38in .12in!important}
