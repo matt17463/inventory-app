@@ -1,6 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import { schoolFlyerPng } from "./lib/marketingIllustratedFlyer";
 import { schoolFlyerPreflight } from "./lib/marketingSchoolFlyerPreflight";
+import { checkFlyerRasterAssets } from "./lib/marketingFlyerPrintPreflight";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { authenticatedFunctionFetch } from "./lib/netlifyFunctionClient";
@@ -185,8 +186,10 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    if(!logo)throw Error("Select the school's approved logo in Step 1 before creating a flyer.");
    if(!actualColors.length)throw Error("Confirm at least one approved school color in Step 1 before creating the flyer.");
    const data=brochureData();
-   const preflight=schoolFlyerPreflight(data,{approvedCover:Boolean(approvedCover)});
-   if(!preflight.ready)throw Error("Flyer is not distribution-ready: "+preflight.errors.join(" "));
+   const preflight=schoolFlyerPreflight(data);
+   if(!preflight.ready)throw Error("Flyer needs corrections: "+preflight.errors.join(" "));
+   const printCheck=await checkFlyerRasterAssets(data,{approvedCover});
+   if(!printCheck.ready)throw Error("Print quality check failed: "+printCheck.errors.join(" "));
    // Preserve the exact approved original design when supplied; otherwise use the editable 300-dpi illustrated cover.
    // The program-details page remains editable and generated from verified inputs.
    const coverPng=approvedCover||await schoolFlyerPng(data);
