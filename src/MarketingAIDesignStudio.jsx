@@ -9,7 +9,7 @@ import {growthWriteAllowed} from "./lib/marketingApi";
 import {DEFAULT_STUDIO_LAYOUT,normalizeStudioLayout} from "./lib/marketingStudioLayoutControls";
 import {schoolFundraisingExample} from "./lib/marketingSchoolFundraising";
 import {checkStudioPrintImages} from "./lib/marketingStudioPrintImages";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork,studioLayoutSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioHeroArtwork,studioLayoutSections,studioExportReadiness,inspectStudioPrintDom} from "./lib/marketingDesignStudio";
 
 const defaults={
  school:{headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Build school pride. Support your programs. Make ordering easier.",benefits:"SCHOOL PRIDE — Quality school-branded apparel\nPROGRAM FUNDING — Support school activities\nEASY ONLINE ORDERS — Dedicated storefront\nLOCAL SUPPORT — Artwork and fulfillment",steps:"Plan together\nWe build your store\nSupporters order\nYour program benefits"},
@@ -23,9 +23,9 @@ async function renderOfflineArtwork(svg){
  const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml"}));
  try{
   const img=new Image();img.src=url;await img.decode();
-  const canvas=document.createElement("canvas");canvas.width=2550;canvas.height=3300;
+  const canvas=document.createElement("canvas");canvas.width=2550;canvas.height=1150;
   const context=canvas.getContext("2d");if(!context)throw Error("Canvas rendering is unavailable.");
-  context.drawImage(img,0,0,2550,3300);
+  context.drawImage(img,0,0,2550,1150);
   return canvas.toDataURL("image/jpeg",0.86);
  }finally{URL.revokeObjectURL(url);}
 }
@@ -187,7 +187,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     setProgress("Creating design concept "+(i+1)+" of 3…");
     let localPlan=null;
     if(localEnabled){try{const result=await localAiCall("/layout",{organization,category,colors,concept:i+1,prompt:visualPrompt});if(result?.plan&&Array.isArray(result.plan.sections))localPlan=result.plan;}catch{localEnabled=false;}}
-    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style,category}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
+    if(localPlan){layouts.push(localPlan);const image=await renderOfflineArtwork(offlineStudioHeroArtwork({concept:i+1,colors,style,category}));created.push(image);setPlans([...layouts]);setConcepts([...created]);continue;}
     const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt,offline:true})
@@ -195,7 +195,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     const data=await response.json();
     if(!response.ok||!data.plan)throw Error(data.message||"Unable to prepare layout.");
     layouts.push(data.plan);
-    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style,category}));
+    const image=await renderOfflineArtwork(offlineStudioHeroArtwork({concept:i+1,colors,style,category}));
     created.push(image);setPlans([...layouts]);setConcepts([...created]);
    }
    setProgress("Three branded concepts ready without paid APIs. Local Ollama was used for layout planning when available; otherwise the offline fallback was used.");
@@ -254,7 +254,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   try{
    const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,colors,concept:selected+1,prompt:visualPrompt,offline:true})});
    const result=await response.json();if(!response.ok||!result.plan)throw Error(result.message||"Unable to regenerate selected layout.");
-   const artwork=await renderOfflineArtwork(offlineStudioArtwork({concept:selected+1,colors,style,category}));
+   const artwork=await renderOfflineArtwork(offlineStudioHeroArtwork({concept:selected+1,colors,style,category}));
    setPlans(old=>old.map((v,i)=>i===selected?result.plan:v));setConcepts(old=>old.map((v,i)=>i===selected?artwork:v));
    setProgress("Only concept "+(selected+1)+" was regenerated. Approved copy and other concepts are unchanged.");
   }catch(e){setError(e.message||"Could not regenerate selected concept.");}finally{setBusy(false);}
