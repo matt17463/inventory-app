@@ -29,6 +29,9 @@ test("school level cues affect mood, operator overrides always win",()=>{
  assert.equal(marketingCampaignMood("business","Example Service"),"professional");
  assert.equal(marketingCampaignMood("wedding","Example Event"),"elegant");
  assert.equal(marketingCampaignMood("school","Example Elementary","professional"),"professional");
+ assert.equal(marketingCampaignMood("school","Generic School","auto",["#ef2424","#ffd500"]),"athletic");
+ assert.equal(marketingCampaignMood("school","Generic School","auto",["#777777","#aaaaaa"]),"professional");
+ assert.equal(marketingCampaignMood("general","Client","auto",["#ef2424","#ffd500"]),"expressive");
 });
 test("approved palette and escaping are preserved in every category",()=>{
  for(const category of marketingCategoryKeys()){
