@@ -93,7 +93,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[next]||defaults.general;
   setHeadline(d.headline);setBody(d.description);setBenefits(d.benefits);setSteps(d.steps);
   setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setLockedSections([]);
-  setSchoolFundraising(defaultSchoolFundraising());setStudioServices(defaultStudioServices(category));
+  setSchoolFundraising(defaultSchoolFundraising());setStudioServices(defaultStudioServices(next));
   setReleaseConfirmed(false);setProgress("");
  }
  async function findApprovedPhotos(){
