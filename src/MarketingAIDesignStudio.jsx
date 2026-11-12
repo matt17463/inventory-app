@@ -128,6 +128,11 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setApprovedPhotoStatus("Could not import image: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
  }
+ function removeProductImage(index){
+  setProductImages(previous=>previous.filter((_,i)=>i!==index));
+  setProductLabels(previous=>[...previous.filter((_,i)=>i!==index),""].slice(0,4));
+  setReleaseConfirmed(false);
+ }
  async function addProductPhotos(event){
   const files=Array.from(event.target.files||[]).slice(0,4-mergedProductImages.length);
   try{
@@ -187,7 +192,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
  }
- const mergedProductImages=[...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")).slice(0,4);
+ const mergedProductImages=[...new Set([...productImages,...(Array.isArray(approvedProductImages)?approvedProductImages:[])].filter(x=>/^data:image\/(png|jpeg|webp);base64,/i.test(x||"")))].slice(0,4);
  useEffect(()=>{setReleaseConfirmed(false);},[selected,headline,body,benefits,steps,cta,contactText,productImages,productLabels,approvedProductImages,plans,concepts,layoutAdjustments,schoolFundraising,logo,style,mode,category,colors.join(",")]);
  const visualPrompt=resolveDesignTokens(prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description}),{school_name:organization,client_name:organization,school_logo:logo?"Approved client logo supplied as image reference":"",client_logo:logo?"Approved client logo supplied as image reference":"",primary_color:colors[0],secondary_color:colors[1],accent_color:colors[2],business_website:"skilledcrafting.com"});
  async function generate(){
@@ -365,7 +370,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    {!!approvedPhotoCandidates.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>{approvedPhotoCandidates.map(item=><div className="growth-subcard" key={item.id}><small>{item.title}</small><button type="button" className="sc-btn" disabled={approvedPhotoBusy||mergedProductImages.length>=4} onClick={()=>importApprovedPhoto(item)}>Use approved image</button></div>)}</div>}
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    <div className="growth-grid">{mergedProductImages.map((src,i)=><label className="growth-field" key={"caption-"+i}><span>Verified caption for merchandise {i+1}</span><input maxLength={60} placeholder="e.g., School hoodie · Heather Grey" value={productLabels[i]||""} onChange={e=>setProductLabels(v=>v.map((text,j)=>j===i?e.target.value:text))}/></label>)}</div>
-   {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
+   {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>removeProductImage(i)}>Remove</button></div>)}</div>}
   </div>
   <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
