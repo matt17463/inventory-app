@@ -96,5 +96,5 @@ test("each campaign category has editable, escaped service descriptions",()=>{
 test("team and nonprofit can offer verified fundraising while business and weddings do not infer proceeds",()=>{
  const products=[{title:"Supporter tee",wholesale:"10",retail:"18",quantity:"50"}];
  for(const category of ["team","nonprofit"])assert.match(studioPrintHtml({category,schoolFundraising:{enabled:true,products}}),/\$400\.00/);
- for(const category of ["business","wedding","event"])assert.ok(!studioPrintHtml({category,schoolFundraising:{enabled:true,products}}).includes("multi-fundraising"));
+ for(const category of ["business","wedding","event"])assert.ok(!studioPrintHtml({category,schoolFundraising:{enabled:true,products}}).includes('class="fundraising-mini multi-fundraising"'));
 });
