@@ -88,3 +88,10 @@ test('approved storefront integration uses account-scoped assortment and private
  assert.match(ui,/normalizeStudioLayout/);
  assert.match(ui,/layoutAdjustments/);
 });
+
+test('pale brand colors cannot become low-contrast flyer headline backgrounds',()=>{
+ const html=studioPrintHtml({category:'school',colors:['#FFFF00','#123456'],headline:'Headline'});
+ assert.ok(html.includes('--primary:#123456')||html.includes('--primary:#233B69'));
+ assert.ok(!html.includes('--primary:#FFFF00'));
+ assert.ok(html.includes('#FFFF00'));
+});
