@@ -73,7 +73,7 @@ test("offline artwork is distinct, branded, safe, and requires no API",async()=>
  const {offlineStudioArtwork}=await import("../../src/lib/marketingDesignStudio.js");
  const images=[1,2,3].map(concept=>offlineStudioArtwork({concept,colors:["#112233","#445566","#aabbcc"]}));
  assert.equal(new Set(images).size,3);
- for(const svg of images){assert.match(svg,/^<svg /);assert.match(svg,/#112233|#445566/);assert.doesNotMatch(svg,/<script|https?:\\/\\//);}
+ for(const svg of images){assert.match(svg,/^<svg /);assert.match(svg,/#112233|#445566/);assert.ok(!svg.includes("<script"));assert.ok(!svg.includes("http://")&&!svg.includes("https://"));}
  const invalid=offlineStudioArtwork({colors:['"><script>alert(1)</script>']});
  assert.doesNotMatch(invalid,/<script|alert\\(1\\)/);
  const studio=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
