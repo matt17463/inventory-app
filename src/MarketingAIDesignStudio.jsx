@@ -435,7 +435,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     <label className="growth-field"><span>Section title</span><input maxLength={92} value={studioServices.heading} onChange={e=>setStudioServices(old=>({...old,heading:e.target.value}))}/></label>
     <label className="growth-field"><span>Description of available services</span><textarea maxLength={280} rows={3} value={studioServices.description} onChange={e=>setStudioServices(old=>({...old,description:e.target.value}))}/></label>
     <label className="growth-field"><span>Examples or seasonal / sport-specific options (optional)</span><textarea maxLength={125} rows={2} value={studioServices.examples} onChange={e=>setStudioServices(old=>({...old,examples:e.target.value}))}/></label>
-    <button className="sc-btn" type="button" onClick={()=>setStudioServices(defaultStudioServices(category))}>Restore {DESIGN_CATEGORIES[category].label.toLowerCase()} service suggestions</button>
+    <button className="sc-btn" type="button" onClick={()=>setStudioServices(defaultStudioServices(category,template))}>Restore {DESIGN_CATEGORIES[category].label.toLowerCase()} service suggestions</button>
    </div>}
    {["school","team","nonprofit"].includes(category)&&<div className="growth-subcard">
     <h4>{category==="school"?"School":category==="team"?"Team / club":"Nonprofit"} fundraising examples — up to four products</h4>
@@ -454,6 +454,24 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
      </fieldset>)}
      <button type="button" className="sc-btn" onClick={addFundraisingProduct} disabled={normalizeSchoolFundraising(schoolFundraising).products.length>=MAX_FUNDRAISING_PRODUCTS}>Add product pricing option ({normalizeSchoolFundraising(schoolFundraising).products.length}/{MAX_FUNDRAISING_PRODUCTS})</button>
      {(()=>{const result=schoolFundraisingExample(schoolFundraising);return result.ready?<div role="status"><strong>Illustrative gross proceeds: {result.grandTotal}</strong><p>{result.examples.map(row=>row.title+": "+row.quantity+" × "+row.perItem+" = "+row.total).join(" | ")}</p></div>:<p role="alert">Verify pricing: {result.errors.join(" ")}</p>})()}
+    </>}
+   </div>}
+   {!["school","team","nonprofit"].includes(category)&&<div className="growth-subcard">
+    <h4>Optional client-facing retail product options — up to four</h4>
+    <p>Use this section to show approved retail product choices for a business, wedding, event, or other promotion. No internal wholesale or profit amounts appear on the flyer.</p>
+    <label className="growth-field"><input type="checkbox" checked={retailPricing.enabled} onChange={e=>setRetailPricing(previous=>({...previous,enabled:e.target.checked}))}/> Include verified customer product prices</label>
+    {retailPricing.enabled&&<>
+     {normalizeStudioRetailPricing(retailPricing).products.map((product,i)=><fieldset key={i} className="growth-subcard" style={{border:"1px solid #bccbd8",padding:12,borderRadius:8}}>
+      <legend><strong>Product option {i+1}</strong></legend>
+      <div className="growth-grid">
+       <label className="growth-field"><span>Approved product title</span><input maxLength={80} placeholder="Personalized tumbler" value={product.title} onChange={e=>updateRetailRow(i,"title",e.target.value)}/></label>
+       <label className="growth-field"><span>Approved retail price ($)</span><input inputMode="decimal" placeholder="25.00" value={product.retail} onChange={e=>updateRetailRow(i,"retail",e.target.value)}/></label>
+       <label className="growth-field"><span>Illustrative quantity</span><input inputMode="numeric" value={product.quantity} onChange={e=>updateRetailRow(i,"quantity",e.target.value)}/></label>
+      </div>
+      {normalizeStudioRetailPricing(retailPricing).products.length>1&&<button type="button" className="sc-btn" onClick={()=>removeRetailRow(i)}>Remove product option</button>}
+     </fieldset>)}
+     <button type="button" className="sc-btn" disabled={normalizeStudioRetailPricing(retailPricing).products.length>=4} onClick={addRetailRow}>Add retail product option ({normalizeStudioRetailPricing(retailPricing).products.length}/4)</button>
+     {(()=>{const result=validateStudioRetailPricing(retailPricing);return result.ready?<p role="status">Illustrative retail merchandise total: <strong>{result.grandTotal}</strong>. Confirm customer pricing and any additional fees.</p>:<p role="alert">{result.errors.join(" ")}</p>})()}
     </>}
    </div>}
   </section>
