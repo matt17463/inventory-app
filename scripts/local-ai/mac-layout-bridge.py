@@ -5,9 +5,13 @@ Run on the Mac, bound to loopback only. Expose HTTPS to your *tailnet only*
 using Tailscale Serve; do not use Tailscale Funnel or public port forwarding.
 Employee authorization is verified by the hosted application.
 """
+import base64
+import copy
 import json
 import os
 import re
+import time
+import urllib.parse
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,6 +23,13 @@ MAX_BYTES = 16000
 SECTIONS = {"hero", "benefits", "steps", "pricing", "products", "cta"}
 COMPOSITIONS = {"split", "full-bleed", "editorial"}
 EMPHASIS = {"hero", "benefits", "steps", "pricing", "products"}
+COMFY_BASE_URL = os.environ.get("SC_COMFYUI_BASE_URL", "").rstrip("/")
+COMFY_WORKFLOW = os.environ.get("SC_COMFYUI_WORKFLOW_JSON", "")
+COMFY_POSITIVE_NODE = os.environ.get("SC_COMFYUI_POSITIVE_NODE", "")
+COMFY_NEGATIVE_NODE = os.environ.get("SC_COMFYUI_NEGATIVE_NODE", "")
+COMFY_MAX_IMAGE_BYTES = 4_000_000
+COMFY_RENDER_DEADLINE = 115
+
 COPY_SYSTEM = (
     "You are a careful copywriting assistant for a local custom merchandise business. "
     "Return a JSON object containing headline, description, benefits, steps, cta. "
@@ -159,6 +170,86 @@ def generate_copy(payload):
     return validate_copy(json.loads(result["message"]["content"]))
 
 
+def render_comfyui_scene(payload):
+    """Optional private tailnet ComfyUI workflow with no public or paid provider."""
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid image request")
+    prompt = str(payload.get("prompt", "")).strip()[:3800]
+    if len(prompt) < 12:
+        raise ValueError("Provide a useful scenic art direction")
+    if not all((COMFY_BASE_URL, COMFY_WORKFLOW, COMFY_POSITIVE_NODE)):
+        raise RuntimeError("Local ComfyUI connection has not been configured on the Mac")
+    parsed = urllib.parse.urlsplit(COMFY_BASE_URL)
+    if (parsed.scheme != "https" or not re.fullmatch(r"[a-z0-9-]+\.tail934ae0\.ts\.net", parsed.hostname or "")
+            or parsed.port not in (None, 443) or parsed.path not in ("", "/")
+            or parsed.query or parsed.fragment or parsed.username or parsed.password):
+        raise RuntimeError("ComfyUI must use a private Tailscale Serve HTTPS hostname")
+    with open(COMFY_WORKFLOW, "r", encoding="utf-8") as source:
+        workflow = json.load(source)
+    if not isinstance(workflow, dict) or len(workflow) > 200:
+        raise ValueError("ComfyUI workflow must be an exported bounded API graph")
+    graph = copy.deepcopy(workflow)
+    positive = graph.get(str(COMFY_POSITIVE_NODE))
+    if not isinstance(positive, dict) or positive.get("class_type") != "CLIPTextEncode":
+        raise ValueError("Configured ComfyUI positive prompt node is missing")
+    positive.setdefault("inputs", {})["text"] = (
+        "Original text-free commercial background illustration, professional editorial lighting. "
+        "No letters, words, logos, emblems, printed products, brands, money, or watermarks. "
+        "Leave a clear space for independently overlaid approved client logo and editable copy. "
+        + prompt
+    )
+    if COMFY_NEGATIVE_NODE:
+        negative = graph.get(str(COMFY_NEGATIVE_NODE))
+        if not isinstance(negative, dict) or negative.get("class_type") != "CLIPTextEncode":
+            raise ValueError("Configured ComfyUI negative prompt node is missing")
+        negative.setdefault("inputs", {})["text"] = (
+            "text, letters, lettering, wordmarks, logo, trademark, school mascot, "
+            "watermark, copied artwork, prices, phone number, products, typography"
+        )
+    def request_json(path, data=None):
+        headers = {"Content-Type": "application/json"} if data is not None else {}
+        req = urllib.request.Request(
+            COMFY_BASE_URL + path,
+            data=json.dumps(data).encode() if data is not None else None,
+            headers=headers, method="POST" if data is not None else "GET"
+        )
+        with urllib.request.urlopen(req, timeout=12) as response:
+            return json.load(response)
+    result = request_json("/prompt", {"prompt": graph})
+    prompt_id = result.get("prompt_id")
+    if not isinstance(prompt_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", prompt_id, re.I):
+        raise RuntimeError("ComfyUI did not accept the workflow")
+    deadline = time.monotonic() + COMFY_RENDER_DEADLINE
+    while time.monotonic() < deadline:
+        history = request_json("/history/" + urllib.parse.quote(prompt_id))
+        entry = history.get(prompt_id)
+        if isinstance(entry, dict):
+            output = entry.get("outputs", {})
+            for node in output.values():
+                for item in node.get("images", []) if isinstance(node, dict) else []:
+                    name = item.get("filename", "")
+                    folder = item.get("subfolder", "")
+                    location = item.get("type", "output")
+                    if (not isinstance(name, str) or len(name) > 180 or "/" in name or "\\" in name
+                            or not isinstance(folder, str) or "/" in folder or "\\" in folder
+                            or location not in ("output", "temp")):
+                        continue
+                    path = "/view?" + urllib.parse.urlencode({"filename": name, "subfolder": folder, "type": location})
+                    req = urllib.request.Request(COMFY_BASE_URL + path, method="GET")
+                    with urllib.request.urlopen(req, timeout=20) as image_response:
+                        mime = str(image_response.headers.get("Content-Type", "")).split(";")[0].strip()
+                        image_bytes = image_response.read(COMFY_MAX_IMAGE_BYTES + 1)
+                    if not image_bytes or len(image_bytes) > COMFY_MAX_IMAGE_BYTES:
+                        raise RuntimeError("ComfyUI image exceeded private bridge output limit")
+                    if mime not in ("image/png", "image/jpeg", "image/webp"):
+                        raise RuntimeError("ComfyUI returned an unsupported image")
+                    return {"mime_type": mime, "image_base64": base64.b64encode(image_bytes).decode(),
+                            "source": "local_comfyui", "approved": False}
+            raise RuntimeError("ComfyUI completed without an output image")
+        time.sleep(2)
+    raise RuntimeError("ComfyUI render exceeded the private bridge deadline")
+
+
 class Handler(BaseHTTPRequestHandler):
     def respond(self, code, value):
         data = json.dumps(value).encode()
@@ -179,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(204 if self.headers.get("Origin") in ORIGINS else 403, {})
 
     def do_POST(self):
-        if self.path not in ("/layout", "/copy"):
+        if self.path not in ("/layout", "/copy", "/image"):
             return self.respond(404, {"error": "Not found"})
         if self.headers.get("Origin") not in ORIGINS:
             return self.respond(403, {"error": "Origin not permitted"})
@@ -192,6 +283,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(401, {"error": "Authentication required"})
             check_user(authorization[7:])
             payload = json.loads(self.rfile.read(length))
+            if self.path == "/image":
+                scene = render_comfyui_scene(payload)
+                return self.respond(200, scene)
             if self.path == "/copy":
                 draft = generate_copy(payload)
                 return self.respond(200, {"draft": draft, "source": "ollama"})
