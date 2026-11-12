@@ -3,6 +3,7 @@ import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
 import {supabase} from "./supabaseClient";
 import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
 import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingSharedImageUrl} from "./lib/marketingArtwork";
+import MarketingApparelComposer from "./MarketingApparelComposer";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
@@ -232,7 +233,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {error&&<p role="alert">{error}</p>}
   <div className="growth-subcard">
    <h4>Approved product photography — up to four</h4>
-   <p>Use photos or mockups you own or are licensed to use. They will appear in every complete flyer preview. No fabricated products or pricing.</p>
+   <p>Use approved decorated mockups, choose imagery from this client\u0027s approved documents, or create a garment proof with the composer below. No fabricated products or pricing.</p>
    {!mergedProductImages.length&&<p role="status"><strong>Draft preview only:</strong> add approved merchandise images before sharing a client-ready flyer.</p>}
    {!!approvedProductImages.length&&<p>{Math.min(4,approvedProductImages.length)} previously uploaded image(s) are available from the classic builder. They are used after any images added here.</p>}
    <button type="button" className="sc-btn" disabled={!accountId||approvedPhotoBusy||mergedProductImages.length>=4} onClick={findApprovedPhotos}>{approvedPhotoBusy?"Loading approved images…":"Find images from this client's approved documents"}</button>
@@ -241,6 +242,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <input aria-label="Add approved product images" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={mergedProductImages.length>=4} onChange={addProductPhotos}/>
    {!!productImages.length&&<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{productImages.map((src,i)=><div key={i}><img src={src} alt={"Approved product "+(i+1)} style={{width:110,height:110,objectFit:"contain"}}/><button type="button" onClick={()=>setProductImages(v=>v.filter((_,j)=>j!==i))}>Remove</button></div>)}</div>}
   </div>
+  <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
    <strong style={{display:"block",marginTop:12}}>Concept {i+1}{selected===i?" — selected":""} · {["Athletic campaign","Modern editorial","Bold school pride"][i]}</strong>
