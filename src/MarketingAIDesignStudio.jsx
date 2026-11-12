@@ -4,7 +4,7 @@ import {supabase} from "./supabaseClient";
 import {marketingLogoImage} from "./lib/marketingArtwork";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {buildStudioPdf} from "./lib/marketingDesignStudioPdf";
-import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml} from "./lib/marketingDesignStudio";
+import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
 
 const defaults={
  school:{headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Build school pride. Support your programs. Make ordering easier.",benefits:"SCHOOL PRIDE — Quality school-branded apparel\nPROGRAM FUNDING — Support school activities\nEASY ONLINE ORDERS — Dedicated storefront\nLOCAL SUPPORT — Artwork and fulfillment",steps:"Plan together\nWe build your store\nSupporters order\nYour program benefits"},
@@ -14,6 +14,16 @@ const defaults={
  wedding:{headline:"PERSONALIZED MOMENTS",description:"Custom gifts, keepsakes and event details.",benefits:"Personalized glassware\nEngraved keepsakes\nCustom signage\nCoordinated gifts",steps:"Share your vision\nSelect products\nApprove proofs\nCelebrate"},
  general:{headline:"BRING YOUR BRAND TO LIFE",description:"Distinctive custom merchandise and promotional products.",benefits:"Personalized products\nProfessional artwork\nFlexible ordering\nLocal support",steps:"Plan\nDesign\nApprove\nProduce"}
 };
+async function renderOfflineArtwork(svg){
+ const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml"}));
+ try{
+  const img=new Image();img.src=url;await img.decode();
+  const canvas=document.createElement("canvas");canvas.width=960;canvas.height=1200;
+  const context=canvas.getContext("2d");if(!context)throw Error("Canvas rendering is unavailable.");
+  context.drawImage(img,0,0,960,1200);
+  return canvas.toDataURL("image/jpeg",0.86);
+ }finally{URL.revokeObjectURL(url);}
+}
 export default function MarketingAIDesignStudio({accountId="",organization="",template="",segment="",logo="",colors=[],description="",contact="",onUseLegacy}){
  const category=designCategory(template,segment);
  const [style,setStyle]=useState("athletic");
@@ -83,26 +93,22 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
   setBusy(true);setError("");setConcepts([]);setPlans([]);setSelected(0);
-  const created=[];const layouts=[];
+  const created=[],layouts=[];
   try{
    for(let i=0;i<3;i++){
-    setProgress("Generating concept "+(i+1)+" of 3…");
-    const promptText=designStudioPrompt({category,style,client:organization,colors,instructions:visualPrompt,variation:i});
-    const layoutResponse=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt})});
-    const layoutData=await layoutResponse.json();
-    if(!layoutResponse.ok||!layoutData.plan)throw Error(layoutData.message||"AI layout generation failed.");
-    layouts.push(layoutData.plan);setPlans([...layouts]);
-    if(layoutData.source==="local")setProgress("AI layout quota reached; using distinct local layouts. Generating artwork concept "+(i+1)+" of 3…");
-    const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-visual",{
+    setProgress("Creating offline design concept "+(i+1)+" of 3…");
+    const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-ai-layout",{
      method:"POST",headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({account_id:accountId,template_id:template,template_label:DESIGN_CATEGORIES[category].label,organization,segment,colors,description,visual_prompt:promptText,logo:logo.length<1000000?logo:""})
+     body:JSON.stringify({account_id:accountId,organization,category,colors,concept:i+1,prompt:visualPrompt})
     });
     const data=await response.json();
-    if(!response.ok||!data.image)throw Error((data.message||"Artwork generation failed.")+(response.status===429?" OpenAI API billing or rate limits must be resolved to generate new artwork. Your ChatGPT plan does not cover API usage.":""));
-    created.push(data.image);setConcepts([...created]);
+    if(!response.ok||!data.plan)throw Error(data.message||"Unable to prepare layout.");
+    layouts.push(data.plan);
+    const image=await renderOfflineArtwork(offlineStudioArtwork({concept:i+1,colors,style}));
+    created.push(image);setPlans([...layouts]);setConcepts([...created]);
    }
-   setProgress("Three concepts ready for review.");
-  }catch(e){setError(e.message||"Unable to generate artwork.");setProgress(created.length+" concept(s) generated.");}
+   setProgress("Three zero-API concepts ready. No AI credits were used.");
+  }catch(e){setError(e.message||"Unable to create layouts.");setProgress(created.length+" concept(s) ready.");}
   finally{setBusy(false);}
  }
  async function pdfCompatibleLogo(value){
@@ -131,14 +137,14 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  };
  return <section className="growth-subcard" aria-label="AI Document Design Studio">
   <h3>AI Document Design Studio</h3>
-  <p>Primary creative workflow · {DESIGN_CATEGORIES[category].label}. Generate three distinct concepts, choose your favorite, and review verified text before export. The classic document builder remains available below.</p>
+  <p>Primary creative workflow · {DESIGN_CATEGORIES[category].label}. Generate three branded concepts without paid image APIs, choose your favorite, and review verified text before export. The classic document builder remains available below.</p>
   <div className="growth-grid">
    <label className="growth-field"><span>Creative style</span><select value={style} onChange={e=>setStyle(e.target.value)}>{DESIGN_STYLES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
    <label className="growth-field"><span>Document editing mode</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="hybrid">Hybrid — editable text and AI artwork</option><option value="artwork">Artwork-first — AI illustration with verified overlays</option></select></label>
   </div>
   <label className="growth-field"><span>Editable creative direction (up to 12,000 characters)</span><textarea rows={9} maxLength={12000} value={visualPrompt} onChange={e=>setPrompt(e.target.value)} /></label>
   <button type="button" className="sc-btn" onClick={()=>setPrompt("")}>Reset to category prompt</button>
-  <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts"}</button>
+  <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts — no API credits"}</button>
   {progress&&<p role="status">{progress}</p>}
   {draftMessage&&<p role="status">{draftMessage}</p>}
   {error&&<p role="alert">{error}</p>}
@@ -156,7 +162,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={downloadPdf}>Download selected one-page PDF</button>
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={print}>Export selected print layout (HTML → Print to PDF)</button>
-  <p>Generated images are not automatically approved. Review logo fidelity, product imagery and any visual artifacts. The printable layout keeps business claims separate from AI-generated pixels.</p>
+  <p>Offline concepts use original abstract branded backgrounds, not fabricated product photos. Approved logos and verified copy remain editable overlays. Local ComfyUI image generation and real product mockups are planned enhancements.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
  </section>;
 }
