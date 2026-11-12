@@ -36,7 +36,7 @@ export function designStudioPrompt({category="general",style="athletic",client="
 }
 export function resolveDesignTokens(prompt,values={}){
  const known=new Set(["school_name","school_mascot","school_logo","primary_color","secondary_color","accent_color","school_level","business_phone","business_email","business_website","client_name","client_logo"]);
- return String(prompt||"").replace(/\\{\\{([a-z_]+)\\}\\}/gi,(whole,key)=>{
+ return String(prompt||"").replace(/\{\{([a-z_]+)\}\}/gi,(whole,key)=>{
   const id=key.toLowerCase();
   if(!known.has(id))return whole;
   const value=String(values[id]||"").trim();
