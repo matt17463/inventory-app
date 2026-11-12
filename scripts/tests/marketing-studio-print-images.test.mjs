@@ -5,7 +5,7 @@ import {studioEffectiveImageDpi,inspectStudioImage,checkStudioPrintImages} from 
 
 test("effective source resolution reflects physical printed dimensions and cropping",()=>{
  assert.equal(studioEffectiveImageDpi({width:2550,height:3300,boxWidthPx:816,boxHeightPx:1056}),300);
- assert.equal(studioEffectiveImageDpi({width:960,height:1200,boxWidthPx:816,boxHeightPx:420,fit:"cover"}),113);
+ assert.equal(studioEffectiveImageDpi({width:960,height:1200,boxWidthPx:816,boxHeightPx:420,fit:"cover"}),112);
  assert.equal(studioEffectiveImageDpi({width:1536,height:1024,boxWidthPx:816,boxHeightPx:320,fit:"cover"}),180);
  assert.equal(studioEffectiveImageDpi({width:0,height:1024,boxWidthPx:816,boxHeightPx:320}),0);
 });
