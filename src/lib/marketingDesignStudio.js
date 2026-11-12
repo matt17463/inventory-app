@@ -59,13 +59,19 @@ export function studioLayoutSections(plan,variant=0){
  const sections=[...new Set(source.filter(x=>allowed.includes(x)))];
  return [...sections,...defaults[Math.max(0,Math.min(2,Number(variant)||0))].filter(x=>!sections.includes(x))];
 }
-export function studioExportReadiness({client="",logo="",headline="",contact="",productImages=[],category="general"}={}){
+export function studioExportReadiness({client="",logo="",headline="",description="",benefits=[],steps=[],cta="",contact="",productImages=[],category="general"}={}){
  const errors=[];
  const isImage=value=>/^data:image\/(?:png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(value||"");
  if(!String(client).trim())errors.push("Select a named client.");
  if(!isImage(logo))errors.push("Provide the client-approved logo.");
  if(!String(headline).trim())errors.push("Enter a verified headline.");
  if(String(headline).length>85)errors.push("Shorten the headline to avoid print clipping (85 characters maximum).");
+ if(String(client).length>90)errors.push("Client name exceeds the safe single-page display limit.");
+ if(String(description).length>280)errors.push("Shorten the description to 280 characters for single-page printing.");
+ if(String(cta).length>80)errors.push("Shorten the call to action to 80 characters.");
+ if(String(contact).length>220)errors.push("Shorten the contact section to 220 characters.");
+ if((Array.isArray(benefits)?benefits:[]).length>4||(Array.isArray(benefits)?benefits:[]).some(x=>String(x).length>100))errors.push("Use up to four benefit statements, each under 100 characters.");
+ if((Array.isArray(steps)?steps:[]).length>4||(Array.isArray(steps)?steps:[]).some(x=>String(x).length>85))errors.push("Use up to four short process steps, each under 85 characters.");
  if(!String(contact).trim())errors.push("Enter verified contact details.");
  if(!Array.isArray(productImages)||!productImages.some(isImage))errors.push("Add at least one approved merchandise photograph.");
  if(!Object.hasOwn(DESIGN_CATEGORIES,category))errors.push("Select a supported document category.");
