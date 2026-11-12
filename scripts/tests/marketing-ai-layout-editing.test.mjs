@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
+import {studioLayoutSections,studioExportReadiness,studioPrintHtml,offlineStudioArtwork,inspectStudioPrintDom,STUDIO_CATEGORY_COPY} from '../../src/lib/marketingDesignStudio.js';
 
 const sample='data:image/png;base64,AAAA';
 test('validated layout plan reorders only supported modules and preserves each exactly once',()=>{
@@ -56,4 +56,15 @@ test('lengthy copy cannot pass export gate while shorter copy can',()=>{
  assert.equal(studioExportReadiness({...base,benefits:['a'.repeat(101)]}).ready,false);
  assert.equal(studioExportReadiness({...base,steps:['a'.repeat(86)]}).ready,false);
  assert.equal(studioExportReadiness({...base,description:'Short approved copy',benefits:['Benefit'],steps:['Step']}).ready,true);
+});
+
+test('DOM print preflight catches clipped body and hero headline',()=>{
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom});
+ const hero={getBoundingClientRect:()=>rect(0,0,816,320)};
+ const title={getBoundingClientRect:()=>rect(10,110,820,350)};
+ const main={scrollHeight:800,clientHeight:600};
+ const page={scrollHeight:1056,clientHeight:1056,querySelector:s=>({main,'.hero':hero,h1:title})[s]||null};
+ const issues=inspectStudioPrintDom({querySelector:s=>s==='.page'?page:null});
+ assert.match(issues.join(' '),/clipped|Headline/);
+ assert.deepEqual(inspectStudioPrintDom({querySelector:()=>null}),['Print page is missing.']);
 });
