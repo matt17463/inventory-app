@@ -37,6 +37,17 @@ try{
      const a=logo.getBoundingClientRect(),b=text.getBoundingClientRect();
      if(a.left<b.right-2&&a.right>b.left+2&&a.top<b.bottom-2&&a.bottom>b.top+2)errors.push("Brand logo and hero content overlap");
     }
+    if(documentPage.classList.contains("school-layout")){
+     const highlights=documentPage.querySelector(".school-highlights");
+     if(!highlights||highlights.querySelectorAll(".school-highlight").length!==4)errors.push("School flyer needs all four program highlights");
+     else if(text){
+      const a=highlights.getBoundingClientRect(),b=text.getBoundingClientRect();
+      if(a.left<b.right-2&&a.right>b.left+2&&a.top<b.bottom-2&&a.bottom>b.top+2)errors.push("School highlight cards overlap campaign text");
+     }
+     if(!documentPage.querySelector(".artwork-options"))errors.push("School seasonal and logo redesign options are missing");
+     const captions=documentPage.querySelectorAll(".piece .product-tag");
+     if(captions.length<2)errors.push("School marketing fixture needs at least two verified merchandise captions");
+    }
     const main=documentPage.querySelector("main"),footer=documentPage.querySelector("footer");
     if(main&&footer&&main.getBoundingClientRect().bottom>footer.getBoundingClientRect().top+2)errors.push("Main content overlays footer");
     return {errors,detail};
