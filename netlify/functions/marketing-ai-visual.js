@@ -33,7 +33,7 @@ export async function handler(event){
   }
   const response=await fetch("https://api.openai.com/v1/responses",{
    method:"POST",headers:{"Authorization":"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},
-   body:JSON.stringify({model:process.env.OPENAI_MARKETING_VISUAL_MODEL||"gpt-4.1",input:[{role:"user",content:inputContent}],tools:[{type:"image_generation",size:"1024x1536",quality:"high",background:"opaque"}],tool_choice:{type:"image_generation"}}),
+   body:JSON.stringify({model:process.env.OPENAI_MARKETING_VISUAL_MODEL||"gpt-4.1",input:[{role:"user",content:inputContent}],tools:[{type:"image_generation",size:input.aspect_ratio==="landscape"?"1536x1024":"1024x1536",quality:"high",background:"opaque"}],tool_choice:{type:"image_generation"}}),
    signal:AbortSignal.timeout(115000)
   });
   if(!response.ok)return respond(502,{message:await aiFailure(response,"Marketing visual generation")},event);
