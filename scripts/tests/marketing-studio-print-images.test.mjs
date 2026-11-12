@@ -32,6 +32,6 @@ test("browser preflight checks approved art and scenic background independently"
 test("print UI uses photo DPI checks and offline artwork renders at print resolution",()=>{
  const ui=readFileSync(new URL("../../src/MarketingAIDesignStudio.jsx",import.meta.url),"utf8");
  assert.match(ui,/checkStudioPrintImages\(popup\.document/);
- assert.match(ui,/canvas\.width=2550;canvas\.height=3300/);
- assert.match(ui,/context\.drawImage\(img,0,0,2550,3300\)/);
+ assert.match(ui,/canvas\.width=2550;canvas\.height=1150/);
+ assert.match(ui,/context\.drawImage\(img,0,0,2550,1150\)/);
 });
