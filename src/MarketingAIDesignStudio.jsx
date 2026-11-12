@@ -5,6 +5,7 @@ import {loadLocalAiConnection,localAiCall} from "./lib/localAiGateway";
 import {marketingLogoImage,marketingLogoBlob,marketingImageDataUrl,marketingSharedImageUrl} from "./lib/marketingArtwork";
 import MarketingApparelComposer from "./MarketingApparelComposer";
 import {marketingFlyerChecks} from "./lib/marketingFlyerChecks";
+import {schoolArtworkServiceOptions,verifiedFundraisingRows} from "./lib/marketingSchoolProgram";
 import {approvedMarketingPhotoCandidates} from "./lib/marketingApprovedPhotoAssets";
 import {growthWriteAllowed} from "./lib/marketingApi";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,resolveDesignTokens,studioPrintHtml,offlineStudioArtwork} from "./lib/marketingDesignStudio";
@@ -62,6 +63,10 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [steps,setSteps]=useState("");
  const [cta,setCta]=useState("");
  const [contactText,setContactText]=useState("");
+ const [artworkMessage,setArtworkMessage]=useState("");
+ const [artworkOptions,setArtworkOptions]=useState("");
+ const [fundraisingNote,setFundraisingNote]=useState("");
+ const [fundraisingRows,setFundraisingRows]=useState([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);
  const [productImages,setProductImages]=useState([]);
  const [heroImage,setHeroImage]=useState("");
  const [heroInfo,setHeroInfo]=useState("");
@@ -72,7 +77,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(category==="school"?"Create coordinated versions of your approved school logo for teams, clubs, seasons and special events. We can also refresh existing artwork.":"");setArtworkOptions(category==="school"?schoolArtworkServiceOptions().join("\n"):"");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -143,7 +148,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -163,7 +168,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
    const heroReference=heroImage?await storeImage(heroImage):null;
-   const content={studioVersion:3,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,headline,body,benefits,steps,cta,contactText};
+   const content={studioVersion:4,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -185,7 +190,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
    const restoredHero=d.heroReference?.key?await marketingLogoImage(accountId,d.heroReference.key):"";
    setHeroImage(restoredHero);setHeroInfo(restoredHero?"Approved hero scene restored from private storage.":"");
-   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductImages(products);
+   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setArtworkMessage(d.artworkMessage||"");setArtworkOptions(d.artworkOptions||"");setFundraisingNote(d.fundraisingNote||"");setFundraisingRows(Array.isArray(d.fundraisingRows)&&d.fundraisingRows.length?d.fundraisingRows.slice(0,3):[{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setProductImages(products);
    setDraftMessage("Saved concepts and design instructions restored.");
   }catch(e){setError(e.message||"Could not reopen design.");}
   finally{setDraftBusy(false);}
@@ -283,6 +288,25 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <ul>{flyerReview.checks.map(check=><li key={check.id}>{check.pass?"✓ ":"• "}{check.message}</li>)}</ul>
    <p>Photo resolution, supplier garment identity, logo permissions and exact production placement require human verification; this checklist does not certify them.</p>
   </section>
+  {category==="school"&&<section className="growth-subcard" aria-label="School program and seasonal logo options">
+   <h4>School spirit-wear program content</h4>
+   <p>The design benchmark includes program benefits, ordering steps, fundraising, and an artwork modernization panel. These editable details apply to any selected school, never just the reference school.</p>
+   <div className="growth-grid">
+    <label className="growth-field"><span>Fundraising program explanation (without guaranteed profits)</span><textarea rows={3} value={fundraisingNote} onChange={e=>setFundraisingNote(e.target.value)}/></label>
+    <label className="growth-field"><span>Artwork modernization and alternate logo versions</span><textarea rows={3} value={artworkMessage} onChange={e=>setArtworkMessage(e.target.value)}/></label>
+    <label className="growth-field"><span>Seasonal, sports, club & event options — one per line</span><textarea rows={5} value={artworkOptions} onChange={e=>setArtworkOptions(e.target.value)}/></label>
+   </div>
+   <h4>Verified fundraising illustration (optional)</h4>
+   <p>Enter actual, confirmed figures to display a wholesale/retail comparison like the reference. These are illustrative gross margins, not a profit guarantee or an invoice.</p>
+   {fundraisingRows.map((row,i)=><div key={i} className="growth-grid" style={{marginBottom:9}}>
+    <label className="growth-field"><span>Product</span><input placeholder="e.g., school hoodie" value={row.product} onChange={e=>setFundraisingRows(current=>current.map((entry,k)=>k===i?{...entry,product:e.target.value,verified:false}:entry))}/></label>
+    {["wholesale","retail","quantity"].map(key=><label key={key} className="growth-field"><span>{key==="quantity"?"Example quantity":key==="wholesale"?"Confirmed unit cost ($)":"Confirmed retail ($)"}</span><input type="number" min={key==="quantity"?"1":"0"} step={key==="quantity"?"1":"0.01"} value={row[key]} onChange={e=>setFundraisingRows(current=>current.map((entry,k)=>k===i?{...entry,[key]:e.target.value,verified:false}:entry))}/></label>)}
+    <label><input type="checkbox" checked={row.verified} onChange={e=>setFundraisingRows(current=>current.map((entry,k)=>k===i?{...entry,verified:e.target.checked}:entry))}/> I have verified these figures</label>
+    <button type="button" className="sc-btn" onClick={()=>setFundraisingRows(current=>current.filter((_,k)=>k!==i))}>Remove row</button>
+   </div>)}
+   <button type="button" className="sc-btn" disabled={fundraisingRows.length>=3} onClick={()=>setFundraisingRows(rows=>[...rows,{product:"",wholesale:"",retail:"",quantity:"",verified:false}])}>Add fundraising product</button>
+   {!!verifiedFundraisingRows(fundraisingRows).length&&<p role="status">{verifiedFundraisingRows(fundraisingRows).length} confirmed example row(s) will appear in the flyer with a clear illustrative-margin disclaimer.</p>}
+  </section>}
   <MarketingApparelComposer key={accountId} accountId={accountId} logo={logo} disabled={busy||draftBusy||mergedProductImages.length>=4} onAdd={image=>setProductImages(current=>[...current,image].slice(0,4))}/>
   {!!concepts.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16}}>{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}>
    <FlyerFrame html={previewHtml(i)} label={"Complete flyer concept "+(i+1)}/>
