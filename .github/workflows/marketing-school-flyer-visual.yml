@@ -8,6 +8,8 @@ on:
       - 'src/lib/marketingVisualBrief.js'
       - 'src/lib/marketingDesignStudio.js'
       - 'src/lib/marketingCampaignProfiles.js'
+      - 'src/lib/marketingCategoryVisualSystem.js'
+      - 'src/lib/marketingSchoolVisualSystem.js'
       - 'src/lib/marketingPrintPreflight.js'
       - 'src/MarketingApparelComposer.jsx'
       - 'src/lib/marketingApparelComposite.js'
