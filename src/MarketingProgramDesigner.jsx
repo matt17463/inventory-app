@@ -267,7 +267,8 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
    <button type="button" className="sc-btn" disabled={p.tiers.length>=7} onClick={()=>patch(p.id,{tiers:[...p.tiers,{min:24,wholesale:"",retail:""}]})}>Add quantity tier</button>
    <button type="button" className="sc-btn" disabled={products.length===1} onClick={()=>setProducts(ps=>ps.filter(x=>x.id!==p.id))}>Remove product</button>
   </article>)}
-  <button type="button" className="sc-btn" disabled={products.length>=25} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
+  <button type="button" className="sc-btn" disabled={products.length>=(brochure?5:25)} onClick={()=>setProducts(ps=>[...ps,fresh("other")])}>Add product</button>
+  {brochure&&<p><small>The illustrated flyer showcases up to five approved products. Use the separate client catalog for larger assortments.</small></p>}
   <p><small>Mockups are conceptual and require artwork approval. School earnings are retail minus agreed decorated wholesale price, not Skilled Crafting's internal supplier cost. Tax, shipping, returns, payment collection, payout and fulfillment must be confirmed in writing.</small></p>
   {brochure&&<div className="growth-subcard">
    <h4>Save or reopen this client's editable flyer</h4>
