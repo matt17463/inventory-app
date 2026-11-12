@@ -65,6 +65,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [contactText,setContactText]=useState("");
  const [artworkMessage,setArtworkMessage]=useState("");
  const [artworkOptions,setArtworkOptions]=useState("");
+ const [artworkVariantImage,setArtworkVariantImage]=useState("");
  const [fundraisingNote,setFundraisingNote]=useState("");
  const [fundraisingRows,setFundraisingRows]=useState([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);
  const [productImages,setProductImages]=useState([]);
@@ -77,7 +78,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setArtworkMessage(category==="school"?"Create coordinated versions of your approved school logo for teams, clubs, seasons and special events. We can also refresh existing artwork.":"");setArtworkOptions(category==="school"?schoolArtworkServiceOptions().join("\n"):"");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
+  setContactText(contact);setArtworkMessage(category==="school"?"Create coordinated versions of your approved school logo for teams, clubs, seasons and special events. We can also refresh existing artwork.":"");setArtworkOptions(category==="school"?schoolArtworkServiceOptions().join("\n"):"");setArtworkVariantImage("");setFundraisingNote(category==="school"?"A customizable school store can support fundraising for activities and programs; the actual return depends on agreed prices and costs.":"");setFundraisingRows([{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");setProductImages([]);setHeroImage("");setHeroInfo("");setApprovedPhotoCandidates([]);setApprovedPhotoStatus("");
  },[accountId,category,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  async function findApprovedPhotos(){
@@ -114,6 +115,12 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setApprovedPhotoStatus("Could not import image: "+e.message);}
   finally{setApprovedPhotoBusy(false);}
  }
+ async function addApprovedLogoVariant(event){
+  const file=event.target.files?.[0];event.target.value="";
+  if(!file)return;
+  if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>2_500_000){setError("Select an approved alternate logo as PNG, JPEG or WebP under 2.5 MB.");return;}
+  try{setArtworkVariantImage(await marketingImageDataUrl(file));setError("");}catch(e){setError(e.message||"Could not read alternate logo.");}
+ }
  async function addHeroScene(event){
   const file=event.target.files?.[0];
   event.target.value="";
@@ -148,7 +155,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   }catch(e){setError(e.message||"Unable to add product images.")}
   event.target.value="";
  }
- const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows});
+ const previewHtml=(i)=>studioPrintHtml({client:organization,category,style,concept:i,mode,plan:plans[i],image:"",logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages,colors,heroImage,artworkMessage,artworkOptions:artworkOptions.split("\n").map(v=>v.trim()).filter(Boolean),fundraisingNote,fundraisingRows,artworkVariantImage});
  async function storeImage(image){
   if(!image)return null;
   const match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -168,7 +175,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    const productReferences=[];
    for(const image of mergedProductImages)productReferences.push(await storeImage(image));
    const heroReference=heroImage?await storeImage(heroImage):null;
-   const content={studioVersion:4,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
+   const logoVariantReference=artworkVariantImage?await storeImage(artworkVariantImage):null;
+   const content={studioVersion:4,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,productReferences,heroReference,logoVariantReference,headline,body,benefits,steps,cta,contactText,artworkMessage,artworkOptions,fundraisingNote,fundraisingRows};
    const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
    if(error)throw error;
    setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
@@ -190,6 +198,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
    const restoredHero=d.heroReference?.key?await marketingLogoImage(accountId,d.heroReference.key):"";
    setHeroImage(restoredHero);setHeroInfo(restoredHero?"Approved hero scene restored from private storage.":"");
+   setArtworkVariantImage(d.logoVariantReference?.key?await marketingLogoImage(accountId,d.logoVariantReference.key):"");
    setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setArtworkMessage(d.artworkMessage||"");setArtworkOptions(d.artworkOptions||"");setFundraisingNote(d.fundraisingNote||"");setFundraisingRows(Array.isArray(d.fundraisingRows)&&d.fundraisingRows.length?d.fundraisingRows.slice(0,3):[{product:"",wholesale:"",retail:"",quantity:"",verified:false}]);setProductImages(products);
    setDraftMessage("Saved concepts and design instructions restored.");
   }catch(e){setError(e.message||"Could not reopen design.");}
@@ -295,6 +304,12 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
     <label className="growth-field"><span>Fundraising program explanation (without guaranteed profits)</span><textarea rows={3} value={fundraisingNote} onChange={e=>setFundraisingNote(e.target.value)}/></label>
     <label className="growth-field"><span>Artwork modernization and alternate logo versions</span><textarea rows={3} value={artworkMessage} onChange={e=>setArtworkMessage(e.target.value)}/></label>
     <label className="growth-field"><span>Seasonal, sports, club & event options — one per line</span><textarea rows={5} value={artworkOptions} onChange={e=>setArtworkOptions(e.target.value)}/></label>
+   </div>
+   <div className="growth-subcard" style={{marginTop:10}}>
+    <h4>Optional example of alternate logo artwork</h4>
+    <p>Upload a second, approved school logo version or seasonal treatment to demonstrate the artwork modernization service. Without an approved second image, the flyer will describe the options without inventing a before-and-after image.</p>
+    <input aria-label="Upload an approved alternate logo" type="file" accept="image/png,image/jpeg,image/webp" onChange={addApprovedLogoVariant}/>
+    {artworkVariantImage&&<div style={{display:"flex",gap:12,alignItems:"center",marginTop:8}}><img src={artworkVariantImage} alt="Approved alternate school logo example" style={{width:90,height:90,objectFit:"contain"}}/><button type="button" className="sc-btn" onClick={()=>setArtworkVariantImage("")}>Remove alternate version</button></div>}
    </div>
    <h4>Verified fundraising illustration (optional)</h4>
    <p>Enter actual, confirmed figures to display a wholesale/retail comparison like the reference. These are illustrative gross margins, not a profit guarantee or an invoice.</p>
