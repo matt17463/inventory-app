@@ -75,7 +75,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [cta,setCta]=useState("");
  const [contactText,setContactText]=useState("");
  const [schoolFundraising,setSchoolFundraising]=useState(defaultSchoolFundraising);
- const [studioServices,setStudioServices]=useState(()=>defaultStudioServices(category));
+ const [studioServices,setStudioServices]=useState(()=>defaultStudioServices(category,template));
  const [productImages,setProductImages]=useState([]);
  const [productLabels,setProductLabels]=useState(["","","",""]);
  const [approvedPhotoCandidates,setApprovedPhotoCandidates]=useState([]);
@@ -86,7 +86,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[category]||defaults.general;
   setHeadline(d.headline);setBody(description||d.description);setBenefits(d.benefits);setSteps(d.steps);
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
-  setContactText(contact);setSchoolFundraising(defaultSchoolFundraising());setStudioServices(defaultStudioServices(category));setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setProductLabels(["","","",""]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedStoreProducts([]);setApprovedPhotoStatus("");
+  setContactText(contact);setSchoolFundraising(defaultSchoolFundraising());setStudioServices(defaultStudioServices(category,template));setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setPrompt("");setProductImages([]);setProductLabels(["","","",""]);setLockedSections([]);setReleaseConfirmed(false);setApprovedPhotoCandidates([]);setApprovedStoreProducts([]);setApprovedPhotoStatus("");
  },[accountId,detectedCategory,organization]);
  useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
  function changeCampaignCategory(next){
@@ -95,7 +95,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   const d=defaults[next]||defaults.general;
   setHeadline(d.headline);setBody(d.description);setBenefits(d.benefits);setSteps(d.steps);
   setConcepts([]);setPlans([]);setLayoutAdjustments({});setSelected(0);setLockedSections([]);
-  setSchoolFundraising(defaultSchoolFundraising());setStudioServices(defaultStudioServices(next));
+  setSchoolFundraising(defaultSchoolFundraising());setStudioServices(defaultStudioServices(next,template));
   setReleaseConfirmed(false);setProgress("");
  }
  async function findApprovedPhotos(){
@@ -190,7 +190,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    if(Array.isArray(d.productReferences))for(const ref of d.productReferences.slice(0,4)){if(!ref?.key)throw Error("Invalid product asset reference.");products.push(await marketingLogoImage(accountId,ref.key));}
    else if(Array.isArray(d.productImages))products.push(...d.productImages.slice(0,4).filter(value=>/^data:image\/(png|jpeg|webp);base64,/i.test(value||"")));
    setCategoryOverride(d.category&&Object.hasOwn(DESIGN_CATEGORIES,d.category)?d.category:detectedCategory);
-   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductLabels(Array.isArray(d.productLabels)?[...d.productLabels.slice(0,4).map(x=>String(x||"").slice(0,60)),"","","",""].slice(0,4):["","","",""]);setSchoolFundraising(normalizeSchoolFundraising(d.schoolFundraising));setStudioServices(normalizeStudioServices(d.studioServices,d.category||detectedCategory));setProductImages(products);
+   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");setProductLabels(Array.isArray(d.productLabels)?[...d.productLabels.slice(0,4).map(x=>String(x||"").slice(0,60)),"","","",""].slice(0,4):["","","",""]);setSchoolFundraising(normalizeSchoolFundraising(d.schoolFundraising));setStudioServices(normalizeStudioServices(d.studioServices,d.category||detectedCategory,template));setProductImages(products);
    setReleaseConfirmed(false);
    setDraftMessage("Saved concepts and design instructions restored. Confirm artwork and copy again before export.");
   }catch(e){setError(e.message||"Could not reopen design.");}
@@ -257,7 +257,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  function checkPrintReady(){
   const readiness=studioExportReadiness({client:organization,category,logo,headline,description:body,benefits:benefits.split("\n").filter(Boolean),steps:steps.split("\n").filter(Boolean),cta,contact:contactText,productImages:mergedProductImages});
   if(!readiness.ready){setError("Client-ready export blocked: "+readiness.errors.join(" "));return false;}
-  const services=validateStudioServices(studioServices,category);
+  const services=validateStudioServices(studioServices,category,template);
   if(!services.ready){setError("Artwork services need review: "+services.errors.join(" "));return false;}
   const funding=["school","team","nonprofit"].includes(category)?schoolFundraisingExample(schoolFundraising):{ready:true};
   if(!funding.ready){setError("Fundraising example needs verification: "+funding.errors.join(" "));return false;}
