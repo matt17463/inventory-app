@@ -1,5 +1,8 @@
 import {useEffect,useState} from "react";
 import {authenticatedFunctionFetch} from "./lib/netlifyFunctionClient";
+import {supabase} from "./supabaseClient";
+import {marketingLogoImage} from "./lib/marketingArtwork";
+import {growthWriteAllowed} from "./lib/marketingApi";
 import {DESIGN_CATEGORIES,DESIGN_STYLES,designCategory,designStudioPrompt,studioPrintHtml} from "./lib/marketingDesignStudio";
 
 const defaults={
@@ -17,6 +20,9 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
  const [prompt,setPrompt]=useState("");
  const [concepts,setConcepts]=useState([]);
  const [plans,setPlans]=useState([]);
+ const [savedDesigns,setSavedDesigns]=useState([]);
+ const [draftBusy,setDraftBusy]=useState(false);
+ const [draftMessage,setDraftMessage]=useState("");
  const [selected,setSelected]=useState(0);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
@@ -33,6 +39,45 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   setCta("LET'S BUILD YOUR "+(organization||"CUSTOM")+" PROGRAM!");
   setContactText(contact);setConcepts([]);setPlans([]);setSelected(0);setPrompt("");
  },[accountId,category,organization]);
+ useEffect(()=>{let active=true;if(!accountId)return;supabase.from("sc_growth_documents").select("id,title,updated_at,content").eq("account_id",accountId).eq("template_id","ai-design-studio").eq("status","draft").order("updated_at",{ascending:false}).limit(15).then(({data,error})=>{if(active&&!error)setSavedDesigns(data||[]);});return()=>{active=false};},[accountId]);
+ async function storeImage(image){
+  if(!image)return null;
+  const match=/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(image);
+  if(!match)throw Error("Generated artwork is not a valid image.");
+  const response=await authenticatedFunctionFetch("/.netlify/functions/marketing-artwork-asset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:accountId,mime_type:match[1],base64:match[2]})});
+  const data=await response.json();
+  if(!response.ok||!data.asset)throw Error(data.message||"Private image storage failed.");
+  return data.asset;
+ }
+ async function saveDesign(){
+  if(!growthWriteAllowed()){setError("Saving is unavailable in training mode.");return;}
+  if(!accountId||!concepts.length){setError("Select a client and generate concepts before saving.");return;}
+  setDraftBusy(true);setError("");setDraftMessage("");
+  try{
+   const references=[];
+   for(const image of concepts)references.push(await storeImage(image));
+   const content={studioVersion:1,organization,category,style,mode,prompt:visualPrompt,selected,plans,references,headline,body,benefits,steps,cta,contactText};
+   const {data,error}=await supabase.from("sc_growth_documents").insert({account_id:accountId,template_id:"ai-design-studio",title:(organization+" — AI Design Studio").slice(0,200),content}).select("id,title,updated_at,content").single();
+   if(error)throw error;
+   setSavedDesigns(v=>[data,...v]);setDraftMessage("Three concepts and your edits saved privately to this client.");
+  }catch(e){setError(e.message||"Could not save design.");}
+  finally{setDraftBusy(false);}
+ }
+ async function reopenDesign(draft){
+  setDraftBusy(true);setError("");setDraftMessage("");
+  try{
+   const {data,error}=await supabase.from("sc_growth_documents").select("id,content").eq("id",draft.id).eq("account_id",accountId).eq("status","draft").single();
+   if(error||!data?.content)throw Error("Design draft not available.");
+   const d=data.content;
+   if(!Array.isArray(d.references)||d.references.length>3)throw Error("Invalid saved design.");
+   const images=[];
+   for(const ref of d.references){if(!ref?.key)throw Error("Missing private image reference.");images.push(await marketingLogoImage(accountId,ref.key));}
+   setConcepts(images);setPlans(Array.isArray(d.plans)?d.plans:[]);setSelected(Math.min(images.length-1,Math.max(0,d.selected||0)));
+   setStyle(d.style||"athletic");setMode(d.mode||"hybrid");setPrompt(d.prompt||"");setHeadline(d.headline||"");setBody(d.body||"");setBenefits(d.benefits||"");setSteps(d.steps||"");setCta(d.cta||"");setContactText(d.contactText||"");
+   setDraftMessage("Saved concepts and design instructions restored.");
+  }catch(e){setError(e.message||"Could not reopen design.");}
+  finally{setDraftBusy(false);}
+ }
  const visualPrompt=prompt||designStudioPrompt({category,style,client:organization,colors,instructions:description});
  async function generate(){
   if(!accountId){setError("Select a saved client first.");return;}
@@ -77,6 +122,7 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
   <button type="button" className="sc-btn" onClick={()=>setPrompt("")}>Reset to category prompt</button>
   <button type="button" className="sc-btn" disabled={busy||!accountId} onClick={generate}>{busy?progress:"Generate 3 design concepts"}</button>
   {progress&&<p role="status">{progress}</p>}
+  {draftMessage&&<p role="status">{draftMessage}</p>}
   {error&&<p role="alert">{error}</p>}
   {!!concepts.length&&<div className="growth-grid">{concepts.map((src,i)=><button type="button" key={i} className="growth-subcard" aria-pressed={selected===i} onClick={()=>setSelected(i)} style={{border:selected===i?"3px solid #3988dd":"1px solid #64748b",textAlign:"left"}}><img src={src} alt={"AI concept "+(i+1)} style={{width:"100%",maxHeight:290,objectFit:"contain"}}/><strong>Concept {i+1}{selected===i?" — selected":""} · {plans[i]?.composition||"layout"}</strong></button>)}</div>}
   {mode==="hybrid"&&<div className="growth-grid">
@@ -88,6 +134,8 @@ export default function MarketingAIDesignStudio({accountId="",organization="",te
    <label className="growth-field"><span>Verified business contact details</span><textarea value={contactText} onChange={e=>setContactText(e.target.value)}/></label>
   </div>}
   {mode==="artwork"&&<p>Artwork-first mode uses a full-bleed image-led layout; the approved logo and factual text remain separately overlaid. Switch to Hybrid to edit each text section.</p>}
+  <button type="button" className="sc-btn" disabled={!concepts.length||busy||draftBusy} onClick={saveDesign}>{draftBusy?"Saving or restoring…":"Save all concepts to client draft"}</button>
+  {!!savedDesigns.length&&<label className="growth-field"><span>Reopen saved AI design</span><select defaultValue="" onChange={e=>{const draft=savedDesigns.find(x=>x.id===e.target.value);if(draft)reopenDesign(draft);}}><option value="">Select saved draft</option>{savedDesigns.map(d=><option key={d.id} value={d.id}>{d.title} · {new Date(d.updated_at).toLocaleDateString()}</option>)}</select></label>}
   <button type="button" className="sc-btn" disabled={!concepts.length||busy} onClick={print}>Export selected print layout (HTML → Print to PDF)</button>
   <p>Generated images are not automatically approved. Review logo fidelity, product imagery and any visual artifacts. The printable layout keeps business claims separate from AI-generated pixels.</p>
   {onUseLegacy&&<button type="button" className="sc-btn" onClick={onUseLegacy}>Open classic document builder</button>}
