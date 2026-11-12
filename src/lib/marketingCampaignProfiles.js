@@ -61,7 +61,7 @@ const PROFILES={
 export function marketingCampaignProfile(category){
  return PROFILES[category]||PROFILES.general;
 }
-export function marketingCampaignMood(category,client="",preference="auto"){
+export function marketingCampaignMood(category,client="",preference="auto",colors=[]){
  const choices=new Set(["collegiate","playful","professional","athletic","welcoming","elegant","expressive"]);
  if(choices.has(preference))return preference;
  const name=String(client||"").toLowerCase();
@@ -69,6 +69,20 @@ export function marketingCampaignMood(category,client="",preference="auto"){
   if(/elementary|primary|preschool/.test(name))return "playful";
   if(/high school|secondary|academy/.test(name))return "collegiate";
  }
+ // Read the already approved client HEX palette, not unverified color guesses.
+ const palette=(Array.isArray(colors)?colors:[]).filter(x=>/^#[0-9a-f]{6}$/i.test(x));
+ const statistics=palette.map(hex=>{
+  const red=parseInt(hex.slice(1,3),16)/255,green=parseInt(hex.slice(3,5),16)/255,blue=parseInt(hex.slice(5,7),16)/255;
+  const brightest=Math.max(red,green,blue),dim=Math.min(red,green,blue);
+  return {saturation:brightest===0?0:(brightest-dim)/brightest,brightness:brightest};
+ });
+ const vivid=statistics.filter(x=>x.saturation>.55&&x.brightness>.45).length;
+ const muted=statistics.length>0&&statistics.every(x=>x.saturation<.25);
+ if(category==="school"){
+  if(vivid>=2)return "athletic";
+  if(muted)return "professional";
+ }
+ if(category==="general"&&vivid>=2)return "expressive";
  return marketingCampaignProfile(category).heroTone;
 }
 export function marketingCampaignMotif(category){
