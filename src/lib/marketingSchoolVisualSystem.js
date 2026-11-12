@@ -45,4 +45,10 @@ export const SCHOOL_CAMPAIGN_CSS=String.raw`/* User-provided flyer references ar
 .category-school .benefits .benefit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))!important}
 .category-school .benefits .benefit{display:flex;flex-direction:row!important;min-height:0!important}
 .category-school .program-row,.category-school .artwork-options{flex-shrink:0}
+
+.category-school.has-fundraiser-table .gallery{height:2.35in!important;flex-basis:2.35in;min-height:2.35in}
+.category-school.has-fundraiser-table .benefits{padding-top:.08in;padding-bottom:.07in}
+.category-school.has-fundraiser-table .program-row{padding:.07in .1in}
+.category-school.has-fundraiser-table .artwork-options{padding-top:.08in;padding-bottom:.08in;min-height:1.06in}
+.category-school.has-fundraiser-table main{gap:.03in!important}
 `;
