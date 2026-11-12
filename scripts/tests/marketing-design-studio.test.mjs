@@ -32,3 +32,20 @@ test("new studio is primary, classic builder remains available",()=>{
  assert.ok(ai.includes('value="artwork"'));
  assert.ok(ai.includes("studioPrintHtml"));
 });
+
+test("native PDF is one US Letter page with factual overlays",async()=>{
+ const sharp=(await import("sharp")).default;
+ const {PDFDocument}=await import("pdf-lib");
+ const {buildStudioPdf}=await import("../../src/lib/marketingDesignStudioPdf.js");
+ const png=await sharp({create:{width:400,height:600,channels:3,background:"#345678"}}).png().toBuffer();
+ const bytes=await buildStudioPdf({image:"data:image/png;base64,"+png.toString("base64"),headline:"SCHOOL SPIRIT WEAR PROGRAM",description:"Support the school",benefits:["School pride","Program funding"],steps:["Plan together","Open store"],cta:"Contact Skilled Crafting",contact:"skilledcrafting.com",plan:{sections:["hero","steps","benefits","cta"],composition:"editorial",accent:"#123456"}});
+ const pdf=await PDFDocument.load(bytes);
+ assert.equal(pdf.getPageCount(),1);
+ assert.deepEqual(pdf.getPage(0).getSize(),{width:612,height:792});
+});
+test("server layout validation restricts section names and colors",async()=>{
+ const {validatePlan}=await import("../../netlify/functions/marketing-ai-layout.js");
+ const plan=validatePlan({sections:["steps","malicious","benefits","steps"],emphasis:"other",composition:"editorial",align:"left",accent:"not-color"});
+ assert.deepEqual(plan.sections,["hero","steps","benefits","cta"]);
+ assert.equal(plan.accent,"#234667");
+});
