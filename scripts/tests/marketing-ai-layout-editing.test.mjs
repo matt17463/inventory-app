@@ -78,3 +78,13 @@ test('studio export and release confirmation gates are connected in the UI',()=>
  assert.match(ui,/image:concepts\[i\]/);
  assert.match(ui,/setLockedSections/);
 });
+
+test('approved storefront integration uses account-scoped assortment and private mockup validation',()=>{
+ const ui=readFileSync(new URL('../../src/MarketingAIDesignStudio.jsx',import.meta.url),'utf8');
+ assert.match(ui,/marketing-store-assortment\?account_id=/);
+ assert.match(ui,/marketingSharedImageUrl\(accountId,\{source:"mockup_outputs",asset_id:assetId\}\)/);
+ assert.match(ui,/findApprovedStoreMockups/);
+ assert.match(ui,/importStoreMockup/);
+ assert.match(ui,/normalizeStudioLayout/);
+ assert.match(ui,/layoutAdjustments/);
+});
