@@ -16,6 +16,8 @@ on:
       - 'src/MarketingProgramDesigner.jsx'
       - 'src/MarketingDocumentStudio.jsx'
       - 'scripts/render-marketing-flyer-fixtures.mjs'
+      - 'scripts/render-marketing-studio-browser-proofs.mjs'
+      - 'src/lib/marketingStudioPrintImages.js'
       - 'scripts/marketing-flyer-visual.vite.config.js'
       - '.github/workflows/marketing-school-flyer-visual.yml'
   workflow_dispatch:
@@ -26,7 +28,7 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +38,8 @@ jobs:
       - run: npm ci
       - run: node --test scripts/tests/marketing-illustrated-flyer.test.mjs scripts/tests/marketing-visual-brief.test.mjs
       - run: node scripts/render-marketing-flyer-fixtures.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/render-marketing-studio-browser-proofs.mjs
       - run: node_modules/.bin/vite build --config scripts/marketing-flyer-visual.vite.config.js
       - run: mv artifacts/marketing-flyers/marketingProgramPdf.bundle.js artifacts/marketing-flyers/marketingProgramPdf.bundle.mjs
       - uses: actions/upload-artifact@v4
