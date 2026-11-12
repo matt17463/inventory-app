@@ -82,3 +82,11 @@ No production deployment is authorized by this document.
 - Editors can adjust the supplied exact school crest placement (left/right), its dimension and opacity, along with decorative scenery visibility, using bounded numeric controls. These are saved in per-concept private draft layout settings; arbitrary CSS or AI-supplied pixels are not accepted.
 - Layout controls do not authorize redrawing or modifying the school identity. Raster DPI, approval and print collision checks still apply.
 - All improvements remain isolated in draft PR #246; **production is not changed**.
+
+## Landscape-first credit-free hero art and school visual hierarchy
+- A new `offlineStudioHeroArtwork` generator produces 1200×540 text-free SVG compositions with category-specific motifs in the horizontal space actually used by the print hero: school mountain/evergreen silhouettes, sports stadium geometry, business architecture, nonprofit community rings, wedding organic flourishes and general commercial bands. Three different motif variations are supported and all colors are allowlisted hexadecimal input.
+- The browser rasterizes these original vector scenes at 2550×1150 pixels (not an upscaled 960×1200 portrait). The older portrait function remains available for compatibility, but the default Studio preview, concept regeneration and CI fixture rendering use the new landscape function.
+- School hero informational cards convey school pride, approved pricing possibilities, online-store support and local production. Print checks explicitly reject collisions with the editable title/description.
+- An actual Chromium QA run found that exceptionally long synthetic school headlines pushed the description into those cards. Length-aware title sizing was added for unusually long titles; shorter titles keep the larger display style. Do not weaken the collision guard to make tests pass.
+- Mascot watermark side, size and opacity and the decorative scene visibility are editable within strict limits and saved per selected concept. These changes do not alter the approved identity image.
+- CI must still pass the final screenshot proof and marketing regression suite after the new landscape scene changes. This remains structural evidence only, not proof of art direction quality relative to the requested reference flyers.
