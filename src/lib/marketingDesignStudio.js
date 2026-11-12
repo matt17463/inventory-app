@@ -1,4 +1,5 @@
 import {studioLayoutStyle,normalizeStudioLayout} from "./marketingStudioLayoutControls.js";
+import {marketingTheme} from "./marketingDesignSystem.js";
 /** Shared AI-first document design prompt library and safe print layout. */
 export const DESIGN_CATEGORIES={
  school:{label:"School spirit wear",brief:"Create a premium school-specific sports marketing flyer with a dramatic mascot-led hero, photorealistic school apparel, four program benefits, four illustrated ordering steps, a fundraising example, product showcase and a bold call to action. Adapt the personality to elementary, middle or high school. Additional creative requirements: Full-color US Letter premium school flyer; preserve exact approved school logo, mascot and colors; photorealistic decorated hoodies, tees, caps and beanies; layered athletic scenery, dramatic typography-safe hero, school pride, fundraising, online orders, local support, four ordering steps, illustrative wholesale-retail examples, product showcase and strong call to action. Elementary: friendly; middle: modern; high school: collegiate. No invented facts."},
@@ -100,8 +101,9 @@ export function studioPrintHtml({client="",category="general",style="athletic",i
  // The LLM is allowed to suggest composition, never authoritative brand colors or facts.
  const safeImage=x=>/^data:image\/(png|jpeg|webp);base64,[a-z\d+/=]+$/i.test(x||"")?x:"";
  const palette=(Array.isArray(colors)?colors:[]).filter(c=>/^#[0-9a-f]{6}$/i.test(c));
- const primary=palette.find(c=>!["#ffffff","#fefefe","#000000"].includes(c.toLowerCase()))||"#193b60";
- const secondary=palette[1]&&palette[1].toLowerCase()!==primary.toLowerCase()?palette[1]:"#d4a94a";
+ const theme=marketingTheme({segment:category==="school"?"school":category==="team"?"team":"general",confirmedColors:palette});
+ const primary=theme.primary;
+ const secondary=palette.find(c=>c.toLowerCase()!==primary.toLowerCase())||theme.accent;
  const variant=Math.max(0,Math.min(2,Number(concept)||0));
  const photos=(Array.isArray(productImages)?productImages:[]).map(safeImage).filter(Boolean).slice(0,4);
  const safeLayout=normalizeStudioLayout(layoutAdjustments);
