@@ -6,6 +6,7 @@ import { supabase } from './supabaseClient';
 import { BUSINESS_HA, PRIVATE_HA, PI_DESKTOP, MAC_DESKTOP, controlFor, entityPresentation, equipment, validHaUrl } from './lib/equipment';
 import './EquipmentCenter.css';
 import RemoteAccessShortcuts from './RemoteAccessShortcuts';
+import PrinterIdleMonitor from './components/PrinterIdleMonitor';
 
 const defaultSettings = { haUrl: PRIVATE_HA, photos: {}, mappings: {} };
 function cameraImageUrl(entity, baseUrl, refresh) {
