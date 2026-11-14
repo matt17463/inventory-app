@@ -181,6 +181,7 @@ export default function EquipmentCenter() {
       <div><strong>{connected && site === 'business' ? switches.length : '—'}</strong><small>Supported live controls</small></div>
       <button className="eq-button primary" disabled={busy || !accountKey} onClick={() => connected ? disconnect() : connect(settings.haUrl)}>{busy ? 'Connecting…' : connected ? 'Disconnect live' : 'Connect live'}</button>
     </section>
+    <PrinterIdleMonitor />
     {message && <p className="eq-notice" role="status">{message}</p>}
     {editing && <form className="eq-settings" onSubmit={saveSettings}><h2>Private connection</h2><p>Use the Pi’s private HTTPS address for live data inside this app. Tailscale must be connected. Home Assistant handles sign-in; passwords and access tokens are not saved by this page.</p><label>Home Assistant HTTPS address<input type="url" required value={settings.haUrl} onChange={(e) => setSettings({ ...settings, haUrl: e.target.value })} /></label><p className="eq-muted">Private HTTPS uses your Tailscale network. Sign in to Home Assistant to authorize this app’s live connection.</p><button className="eq-button primary" type="submit">Save preferences</button></form>}
     <RemoteAccessShortcuts />
