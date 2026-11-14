@@ -1,0 +1,72 @@
+# STAGED Home Assistant package: load on the Pi only after Work validates the existing HA configuration.
+# Helpers record manual observations. They are not hardware sleep/vacation commands.
+input_datetime:
+  sc_roland_last_print:
+    name: Roland BN2-30 last successful print
+    has_date: true
+    has_time: true
+  sc_omni_last_print:
+    name: xTool Omni last successful print
+    has_date: true
+    has_time: true
+
+input_number:
+  sc_roland_idle_days:
+    name: Roland BN2-30 inactivity reminder days
+    min: 1
+    max: 365
+    step: 1
+    mode: box
+    initial: 7
+  sc_omni_idle_days:
+    name: xTool Omni inactivity reminder days
+    min: 1
+    max: 365
+    step: 1
+    mode: box
+    initial: 7
+
+input_select:
+  sc_roland_observed_mode:
+    name: Roland BN2-30 observed mode (manual)
+    options: [Unknown, Normal, Sleep, Vacation]
+    initial: Unknown
+  sc_omni_observed_mode:
+    name: xTool Omni observed mode (manual)
+    options: [Unknown, Normal, Sleep, Vacation]
+    initial: Unknown
+
+template:
+  - sensor:
+      - name: Roland BN2-30 inactivity status
+        unique_id: sc_roland_inactivity_status
+        icon: mdi:printer-alert
+        state: >-
+          {% set raw = states('input_datetime.sc_roland_last_print') %}
+          {% set last = as_timestamp(raw, none) %}
+          {% set days = states('input_number.sc_roland_idle_days') | int(7) %}
+          {% if last is none or last > as_timestamp(now()) %}unknown
+          {% elif (as_timestamp(now()) - last) / 86400 >= days %}overdue
+          {% elif (as_timestamp(now()) - last) / 86400 >= days - [2, days / 3] | min %}due_soon
+          {% else %}ok{% endif %}
+        attributes:
+          last_print: "{{ states('input_datetime.sc_roland_last_print') }}"
+          reminder_days: "{{ states('input_number.sc_roland_idle_days') }}"
+          mode_source: manual_observation
+          observed_mode: "{{ states('input_select.sc_roland_observed_mode') }}"
+      - name: xTool Omni inactivity status
+        unique_id: sc_omni_inactivity_status
+        icon: mdi:printer-alert
+        state: >-
+          {% set raw = states('input_datetime.sc_omni_last_print') %}
+          {% set last = as_timestamp(raw, none) %}
+          {% set days = states('input_number.sc_omni_idle_days') | int(7) %}
+          {% if last is none or last > as_timestamp(now()) %}unknown
+          {% elif (as_timestamp(now()) - last) / 86400 >= days %}overdue
+          {% elif (as_timestamp(now()) - last) / 86400 >= days - [2, days / 3] | min %}due_soon
+          {% else %}ok{% endif %}
+        attributes:
+          last_print: "{{ states('input_datetime.sc_omni_last_print') }}"
+          reminder_days: "{{ states('input_number.sc_omni_idle_days') }}"
+          mode_source: manual_observation
+          observed_mode: "{{ states('input_select.sc_omni_observed_mode') }}"
