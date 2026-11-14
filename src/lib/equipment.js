@@ -24,6 +24,17 @@ export const equipment = [
     "haPath": "/skilled-crafting/roland"
   },
   {
+    "id": "omni",
+    "name": "xTool Omni Dual UV",
+    "maker": "XTOOL",
+    "category": "UV printer",
+    "site": "business",
+    "entities": [],
+    "stage": "Manual monitoring configured · live integration pending",
+    "detail": "xTool O1 Omni dual UV printheads. Use xTool Studio for supported nozzle checks, sleep, wake and vacation settings. No verified Home Assistant telemetry or remote machine commands are enabled.",
+    "url": "https://support.xtool.com/article/3081"
+  },
+  {
     "id": "s1",
     "name": "xTool S1",
     "maker": "XTOOL",
