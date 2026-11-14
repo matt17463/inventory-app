@@ -192,6 +192,7 @@ export default function Home() {
 
   return (
     <div className="sc-home-page sc-page-stack">
+      <PrinterIdleMonitor compact />
       <section className="sc-home-hero">
         <div className="sc-home-hero-accent" aria-hidden="true" />
         <div className="sc-home-logo-card">
