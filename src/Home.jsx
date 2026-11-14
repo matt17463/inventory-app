@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import HomeClientOrderNotice from './HomeClientOrderNotice';
+import PrinterIdleMonitor from './components/PrinterIdleMonitor';
 import HomeUpcomingCommitments from './HomeUpcomingCommitments';
 import { isOpenClientOrder } from './lib/openWorkStatus';
 import './ArtworkHub.css';
