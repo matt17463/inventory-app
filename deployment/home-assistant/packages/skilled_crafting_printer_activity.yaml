@@ -8,7 +8,8 @@ rest:
     sensor:
       - name: SC Printer Activity Feed
         unique_id: sc_printer_activity_feed
-        value_template: "{{ value_json.checked_at }}"
+        value_template: >-
+          {{ value_json.checked_at if value_json is defined and value_json.checked_at is defined else 'unknown' }}
         json_attributes: [roland, omni]
 
 template:
@@ -117,6 +118,9 @@ automation:
     alias: SC Printer Reminder Notifications
     mode: queued
     triggers:
+      - trigger: homeassistant
+        event: start
+        id: startup
       - trigger: state
         entity_id:
           - sensor.sc_roland_printer_activity
@@ -127,68 +131,53 @@ automation:
           - sensor.sc_roland_printer_activity
           - sensor.sc_omni_printer_activity
         attribute: reminder_snoozed
-    conditions:
-      - condition: template
-        value_template: "{{ trigger.to_state is not none }}"
-    actions:
-      - variables:
-          reminder: "{{ trigger.to_state }}"
-          notification_id: "{{ trigger.entity_id | replace('.', '_') }}"
-      - if:
-          - condition: template
-            value_template: >-
-              {{ reminder.state == 'overdue'
-                 or (reminder.state == 'soon' and not reminder.attributes.get('reminder_snoozed', false))
-                 or reminder.state == 'unavailable' }}
-        then:
-          - action: persistent_notification.create
-            data:
-              notification_id: "{{ notification_id }}"
-              title: "{{ reminder.name }}"
-              message: >-
-                {% if reminder.state == 'unavailable' %}Shared printer monitoring is unavailable.
-                {% elif reminder.state == 'overdue' %}The printer has passed its inactivity limit.
-                {% else %}The printer is approaching its inactivity limit.{% endif %}
-                Check [Equipment & Remote Access](https://inventory.skilledcrafting.com/equipment-center).
-        else:
-          - action: persistent_notification.dismiss
-            data:
-              notification_id: "{{ notification_id }}"
-
-  - id: sc_printer_hardware_notifications
-    alias: SC Printer Hardware Alerts
-    mode: queued
-    triggers:
       - trigger: state
         entity_id:
           - sensor.sc_roland_printer_activity
           - sensor.sc_omni_printer_activity
         attribute: hardware_alerts
-      - trigger: state
-        entity_id:
-          - sensor.sc_roland_printer_activity
-          - sensor.sc_omni_printer_activity
-        to:
-          - unavailable
-    conditions:
-      - condition: template
-        value_template: "{{ trigger.to_state is not none }}"
     actions:
-      - variables:
-          notification_id: "{{ trigger.entity_id | replace('.', '_') ~ '_hardware' }}"
-          alerts: >-
-            {{ trigger.to_state.attributes.get('hardware_alerts', [])
-               if trigger.to_state.state != 'unavailable' else [] }}
-      - if:
-          - condition: template
-            value_template: "{{ alerts | length > 0 }}"
-        then:
-          - action: persistent_notification.create
-            data:
-              notification_id: "{{ notification_id }}"
-              title: "{{ trigger.to_state.name }} maintenance"
-              message: "{{ alerts | join(', ') }}"
-        else:
-          - action: persistent_notification.dismiss
-            data:
-              notification_id: "{{ notification_id }}"
+      - repeat:
+          for_each: >-
+            {{ ['sensor.sc_roland_printer_activity', 'sensor.sc_omni_printer_activity']
+               if trigger.id == 'startup' else [trigger.entity_id] }}
+          sequence:
+            - variables:
+                entity: "{{ repeat.item }}"
+                state: "{{ states(repeat.item) }}"
+                title: "{{ state_attr(repeat.item, 'friendly_name') or repeat.item }}"
+                notification_id: "{{ repeat.item | replace('.', '_') }}"
+                alerts: >-
+                  {{ state_attr(repeat.item, 'hardware_alerts') or [] if has_value(repeat.item) else [] }}
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ state in ['overdue', 'unavailable']
+                       or (state == 'soon' and not state_attr(entity, 'reminder_snoozed')) }}
+              then:
+                - action: persistent_notification.create
+                  data:
+                    notification_id: "{{ notification_id }}"
+                    title: "{{ title }}"
+                    message: >-
+                      {% if state == 'unavailable' %}Shared printer monitoring is unavailable.
+                      {% elif state == 'overdue' %}The printer has passed its inactivity limit.
+                      {% else %}The printer is approaching its inactivity limit.{% endif %}
+                      Check [Equipment & Remote Access](https://inventory.skilledcrafting.com/equipment-center).
+              else:
+                - action: persistent_notification.dismiss
+                  data:
+                    notification_id: "{{ notification_id }}"
+            - if:
+                - condition: template
+                  value_template: "{{ alerts | length > 0 }}"
+              then:
+                - action: persistent_notification.create
+                  data:
+                    notification_id: "{{ notification_id }}_hardware"
+                    title: "{{ title }} maintenance"
+                    message: "{{ alerts | join(', ') }}"
+              else:
+                - action: persistent_notification.dismiss
+                  data:
+                    notification_id: "{{ notification_id }}_hardware"
