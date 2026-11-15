@@ -13,11 +13,12 @@ const response = (statusCode, body) => ({
 
 function validMetric(printer, name, value) {
   if (!Object.hasOwn(METRICS[printer], name)) return false;
-  const [, , min, max] = METRICS[printer][name];
+  const [, unit, min, max] = METRICS[printer][name];
   if (min instanceof RegExp) return typeof value === 'string' && min.test(value);
   if (Array.isArray(min)) return min.includes(value);
   if (min === undefined) return typeof value === 'boolean';
-  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+    && (unit !== '' || Number.isInteger(value));
 }
 
 export function normalizePrinterEvent(input, now = Date.now()) {
@@ -33,7 +34,7 @@ export function normalizePrinterEvent(input, now = Date.now()) {
     actor: null, source: SOURCES[printer_id],
   };
   if (kind === 'print') {
-    if (input.job_type !== 'production_print' || input.outcome !== 'completed'
+    if (printer_id === 'omni' || input.job_type !== 'production_print' || input.outcome !== 'completed'
       || !detail || detail.length > 200 || readings !== undefined || observed_mode !== undefined) return null;
     return { ...event, detail };
   }
@@ -41,6 +42,8 @@ export function normalizePrinterEvent(input, now = Date.now()) {
     || (observed_mode !== undefined && !PRINTER_MODES.includes(observed_mode))) return null;
 
   const entries = Object.entries(readings);
+  // Match the database's JSON size bound, reserving space for JSONB formatting.
+  if (Buffer.byteLength(JSON.stringify(readings)) + entries.length * 2 > 2048) return null;
   if ((!entries.length && !observed_mode) || !entries.every(([name, value]) => validMetric(printer_id, name, value))) return null;
   return { ...event, readings, observed_mode: observed_mode ?? null };
 }

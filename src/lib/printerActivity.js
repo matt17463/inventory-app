@@ -9,7 +9,7 @@ export const PRINTER_MODES = ['unknown', 'normal', 'sleep', 'vacation'];
 export const SOURCE_LABELS = {
   staff: 'Staff confirmation',
   roland_connect: 'Roland Connect Hub',
-  omni_studio: 'xTool Studio feed',
+  omni_studio: 'Omni device feed',
 };
 
 export const METRICS = {
@@ -38,7 +38,33 @@ export const METRICS = {
     error_count: ['Recorded errors', '', 0, 1000000],
   },
   omni: {
-    status: ['Operating status', '', ['idle', 'printing', 'paused', 'maintenance', 'error', 'offline', 'sleep']],
+    status: ['Operating status', '', ['idle', 'printing', 'paused', 'maintenance', 'error', 'offline', 'sleep',
+      'low_power_or_sleep', 'initializing', 'measuring', 'ready', 'firmware_update', 'wifi_setup']],
+    uv_head_1_mode: ['UV head 1 mode', '', ['normal', 'sleep', 'vacation']],
+    uv_head_2_mode: ['UV head 2 mode', '', ['normal', 'sleep', 'vacation']],
+    front_door_open: ['Front door open'],
+    rear_door_open: ['Rear door open'],
+    lid_open: ['Top lid open'],
+    air_filter_installed: ['Air filter installed'],
+    active_alarms: ['Active alarms', '', 0, 1000],
+    job_progress_pct: ['Current job progress', '%', 0, 100],
+    job_remaining_s: ['Estimated time remaining', 's', 0, 604800],
+    queued_jobs: ['Queued jobs', '', 0, 10000],
+    operating_count: ['Operating cycles', '', 0, 10000000],
+    working_hours: ['Total working time', 'h', 0, 1000000],
+    standby_hours: ['Total standby time', 'h', 0, 1000000],
+    uv_lamp_hours: ['UV lamp runtime', 'h', 0, 1000000],
+    purifier_hours: ['Air purifier runtime', 'h', 0, 1000000],
+    last_job_duration_s: ['Last job duration', 's', 0, 604800],
+    wifi_signal_dbm: ['Wi-Fi signal', 'dBm', -130, 0],
+    uv_cyan_pct: ['UV cyan ink', '%', 0, 100],
+    uv_magenta_pct: ['UV magenta ink', '%', 0, 100],
+    uv_yellow_pct: ['UV yellow ink', '%', 0, 100],
+    uv_black_pct: ['UV black ink', '%', 0, 100],
+    uv_white_pct: ['UV white ink', '%', 0, 100],
+    uv_varnish_pct: ['UV varnish', '%', 0, 100],
+    moisturizing_liquid_1_pct: ['UV head 1 moisturizing liquid', '%', 0, 100],
+    moisturizing_liquid_2_pct: ['UV head 2 moisturizing liquid', '%', 0, 100],
     uv_head_1_c: ['UV head 1 temperature', '°C', -20, 120],
     uv_head_2_c: ['UV head 2 temperature', '°C', -20, 120],
     ambient_c: ['Ambient temperature', '°C', -30, 100],
@@ -65,6 +91,11 @@ function activeHardwareWarnings(row, telemetry) {
     .filter((name) => row.readings[name] === true)
     .map((name) => METRICS[row.printer_id][name][0]);
   if (row.readings.waste_ink_installed === false) alertNames.push('Waste cartridge missing');
+  if (row.printer_id === 'omni' && row.readings.air_filter_installed === false) alertNames.push('Air filter missing');
+  if (row.printer_id === 'omni' && row.readings.active_alarms > 0) {
+    const count = row.readings.active_alarms;
+    alertNames.push(`${count} active printer alarm${count === 1 ? '' : 's'}`);
+  }
   if (row.readings.status === 'error') alertNames.push('Printer reports an error');
   return alertNames;
 }

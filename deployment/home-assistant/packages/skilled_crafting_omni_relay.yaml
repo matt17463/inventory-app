@@ -1,0 +1,10 @@
+# Optional. Load only after the separate Omni credential is provisioned.
+rest_command:
+  sc_relay_omni_health:
+    url: !secret sc_printer_activity_url
+    method: POST
+    headers:
+      Authorization: !secret sc_omni_event_authorization
+    content_type: application/json
+    timeout: 10
+    payload: "{{ omni_event | to_json }}"

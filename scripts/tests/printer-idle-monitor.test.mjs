@@ -185,3 +185,40 @@ test('monitoring surfaces retain the established private remote shortcut and hav
   assert.match(source, /'kind': 'telemetry'/);
   assert.doesNotMatch(source, /'kind': 'print'|action:.*turn_off/);
 });
+
+test('Omni relay accepts extensive health readings and leaves combined low power status distinct from hardware mode', () => {
+  const raw = {
+    kind: 'telemetry',
+    printer_id: 'omni',
+    event_key: 'omni:1794675600345678',
+    occurred_at: new Date(now - 1000).toISOString(),
+    observed_mode: 'unknown',
+    readings: {
+      status: 'low_power_or_sleep', uv_head_1_mode: 'normal', uv_head_2_mode: 'sleep',
+      uv_head_1_c: 28.4, uv_head_2_c: 28.3, humidity_pct: 53.8,
+      front_door_open: false, wifi_signal_dbm: -62, air_filter_installed: false,
+      active_alarms: 2, working_hours: 0.2, moisturizing_liquid_1_pct: 87, uv_cyan_pct: 82,
+    },
+  };
+  const event = normalizePrinterEvent(raw, now);
+  assert.deepEqual(event.readings, raw.readings);
+  const status = printerStatus({
+    printer_id: 'omni', telemetry_at: event.occurred_at,
+    hardware_mode: event.observed_mode, readings: event.readings,
+  }, now);
+  assert.equal(status.verified_mode, 'unknown');
+  assert.deepEqual(status.hardware_alerts, ['Air filter missing', '2 active printer alarms']);
+  assert.equal(normalizePrinterEvent({ ...raw, readings: { ...raw.readings, uv_cyan_pct: 101 } }, now), null);
+  assert.equal(normalizePrinterEvent({
+    ...fixture, printer_id: 'omni',
+  }, now), null);
+});
+
+test('Omni hardware controls open the existing Studio workstation and bypass generic switch actions', async () => {
+  const { controlFor } = await import('../../src/lib/equipment.js');
+  assert.equal(controlFor({ entity_id: 'switch.omni_power', state: 'on', attributes: {} }, 'off'), null);
+  assert.match(read('src/EquipmentCenter.jsx'), /href=\{MAC_DESKTOP\}>Studio Device Health/);
+  const automation = read('deployment/home-assistant/blueprints/automation/skilled_crafting/omni_health_relay.yaml');
+  assert.match(automation, /last_reported/);
+  assert.doesNotMatch(automation, /printer_id'\s*:\s*'roland'|'kind'\s*:\s*'print'|turn_off|turn_on/);
+});
