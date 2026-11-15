@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import HomeClientOrderNotice from './HomeClientOrderNotice';
+import PrinterIdleMonitor from './components/PrinterIdleMonitor';
 import HomeUpcomingCommitments from './HomeUpcomingCommitments';
 import { isOpenClientOrder } from './lib/openWorkStatus';
 import './ArtworkHub.css';
@@ -191,6 +192,7 @@ export default function Home() {
 
   return (
     <div className="sc-home-page sc-page-stack">
+      <PrinterIdleMonitor />
       <section className="sc-home-hero">
         <div className="sc-home-hero-accent" aria-hidden="true" />
         <div className="sc-home-logo-card">

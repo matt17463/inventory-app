@@ -1,8 +1,17 @@
+import { MAC_DESKTOP } from './lib/equipment';
+
 export default function RemoteAccessShortcuts() {
   return <section className="eq-access" aria-labelledby="remote-access-heading">
     <h2 id="remote-access-heading">Remote-access shortcuts</h2>
     <p className="eq-remote-help">Connect Tailscale on this device first. These shortcuts use your existing device accounts; connection checks do not confirm a successful sign-in.</p>
     <div className="eq-access-grid">
+      <article className="eq-access-card">
+        <h3>xTool Studio</h3>
+        <p>The Omni is connected to the Business Mac. Open xTool Studio and choose Device health to check both printheads, the shop environment, ink and maintenance supplies.</p>
+        <a className="eq-button primary" href={MAC_DESKTOP}>Open Business Mac screen sharing</a>
+        <a className="eq-button" href="https://support.xtool.com/article/3081" target="_blank" rel="noreferrer">Open xTool Studio guide</a>
+        <details><summary>Remote access</summary><p>Connect Tailscale and sign in with the Business Mac’s screen-sharing account. Keep the Mac awake and xTool Studio connected to the Omni.</p></details>
+      </article>
       <article className="eq-access-card">
         <h3>Diana’s Windows laptop</h3>
         <p>Screen sharing · VNC over Tailscale</p>
