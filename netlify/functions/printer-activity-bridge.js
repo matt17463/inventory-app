@@ -1,4 +1,5 @@
-import { createServiceClient, timingSafeEqualText } from './_shared/security.js';
+import { createHash } from 'node:crypto';
+import { createServiceClient } from './_shared/security.js';
 import { METRICS, PRINTER_MODES, printerStatus } from '../../src/lib/printerActivity.js';
 
 const SOURCES = { roland: 'roland_connect', omni: 'omni_studio' };
@@ -44,24 +45,25 @@ export function normalizePrinterEvent(input, now = Date.now()) {
   return { ...event, readings, observed_mode: observed_mode ?? null };
 }
 
-export function makeHandler({ connect = createServiceClient, env = process.env } = {}) {
+export function makeHandler({ connect = createServiceClient } = {}) {
   return async (event) => {
     const method = event.httpMethod;
     if (method !== 'GET' && method !== 'POST') return response(405, { error: 'Method unavailable.' });
 
     const auth = event.headers?.authorization || event.headers?.Authorization || '';
-    const matches = (secret) => typeof secret === 'string' && secret.length >= 32
-      && timingSafeEqualText(auth, `Bearer ${secret}`);
-    const writeTokens = [env.PRINTER_EVENT_WRITE_TOKEN, env.PRINTER_ROLAND_PRINT_TOKEN, env.PRINTER_OMNI_EVENT_TOKEN];
-    const usableWriteToken = (token) => token !== env.PRINTER_HA_READ_TOKEN
-      && writeTokens.filter((candidate) => candidate === token).length === 1 && matches(token);
-    if (method === 'GET' ? !matches(env.PRINTER_HA_READ_TOKEN) : !writeTokens.some(usableWriteToken)) {
-      return response(401, { error: 'Unauthorized.' });
-    }
+    const token = /^Bearer ([0-9a-f]{64})$/.exec(auth)?.[1];
+    if (!token) return response(401, { error: 'Unauthorized.' });
 
     try {
+      const db = connect();
+      const digest = createHash('sha256').update(token).digest('hex');
+      const credential = await db.from('sc_printer_bridge_credentials').select('scope').eq('token_sha256', digest).maybeSingle();
+      if (credential.error) return response(503, { error: 'Printer activity unavailable.' });
+      const scope = credential.data?.scope;
+      if (!scope || (method === 'GET') !== (scope === 'ha_read')) return response(401, { error: 'Unauthorized.' });
+
       if (method === 'GET') {
-        const { data, error } = await connect().from('sc_printer_activity').select('*');
+        const { data, error } = await db.from('sc_printer_activity').select('*');
         if (error || data.length !== 2) return response(503, { error: 'Printer activity unavailable.' });
         const now = Date.now();
         const printers = Object.fromEntries(data.map((row) => {
@@ -78,11 +80,11 @@ export function makeHandler({ connect = createServiceClient, env = process.env }
       try { input = JSON.parse(event.body); } catch { return response(400, { error: 'Invalid event body.' }); }
       const record = normalizePrinterEvent(input);
       if (!record) return response(422, { error: 'Invalid printer event.' });
-      const sourceToken = record.printer_id === 'omni' ? env.PRINTER_OMNI_EVENT_TOKEN
-        : record.kind === 'print' ? env.PRINTER_ROLAND_PRINT_TOKEN : env.PRINTER_EVENT_WRITE_TOKEN;
-      if (!usableWriteToken(sourceToken)) return response(403, { error: 'Wrong source authorization.' });
+      const requiredScope = record.printer_id === 'omni' ? 'omni_events'
+        : record.kind === 'print' ? 'roland_print' : 'roland_health';
+      if (scope !== requiredScope) return response(403, { error: 'Wrong source authorization.' });
 
-      const { error } = await connect().from('sc_printer_activity_events').insert(record);
+      const { error } = await db.from('sc_printer_activity_events').insert(record);
       if (error && error.code !== '23505') return response(503, { error: 'Could not record the event.' });
       return response(200, { accepted: true, duplicate: error?.code === '23505' });
     } catch {

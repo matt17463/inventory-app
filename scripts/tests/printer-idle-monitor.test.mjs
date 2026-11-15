@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { DAY_MS, printerStatus } from '../../src/lib/printerActivity.js';
 import { makeHandler, normalizePrinterEvent } from '../../netlify/functions/printer-activity-bridge.js';
@@ -62,13 +63,22 @@ test('ingest requires typed successful production evidence and a valid telemetry
 });
 
 test('bridge isolates read and write credentials, disables caching, and accepts duplicate retries', async () => {
-  const readToken = 'r'.repeat(40);
-  const writeToken = 'w'.repeat(40);
-  const rolandPrintToken = 'p'.repeat(40);
+  const readToken = 'a'.repeat(64);
+  const writeToken = 'b'.repeat(64);
+  const rolandPrintToken = 'c'.repeat(64);
+  const credentials = new Map([
+    [readToken, 'ha_read'], [writeToken, 'roland_health'], [rolandPrintToken, 'roland_print'],
+  ].map(([token, scope]) => [createHash('sha256').update(token).digest('hex'), scope]));
   let writes = 0;
   const handler = makeHandler({
-    env: { PRINTER_HA_READ_TOKEN: readToken, PRINTER_EVENT_WRITE_TOKEN: writeToken, PRINTER_ROLAND_PRINT_TOKEN: rolandPrintToken },
-    connect: () => ({ from: (table) => ({
+    connect: () => ({ from: (table) => table === 'sc_printer_bridge_credentials' ? {
+      select: (field) => ({ eq: (column, digest) => ({ maybeSingle: async () => {
+        assert.equal(field, 'scope');
+        assert.equal(column, 'token_sha256');
+        const scope = credentials.get(digest);
+        return { data: scope ? { scope } : null };
+      } }) }),
+    } : ({
       select: async () => {
         assert.equal(table, 'sc_printer_activity');
         return { data: [
@@ -86,6 +96,8 @@ test('bridge isolates read and write credentials, disables caching, and accepts 
   const request = (httpMethod, key, body = fixture) => handler({
     httpMethod, headers: { authorization: `Bearer ${key}` }, body: JSON.stringify(body),
   });
+  assert.equal((await request('GET', 'invalid')).statusCode, 401);
+  assert.equal((await request('GET', 'd'.repeat(64))).statusCode, 401);
   assert.equal((await request('GET', writeToken)).statusCode, 401);
   assert.equal((await request('POST', readToken)).statusCode, 401);
   assert.equal((await request('POST', writeToken, { ...fixture, kind: 'settings' })).statusCode, 422);
@@ -114,6 +126,8 @@ test('Postgres enforces event roles, provenance, immutable history and correctio
     grant usage on schema auth to authenticated;
   `);
   await db.exec(read('supabase/migrations/20261114235540_printer_activity.sql'));
+  await db.exec(read('supabase/migrations/20261115002646_printer_bridge_credentials.sql'));
+  await db.query("insert into public.sc_printer_bridge_credentials (scope, token_sha256) values ('ha_read', $1)", ['a'.repeat(64)]);
   const setRole = async (role, account = 'authenticated') => db.exec(`
     reset role;
     set role ${account};
@@ -129,7 +143,9 @@ test('Postgres enforces event roles, provenance, immutable history and correctio
     (printer_id, kind, source, event_key, actor, occurred_at, detail)
     values ('roland','print','roland_connect','${key}',null,${time},'Job number ${key}')`;
   await setRole('viewer', 'anon');
+  const credentials = () => db.query('select scope from public.sc_printer_bridge_credentials');
   await assert.rejects(projection, { code: '42501' });
+  await assert.rejects(credentials, { code: '42501' });
   await setRole('marketing');
   assert.equal((await projection()).rows.length, 0);
   await setRole('viewer');
@@ -142,11 +158,14 @@ test('Postgres enforces event roles, provenance, immutable history and correctio
   assert.equal((await projection()).rows[0].last_print_source, 'staff');
   await assert.rejects(() => db.exec('delete from public.sc_printer_activity_events'), { code: '42501' });
   await setRole('manager');
+  await assert.rejects(credentials, { code: '42501' });
   await db.exec(settings);
   assert.equal((await projection()).rows[0].planned_mode, 'vacation');
   assert.equal((await projection()).rows[0].hardware_mode, null);
 
   await setRole('', 'service_role');
+  assert.deepEqual((await credentials()).rows, [{ scope: 'ha_read' }]);
+  await assert.rejects(() => db.exec('delete from public.sc_printer_bridge_credentials'), { code: '42501' });
   await db.exec(print('old-job', "now() - interval '1 day'"));
   await assert.rejects(() => db.exec(print('old-job', "now() - interval '1 day'")), { code: '23505' });
   assert.equal((await projection()).rows[0].last_print_source, 'staff');
