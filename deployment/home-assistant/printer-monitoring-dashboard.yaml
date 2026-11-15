@@ -1,0 +1,45 @@
+title: Printer Monitoring
+views:
+  - title: Printer Monitoring
+    path: printer-monitoring
+    icon: mdi:printer-alert
+    cards:
+      - type: entities
+        title: Shared monitoring
+        entities:
+          - binary_sensor.sc_printer_sync_online
+          - sensor.sc_printer_activity_feed
+          - sensor.sc_roland_printer_activity
+          - sensor.sc_omni_printer_activity
+      - type: markdown
+        content: |-
+          {% for name, entity in [
+            ('Roland BN2-30', 'sensor.sc_roland_printer_activity'),
+            ('xTool O1 Omni Dual UV', 'sensor.sc_omni_printer_activity')
+          ] %}
+          ## {{ name }}
+          {% if not has_value(entity) %}
+          Shared printer activity unavailable.
+          {% else %}
+          {% set printer = state_attr(entity, 'snapshot') or {} %}
+          {% set sources = {'staff': 'Staff confirmation', 'roland_connect': 'Roland Connect Hub', 'omni_studio': 'xTool Studio feed'} %}
+          - **Last successful print** {{ as_local(as_datetime(printer.last_print_at)).strftime('%Y-%m-%d %H:%M') if printer.last_print_at else 'Unknown' }}
+          - **Evidence** {{ sources.get(printer.last_print_source, 'Unknown') }}
+          - **Idle limit** {{ printer.idle_days }} days, with {{ printer.warning_days }} days' notice
+          - **Due** {{ as_local(as_datetime(printer.due_at)).strftime('%Y-%m-%d %H:%M') if printer.due_at else 'Unknown' }}
+          - **Feed** {{ printer.telemetry | capitalize }}, last report {{ as_local(as_datetime(printer.telemetry_at)).strftime('%Y-%m-%d %H:%M') if printer.telemetry_at else 'unknown' }}
+          - **Hardware mode** {{ printer.verified_mode | capitalize }}
+          - **Staff observation** {{ (printer.staff_observed_mode or 'Unknown') | capitalize }}
+          - **Planned mode** {{ printer.planned_mode | capitalize }}
+          - **Early alerts** {{ 'Paused' if printer.reminder_snoozed else 'Active' }}
+          {% if printer.hardware_alerts %}
+          - **Maintenance alerts** {{ printer.hardware_alerts | join(', ') }}
+          {% endif %}
+          {% for label, value in (printer.readings or {}).items() %}
+          - **{{ label | replace('_', ' ') | capitalize }}** {{ ('Yes' if value else 'No') if value is boolean else value }}
+          {% endfor %}
+          {% endif %}
+          {% endfor %}
+
+          [Record a print or change reminders in Equipment & Remote Access](https://inventory.skilledcrafting.com/equipment-center).
+          Open xTool Studio on the Business Mac to check Omni printhead health and mode.

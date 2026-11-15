@@ -1,1 +1,101 @@
-.printer-idle-panel{margin:1rem 0;padding:1rem;border:1px solid #64748b55;border-radius:14px;background:var(--sc-surface,#172331);color:inherit}.printer-idle-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}.printer-idle-heading h2{font-size:1.15rem;margin:0}.printer-idle-heading p,.printer-idle-explain,.printer-idle-date{font-size:.84rem;opacity:.85}.printer-idle-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:.8rem;margin-top:.8rem}.printer-idle-card{padding:.9rem;border:1px solid #94a3b855;border-left:5px solid #64748b;border-radius:10px;min-width:0}.printer-idle-overdue{border-left-color:#dc2626}.printer-idle-soon{border-left-color:#d97706}.printer-idle-ok{border-left-color:#16a34a}.printer-idle-top{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap}.printer-idle-status{font-size:.88rem;font-weight:700}.printer-idle-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.7rem;margin-top:1rem}.printer-idle-fields label{font-size:.84rem;display:flex;flex-direction:column;gap:.3rem}.printer-idle-fields input,.printer-idle-fields select{max-width:100%;padding:.55rem;border:1px solid #94a3b8;border-radius:7px;background:var(--sc-surface,#fff);color:inherit;font-size:1rem}.printer-idle-fields :focus-visible{outline:3px solid #60a5fa;outline-offset:2px}.printer-idle-saved{font-size:.85rem} @media(max-width:520px){.printer-idle-panel{padding:.75rem}}
+.printer-idle-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #64748b55;
+  border-radius: 14px;
+  background: var(--sc-surface, transparent);
+}
+
+.printer-idle-heading,
+.printer-idle-readings div {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.printer-idle-heading {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.printer-idle-heading h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.printer-idle-grid,
+.printer-idle-fields {
+  display: grid;
+  gap: .8rem;
+  margin-top: .85rem;
+}
+
+.printer-idle-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+}
+
+.printer-idle-card {
+  min-width: 0;
+  padding: .9rem;
+  border: 1px solid #94a3b855;
+  border-left: 5px solid #64748b;
+  border-radius: 10px;
+}
+
+.printer-idle-overdue { border-left-color: #dc2626; }
+.printer-idle-soon { border-left-color: #d97706; }
+.printer-idle-ok { border-left-color: #16a34a; }
+
+.printer-idle-card h3 {
+  margin: 0 0 .45rem;
+  font-size: 1rem;
+}
+
+.printer-idle-summary {
+  margin: .55rem 0;
+  font-size: .85rem;
+  overflow-wrap: anywhere;
+}
+
+.printer-idle-summary p { margin: .25rem 0; }
+.printer-idle-hardware-alert { font-weight: 700; }
+.printer-idle-edit { margin-top: .75rem; }
+
+.printer-idle-edit summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.printer-idle-fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+
+.printer-idle-fields label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: .3rem;
+  font-size: .84rem;
+}
+
+.printer-idle-fields input,
+.printer-idle-fields select {
+  min-width: 0;
+  max-width: 100%;
+  padding: .55rem;
+  border: 1px solid #94a3b8;
+  border-radius: 7px;
+  background: var(--sc-surface, Canvas);
+  color: inherit;
+  font-size: 1rem;
+}
+
+.printer-idle-fields :focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.printer-idle-submit { align-self: end; }
+.printer-idle-explain, .printer-idle-saved { font-size: .85rem; }
+.printer-idle-readings { margin: .65rem 0; }
+.printer-idle-readings dd { margin: 0; font-weight: 600; }

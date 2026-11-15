@@ -1,18 +1,25 @@
-# Printer activity reminders (staged development)
+# Printer activity and Home Assistant
 
-This feature is on branch `feature/printer-idle-monitoring-omni`; it is not a production deployment.
+Operations Home shows the latest successful production print and the reminder status for each printer. In **Equipment & Remote Access**, use **Printer activity reminders**, a printer card, or its **Details** to see print evidence, device feed freshness, staff-observed mode, planned mode, and available health readings. The Omni remote-access card opens the existing Business Mac Screen Sharing relay. In xTool Studio, open **Device health** for both printheads, environment, ink and maintenance supplies.
 
-Operations Home shows a compact reminder card. Equipment & Remote Access shows editable reminder settings for Roland BN2-30 and xTool Omni Dual UV.
+- Operators, managers and admins can confirm successful prints and record a mode they observed. Use an order number, job reference, or reason when correcting an entry. Do not enter names, filenames, or customer details as evidence.
+- Managers and admins can change the idle interval, warning lead, planned mode and pause expiration. Viewers can read shared activity.
+- Reminders use elapsed 24-hour days. Initial settings are seven days idle and two days' warning. Set shop-approved intervals for each printer. An early-alert pause expires within 30 days and leaves overdue alerts visible.
+- Device mode is known only from a fresh verified device report. Staff observations and planned modes are displayed separately. Use xTool Studio or the printer's normal controls for physical mode changes.
 
-- Last successful print is entered manually. It is **not** a confirmed telemetry value.
-- Reminder intervals can be 1–365 days per printer. Until a date is recorded, status is unknown rather than healthy.
-- Sleep/Normal/Vacation record a **manually observed** state only. Selecting a state does not command a printer.
-- Data currently persists in the signed-in user's browser. It does not synchronize among devices or with Home Assistant.
-- xTool Studio's Device Health page is the official way to change Omni printhead Sleep/Wake/Vacation. Never claim the app changes this mode.
-- Roland's automatic sleep and maintenance are managed by its existing onboard/Connect Hub systems; do not remote-cut power to clear inactivity.
+## Existing Roland feed
 
-Remaining integration: inspect and safely implement shared Supabase records, Home Assistant helpers, authenticated bridge events, xTool device capabilities, and verified physical mode control only if supported. See the included Work handoff for tasks and acceptance criteria.
+The shop Mac's approved Connect Hub uploader sends reports to the shop Pi. The Home Assistant package relays fresh, fingerprint-matched reports. It publishes driver status, maintenance flags, the job record count, cleaning age, estimated ink, and available power readings. The estimate and job count are labeled separately from successful print evidence. The Connect Hub data observed on November 14 included completed adjustments alongside jobs without a reliable production classification. Confirm production prints in the app until an authoritative job type and result are available.
 
-References:
-- https://support.xtool.com/article/3081
-- https://www.home-assistant.io/integrations/input_datetime/
+If the Roland starts printing but Home Assistant shows an old report, check the Business Mac's `~/Library/Application Support/SkilledCraftingRoland/last-error.log`. The existing upload-only identity should reach the Pi through its stable Tailscale address and match the pinned SSH host key. A successful upload prints **Roland report accepted**. The Pi's Roland Hub reader should then report **synced** and **device_verified** within three minutes. An accepted report alone does not confirm printer fingerprint verification.
+
+## Deployment and verification
+
+1. Confirm the PR head and green checks. Exercise the migration, server endpoint, and Home Assistant package against disposable data first. The live Supabase database uses PostgreSQL 17 and already has the app-role lookup used by the migration.
+2. Back up and verify the production database and Home Assistant configuration. After the release gate is satisfied, apply the additive migration and verify that anon and marketing access cannot read activity, viewers cannot write, operators can post confirmations, and managers can configure reminders.
+3. Set strong, distinct Netlify Functions secrets for `PRINTER_HA_READ_TOKEN` and `PRINTER_EVENT_WRITE_TOKEN`. Keep these out of browser variables and source control. The first reads the shared snapshot, and the second accepts the verified Roland health report. Leave optional `PRINTER_ROLAND_PRINT_TOKEN` and `PRINTER_OMNI_EVENT_TOKEN` unset until each source is independently verified. Use a stable source event key for each report or job so replay does not duplicate activity.
+4. On the Pi, keep `skilled_crafting_printer_activity.yaml` under the Home Assistant `packages` directory and add the packages include under the existing `homeassistant` configuration. Register `printer-monitoring-dashboard.yaml` as a YAML Lovelace dashboard with path `printer-monitoring`, alongside the existing shop dashboard. Set `sc_printer_activity_url` to the released HTTPS endpoint `/.netlify/functions/printer-activity-bridge`. Set `sc_printer_activity_authorization` and `sc_printer_event_authorization` to the corresponding `Bearer …` values in the Pi's `secrets.yaml`.
+5. Run Home Assistant's configuration check and verify the existing dashboard before restarting. Confirm that `binary_sensor.sc_printer_sync_online`, `sensor.sc_roland_printer_activity`, and `sensor.sc_omni_printer_activity` appear. Verify the warning, overdue, unavailable and maintenance notification transitions using disposable test data first. Check that reconnecting to Home Assistant restores current shared status, the Roland report refreshes and expires correctly, and a staff confirmation appears on another authenticated browser. Verify the released Netlify build on the production URL.
+6. If rollback is needed, restore the previous app deploy and Home Assistant configuration, then restart Home Assistant. Disable the bridge by removing its Netlify secrets. Keep the printer activity tables for recovery and audit.
+
+The Omni's confirmed workstation is the Business Mac. Supported xTool Studio screens are described in the [manufacturer guide](https://support.xtool.com/article/3081). Omni network telemetry remains unavailable until a supported source is verified.

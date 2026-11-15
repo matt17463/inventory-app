@@ -10,7 +10,6 @@ export const equipment = [
     "category": "Print & cut",
     "site": "business",
     "image": "roland.webp",
-    "address": "192.168.1.160",
     "entities": [
       "sensor.roland_bn2_30_operating_status",
       "binary_sensor.roland_bn2_30_manual_cleaning_requested",
@@ -25,14 +24,15 @@ export const equipment = [
   },
   {
     "id": "omni",
-    "name": "xTool Omni Dual UV",
+    "name": "xTool O1 Omni Dual UV",
     "maker": "XTOOL",
     "category": "UV printer",
     "site": "business",
     "entities": [],
-    "stage": "Manual monitoring configured · live integration pending",
-    "detail": "xTool O1 Omni dual UV printheads. Use xTool Studio for supported nozzle checks, sleep, wake and vacation settings. No verified Home Assistant telemetry or remote machine commands are enabled.",
-    "url": "https://support.xtool.com/article/3081"
+    "stage": "xTool Studio health checks",
+    "detail": "xTool O1 Omni dual UV printheads. Use xTool Studio for supported nozzle checks, sleep, wake and vacation settings. Shared activity shows the latest report and its source when a feed is connected.",
+    "url": "https://support.xtool.com/article/3081",
+    "action": "xTool Studio guide"
   },
   {
     "id": "s1",

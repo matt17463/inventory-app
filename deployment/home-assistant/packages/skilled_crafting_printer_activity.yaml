@@ -1,0 +1,194 @@
+# Shared application records, polled by the private shop Home Assistant.
+rest:
+  - resource: !secret sc_printer_activity_url
+    headers:
+      Authorization: !secret sc_printer_activity_authorization
+    scan_interval: 60
+    timeout: 10
+    sensor:
+      - name: SC Printer Activity Feed
+        unique_id: sc_printer_activity_feed
+        value_template: "{{ value_json.checked_at }}"
+        json_attributes: [roland, omni]
+
+template:
+  - binary_sensor:
+      - name: SC Printer Sync Online
+        unique_id: sc_printer_sync_online
+        device_class: connectivity
+        state: >-
+          {% set checked = as_timestamp(states('sensor.sc_printer_activity_feed'), none) %}
+          {{ checked is not none and -60 <= as_timestamp(now()) - checked <= 180 }}
+  - sensor:
+      - name: SC Roland Printer Activity
+        unique_id: sc_roland_printer_activity
+        icon: mdi:printer-alert
+        availability: >-
+          {{ is_state('binary_sensor.sc_printer_sync_online', 'on')
+             and state_attr('sensor.sc_printer_activity_feed', 'roland') is mapping }}
+        state: >-
+          {% set printer = state_attr('sensor.sc_printer_activity_feed', 'roland') %}
+          {{ printer.get('status', 'unknown') if printer is mapping else 'unknown' }}
+        attributes:
+          snapshot: "{{ state_attr('sensor.sc_printer_activity_feed', 'roland') or {} }}"
+          reminder_snoozed: "{{ (state_attr('sensor.sc_printer_activity_feed', 'roland') or {}).get('reminder_snoozed', false) }}"
+          hardware_alerts: "{{ (state_attr('sensor.sc_printer_activity_feed', 'roland') or {}).get('hardware_alerts', []) }}"
+      - name: SC Omni Printer Activity
+        unique_id: sc_omni_printer_activity
+        icon: mdi:printer-alert
+        availability: >-
+          {{ is_state('binary_sensor.sc_printer_sync_online', 'on')
+             and state_attr('sensor.sc_printer_activity_feed', 'omni') is mapping }}
+        state: >-
+          {% set printer = state_attr('sensor.sc_printer_activity_feed', 'omni') %}
+          {{ printer.get('status', 'unknown') if printer is mapping else 'unknown' }}
+        attributes:
+          snapshot: "{{ state_attr('sensor.sc_printer_activity_feed', 'omni') or {} }}"
+          reminder_snoozed: "{{ (state_attr('sensor.sc_printer_activity_feed', 'omni') or {}).get('reminder_snoozed', false) }}"
+          hardware_alerts: "{{ (state_attr('sensor.sc_printer_activity_feed', 'omni') or {}).get('hardware_alerts', []) }}"
+
+rest_command:
+  sc_relay_roland_health:
+    url: !secret sc_printer_activity_url
+    method: POST
+    headers:
+      Authorization: !secret sc_printer_event_authorization
+    content_type: application/json
+    timeout: 10
+    payload: >-
+      {% set hub = states.sensor.roland_bn2_30_hub_report %}
+      {% set sample = as_timestamp(hub.attributes.received_at) | int %}
+      {% set ns = namespace(readings={
+        'driver_state': hub.attributes.driver_status,
+        'jobs_7d': hub.attributes.jobs_7d
+      }) %}
+      {% set flags = {
+        'B_WARNING_MANUAL_CLEANING': 'cleaning_requested',
+        'B_WARNING_TIME_FOR_FORCE_MANUAL_CL': 'forced_cleaning_due',
+        'B_WARNING_DRAIN_BOTTLE': 'drain_bottle_warning',
+        'B_WARNING_WIPER_CHANGE': 'wiper_change_requested',
+        'B_WARNING_HEAD_PROTECTION': 'head_protection_warning',
+        'B_WARNING_TIME_FOR_REPLACE_FELT': 'felt_replacement_requested',
+        'B_WARNING_TIME_FOR_REPLACE_CAPTOP': 'cap_top_replacement_requested',
+        'B_WARNING_EXPIRED_INK': 'ink_expired',
+        'B_WARNING_TIME_FOR_REPLACE_WIPERPAD': 'wiper_pad_replacement_requested'
+      } %}
+      {% for key, metric in flags.items() if key in hub.attributes.flags %}
+        {% set ns.readings = dict(ns.readings, **{metric: hub.attributes.flags[key] == 1}) %}
+      {% endfor %}
+      {% set metrics = {
+        'sensor.roland_printer_current_consumption': ('power_w', 'W', 10000),
+        'sensor.roland_printer_today_s_consumption': ('energy_today_kwh', 'kWh', 1000),
+        'sensor.roland_printer_voltage': ('voltage_v', 'V', 500),
+        'sensor.roland_bn2_30_black_ink_level': ('black_ink_pct', '%', 100),
+        'sensor.roland_bn2_30_cyan_ink_level': ('cyan_ink_pct', '%', 100),
+        'sensor.roland_bn2_30_yellow_ink_level': ('yellow_ink_pct', '%', 100),
+        'sensor.roland_bn2_30_magenta_a_ink_level': ('magenta_a_ink_pct', '%', 100),
+        'sensor.roland_bn2_30_magenta_b_ink_level': ('magenta_b_ink_pct', '%', 100),
+        'sensor.roland_bn2_30_manual_cleaning_age': ('cleaning_age_days', 'd', 20000)
+      } %}
+      {% for entity, spec in metrics.items() %}
+        {% set value = states(entity) | float(none) %}
+        {% if value is not none and 0 <= value <= spec[2] and state_attr(entity, 'unit_of_measurement') == spec[1] %}
+          {% set ns.readings = dict(ns.readings, **{spec[0]: value}) %}
+        {% endif %}
+      {% endfor %}
+      {{ {'kind': 'telemetry', 'printer_id': 'roland', 'event_key': 'hub:' ~ sample,
+          'occurred_at': hub.attributes.received_at, 'readings': ns.readings,
+          'observed_mode': 'sleep' if hub.attributes.driver_status == 'SLEEPING' else 'unknown'} | to_json }}
+
+automation:
+  - id: sc_relay_roland_health
+    alias: SC Relay Verified Roland Health
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+    conditions:
+      - condition: template
+        value_template: >-
+          {% set id = 'sensor.roland_bn2_30_hub_report' %}
+          {% set received = as_timestamp(state_attr(id, 'received_at'), 0) %}
+          {{ is_state(id, 'synced') and state_attr(id, 'device_verified') == true
+             and 0 <= as_timestamp(now()) - received < 180 }}
+    actions:
+      - action: rest_command.sc_relay_roland_health
+  - id: sc_printer_reminder_notifications
+    alias: SC Printer Reminder Notifications
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id:
+          - sensor.sc_roland_printer_activity
+          - sensor.sc_omni_printer_activity
+        to: null
+      - trigger: state
+        entity_id:
+          - sensor.sc_roland_printer_activity
+          - sensor.sc_omni_printer_activity
+        attribute: reminder_snoozed
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state is not none }}"
+    actions:
+      - variables:
+          reminder: "{{ trigger.to_state }}"
+          notification_id: "{{ trigger.entity_id | replace('.', '_') }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {{ reminder.state == 'overdue'
+                 or (reminder.state == 'soon' and not reminder.attributes.get('reminder_snoozed', false))
+                 or reminder.state == 'unavailable' }}
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: "{{ notification_id }}"
+              title: "{{ reminder.name }}"
+              message: >-
+                {% if reminder.state == 'unavailable' %}Shared printer monitoring is unavailable.
+                {% elif reminder.state == 'overdue' %}The printer has passed its inactivity limit.
+                {% else %}The printer is approaching its inactivity limit.{% endif %}
+                Check [Equipment & Remote Access](https://inventory.skilledcrafting.com/equipment-center).
+        else:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: "{{ notification_id }}"
+
+  - id: sc_printer_hardware_notifications
+    alias: SC Printer Hardware Alerts
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id:
+          - sensor.sc_roland_printer_activity
+          - sensor.sc_omni_printer_activity
+        attribute: hardware_alerts
+      - trigger: state
+        entity_id:
+          - sensor.sc_roland_printer_activity
+          - sensor.sc_omni_printer_activity
+        to:
+          - unavailable
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state is not none }}"
+    actions:
+      - variables:
+          notification_id: "{{ trigger.entity_id | replace('.', '_') ~ '_hardware' }}"
+          alerts: >-
+            {{ trigger.to_state.attributes.get('hardware_alerts', [])
+               if trigger.to_state.state != 'unavailable' else [] }}
+      - if:
+          - condition: template
+            value_template: "{{ alerts | length > 0 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: "{{ notification_id }}"
+              title: "{{ trigger.to_state.name }} maintenance"
+              message: "{{ alerts | join(', ') }}"
+        else:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: "{{ notification_id }}"
