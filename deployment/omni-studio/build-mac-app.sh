@@ -15,8 +15,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleIdentifier</key><string>com.skilledcrafting.omnistudioprobe</string>
-  <key>CFBundleName</key><string>OmniStudioProbe</string>
+  <key>CFBundleIdentifier</key><string>com.skilledcrafting.omnistudioprobe.v2</string>
+  <key>CFBundleName</key><string>OmniStudioProbe2</string>
   <key>CFBundleExecutable</key><string>OmniStudioProbe</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleVersion</key><string>1</string>
@@ -27,7 +27,7 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 CLANG_MODULE_CACHE_PATH="$temp/cache" swiftc -module-cache-path "$temp/cache" "$source_file" -o "$app/Contents/MacOS/OmniStudioProbe"
-codesign --force --sign - --identifier com.skilledcrafting.omnistudioprobe "$app"
+codesign --force --sign - --identifier com.skilledcrafting.omnistudioprobe.v2 "$app"
 codesign --verify --strict "$app"
 mv "$app" "$destination"
 printf 'Built %s\n' "$destination"

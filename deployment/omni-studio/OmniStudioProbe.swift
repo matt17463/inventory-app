@@ -18,17 +18,18 @@ struct Snapshot: Codable {
     let state: String
     let readings: Reading?
     let reason: String?
+    var diagnostics: [String]? = nil
+    var connection_confirmed: Bool? = nil
 }
 
 func parseHealth(_ content: [String]) -> Reading? {
-    let lines = content.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    guard lines.contains("Device health"),
-          lines.contains("Dual UV"),
-          lines.contains("Ready"),
-          !lines.contains("Not connected"),
-          let uv1 = lines.firstIndex(of: "UV 1"),
-          let uv2 = lines[lines.index(after: uv1)...].firstIndex(of: "UV 2"),
-          let environment = lines[lines.index(after: uv2)...].firstIndex(of: "Environment")
+    let lines = content.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    guard lines.contains("device health"),
+          lines.contains("dual uv"),
+          !lines.contains("not connected"),
+          let uv1 = lines.firstIndex(of: "uv 1"),
+          let uv2 = lines[lines.index(after: uv1)...].firstIndex(of: "uv 2"),
+          let environment = lines[lines.index(after: uv2)...].firstIndex(of: "environment")
     else { return nil }
 
     func number(_ raw: String, unit: String, within range: ClosedRange<Double>) -> Double? {
@@ -40,10 +41,10 @@ func parseHealth(_ content: [String]) -> Reading? {
         return result
     }
 
-    let modeLabels = ["Working mode": "normal", "Sleep mode": "sleep",
-                      "Sleeping mode": "sleep", "Vacation mode": "vacation"]
+    let modeLabels = ["working mode": "normal", "sleep mode": "sleep",
+                      "sleeping mode": "sleep", "vacation mode": "vacation"]
     func head(_ section: ArraySlice<String>) -> (Double, String)? {
-        let temperatures = section.compactMap { number($0, unit: "°C", within: -20...120) }
+        let temperatures = section.compactMap { number($0, unit: "°c", within: -20...120) }
         let modes = section.compactMap { modeLabels[$0] }
         guard !temperatures.isEmpty, Set(temperatures).count == 1,
               !modes.isEmpty, Set(modes).count == 1 else { return nil }
@@ -59,10 +60,10 @@ func parseHealth(_ content: [String]) -> Reading? {
     }
     return Reading(uv_head_1_c: first.0, uv_head_2_c: second.0,
                    uv_head_1_mode: first.1, uv_head_2_mode: second.1,
-                   ambient_c: optional("Temperature", unit: "°C", range: -30...100),
-                   humidity_pct: optional("Humidity", unit: "%", range: 0...100),
-                   moisturizing_liquid_1_pct: optional("UV 1 Moisturizing liquid", unit: "%", range: 0...100),
-                   moisturizing_liquid_2_pct: optional("UV 2 Moisturizing liquid", unit: "%", range: 0...100))
+                   ambient_c: optional("temperature", unit: "°c", range: -30...100),
+                   humidity_pct: optional("humidity", unit: "%", range: 0...100),
+                   moisturizing_liquid_1_pct: optional("uv 1 moisturizing liquid", unit: "%", range: 0...100),
+                   moisturizing_liquid_2_pct: optional("uv 2 moisturizing liquid", unit: "%", range: 0...100))
 }
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -84,34 +85,49 @@ func healthSnapshot() -> Snapshot {
         return unavailable("Studio did not expose an accessible window.")
     }
 
-    var candidates: [Reading] = []
+    var candidates: [(Reading, Bool)] = []
+    var diagnostics: [String] = []
+    let anchors = ["device health", "dual uv", "ready", "not connected", "uv 1", "uv 2",
+                   "environment", "working mode", "sleep mode", "sleeping mode", "vacation mode"]
     for window in windows where (attribute(window, kAXMinimizedAttribute) as? Bool) != true {
         var stack = [window]
         var content: [String] = []
         var visited = 0
         while let node = stack.popLast(), visited < 1500 {
             visited += 1
-            let role = attribute(node, kAXRoleAttribute) as? String
-            if [kAXStaticTextRole, "AXHeading"].contains(role ?? "") {
-                if let text = (attribute(node, kAXValueAttribute) ?? attribute(node, kAXTitleAttribute)) as? String,
-                   text.count < 200 {
-                    content.append(contentsOf: text.components(separatedBy: .newlines))
+            let role = attribute(node, kAXRoleAttribute) as? String ?? ""
+            if [kAXStaticTextRole, "AXHeading", kAXButtonRole, kAXGroupRole, "AXDialog"].contains(role) {
+                var nodeText: Set<String> = []
+                for field in [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute] {
+                    if let text = attribute(node, field) as? String, text.count < 200,
+                       nodeText.insert(text).inserted {
+                        content.append(contentsOf: text.components(separatedBy: .newlines))
+                    }
                 }
             }
             if let children = attribute(node, kAXChildrenAttribute) as? [AXUIElement] {
                 stack.append(contentsOf: children.reversed())
             }
         }
-        if let reading = parseHealth(content) { candidates.append(reading) }
+        let normalized = content.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        let visibleAnchors = anchors.filter(normalized.contains)
+        let temperatures = normalized.filter { $0.hasSuffix("°c") }.count
+        diagnostics.append("Window: \(visited) nodes; \(content.count) text items; \(temperatures) temperature labels; matched: \(visibleAnchors.joined(separator: ", "))")
+        if let reading = parseHealth(content) {
+            candidates.append((reading, normalized.contains("ready")))
+        }
     }
     guard candidates.count == 1 else {
-        return unavailable("Open the connected Omni’s Device Health Overview with both UV heads visible.")
+        var result = unavailable("Studio’s accessibility data did not contain one complete Omni panel.")
+        result.diagnostics = diagnostics
+        return result
     }
-    return Snapshot(captured_at: Date(), state: "pilot_snapshot", readings: candidates[0], reason: nil)
+    return Snapshot(captured_at: Date(), state: "pilot_snapshot", readings: candidates[0].0,
+                    reason: nil, connection_confirmed: candidates[0].1)
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
-let standalone = Bundle.main.bundleIdentifier == "com.skilledcrafting.omnistudioprobe"
+let standalone = Bundle.main.bundleIdentifier == "com.skilledcrafting.omnistudioprobe.v2"
 let output: Snapshot
 if standalone {
     Thread.sleep(forTimeInterval: 15)
@@ -133,7 +149,7 @@ encoder.outputFormatting = [.sortedKeys]
 let encoded = try encoder.encode(output)
 if standalone {
     let result = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Downloads/OmniStudioResult.json")
+        .appendingPathComponent("Downloads/OmniStudioPilot2.json")
     try encoded.write(to: result, options: .atomic)
 } else {
     print(String(decoding: encoded, as: UTF8.self))

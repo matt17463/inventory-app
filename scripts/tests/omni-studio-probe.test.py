@@ -32,6 +32,10 @@ class StudioProbeTest(unittest.TestCase):
             "moisturizing_liquid_1_pct": 87, "moisturizing_liquid_2_pct": 86,
         })
 
+    def test_heading_capitalization_does_not_hide_a_complete_panel(self):
+        result = self.parse([label.upper() for label in HEALTH[1:]])
+        self.assertEqual(result["readings"]["uv_head_1_mode"], "normal")
+
     def test_disconnected_and_missing_panels_produce_no_readings(self):
         for display in (HEALTH + ["Not connected"], HEALTH[2:], ["Device health", "Ready"]):
             result = self.parse(display)
