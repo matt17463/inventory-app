@@ -111,8 +111,12 @@ func healthSnapshot() -> Snapshot {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+let standalone = Bundle.main.bundleIdentifier == "com.skilledcrafting.omnistudioprobe"
 let output: Snapshot
-if arguments.count == 2, arguments[0] == "--fixture" {
+if standalone {
+    Thread.sleep(forTimeInterval: 15)
+    output = healthSnapshot()
+} else if arguments.count == 2, arguments[0] == "--fixture" {
     let content = try JSONDecoder().decode([String].self, from: Data(contentsOf: URL(fileURLWithPath: arguments[1])))
     let reading = parseHealth(content)
     output = Snapshot(captured_at: Date(), state: reading == nil ? "unavailable" : "fixture", readings: reading, reason: nil)
@@ -126,4 +130,11 @@ if arguments.count == 2, arguments[0] == "--fixture" {
 let encoder = JSONEncoder()
 encoder.dateEncodingStrategy = .iso8601
 encoder.outputFormatting = [.sortedKeys]
-print(String(decoding: try encoder.encode(output), as: UTF8.self))
+let encoded = try encoder.encode(output)
+if standalone {
+    let result = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Downloads/OmniStudioResult.json")
+    try encoded.write(to: result, options: .atomic)
+} else {
+    print(String(decoding: encoded, as: UTF8.self))
+}
