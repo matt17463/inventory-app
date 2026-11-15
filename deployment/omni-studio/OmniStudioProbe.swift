@@ -85,37 +85,80 @@ func healthSnapshot() -> Snapshot {
         return unavailable("Studio did not expose an accessible window.")
     }
 
-    var candidates: [(Reading, Bool)] = []
-    var diagnostics: [String] = []
     let anchors = ["device health", "dual uv", "ready", "not connected", "uv 1", "uv 2",
                    "environment", "working mode", "sleep mode", "sleeping mode", "vacation mode"]
+    func normalized(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+    func labels(_ element: AXUIElement) -> [String] {
+        let role = attribute(element, kAXRoleAttribute) as? String ?? ""
+        guard [kAXStaticTextRole, "AXHeading", kAXButtonRole, kAXGroupRole, "AXDialog",
+               kAXTextFieldRole].contains(role) else { return [] }
+        var seen: Set<String> = []
+        return [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute]
+            .compactMap { attribute(element, $0) as? String }
+            .filter { $0.count < 200 && seen.insert($0).inserted }
+            .flatMap { $0.components(separatedBy: .newlines) }
+    }
+    func children(_ element: AXUIElement) -> [AXUIElement] {
+        attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []
+    }
+    func boundedChildren(_ element: AXUIElement) -> [AXUIElement] {
+        let elements = children(element)
+        if elements.count <= 80 { return elements }
+        return Array(elements.prefix(24)) + Array(elements.suffix(32))
+    }
+    var candidates: [(Reading, Bool)] = []
+    var diagnostics: [String] = []
+    let deadline = ProcessInfo.processInfo.systemUptime + 25
+    let discoveryDeadline = deadline - 12
     for window in windows where (attribute(window, kAXMinimizedAttribute) as? Bool) != true {
-        var stack = [window]
-        var content: [String] = []
-        var visited = 0
-        while let node = stack.popLast(), visited < 1500 {
-            visited += 1
-            let role = attribute(node, kAXRoleAttribute) as? String ?? ""
-            if [kAXStaticTextRole, "AXHeading", kAXButtonRole, kAXGroupRole, "AXDialog"].contains(role) {
-                var nodeText: Set<String> = []
-                for field in [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute] {
-                    if let text = attribute(node, field) as? String, text.count < 200,
-                       nodeText.insert(text).inserted {
-                        content.append(contentsOf: text.components(separatedBy: .newlines))
-                    }
+        // Use a breadth-first pass to find the modal without walking thousands of canvas elements.
+        var queue = [window]
+        var cursor = 0
+        var windowSignals: Set<String> = []
+        var panels: [AXUIElement] = []
+        while cursor < queue.count && cursor < 4500 && ProcessInfo.processInfo.systemUptime < discoveryDeadline {
+            let node = queue[cursor]
+            cursor += 1
+            let nodeLabels = labels(node).map(normalized)
+            windowSignals.formUnion(nodeLabels.filter(anchors.contains))
+            if nodeLabels.contains("device health"),
+               (attribute(node, kAXRoleAttribute) as? String) != kAXButtonRole {
+                var ancestor = node
+                for _ in 0..<4 {
+                    guard let parent = attribute(ancestor, kAXParentAttribute),
+                          CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+                    ancestor = unsafeBitCast(parent, to: AXUIElement.self)
+                    if CFEqual(ancestor, window) { break }
+                    if !panels.contains(where: { CFEqual($0, ancestor) }) { panels.append(ancestor) }
                 }
             }
-            if let children = attribute(node, kAXChildrenAttribute) as? [AXUIElement] {
-                stack.append(contentsOf: children.reversed())
+            queue.append(contentsOf: boundedChildren(node))
+        }
+        var bestMatches: Set<String> = []
+        var highestTemperatureCount = 0
+        for panel in panels where ProcessInfo.processInfo.systemUptime < deadline {
+            var stack = [panel]
+            var content: [String] = []
+            var visited = 0
+            while let node = stack.popLast(), visited < 600, ProcessInfo.processInfo.systemUptime < deadline {
+                visited += 1
+                content.append(contentsOf: labels(node))
+                stack.append(contentsOf: boundedChildren(node).reversed())
+            }
+            let signals = content.map(normalized)
+            bestMatches.formUnion(signals.filter(anchors.contains))
+            highestTemperatureCount = max(highestTemperatureCount, signals.filter { $0.hasSuffix("°c") }.count)
+            if !windowSignals.contains("not connected"), let reading = parseHealth(content) {
+                candidates.append((reading, windowSignals.contains("ready")))
+                break
             }
         }
-        let normalized = content.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-        let visibleAnchors = anchors.filter(normalized.contains)
-        let temperatures = normalized.filter { $0.hasSuffix("°c") }.count
-        diagnostics.append("Window: \(visited) nodes; \(content.count) text items; \(temperatures) temperature labels; matched: \(visibleAnchors.joined(separator: ", "))")
-        if let reading = parseHealth(content) {
-            candidates.append((reading, normalized.contains("ready")))
-        }
+        diagnostics.append("Searched \(cursor) nodes; \(panels.count) candidate containers; \(highestTemperatureCount) temperature labels; matched: \(windowSignals.union(bestMatches).sorted().joined(separator: ", "))")
+    }
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier else {
+        return unavailable("Keep Studio in the foreground until the pilot finishes.")
     }
     guard candidates.count == 1 else {
         var result = unavailable("Studio’s accessibility data did not contain one complete Omni panel.")
@@ -127,7 +170,7 @@ func healthSnapshot() -> Snapshot {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
-let standalone = Bundle.main.bundleIdentifier == "com.skilledcrafting.omnistudioprobe.v2"
+let standalone = Bundle.main.bundleIdentifier == "com.skilledcrafting.omnistudioprobe.v3"
 let output: Snapshot
 if standalone {
     Thread.sleep(forTimeInterval: 15)
@@ -149,7 +192,7 @@ encoder.outputFormatting = [.sortedKeys]
 let encoded = try encoder.encode(output)
 if standalone {
     let result = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Downloads/OmniStudioPilot2.json")
+        .appendingPathComponent("Downloads/OmniStudioPilot3.json")
     try encoded.write(to: result, options: .atomic)
 } else {
     print(String(decoding: encoded, as: UTF8.self))
