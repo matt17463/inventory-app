@@ -944,15 +944,40 @@ function scUvHelp(){
  .sc-help-wrap{position:relative;display:inline-flex;vertical-align:middle;margin-left:6px}
  .sc-help-btn{font-weight:700;border:1px solid #68879b;border-radius:50%;background:#173545;color:#e6f6ff;width:24px;height:24px;padding:0;cursor:help}
  .sc-help-tip{display:none;position:absolute;left:0;top:calc(100% + 7px);z-index:30;min-width:240px;max-width:min(350px,80vw);padding:11px 13px;background:#102a39;border:1px solid #6d93ab;border-radius:9px;color:white;line-height:1.5;box-shadow:0 8px 28px #0009;white-space:normal}
- .sc-help-wrap:hover .sc-help-tip,.sc-help-wrap:focus-within .sc-help-tip{display:block}
+ .sc-help-tip:not([hidden]){display:block}
+ @media(max-width:600px){.sc-help-tip{position:fixed;inset:auto 12px 12px;max-width:none;min-width:0}}
  `;document.head.appendChild(style);
+ let activeHelp=null;
+ function hideHelp(){
+  if(!activeHelp)return;
+  activeHelp.tip.hidden=true;
+  activeHelp.button.setAttribute('aria-expanded','false');
+  activeHelp=null;
+ }
+ document.addEventListener('pointerdown',event=>{
+  if(activeHelp&&!activeHelp.wrap.contains(event.target))hideHelp();
+ });
+ document.addEventListener('keydown',event=>{if(event.key==='Escape')hideHelp()});
  document.querySelectorAll('label[for],label.checkbox').forEach(label=>{
  const input=label.htmlFor?$(label.htmlFor):label.querySelector('input');
  if(!input||!input.id||label.querySelector('.sc-help-wrap'))return;
  const detail=scUvTips[input.id]||'Changes '+label.textContent.trim().replace(/\\s+/g,' ').toLowerCase()+'. Review the preview, exported separations and material-specific production instructions; run a sample to verify the actual print result.';
  const wrap=document.createElement('span');wrap.className='sc-help-wrap';
  const btn=document.createElement('button');btn.type='button';btn.className='sc-help-btn';btn.textContent='?';btn.setAttribute('aria-label','Help: '+label.textContent.trim());btn.setAttribute('aria-describedby','sc-tip-'+input.id);
- const tip=document.createElement('span');tip.className='sc-help-tip';tip.id='sc-tip-'+input.id;tip.textContent=detail;
+ const tip=document.createElement('span');tip.className='sc-help-tip';tip.id='sc-tip-'+input.id;tip.textContent=detail;tip.hidden=true;
+ btn.setAttribute('aria-expanded','false');
+ function showHelp(pinned=false){
+  if(activeHelp?.button!==btn)hideHelp();
+  activeHelp={button:btn,tip,wrap,pinned};
+  tip.hidden=false;btn.setAttribute('aria-expanded','true');
+ }
+ wrap.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse'&&!activeHelp?.pinned)showHelp()});
+ wrap.addEventListener('pointerleave',()=>{
+  if(activeHelp?.button===btn&&!activeHelp.pinned&&document.activeElement!==btn)hideHelp();
+ });
+ btn.addEventListener('focus',()=>{if(btn.matches(':focus-visible'))showHelp()});
+ btn.addEventListener('blur',()=>{if(activeHelp?.button===btn)hideHelp()});
+ btn.addEventListener('click',()=>{if(activeHelp?.button===btn&&activeHelp.pinned)hideHelp();else showHelp(true)});
  wrap.append(btn,tip);label.insertAdjacentElement('afterend',wrap);
  });
 }
