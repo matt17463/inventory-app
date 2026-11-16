@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { PDFDocument } from "pdf-lib";
 import { schoolFlyerPng } from "./lib/marketingIllustratedFlyer";
 import { schoolFlyerPreflight } from "./lib/marketingSchoolFlyerPreflight";
@@ -222,7 +223,7 @@ export default function MarketingProgramDesigner({mode,organization="",schoolLog
   <p>{brochure?"One creation path: provide your approved school branding, position artwork on apparel, review the two-page flyer and download the PDF.":"Use real product photographs and approved client artwork with editable placement."} Enter agreed decorated wholesale and client retail prices; supplier purchase costs remain private.</p>
   {brochure&&<h4>Step 2 — Flyer message and visual identity</h4>}
   {brochure&&<div className="growth-grid">
-   <label className="growth-field"><span>Flyer headline</span><input value={headline} maxLength={55} onChange={e=>setHeadline(e.target.value)}/></label>
+   <div><label className="growth-field"><span>Flyer headline</span><input value={headline} maxLength={55} onChange={e=>setHeadline(e.target.value)}/></label><SettingHelp label="Flyer headline">The headline is the main text on the flyer cover. It can contain up to 55 characters. Review the preview after changing it to check the cover layout.</SettingHelp></div>
    <label className="growth-field"><span>Flyer tagline</span><input value={tagline} maxLength={140} onChange={e=>setTagline(e.target.value)}/></label>
    <p><strong>School design colors:</strong> {actualColors.length?actualColors.join(", "):"Using the school-spirit design defaults until approved colors are entered above."}</p>
   </div>}
