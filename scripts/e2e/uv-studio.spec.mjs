@@ -1,3 +1,4 @@
+/* global window -- used in Playwright page.evaluate callbacks */
 import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 
