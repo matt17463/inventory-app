@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -690,7 +691,7 @@ export default function Purchasing() {
             )}
 
             <form onSubmit={searchPairingBlanks}>
-              <label>Search correct blank product</label>
+              <label>Search correct blank product</label><SettingHelp label="Correct blank product">Choose the exact blank style, color and size for the demand line. Saving a reusable pairing can also affect future orders that match that WooCommerce variation, SKU or product.</SettingHelp>
               <div className="purchasing-pairing-search-row">
                 <input
                   value={pairingSearch}
