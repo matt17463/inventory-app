@@ -89,3 +89,12 @@ test('minimum bridge width blocks a narrow connection without blocking a solid s
  engine.setArtwork(fill);
  assert.doesNotThrow(()=>engine.patchOutlineSVG({...v,contourBridgeWidth:4}));
 });
+test('smoothing keeps the outer loop and hole and rounds their corners',()=>{
+ engine.setArtwork((x,y)=>fill(x,y)&&!(x>.35&&x<.65&&y>.35&&y<.65)?255:0);
+ const original=engine.graphicContour(v);
+ const smoothed=engine.graphicContour({...v,contourSmooth:true});
+ assert.equal(smoothed.components,2);
+ assert.deepEqual(smoothed.bounds,original.bounds);
+ assert.match(smoothed.d,/Q/);
+ assert.equal((smoothed.d.match(/Z/g)??[]).length,2);
+});
