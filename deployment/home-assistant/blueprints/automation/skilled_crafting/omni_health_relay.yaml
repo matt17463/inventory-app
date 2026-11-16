@@ -1,0 +1,121 @@
+blueprint:
+  name: Skilled Crafting Omni health relay
+  description: Sends fresh numeric, boolean and mode readings from an Omni to the shared printer dashboard.
+  domain: automation
+  homeassistant:
+    min_version: 2026.10.0
+  input:
+    status_entity:
+      name: Omni operating status
+      description: Select the Omni integration's live status sensor. It must report unavailable on disconnect.
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+    telemetry_entities:
+      name: Omni telemetry mapping
+      description: Map metric keys to entity IDs. To read an attribute, use an object with entity and attribute fields.
+      default: {}
+      selector:
+        object: {}
+
+mode: single
+triggers:
+  - trigger: time_pattern
+    minutes: "/1"
+variables:
+  status_entity: !input status_entity
+  telemetry_entities: !input telemetry_entities
+conditions:
+  - condition: template
+    value_template: >-
+      {% set status = states[status_entity] %}
+      {% set received = as_timestamp(status.last_reported, 0) if status else 0 %}
+      {{- has_value(status_entity) and (states(status_entity) | lower) != 'offline'
+        and 0 <= as_timestamp(now()) - received <= 180 }}
+actions:
+  - variables:
+      omni_event: >-
+        {% set status = states[status_entity] %}
+        {% set states_map = {
+          'idle': 'idle', 'processing': 'printing', 'printing': 'printing', 'paused': 'paused',
+          'cleaning': 'maintenance', 'maintenance': 'maintenance', 'error': 'error',
+          'sleeping': 'low_power_or_sleep', 'sleep': 'low_power_or_sleep', 'low_power': 'low_power_or_sleep',
+          'initializing': 'initializing', 'measuring': 'measuring', 'ready': 'ready',
+          'processing_ready': 'ready', 'firmware_update': 'firmware_update', 'wifi_setup': 'wifi_setup'
+        } %}
+        {% set mode_map = {'working_mode': 'normal', 'normal': 'normal', 'sleep_mode': 'sleep',
+          'sleeping_mode': 'sleep', 'sleep': 'sleep', 'vacation_mode': 'vacation', 'vacation': 'vacation'} %}
+        {% set booleans = ['front_door_open', 'rear_door_open', 'lid_open', 'air_filter_installed',
+          'waste_ink_installed', 'waste_ink_full', 'moisturizing_liquid_low', 'ink_low'] %}
+        {% set modes = ['verified_mode', 'uv_head_1_mode', 'uv_head_2_mode'] %}
+        {% set numeric = {
+          'active_alarms': [0, 1000, ''],
+          'job_progress_pct': [0, 100, '%'],
+          'job_remaining_s': [0, 604800, 's'],
+          'queued_jobs': [0, 10000, ''],
+          'operating_count': [0, 10000000, ''],
+          'working_hours': [0, 1000000, 'h'],
+          'standby_hours': [0, 1000000, 'h'],
+          'uv_lamp_hours': [0, 1000000, 'h'],
+          'purifier_hours': [0, 1000000, 'h'],
+          'last_job_duration_s': [0, 604800, 's'],
+          'wifi_signal_dbm': [-130, 0, 'dBm'],
+          'uv_cyan_pct': [0, 100, '%'],
+          'uv_magenta_pct': [0, 100, '%'],
+          'uv_yellow_pct': [0, 100, '%'],
+          'uv_black_pct': [0, 100, '%'],
+          'uv_white_pct': [0, 100, '%'],
+          'uv_varnish_pct': [0, 100, '%'],
+          'moisturizing_liquid_1_pct': [0, 100, '%'],
+          'moisturizing_liquid_2_pct': [0, 100, '%'],
+          'uv_head_1_c': [-20, 120, '°C'],
+          'uv_head_2_c': [-20, 120, '°C'],
+          'ambient_c': [-30, 100, '°C'],
+          'humidity_pct': [0, 100, '%'],
+          'ink_pad_remaining_pct': [0, 100, '%'],
+          'ink_scraper_remaining_pct': [0, 100, '%']
+        } %}
+        {% set ns = namespace(readings={}, mode='unknown') %}
+        {% set operating = states_map.get(status.state | lower | replace(' ', '_')) %}
+        {% if operating is not none %}{% set ns.readings = {'status': operating} %}{% endif %}
+        {% for key, source in (telemetry_entities.items() if telemetry_entities is mapping else []) %}
+          {% set entity = source.entity if source is mapping else source %}
+          {% set reading = states[entity] if entity is string and entity != status_entity else none %}
+          {% if reading and has_value(entity) and 0 <= as_timestamp(now()) - as_timestamp(reading.last_reported, 0) <= 180 %}
+            {% set raw = state_attr(entity, source.attribute) if source is mapping and source.attribute is defined else reading.state %}
+            {% set label = raw | string | lower | replace(' ', '_') %}
+            {% if key in booleans and label in ['on', 'off', 'true', 'false'] %}
+              {% set ns.readings = dict(ns.readings, **{key: label in ['on', 'true']}) %}
+            {% elif key in modes and label in mode_map %}
+              {% if key == 'verified_mode' %}
+                {% set ns.mode = mode_map[label] %}
+              {% else %}
+                {% set ns.readings = dict(ns.readings, **{key: mode_map[label]}) %}
+              {% endif %}
+            {% elif key in numeric and raw is not boolean and is_number(raw) %}
+              {% set bounds = numeric[key] %}
+              {% set unit = state_attr(entity, 'unit_of_measurement') or '' %}
+              {% set value = raw | float %}
+              {% if bounds[2] == 'h' and unit == 's' %}
+                {% set value = value / 3600 %}
+                {% set unit = 'h' %}
+              {% elif bounds[2] == '°C' and unit == '°F' %}
+                {% set value = (value - 32) * 5 / 9 %}
+                {% set unit = '°C' %}
+              {% endif %}
+              {% if bounds[2] == unit and bounds[0] <= value <= bounds[1] and (unit != '' or value == (value | int)) %}
+                {% set ns.readings = dict(ns.readings, **{key: value | round(3)}) %}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{- {'printer_id': 'omni', 'kind': 'telemetry',
+            'event_key': 'omni:' ~ ((as_timestamp(status.last_reported) * 1000000) | int),
+            'occurred_at': status.last_reported.isoformat(), 'observed_mode': ns.mode,
+            'readings': ns.readings} }}
+  - condition: template
+    value_template: "{{ omni_event.readings | length > 0 or omni_event.observed_mode != 'unknown' }}"
+  - action: rest_command.sc_relay_omni_health
+    data:
+      omni_event: "{{ omni_event }}"

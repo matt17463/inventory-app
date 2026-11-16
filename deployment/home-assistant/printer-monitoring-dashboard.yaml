@@ -22,12 +22,13 @@ views:
           Shared printer activity unavailable.
           {% else %}
           {% set printer = state_attr(entity, 'snapshot') or {} %}
-          {% set sources = {'staff': 'Staff confirmation', 'roland_connect': 'Roland Connect Hub', 'omni_studio': 'xTool Studio feed'} %}
+          {% set sources = {'staff': 'Staff confirmation', 'roland_connect': 'Roland Connect Hub', 'omni_studio': 'Omni device feed'} %}
           - **Last successful print** {{ as_local(as_datetime(printer.last_print_at)).strftime('%Y-%m-%d %H:%M') if printer.last_print_at else 'Unknown' }}
           - **Evidence** {{ sources.get(printer.last_print_source, 'Unknown') }}
           - **Idle limit** {{ printer.idle_days }} days, with {{ printer.warning_days }} days' notice
           - **Due** {{ as_local(as_datetime(printer.due_at)).strftime('%Y-%m-%d %H:%M') if printer.due_at else 'Unknown' }}
           - **Feed** {{ printer.telemetry | capitalize }}, last report {{ as_local(as_datetime(printer.telemetry_at)).strftime('%Y-%m-%d %H:%M') if printer.telemetry_at else 'unknown' }}
+          - **Telemetry source** {{ sources.get(printer.telemetry_source, 'Unknown') }}
           - **Hardware mode** {{ printer.verified_mode | capitalize }}
           - **Staff observation** {{ (printer.staff_observed_mode or 'Unknown') | capitalize }}
           - **Planned mode** {{ printer.planned_mode | capitalize }}
@@ -36,10 +37,10 @@ views:
           - **Maintenance alerts** {{ printer.hardware_alerts | join(', ') }}
           {% endif %}
           {% for label, value in (printer.readings or {}).items() %}
-          - **{{ label | replace('_', ' ') | capitalize }}** {{ ('Yes' if value else 'No') if value is boolean else value }}
+          - **{{ label | replace('_', ' ') | capitalize }}** {{ ('Yes' if value else 'No') if value is boolean else (value | replace('_', ' ') if value is string else value) }}
           {% endfor %}
           {% endif %}
           {% endfor %}
 
           [Record a print or change reminders in Equipment & Remote Access](https://inventory.skilledcrafting.com/equipment-center).
-          Open xTool Studio on the Business Mac to check Omni printhead health and mode.
+          Use the Business Mac screen-sharing shortcut in Equipment & Remote Access to open xTool Studio. Device Health provides per-head sleep and wake, and printer Vacation Mode.

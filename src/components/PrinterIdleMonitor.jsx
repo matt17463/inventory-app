@@ -8,6 +8,7 @@ import './PrinterIdleMonitor.css';
 
 const STATUS_TEXT = { unknown: 'Last print unknown', overdue: 'Print overdue', soon: 'Print due soon', ok: 'Within reminder interval' };
 const MODE_TEXT = { unknown: 'Unknown', normal: 'Normal', sleep: 'Sleep', vacation: 'Vacation' };
+const READING_LABELS = { low_power_or_sleep: 'Low power / sleep', firmware_update: 'Firmware update', wifi_setup: 'Wi-Fi setup' };
 const formatTime = (value) => value ? new Date(value).toLocaleString() : 'Unknown';
 const localTime = (time) => {
   const date = new Date(time);
@@ -31,7 +32,7 @@ export function PrinterActivitySummary({ row, now, expanded = false }) {
       {readings.length > 0 && <dl className="printer-idle-readings">{readings.map(([key, value]) => {
         const metric = METRICS[row.printer_id][key];
         if (!metric) return null;
-        return <div key={key}><dt>{metric[0]}</dt><dd>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : `${value} ${metric[1]}`.trim()}</dd></div>;
+        return <div key={key}><dt>{metric[0]}</dt><dd>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : (READING_LABELS[value] || MODE_TEXT[value] || `${value} ${metric[1]}`.trim())}</dd></div>;
       })}</dl>}
     </>}
   </div>;
