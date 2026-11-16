@@ -72,3 +72,13 @@ test('Merrow retains geometric outlines',()=>{
  assert.match(cut.d,/Q/);
  assert.equal(cut.originOffset,0);
 });
+test('optional contour cleanup suppresses small artwork islands before they expand',()=>{
+ engine.setArtwork((x,y)=>fill(x,y)||(x<.025&&y<.025)?255:0);
+ assert.equal(engine.graphicContour(v).components,2);
+ assert.equal(engine.graphicContour({...v,contourIslandArea:3}).components,1);
+});
+test('optional hole cleanup retains the outer contour',()=>{
+ engine.setArtwork((x,y)=>fill(x,y)&&!(x>.45&&x<.55&&y>.45&&y<.55)?255:0);
+ assert.equal(engine.graphicContour(v).components,2);
+ assert.equal(engine.graphicContour({...v,contourHoleArea:20}).components,1);
+});
