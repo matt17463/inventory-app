@@ -70,7 +70,7 @@
 <div class="small">Layer count creates grayscale threshold masks for testing; it does not set real printer passes. xTool Studio determines ink buildup.</div>
 <label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
 <label for="edgeStyle">Patch perimeter</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">None</option></select>
-<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px">
+<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px">
 <label class="checkbox"><input id="varnish" type="checkbox" checked> Generate highlight / varnish mask</label>
 <label class="checkbox" id="mirrorBox" style="display:none"><input id="mirror" type="checkbox"> Include mirrored artwork reference (film only)</label>
 <div class="small" id="mirrorNote" style="display:none">Mirroring depends on the film's print-side and xTool Studio workflow. Never mirror automatically without confirming the transfer orientation.</div>
@@ -140,7 +140,7 @@ async function useImage(src){image=await loadImg(src);imageDataURL=src;renderSoo
 function values(){return {width:Math.max(.75,Math.min(6,Number($('width').value)||3.5)),height:Math.max(.75,Math.min(6,Number($('height').value)||2.5)),spacing:+$('spacing').value,stitchLength:+$('stitchLength').value,angle:+$('angle').value,contrast:+$('contrast').value,borderSize:+$('borderSize').value,depth:+$('depth').value,layers:+$('layers').value,border:$('border').checked,varnish:$('varnish').checked,preset:settings.preset,job:$('job').value||'Faux Embroidery Patch',material:$('material').value,variant:$('variant').value,mirror:$('mirror').checked};}
 function UI(){const v=values();['spacing','stitchLength','borderSize','depth'].forEach(k=>$(k+'V').textContent=v[k].toFixed(k==='depth'?2:k==='spacing'?2:1)+' mm');$('angleV').textContent=v.angle+'°';$('contrastV').textContent=v.contrast+'%';$('layersV').textContent=v.layers;$('summarySize').textContent=`${v.width} × ${v.height} in`;$('summaryPixels').textContent=`${Math.round(v.width*DPI)} × ${Math.round(v.height*DPI)} pixels at 300 DPI`;$('summaryHeight').textContent=`0–${v.depth.toFixed(2)} mm`;$('summaryLayers').textContent=v.layers;$('dimensions').textContent=`${v.width} × ${v.height} in · 300 DPI`;materialUI(v);}
 function renderSoon(){UI();clearTimeout(debounce);debounce=setTimeout(()=>renderPreview(),120)}
-function paintBase(w,h){let c=document.createElement('canvas');c.width=w;c.height=h;let ctx=c.getContext('2d',{willReadFrequently:true});ctx.clearRect(0,0,w,h);let pad=Math.max(7,Math.round(Math.min(w,h)*.04));if(image){let scale=Math.min((w-pad*2)/image.width,(h-pad*2)/image.height);let dw=image.width*scale,dh=image.height*scale;ctx.drawImage(image,(w-dw)/2,(h-dh)/2,dw,dh)}return ctx.getImageData(0,0,w,h)}
+function paintBase(w,h){let c=document.createElement('canvas');c.width=w;c.height=h;let ctx=c.getContext('2d',{willReadFrequently:true});ctx.clearRect(0,0,w,h);let pad=Math.min(w,h)*.04;if(image){let scale=Math.min((w-pad*2)/image.width,(h-pad*2)/image.height);let dw=image.width*scale,dh=image.height*scale;ctx.drawImage(image,(w-dw)/2,(h-dh)/2,dw,dh)}return ctx.getImageData(0,0,w,h)}
 function distanceField(mask,w,h,fromForeground=false){
  const d=new Float32Array(w*h),diag=Math.SQRT2,far=1e6;
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;const inside=mask[i];d[i]=fromForeground?(inside?0:far):(!inside||x===0||y===0||x===w-1||y===h-1||!mask[i-1]||!mask[i-w]||(x<w-1&&!mask[i+1])||(y<h-1&&!mask[i+w]))?0:far;}
@@ -244,7 +244,7 @@ values=function(){let v=oldValues();return {...v,
  paletteSize:Math.min(10,Math.max(2,Number($('paletteSize').value)||6)),
  autoAngles:$('autoAngles').checked, gloss:+$('gloss').value,
  reliefContrast:+$('reliefContrast').value,edgeStyle:$('edgeStyle').value,
- edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,patchShape:$('patchShape').value,
+ edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),patchShape:$('patchShape').value,
  sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
  margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
  regionOverrides:{...regionOverrides},selectedCalibrationId
@@ -264,11 +264,31 @@ function outlinePath(w,h,shape,inset=0){
 // The SVG origin is padded by the requested offset. Registration must be verified manually.
 let contourCache;
 function graphicContour(v,wIn=v.width,hIn=v.height){
- const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.cleanupWhite,v.cleanThreshold]);
+ const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.cleanupWhite,v.cleanThreshold]);
  if(contourCache?.artwork===image && contourCache?.key===key)return contourCache.result;
  const result=traceGraphicContour(v,wIn,hIn);
  contourCache={artwork:image,key,result};
  return result;
+}
+// Remove connected regions below the selected area. The sheet exterior is never filled.
+function suppressSmallRegions(mask,w,h,target,minPixels){
+ if(!(minPixels>1))return;
+ const seen=new Uint8Array(mask.length),queue=new Int32Array(mask.length);
+ for(let start=0;start<mask.length;start++){
+  if(seen[start]||mask[start]!==target)continue;
+  let size=1,touchesEdge=false;queue[0]=start;seen[start]=1;
+  for(let head=0;head<size;head++){
+   const cell=queue[head],x=cell%w,y=Math.floor(cell/w);
+   if(!x||!y||x===w-1||y===h-1)touchesEdge=true;
+   for(const next of [x?cell-1:-1,x<w-1?cell+1:-1,y?cell-w:-1,y<h-1?cell+w:-1]){
+    if(next<0||seen[next]||mask[next]!==target)continue;
+    seen[next]=1;queue[size++]=next;
+   }
+  }
+  if(size<minPixels&&(target===1||!touchesEdge)){
+   for(let n=0;n<size;n++)mask[queue[n]]=1-target;
+  }
+ }
 }
 function traceGraphicContour(v,wIn,hIn){
  const scale=4, cw=Math.max(1,Math.round(wIn*25.4*scale)),ch=Math.max(1,Math.round(hIn*25.4*scale));
@@ -276,8 +296,10 @@ function traceGraphicContour(v,wIn,hIn){
  const source=paintBase(cw,ch).data,mask=new Uint8Array(w*h);
  const a=Math.round(v.contourAlpha*2.55);
  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++)if(source[(y*cw+x)*4+3]>=a)mask[(y+pad)*w+x+pad]=1;
+ suppressSmallRegions(mask,w,h,1,v.contourIslandArea*scale**2);
  const distances=distanceField(mask,w,h,true),radius=v.contourOffset*scale;
  for(let i=0;i<mask.length;i++)if(distances[i]<=radius)mask[i]=1;
+ suppressSmallRegions(mask,w,h,0,v.contourHoleArea*scale**2);
  const edges=new Map();
  const edge=(x,y,x2,y2)=>{let k=x+','+y,arr=edges.get(k);if(!arr){arr=[];edges.set(k,arr)}arr.push([x2,y2])};
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(!mask[y*w+x])continue;
@@ -498,7 +520,7 @@ function renderCalRecords(){const div=$('calRecords');div.innerHTML='';if(!calib
 function csvQuote(s){return '"'+String(s??'').replace(/"/g,'""')+'"'}
 function calibrationCSV(){const cols=['date','id','material','variant','supplier_lot','studio_mode','studio_height_mm','actual_measured_height_mm','primer','result','notes'];return [cols.map(csvQuote).join(','),...calibrationRecords.map(r=>[r.date,r.id,r.material,r.variant,r.name,r.mode,r.studioHeight,r.measured,r.primer,r.result,r.notes].map(csvQuote).join(','))].join('\r\n')+'\r\n'}
 function calRef(v){const candidates=calibrationRecords.filter(r=>r.material===v.material&&r.variant===v.variant&&r.result==='pass'&&Number(r.measured)>0&&Number(r.studioHeight)>0);return candidates.find(x=>x.id===v.selectedCalibrationId)||candidates.at(-1)||null}
-function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
+function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
 function exportProjectJSON(){return JSON.stringify({type:'SC_UV_STUDIO_PROJECT',version:MODULE_VERSION,settings:values(),artworkDataURL:imageDataURL,calibrationRecords},null,2)}
 const oldPrintNotes=printNotes;
 printNotes=function(v){return oldPrintNotes(v)+'\nNEW v0.3 FEATURES: k-means/connected-component stitch regions, customizable angles, thread highlights, merrow/satin patch perimeter, template SVG, batch layouts, locally recorded print tests.\n\nHEIGHT CALIBRATION: calibrated records only yield a LINEAR ESTIMATE of the xTool Studio height setting. They do NOT establish that a grayscale pixel commands a physical pass or varnish/white channels. These generated masks and outlines are prepress references, not machine control.\n\nBATCH: separate color sheet PNG and reference cut SVG share document origin; align using a physical registration test before cutting.\n'};
@@ -591,7 +613,7 @@ function applyProductPreset(){const p=productPresets[$('productPreset').value];i
  if($('material').value!==p.material){$('material').value=p.material;applyMaterialProfile()}
  renderSoon();}
 function applySheetChoice(){let sheet=$('sheet').value,size=sheetSize(values());if(sheet!=='custom'){$('sheetW').value=size[0];$('sheetH').value=size[1]}for(let key of ['sheetW','sheetH'])$(key).disabled=sheet!=='custom';renderSoon()}
-for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','autoAngles','patchShape','sheetW','sheetH','margin','gap','quantity']){
+for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','autoAngles','patchShape','sheetW','sheetH','margin','gap','quantity']){
  let el=$(key);el.addEventListener('input',()=>renderSoon());el.addEventListener('change',()=>renderSoon());
 }
 $('sheet').addEventListener('change',applySheetChoice);
@@ -841,6 +863,8 @@ window.addEventListener('message', (event) => {
 const scUvTips={
  edgeStyle:'Changes how the patch edge looks AND the exported cut reference. Merrow and satin keep the selected geometric patch; None follows the outer silhouette of opaque artwork. A cutline is not printed as color ink.',
  contourOffset:'Moves the proposed cutter edge outward from visible artwork. More offset gives a wider protective margin but can join nearby graphic elements or exceed the blank. Check physical registration before cutting.',
+ contourIslandArea:'Suppresses small disconnected artwork regions before offsetting the cutter path. This changes the cut reference only. Keep this at zero to retain intentional small pieces.',
+ contourHoleArea:'Fills small enclosed holes in the cut reference after the cut offset. The graphics and ink masks are preserved. Set this to zero to retain all traceable holes.',
  contourAlpha:'Treats pixels above this opacity as part of the design. Raise to ignore faint antialiasing/noise; lower to preserve soft edges. Transparent stray pixels can create separate cut loops.',
  edgeColor:'Sets the simulated decorative thread color when Merrow or satin is selected; it does not change the actual thread or patch material.',
  depth:'Artist target for perceived raised texture. Actual deposited thickness depends on xTool Studio and needs physical calibration; never assume the grayscale PNG is a direct printer pass command.',
