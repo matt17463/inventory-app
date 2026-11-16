@@ -13,7 +13,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ORIGINS = {"https://inventory.skilledcrafting.com", "https://app.skilledcrafting.com"}
-AUTH_URL = "https://inventory.skilledcrafting.com/.netlify/functions/marketing-local-ai-authorize"
+AUTH_PATH = "/.netlify/functions/marketing-local-ai-authorize"
 MODEL = os.environ.get("SC_OLLAMA_MODEL", "qwen2.5:7b")
 MAX_BYTES = 16000
 SECTIONS = {"hero", "benefits", "steps", "pricing", "products", "cta"}
@@ -30,10 +30,12 @@ SYSTEM = (
 )
 
 
-def check_user(token):
+def check_user(token, origin):
     """Verify the caller is an active employee with a permitted role."""
+    if origin not in ORIGINS:
+        raise ValueError("Application origin is not allowed")
     request = urllib.request.Request(
-        AUTH_URL, data=b"{}", method="POST",
+        origin + AUTH_PATH, data=b"{}", method="POST",
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
     )
     with urllib.request.urlopen(request, timeout=12) as response:
@@ -127,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             authorization = self.headers.get("Authorization", "")
             if not authorization.startswith("Bearer ") or len(authorization) > 5000:
                 return self.respond(401, {"error": "Authentication required"})
-            check_user(authorization[7:])
+            check_user(authorization[7:], self.headers.get("Origin"))
             payload = json.loads(self.rfile.read(length))
             plan = generate_layout(payload)
             return self.respond(200, {"plan": plan, "source": "ollama"})
