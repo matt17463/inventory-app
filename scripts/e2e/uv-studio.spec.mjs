@@ -78,3 +78,29 @@ test('keyboard help has an accessible description', async ({ page }) => {
   await expect(page.locator('#sc-tip-edgeStyle')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('embedded cloud pack carries print guidance and the cleanup manifest', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await expect(page.locator('#job')).toHaveValue('fixture');
+  await page.locator('#width').fill('1');
+  await page.locator('#height').fill('1');
+  await page.locator('#edgeStyle').selectOption('none');
+  await page.locator('#contourIslandArea').fill('1');
+  const result = await page.evaluate(() => new Promise(resolve => {
+    const requestId = 'cloud-pack-fixture';
+    function receive({ data }) {
+      if (data.requestId !== requestId || !data.type.startsWith('SC_UV_EXPORT_') || data.type === 'SC_UV_EXPORT_PACK') return;
+      window.removeEventListener('message', receive);
+      resolve(data.buffer ? Array.from(new Uint8Array(data.buffer)) : data.message);
+    }
+    window.addEventListener('message', receive);
+    window.postMessage({ type: 'SC_UV_EXPORT_PACK', requestId }, window.location.origin);
+  }));
+  expect(Array.isArray(result), String(result).slice(0, 120)).toBe(true);
+  const entries = zipEntries(Buffer.from(result));
+  expect(entries.has('XTOOL-STUDIO-PRINT-GUIDE.txt')).toBe(true);
+  const manifest = JSON.parse(entries.get('manifest.json').toString());
+  expect(manifest.patch).toMatchObject({ suppress_islands_below_mm2: 1 });
+  expect(errors).toEqual([]);
+});
