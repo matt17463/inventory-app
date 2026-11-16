@@ -11,6 +11,7 @@ import { sourcePoint, validateGuidance } from './lib/dtfMaskGuidance.js';
 import { preparedMask } from './lib/dtfMaskClient.js';
 import { supabase } from './supabaseClient.js';
 import { authenticatedFunctionFetch } from './lib/netlifyFunctionClient.js';
+import SettingHelp from './SettingHelp.jsx';
 import './DTFPrepStudio.css';
 
 const PRESETS = {
@@ -66,7 +67,20 @@ function download(blob,name){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
   a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
-function field(label,children){return <label className="dtf-field"><span>{label}</span>{children}</label>;}
+const SETTING_HELP_V1 = Object.freeze({
+  outputWidth: 'Sets the print width from 0.25 to 20 inches. Changing the width changes the exported pixel width at the selected resolution. Match the order or production traveler before exporting.',
+  outputHeight: 'Sets the print height from 0.25 to 20 inches. Changing the height changes the exported pixel height at the selected resolution. Check the proof for fit at the selected size.',
+  backgroundMethod: 'Chooses how background pixels are removed. Review the proof at the artwork edges and in enclosed gaps, especially when the artwork contains colors close to the background.',
+  finalAlpha: 'Controls transparency in the prepared artwork. Review semi-transparent edges in the proof and confirm the chosen alpha treatment suits the DTF print workflow.',
+  halftoneStyle: 'Chooses which artwork areas are converted into dots. Gradient, shirt-color knockout and full halftone modes affect different areas. Compare the proof at print size before exporting.',
+});
+function field(label,children,helpKey){
+  if(!helpKey)return <label className="dtf-field"><span>{label}</span>{children}</label>;
+  return <div style={{position:'relative'}}>
+    <label className="dtf-field"><span style={{paddingInlineEnd:30}}>{label}</span>{children}</label>
+    <span style={{position:'absolute',insetInlineEnd:0,top:0}}><SettingHelp label={label}>{SETTING_HELP_V1[helpKey]}</SettingHelp></span>
+  </div>;
+}
 function Tuning({title,children}){return <details className="dtf-panel" open><summary>{title}</summary><div className="dtf-panel-content">{children}</div></details>;}
 function Slider({label,value,onChange,min=0,max=100,step=1}) {
   return <label className="dtf-field"><span>{label}<strong>{value}</strong></span>
@@ -341,8 +355,8 @@ export default function DTFPrepStudio(){
         </Tuning>
         <Tuning title="Print size & actual resolution">
           <div className="dtf-pair">
-            {field('Width (in)',<input type="number" min=".25" max="20" step=".25" value={opts.width} onChange={e=>change('width',e.target.value)}/>)}
-            {field('Height (in)',<input type="number" min=".25" max="20" step=".25" value={opts.height} onChange={e=>change('height',e.target.value)}/>)}
+            {field('Width (in)',<input type="number" min=".25" max="20" step=".25" value={opts.width} onChange={e=>change('width',e.target.value)}/>,'outputWidth')}
+            {field('Height (in)',<input type="number" min=".25" max="20" step=".25" value={opts.height} onChange={e=>change('height',e.target.value)}/>,'outputHeight')}
           </div>
           {field('Quick size',<select value="" onChange={e=>{const [w,h]=e.target.value.split(',');setOpts(o=>({...o,width:w,height:h}));setSavedPrepared('');}}><option value="">Choose print size</option><option value="3.5,3.5">Left chest 3.5″</option><option value="10,10">Full chest 10″</option><option value="12,12">Full 12″ × 12″</option><option value="10,5">Back 10″ × 5″</option><option value="2,8">Sleeve 2″ × 8″</option></select>)}
           <label className="dtf-check"><input type="checkbox" checked={opts.crop} onChange={e=>change('crop',e.target.checked)}/> Crop transparent source margins</label>
@@ -370,7 +384,7 @@ export default function DTFPrepStudio(){
             <option value="white">Remove white / off-white</option>
             <option value="sampled">Remove chosen background color</option>
             <option value="pick">Click a region in Source to remove</option>
-          </select>)}
+          </select>,'backgroundMethod')}
           {opts.background==='pick'&&<p className="dtf-pick-tip"><strong>Click unwanted regions in SOURCE to accumulate removals.</strong> The selected connected region becomes truly transparent. {opts.backgroundPoint?'Selected point: '+opts.backgroundPoint.x+', '+opts.backgroundPoint.y+'. Click another region to add it; use Keep to restore intentional details.':'Choose a background pixel to continue.'}</p>}
           {opts.background==='white'&&<Slider label="White threshold" value={opts.threshold} min={200} max={255} onChange={v=>change('threshold',v)}/>}
           {opts.background==='sampled'&&field('Background RGB color',<input type="color" value={opts.backgroundColor} onChange={e=>change('backgroundColor',e.target.value)}/>)}
@@ -413,13 +427,13 @@ export default function DTFPrepStudio(){
           {field('Final alpha',<select value={opts.alphaMode} onChange={e=>change('alphaMode',e.target.value)}>
             <option value="hard">DTF hard alpha (opaque or transparent)</option>
             <option value="preserve">Preserve soft edge transparency</option>
-          </select>)}
+          </select>,'finalAlpha')}
           <Slider label="Alpha cutoff" value={opts.alphaThreshold} min={0} max={254} onChange={v=>change('alphaThreshold',v)}/>
           <p className="dtf-note">Transparency is written to the PNG alpha channel before the 300 PPI export. Checkerboard and garment colors are preview-only. Automatic color selection works best with solid backgrounds; detailed photographic backgrounds may require a manually refined mask.</p>
         </Tuning>
         <Tuning title="Halftones & garment knockout">
           {field('Quick preset',<select value="" onChange={e=>{record();revisionRef.current++;setOpts(o=>({...o,...PRESETS[e.target.value]}));setSavedPrepared('');}}><option value="">Choose processing preset</option>{Object.keys(PRESETS).map(k=><option key={k}>{k}</option>)}</select>)}
-          {field('Halftone style',<select value={opts.halftone} onChange={e=>change('halftone',e.target.value)}><option value="none">Off</option><option value="fades">Transparent gradients only</option><option value="knockout">Shirt-color knockout</option><option value="full">Full halftone (vintage)</option><option value="multicolor">CMYK multicolor rosette (4 channels)</option><option value="color-dots">Original-color dots (RGB)</option></select>)}
+          {field('Halftone style',<select value={opts.halftone} onChange={e=>change('halftone',e.target.value)}><option value="none">Off</option><option value="fades">Transparent gradients only</option><option value="knockout">Shirt-color knockout</option><option value="full">Full halftone (vintage)</option><option value="multicolor">CMYK multicolor rosette (4 channels)</option><option value="color-dots">Original-color dots (RGB)</option></select>,'halftoneStyle')}
           {field('Knockout',<select value={opts.knockout} onChange={e=>change('knockout',e.target.value)}><option value="none">Do not knock out</option><option value="shirt">Remove shirt-matched color</option></select>)}
           {field('Shirt RGB',<input type="color" value={opts.shirtColor} onChange={e=>change('shirtColor',e.target.value)}/>)}
           <Slider label="Knockout tolerance" value={opts.knockoutTolerance} min={1} max={200} onChange={v=>change('knockoutTolerance',v)}/>
