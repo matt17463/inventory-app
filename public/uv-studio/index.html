@@ -141,9 +141,9 @@ function values(){return {width:Math.max(.75,Math.min(6,Number($('width').value)
 function UI(){const v=values();['spacing','stitchLength','borderSize','depth'].forEach(k=>$(k+'V').textContent=v[k].toFixed(k==='depth'?2:k==='spacing'?2:1)+' mm');$('angleV').textContent=v.angle+'°';$('contrastV').textContent=v.contrast+'%';$('layersV').textContent=v.layers;$('summarySize').textContent=`${v.width} × ${v.height} in`;$('summaryPixels').textContent=`${Math.round(v.width*DPI)} × ${Math.round(v.height*DPI)} pixels at 300 DPI`;$('summaryHeight').textContent=`0–${v.depth.toFixed(2)} mm`;$('summaryLayers').textContent=v.layers;$('dimensions').textContent=`${v.width} × ${v.height} in · 300 DPI`;materialUI(v);}
 function renderSoon(){UI();clearTimeout(debounce);debounce=setTimeout(()=>renderPreview(),120)}
 function paintBase(w,h){let c=document.createElement('canvas');c.width=w;c.height=h;let ctx=c.getContext('2d',{willReadFrequently:true});ctx.clearRect(0,0,w,h);let pad=Math.max(7,Math.round(Math.min(w,h)*.04));if(image){let scale=Math.min((w-pad*2)/image.width,(h-pad*2)/image.height);let dw=image.width*scale,dh=image.height*scale;ctx.drawImage(image,(w-dw)/2,(h-dh)/2,dw,dh)}return ctx.getImageData(0,0,w,h)}
-function distanceField(mask,w,h){
+function distanceField(mask,w,h,fromForeground=false){
  const d=new Float32Array(w*h),diag=Math.SQRT2,far=1e6;
- for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;const inside=mask[i];d[i]=(!inside||x===0||y===0||x===w-1||y===h-1||!mask[i-1]||!mask[i-w]||(x<w-1&&!mask[i+1])||(y<h-1&&!mask[i+w]))?0:far;}
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;const inside=mask[i];d[i]=fromForeground?(inside?0:far):(!inside||x===0||y===0||x===w-1||y===h-1||!mask[i-1]||!mask[i-w]||(x<w-1&&!mask[i+1])||(y<h-1&&!mask[i+w]))?0:far;}
  for(let y=1;y<h;y++)for(let x=1;x<w;x++){let i=y*w+x;if(d[i]===0)continue;let a=Math.min(d[i-1]+1,d[i-w]+1,d[i-w-1]+diag);if(x<w-1)a=Math.min(a,d[i-w+1]+diag);d[i]=Math.min(d[i],a)}
  for(let y=h-2;y>=0;y--)for(let x=w-2;x>=0;x--){let i=y*w+x;if(d[i]===0)continue;let a=Math.min(d[i+1]+1,d[i+w]+1,d[i+w+1]+diag);if(x>0)a=Math.min(a,d[i+w-1]+diag);d[i]=Math.min(d[i],a)}return d;
 }
@@ -262,15 +262,22 @@ function outlinePath(w,h,shape,inset=0){
 // An offset silhouette is a cutter reference, not a printer or cutter command.
 // Rasterize at approximately 4 samples/mm; trace all closed loops, preserving holes/islands.
 // The SVG origin is padded by the requested offset. Registration must be verified manually.
+let contourCache;
 function graphicContour(v,wIn=v.width,hIn=v.height){
+ const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.cleanupWhite,v.cleanThreshold]);
+ if(contourCache?.artwork===image && contourCache?.key===key)return contourCache.result;
+ const result=traceGraphicContour(v,wIn,hIn);
+ contourCache={artwork:image,key,result};
+ return result;
+}
+function traceGraphicContour(v,wIn,hIn){
  const scale=4, cw=Math.max(1,Math.round(wIn*25.4*scale)),ch=Math.max(1,Math.round(hIn*25.4*scale));
  const pad=Math.ceil((v.contourOffset+1)*scale),w=cw+2*pad,h=ch+2*pad;
  const source=paintBase(cw,ch).data,mask=new Uint8Array(w*h);
  const a=Math.round(v.contourAlpha*2.55);
  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++)if(source[(y*cw+x)*4+3]>=a)mask[(y+pad)*w+x+pad]=1;
- const outside=new Uint8Array(w*h);for(let i=0;i<outside.length;i++)outside[i]=mask[i]?0:1;
- const distances=distanceField(outside,w,h),radius=v.contourOffset*scale;
- for(let i=0;i<mask.length;i++)if(outside[i]&&distances[i]<=radius)mask[i]=1;
+ const distances=distanceField(mask,w,h,true),radius=v.contourOffset*scale;
+ for(let i=0;i<mask.length;i++)if(distances[i]<=radius)mask[i]=1;
  const edges=new Map();
  const edge=(x,y,x2,y2)=>{let k=x+','+y,arr=edges.get(k);if(!arr){arr=[];edges.set(k,arr)}arr.push([x2,y2])};
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(!mask[y*w+x])continue;
@@ -279,7 +286,7 @@ function graphicContour(v,wIn=v.width,hIn=v.height){
   if(y===h-1||!mask[(y+1)*w+x])edge(x+1,y+1,x,y+1);
   if(x===0||!mask[y*w+x-1])edge(x,y+1,x,y);
  }
- const paths=[];let total=0;
+ const paths=[];let total=0,minX=w,minY=h,maxX=0,maxY=0;
  while(edges.size&&total<2000000){
   const start=edges.keys().next().value;let cur=start,pts=[],guard=0;
   do{
@@ -293,16 +300,19 @@ function graphicContour(v,wIn=v.width,hIn=v.height){
    if((q[0]-p[0])*(r[1]-q[1])!==(q[1]-p[1])*(r[0]-q[0]))keep.push(q);
   }
   if(keep.length<3)continue;
+  for(const [x,y] of keep){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}
   paths.push('M'+keep.map(p=>(p[0]/scale).toFixed(2)+','+(p[1]/scale).toFixed(2)).join('L')+'Z');
  }
- return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length};
+ return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
 }
 function scCutPath(v,wIn=v.width,hIn=v.height){
  if(v.edgeStyle!=='none')return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
  return graphicContour(v,wIn,hIn);
 }
 function patchOutlineSVG(v,wIn=v.width,hIn=v.height){
- const cut=scCutPath(v,wIn,hIn),W=cut.width.toFixed(3),H=cut.height.toFixed(3);
+ const cut=scCutPath(v,wIn,hIn);
+ if(!cut.d)throw Error('No cut contour found. Load visible artwork or lower the opacity threshold.');
+ const W=cut.width.toFixed(3),H=cut.height.toFixed(3);
  const detail=v.edgeStyle==='none'?'Artwork silhouette with user offset':'Geometric patch perimeter';
  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}"><title>${detail} — physical registration unverified</title><path d="${cut.d}" fill="none" stroke="red" stroke-width="0.1" fill-rule="evenodd"/></svg>`;
 }
@@ -414,14 +424,63 @@ function layoutPlan(v){const [sw,sh]=sheetSize(v),m=cap(v.margin,0,1),g=cap(v.ga
 }
 function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Patch + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
 const oldUI=UI;UI=function(){oldUI();$('contourControls').hidden=values().edgeStyle!=='none';$('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
-function batchSheetSvg(v,plan,count){const W=plan.sw*25.4,H=plan.sh*25.4,s=v.width*25.4,t=v.height*25.4;
- let paths=[];for(let i=0;i<count;i++){let x=(plan.margin+(i%plan.cols)*(v.width+plan.gap))*25.4,y=(plan.margin+Math.floor(i/plan.cols)*(v.height+plan.gap))*25.4;
- {const cut=scCutPath(v);paths.push(`<g transform="translate(${(x-cut.originOffset).toFixed(3)} ${(y-cut.originOffset).toFixed(3)})"><path d="${cut.d}" fill="none" stroke="red" stroke-width="0.11" fill-rule="evenodd"/></g>`)}}
+function sheetPosition(v,plan,i){
+ return [
+  (plan.originX+(i%plan.cols)*(v.width+plan.gapX))*25.4,
+  (plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*25.4
+ ];
+}
+function validateBatchCut(v,plan,cut){
+ if(!cut.d)throw Error('No cut contour found. Load visible artwork or lower the opacity threshold.');
+ if(!cut.bounds)return;
+ const [minX,minY,maxX,maxY]=cut.bounds;
+ const [firstX,firstY]=sheetPosition(v,plan,0),[lastX,lastY]=sheetPosition(v,plan,plan.capacity-1);
+ if(firstX+minX<0 || firstY+minY<0 || lastX+maxX>plan.sw*25.4 || lastY+maxY>plan.sh*25.4){
+  throw Error('Cut contour extends beyond the sheet. Adjust jig origin, spacing, sheet size or cut offset.');
+ }
+ if((plan.cols>1 && maxX-minX>=(v.width+plan.gapX)*25.4) ||
+    (plan.rows>1 && maxY-minY>=(v.height+plan.gapY)*25.4)){
+  throw Error('Cut contours may overlap. Increase jig spacing or reduce cut offset.');
+ }
+}
+function batchSheetSvg(v,plan,count){
+ const W=plan.sw*25.4,H=plan.sh*25.4,cut=scCutPath(v);
+ validateBatchCut(v,plan,cut);
+ const paths=Array.from({length:count},(_,i)=>{
+  const [x,y]=sheetPosition(v,plan,i);
+  return `<g transform="translate(${(x-cut.originOffset).toFixed(3)} ${(y-cut.originOffset).toFixed(3)})"><path d="${cut.d}" fill="none" stroke="red" stroke-width="0.11" fill-rule="evenodd"/></g>`;
+ });
+ if(v.registrationMarks){
+  for(const [x,y] of [[5,5],[W-5,5],[5,H-5],[W-5,H-5]]){
+   paths.push(`<path d="M${x-2} ${y}h4 M${x} ${y-2}v4" stroke="#1788ef" stroke-width=".15" fill="none"/>`);
+  }
+ }
  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(3)}mm" height="${H.toFixed(3)}mm" viewBox="0 0 ${W.toFixed(3)} ${H.toFixed(3)}"><title>Unregistered reference outline sheet — not verified cutter coordinates</title>${paths.join('')}</svg>`;
 }
-function makeSheetCanvas(p,v,plan,count,proof=false){const c=document.createElement('canvas');c.width=Math.round(plan.sw*DPI);c.height=Math.round(plan.sh*DPI);let cx=c.getContext('2d');const art=imageCanvas(p,'color');
- for(let i=0;i<count;i++){let x=Math.round((plan.margin+(i%plan.cols)*(v.width+plan.gap))*DPI),y=Math.round((plan.margin+Math.floor(i/plan.cols)*(v.height+plan.gap))*DPI);
- cx.drawImage(art,x,y,p.w,p.h);if(proof){cx.save();cx.translate(x,y);cx.strokeStyle='#f45650';cx.lineWidth=2;cx.stroke(new Path2D(outlinePath(p.w,p.h,v.patchShape,Math.min(p.w,p.h)*.018)));cx.restore()}}return c;
+function makeSheetCanvas(p,v,plan,count,proof=false){
+ const c=document.createElement('canvas'),pixelsPerMM=DPI/25.4;
+ c.width=Math.round(plan.sw*DPI);c.height=Math.round(plan.sh*DPI);
+ const cx=c.getContext('2d'),art=imageCanvas(p,'color');
+ const cut=proof?scCutPath(v):null,path=cut?new Path2D(cut.d):null;
+ for(let i=0;i<count;i++){
+  const [x,y]=sheetPosition(v,plan,i);
+  cx.drawImage(art,Math.round(x*pixelsPerMM),Math.round(y*pixelsPerMM),p.w,p.h);
+  if(path){
+   cx.save();cx.scale(pixelsPerMM,pixelsPerMM);
+   cx.translate(x-cut.originOffset,y-cut.originOffset);
+   cx.strokeStyle='#f45650';cx.lineWidth=2/pixelsPerMM;cx.stroke(path);cx.restore();
+  }
+ }
+ if(proof&&v.registrationMarks){
+  const W=plan.sw*25.4,H=plan.sh*25.4;
+  cx.save();cx.scale(pixelsPerMM,pixelsPerMM);cx.strokeStyle='#1687dc';cx.lineWidth=.15;
+  cx.beginPath();
+  for(const [x,y] of [[5,5],[W-5,5],[5,H-5],[W-5,H-5]]){
+   cx.moveTo(x-2,y);cx.lineTo(x+2,y);cx.moveTo(x,y-2);cx.lineTo(x,y+2);
+  }
+  cx.stroke();cx.restore();
+ }
+ return c;
 }
 function calSave(){try{localStorage.setItem(CAL_KEY,JSON.stringify(calibrationRecords))}catch(e){$('calGuidance').textContent='Local storage unavailable; export JSON or CSV to retain these records.'}}
 try{const parsed=JSON.parse(localStorage.getItem(CAL_KEY)||'[]');if(Array.isArray(parsed))calibrationRecords=parsed.filter(r=>r&&typeof r==='object').slice(-400)}catch(e){}
@@ -474,6 +533,9 @@ function scOmniPrintGuide(v){
 
 async function exportV03Zip(layoutOnly=false){if(busy)return;busy=true;try{
  let v=values(),pl=layoutPlan(v);if(layoutOnly&&!pl.capacity)throw Error('Patch does not fit on this sheet');
+ const cut=scCutPath(v);
+ if(!cut.d)throw Error('No cut contour found. Load visible artwork or lower the opacity threshold.');
+ if(pl.capacity)validateBatchCut(v,pl,cut);
  const p=await prod(),files=[],addTxt=(name,s)=>files.push({name,data:textBytes(s)});
  if(!layoutOnly){
  for(let [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],['white','white-underbase.png'],['varnish','varnish-highlights.png']]){ $('status').textContent='Encoding '+name+'…';files.push({name,data:await pngBytes(imageCanvas(p,key))});}
@@ -542,7 +604,10 @@ $('importCalibration').onclick=()=>$('calImport').click();
 $('calImport').addEventListener('change',async e=>{let f=e.target.files?.[0];if(!f)return;try{let a=JSON.parse(await f.text());if(!Array.isArray(a))throw Error('Expected JSON array of records');calibrationRecords=a.filter(r=>r&&typeof r==='object'&&r.material&&r.variant&&r.id).slice(-400);calSave();renderCalRecords();updateCalibrationGuide();$('status').textContent='✓ Calibration records imported';}catch(err){alert('Import failed: '+err.message)}finally{e.target.value=''}});
 $('layoutZip').onclick=()=>exportV03Zip(true);
 $('all').onclick=()=>exportV03Zip(false);
-$('outlineSvg').onclick=()=>saveBytes(filename()+'-patch-outline.svg',textBytes(patchOutlineSVG(values())),'image/svg+xml');
+$('outlineSvg').onclick=()=>{
+ try{saveBytes(filename()+'-patch-outline.svg',textBytes(patchOutlineSVG(values())),'image/svg+xml')}
+ catch(error){$('status').textContent='Export error: '+error.message}
+};
 $('save').onclick=()=>saveBytes(filename()+'-project-v03.json',textBytes(exportProjectJSON()),'application/json');
 // Load both old v0.2 projects and new v0.3 projects.
 // Original project handler also loads v0.3's known keys; restore the extra region override state after it completes.
@@ -570,47 +635,6 @@ layoutPlan=function(v){
  const capacity=cols*rows;
  return {...base,originX,originY,gapX,gapY,cols,rows,capacity,sheets:capacity?Math.ceil(base.quantity/capacity):0,
    fullSheets:capacity?Math.floor(base.quantity/capacity):0,remainder:capacity?base.quantity%capacity:0};
-};
-const scBaseSheetSVG=batchSheetSvg;
-batchSheetSvg=function(v,plan,count){
- let result=scBaseSheetSVG(v,{...plan,margin:plan.originX??plan.margin,gap:plan.gapX??plan.gap},count);
- if(plan.originY!==plan.originX ||plan.gapY!==plan.gapX){
-  const W=plan.sw*25.4,H=plan.sh*25.4;
-  const paths=Array.from({length:count},(_,i)=>{
-   const x=(plan.originX+(i%plan.cols)*(v.width+plan.gapX))*25.4;
-   const y=(plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*25.4;
-   const shape=outlinePath(v.width*25.4,v.height*25.4,v.patchShape,Math.min(v.width,v.height)*.45);
-   return '<g transform="translate('+x.toFixed(3)+' '+y.toFixed(3)+')"><path d="'+shape+'" fill="none" stroke="#ef4444" stroke-width=".1"/></g>';
-  }).join('');
-  result='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+paths+'</svg>';
- }
- if(v.registrationMarks){
-  const mx=5,my=5,W=plan.sw*25.4,H=plan.sh*25.4;
-  const mark=(x,y)=>'<path d="M'+(x-2)+' '+y+'h4 M'+x+' '+(y-2)+'v4" stroke="#1788ef" stroke-width=".15" fill="none"/>';
-  result=result.replace('</svg>',mark(mx,my)+mark(W-mx,my)+mark(mx,H-my)+mark(W-mx,H-my)+'</svg>');
- }
- return result;
-};
-const scBaseSheetCanvas=makeSheetCanvas;
-makeSheetCanvas=function(p,v,plan,count,proof=false){
- // Keep production artwork on physical 300 DPI coordinates.
- const sheet=scBaseSheetCanvas(p,v,{...plan,margin:plan.originX??plan.margin,gap:plan.gapX??plan.gap},count,proof);
- if(plan.originX!==plan.originY||plan.gapX!==plan.gapY){
-  const ctx=sheet.getContext('2d');ctx.clearRect(0,0,sheet.width,sheet.height);
-  const art=imageCanvas(p,'color');
-  for(let i=0;i<count;i++){
-   const x=Math.round((plan.originX+(i%plan.cols)*(v.width+plan.gapX))*DPI),
-     y=Math.round((plan.originY+Math.floor(i/plan.cols)*(v.height+plan.gapY))*DPI);
-   ctx.drawImage(art,x,y,p.w,p.h);
-   if(proof){ctx.strokeStyle='#ef4444';ctx.stroke(new Path2D(outlinePath(p.w,p.h,v.patchShape,4)));}
-  }
- }
- if(proof&&v.registrationMarks){
-  const ctx=sheet.getContext('2d');ctx.strokeStyle='#1687dc';ctx.lineWidth=2;
-  const crosses=[[30,30],[sheet.width-30,30],[30,sheet.height-30],[sheet.width-30,sheet.height-30]];
-  for(const [x,y] of crosses){ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke();}
- }
- return sheet;
 };
 const scBaseValuesForJig=values;
 values=function(){return {...scBaseValuesForJig(),jigX:Number($('jigX').value),jigY:Number($('jigY').value),
