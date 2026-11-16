@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { Link, useLocation } from 'react-router-dom';
 import { shouldSimulateWrites } from './lib/testingMode';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -186,7 +187,7 @@ export default function EquipmentCenter() {
     </section>
     {site === 'business' && <PrinterActivityPanel activity={printerActivity} compact={tvMode} />}
     {message && <p className="eq-notice" role="status">{message}</p>}
-    {editing && <form className="eq-settings" onSubmit={saveSettings}><h2>Private connection</h2><p>Use the Pi’s private HTTPS address for live data inside this app. Tailscale must be connected. Home Assistant handles sign-in; passwords and access tokens are not saved by this page.</p><label>Home Assistant HTTPS address<input type="url" required value={settings.haUrl} onChange={(e) => setSettings({ ...settings, haUrl: e.target.value })} /></label><p className="eq-muted">Private HTTPS uses your Tailscale network. Sign in to Home Assistant to authorize this app’s live connection.</p><button className="eq-button primary" type="submit">Save preferences</button></form>}
+    {editing && <form className="eq-settings" onSubmit={saveSettings}><h2>Private connection</h2><p>Use the Pi’s private HTTPS address for live data inside this app. Tailscale must be connected. Home Assistant handles sign-in; passwords and access tokens are not saved by this page.</p><div><label>Home Assistant HTTPS address<input type="url" required value={settings.haUrl} onChange={(e) => setSettings({ ...settings, haUrl: e.target.value })} /></label><SettingHelp label="Home Assistant HTTPS address">Use the workshop Pi’s private HTTPS address. This preference changes which Home Assistant instance supplies live device data. The browser must be on the approved private network and signed in to Home Assistant.</SettingHelp></div><p className="eq-muted">Private HTTPS uses your Tailscale network. Sign in to Home Assistant to authorize this app’s live connection.</p><button className="eq-button primary" type="submit">Save preferences</button></form>}
     <RemoteAccessShortcuts />
     <nav className="eq-remote" aria-label="Other remote access">
       <External href={MAC_DESKTOP}><span className="eq-icon">▣</span><div><strong>Business MacBook</strong><small>Pi-assisted Screen Sharing · Tailscale required</small></div></External>
