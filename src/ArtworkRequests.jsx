@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import GrowthDesignInbox from './GrowthDesignInbox';
@@ -213,7 +214,7 @@ function ArtworkRequests() {
                 <Field label="Message">{selected.message}</Field>
                 {selected.mockup_url && <p><a href={selected.mockup_url} target="_blank" rel="noreferrer">Open Mockup</a></p>}
                 {selected.file_url && <p><a href={selected.file_url} target="_blank" rel="noreferrer">Open Artwork File</a></p>}
-                <label>Inventory App Status</label>
+                <div><label>Inventory App Status</label>
                 <select value={selected.app_status || 'new'} onChange={(e) => updateStatus(selected, 'reorder', e.target.value)} disabled={savingId === selected.id}>
                   {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
@@ -230,7 +231,7 @@ function ArtworkRequests() {
                 <Field label="Garment Color">{selected.garment_color}</Field>
                 <Field label="Deadline">{selected.deadline}</Field>
                 <Field label="Notes">{selected.notes || selected.final_notes}</Field>
-                <label>Inventory App Status</label>
+                <label>Inventory App Status</label><SettingHelp label="Inventory App Status">Updates the artwork item’s status in the Inventory App. Use this field to record where the request or reorder is in the shop’s review workflow.</SettingHelp></div>
                 <select value={selected.app_status || 'new'} onChange={(e) => updateStatus(selected, 'request', e.target.value)} disabled={savingId === selected.id}>
                   {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
