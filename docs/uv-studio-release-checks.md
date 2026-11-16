@@ -19,3 +19,9 @@ Netlify serves the two hosts from the same site. At discovery, `inventory.skille
 WordPress Pull Sheet Due Dates uses the legacy host for `manual-pullsheet` and `set-pullsheet-due-dates`. Preserve those POST endpoints while migrating callers. Keep webhook, OAuth, password-reset, and service worker transition behavior explicit. Do not redirect integration POST requests through the interactive UI redirect.
 
 Verify authentication and password reset, a deep link with a query string, and legacy callback and webhook reachability in an isolated check. Record the current Netlify deploy so it can be republished if a cutover fails. Check the production deploy SHA and both hosts after publishing.
+
+### Verified configuration and rollout flag
+
+Supabase already uses the app host as the Site URL. Both host roots and both exact `/reset-password` callbacks are in the allowlist. Netlify has `SC_APP_URL` and the Google Calendar and QuickBooks OAuth callbacks on the app host. These settings are configuration evidence. An end-to-end OAuth reauthorization is a separate check.
+
+The edge redirect is disabled by default. After the signed-in app-host smoke test and integration checks pass, set the production Edge Functions environment value `SC_CANONICAL_APP_NAVIGATION=true`. The rule permanently redirects ordinary legacy browser navigation with its path and query, and keeps the legacy root available for older fragment-based authentication links. The legacy root can be retired after all such links and provider settings are migrated. Leave function endpoints, APIs, webhook requests, OAuth and recovery callbacks, service workers and assets on their original host. To reverse the redirect, disable the flag and redeploy the published revision.
