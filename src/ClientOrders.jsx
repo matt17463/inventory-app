@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import {
   buildClientOrderInvoiceCsv,
@@ -502,7 +503,7 @@ export default function ClientOrders(){
                 <label>Blank cost<input type="number" step="0.01" value={item.unit_cost??0} onChange={(e)=>editItem(item.id,{unit_cost:e.target.value})}/></label>
                 <label>Decoration<input type="number" step="0.01" value={item.decoration_cost??0} onChange={(e)=>editItem(item.id,{decoration_cost:e.target.value})}/></label>
                 <label>Labor<input type="number" step="0.01" value={item.labor_cost??0} onChange={(e)=>editItem(item.id,{labor_cost:e.target.value})}/></label>
-                <label>Sell price each<input type="number" step="0.01" value={item.unit_price??0} onChange={(e)=>editItem(item.id,{unit_price:e.target.value})}/></label>
+                <div><label>Sell price each<input type="number" step="0.01" value={item.unit_price??0} onChange={(e)=>editItem(item.id,{unit_price:e.target.value})}/></label><SettingHelp label="Sell price each">Sets the quoted selling price for one item. Review the line quantity, personalization, shipping and tax in the quote summary before confirming.</SettingHelp></div>
               </div>
               <div className="sc-pricing-actions">
                 <select value={item.pricing_rule_id||''} onChange={(e)=>applyRule(item,e.target.value)}>
