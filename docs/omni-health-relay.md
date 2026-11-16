@@ -19,6 +19,10 @@ The production Pi already has the shared printer dashboard and Roland relay. The
 
 ## Connect the shared feed
 
+The community Omni module was verified upstream on firmware `40.101.013.01.ht1`. On the shop Omni running `40.101.014.01.ht11`, the isolated Pi pilot reached the printer over pinned TLS, then received `406 connection identifier or version mismatch` during session setup with Studio both open and closed. No telemetry was returned. Retest with a firmware-compatible release in the isolated environment before enabling the relay. Keep the existing xTool installation in place for the S1 during the pilot.
+
+A separate live test changed the WebSocket session ID from the community client's UUID to the millisecond timestamp described in its Studio protocol notes. The printer returned the same `406`. The pilot build retains the upstream session ID format.
+
 1. Deploy the bridge and UI changes once the pilot and app checks pass. Generate a separate random 32-byte token encoded as lowercase hexadecimal. Save only its SHA-256 digest in `sc_printer_bridge_credentials` under `omni_events`. Put the token in the Pi's protected `secrets.yaml` as `sc_omni_event_authorization: "Bearer TOKEN"`. Reuse the existing HTTPS `sc_printer_activity_url` entry.
 2. Install `deployment/home-assistant/packages/skilled_crafting_omni_relay.yaml` and copy the blueprint under `blueprints/automation/skilled_crafting/`. Create an automation from **Skilled Crafting Omni health relay**. Select the live status entity, then map only entities verified for this printer. The blueprint accepts entity IDs or an object with `entity` and `attribute`. Example shape, with illustrative entity IDs:
 
@@ -38,3 +42,17 @@ The production Pi already has the shared printer dashboard and Roland relay. The
 ## Local checks
 
 Run `npm run test:equipment`, `npm run functions:esm`, and `npm run build`. Run `python3 scripts/tests/omni-relay-template.test.py` in a test environment with PyYAML and Jinja2. These checks don't exercise the physical printer.
+
+## Pilot the Studio log reader
+
+Copy `deployment/omni-studio/read-studio-log.py` to the Business Mac. With the Omni connected in Studio, open Device Health and run `python3 ~/Downloads/read-studio-log.py --host 192.168.1.181`. The reader prints JSON containing only recognized measurements and their original observation times in UTC. Compare the values and timestamps with Studio. An empty metrics object means the reader found no complete matching responses within the last three minutes.
+
+Repeat the check with Device Health closed to find out whether Studio keeps logging the measurements in the background. Run `python3 scripts/tests/omni-studio-log.test.py` in the repository to verify sample filtering with reconstructed records. The reader has no reporting destination during this pilot.
+
+### Install the Business Mac relay
+
+Use this path for the verified Studio log fields. The existing Home Assistant printer dashboard reads the same bridge as Equipment & Remote Access. The Business Mac can send directly to the bridge, so leave the optional Home Assistant Omni upload automation disabled for this source.
+
+1. Provision a dedicated `omni_events` token as described above. Save the token to a private file on the Business Mac. Put the reader and `install-log-relay.sh` in the same folder.
+2. From that folder, run `bash install-log-relay.sh 192.168.1.181 /path/to/omni-token` as the user running Studio. The LaunchAgent checks once a minute. It sends only the allowlisted fresh metrics, uses the oldest included observation time for the event, and sends nothing when all metrics are stale.
+3. Verify a fresh report in both dashboards, then verify the readings age out when Studio stops logging. Check `~/Library/Application Support/SkilledCraftingOmni/relay-error.log` if delivery fails. Roll back by running `launchctl bootout gui/$(id -u)/com.skilledcrafting.omni-studio-relay`, moving its plist out of `~/Library/LaunchAgents`, and revoking the Omni token.
