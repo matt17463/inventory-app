@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
@@ -257,10 +258,10 @@ export default function ManufacturingRecipes({embedded=false,initialRecipeId=''}
         </div>
         <label>Recipe notes<textarea rows="2" value={form.notes} disabled={!editor||Boolean(selectedRecipe)} onChange={e=>change('notes',e.target.value)}/></label>
         <h3>Artwork and machine settings</h3>
-        <label>Approved material/machine settings<select value={form.machine_settings_id} disabled={!editor} onChange={e=>change('machine_settings_id',e.target.value)}>
+        <div><label>Approved material/machine settings<select value={form.machine_settings_id} disabled={!editor} onChange={e=>change('machine_settings_id',e.target.value)}>
           <option value="">Not linked — verify manually</option>
           {materials.map(x=><option key={x.id} value={x.id}>{x.machine_model} / {x.material_name} — {x.operation}</option>)}
-        </select></label>
+        </select></label><SettingHelp label="Approved material/machine settings">Links the recipe to the material and machine settings staff should follow for this process. Confirm the equipment, substrate, and approved settings revision before using the recipe on a job.</SettingHelp></div>
         <label>Existing artwork asset<select value={form.artwork_asset_id} disabled={!editor} onChange={e=>change('artwork_asset_id',e.target.value)}>
           <option value="">Not linked — add approved art later</option>
           {artworks.map(x=><option key={x.id} value={x.id}>{x.artwork_name} ({x.preflight_status})</option>)}
