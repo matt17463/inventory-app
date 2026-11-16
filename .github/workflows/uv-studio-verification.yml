@@ -5,6 +5,8 @@ on:
     branches: [main, feature/uv-studio-contours-guides-20261116]
     paths:
       - public/uv-studio/**
+      - src/**
+      - scripts/tests/settings-help-coverage.test.mjs
       - netlify/edge-functions/canonical-app-navigation.js
       - scripts/tests/canonical-app-navigation.test.mjs
       - scripts/tests/uv-studio-contours.test.cjs
@@ -26,6 +28,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --test scripts/tests/uv-studio-contours.test.cjs scripts/tests/canonical-app-navigation.test.mjs
+      - run: node --test scripts/tests/uv-studio-contours.test.cjs scripts/tests/canonical-app-navigation.test.mjs scripts/tests/settings-help-coverage.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test scripts/e2e/uv-studio.spec.mjs --workers=1
