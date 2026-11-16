@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import {useEffect,useState} from 'react';
 import {authenticatedFunctionFetch} from './lib/netlifyFunctionClient';
 import './StorefrontDesigner.css';
@@ -146,7 +147,7 @@ export default function StorefrontDesigner({campaign,canManage,onUpdated}){
    <h4>3. Client-only product category</h4>
    <p>Every visible item must belong to this client’s WooCommerce category. A new client can have that category created automatically; existing clients may use their already established category ID.</p>
    <div className="sc-store-category-choice">
-     <label>Assigned Woo category ID<input type="number" min="1" value={categoryId} disabled={!canManage||locked} onChange={e=>setCategoryId(e.target.value)} placeholder="Existing category ID" /></label>
+     <div><label>Assigned Woo category ID<input type="number" min="1" value={categoryId} disabled={!canManage||locked} onChange={e=>setCategoryId(e.target.value)} placeholder="Existing category ID" /></label><SettingHelp label="Assigned Woo category ID">Select the WooCommerce category containing this client store’s products. Verify the category belongs to this client before publishing.</SettingHelp></div>
      {canManage&&!locked&&<><button disabled={busy} type="button" onClick={()=>run(async()=>{
        const r=await siteCall('category',{campaign_id:id,category_id:categoryId||undefined});setCategoryId(String(r.category.id));return 'Client category ready: '+r.category.name+' (Woo #'+r.category.id+').';
      })}>{categoryId?'Verify and use this category':'Automatically create client category'}</button>
