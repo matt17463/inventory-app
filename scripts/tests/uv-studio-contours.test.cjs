@@ -82,3 +82,10 @@ test('optional hole cleanup retains the outer contour',()=>{
  assert.equal(engine.graphicContour(v).components,2);
  assert.equal(engine.graphicContour({...v,contourHoleArea:20}).components,1);
 });
+test('minimum bridge width blocks a narrow connection without blocking a solid square',()=>{
+ engine.setArtwork((x,y)=>((x>.1&&x<.35 || x>.65&&x<.9)&&y>.25&&y<.75)||(x>.3&&x<.7&&y>.49&&y<.51)?255:0);
+ assert.equal(engine.graphicContour(v).components,1);
+ assert.throws(()=>engine.patchOutlineSVG({...v,contourBridgeWidth:4}),/bridge below/);
+ engine.setArtwork(fill);
+ assert.doesNotThrow(()=>engine.patchOutlineSVG({...v,contourBridgeWidth:4}));
+});
