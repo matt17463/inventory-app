@@ -1,3 +1,4 @@
+import SettingHelp from './SettingHelp.jsx';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { EmployeeAccessContext } from './lib/employeeAccessContext';
@@ -229,7 +230,7 @@ export default function MaterialSettings(){
         {fieldNames.map(([name,label])=><label key={name}>{label}{['material_notes','safety_notes'].includes(name)?
           <textarea rows={2} value={form[name]||''} onChange={e=>set(name,e.target.value)}/>:
           <input type={name==='thickness_mm'?'number':'text'} step={name==='thickness_mm'?'0.01':undefined} value={form[name]||''} onChange={e=>set(name,e.target.value)}/>}</label>)}
-        <label>Evidence classification<select value={form.source_type} onChange={e=>set('source_type',e.target.value)}>{['manual','manufacturer','supplier','ai_suggested','prior_test'].map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+        <div><label>Evidence classification<select value={form.source_type} onChange={e=>set('source_type',e.target.value)}>{['manual','manufacturer','supplier','ai_suggested','prior_test'].map(x=><option key={x} value={x}>{x}</option>)}</select></label><SettingHelp label="Evidence classification">Records where the recipe settings came from. Choose Prior Test only when you have a recorded sample. Evidence classification helps staff decide which settings still need a material trial.</SettingHelp></div>
       </div>
       <p className="sc-material-help">{machine.note}</p>
       {form.material_name.trim() && safety.blocked?<p className="sc-material-danger" role="alert">{safety.reason}</p>:<p className="sc-material-help">{form.material_name.trim()?safety.warning:'Add a material name when known. Safety checks apply before using this recipe in production.'}</p>}
@@ -263,9 +264,9 @@ export default function MaterialSettings(){
       </section>
       <section className="card"><h2>Physical test log</h2>
         {!form.id?<p>Save the draft to attach tests and photographs.</p>:<>
-        <label>Outcome<select value={trial.result} onChange={e=>setTrial(p=>({...p,result:e.target.value}))}>{['needs_adjustment','fail','pass'].map(x=><option value={x} key={x}>{x}</option>)}</select></label>
+        <div><label>Outcome<select value={trial.result} onChange={e=>setTrial(p=>({...p,result:e.target.value}))}>{['needs_adjustment','fail','pass'].map(x=><option value={x} key={x}>{x}</option>)}</select></label><SettingHelp label="Outcome">Record the sample result after inspecting the actual material. Choose Needs Adjustment when the settings, finish, or durability need another trial.</SettingHelp></div>
         <label>Results, machine conditions and material lot<textarea rows={3} value={trial.observations} onChange={e=>setTrial(p=>({...p,observations:e.target.value}))}/></label>
-        <label>Measurements (JSON with units)<textarea rows={3} spellCheck={false} value={trial.measurement} onChange={e=>setTrial(p=>({...p,measurement:e.target.value}))}/></label>
+        <div><label>Measurements (JSON with units)<textarea rows={3} spellCheck={false} value={trial.measurement} onChange={e=>setTrial(p=>({...p,measurement:e.target.value}))}/></label><SettingHelp label="Measurements (JSON with units)">Enter measured results with units so another operator can compare the trial with the intended recipe. Use the measurements from the sample that produced the recorded outcome.</SettingHelp></div>
         <button className="primary-button" type="button" disabled={busy||!canWrite} onClick={recordTrial}>Record test</button>
         {trialRows.map(t=><article className="sc-material-trial" key={t.id}><strong>{t.result}</strong> · {new Date(t.created_at).toLocaleString()}<p>{t.observations}</p></article>)}
         </>}
