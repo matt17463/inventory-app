@@ -119,3 +119,22 @@ test.describe('touch settings help', () => {
     await expect(page.locator('#sc-tip-edgeStyle')).toBeHidden();
   });
 });
+
+test('maximum-size artwork exports at 300 DPI with a batch proof', async ({ page }) => {
+  test.setTimeout(90000);
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await expect(page.locator('#job')).toHaveValue('fixture');
+  await page.locator('#width').fill('6');
+  await page.locator('#height').fill('6');
+  await page.locator('#edgeStyle').selectOption('none');
+  await page.locator('#quantity').fill('1');
+  const start = performance.now();
+  const entries = zipEntries(await readDownload(page, '#all'));
+  const elapsed = Math.round(performance.now() - start);
+  const png = entries.get('color-artwork.png');
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1800, 1800]);
+  expect([...entries.keys()].some(name => name.startsWith('batch/') && name.endsWith('-proof.png'))).toBe(true);
+  expect(errors).toEqual([]);
+  console.log(`6×6 inch export at 300 DPI (Chromium): ${elapsed} ms`);
+});
