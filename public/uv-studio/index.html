@@ -204,7 +204,7 @@ function saveBytes(name,b,type='application/octet-stream'){let url=URL.createObj
 function filename(){return values().job.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,50)||'patch'}
 function manifest(v,p){return {application:'Skilled Crafting UV Studio',version:'0.3.0',design:v.job,material_profile:{type:v.material,variant:v.variant,description:profiles[v.material]?.name,ink_advisory:profiles[v.material]?.ink,process_advisory:profiles[v.material]?.safety,mirrored_reference_included:!!(v.material==='film'&&v.mirror)},production_status:'UNVALIDATED — design-only, not RIP-ready',created:new Date().toISOString(),dimensions_inches:{width:v.width,height:v.height},dpi:DPI,pixels:{width:p.w,height:p.h},stitches:{pattern:v.preset,spacing_mm:v.spacing,length_mm:v.stitchLength,angle_degrees:v.angle,appearance_strength_percent:v.contrast,border:v.border,border_width_mm:v.borderSize},nominal_height_mm:v.depth,nominal_threshold_mask_count:v.layers,mask_mapping:'grayscale 0..255 maps to an intended relative texture height of 0..nominal_height_mm; black/no-art region corresponds to zero height',printing_note:'DESIGN ASSETS ONLY. xTool O1 Omni uses xTool Studio for processing. Third-party RIP control, alignment of individual masks and physical layer height have not been validated. Do not treat mask count as printer pass count.'}}
 let currentProduction=null;
-async function prod(){let v=values();let w=Math.round(v.width*DPI),h=Math.round(v.height*DPI);$('status').textContent='Generating 300 DPI artwork…';await new Promise(r=>setTimeout(r,30));let p=produce(w,h,v);currentProduction=p;return p}
+async function prod(v=values()){let w=Math.round(v.width*DPI),h=Math.round(v.height*DPI);$('status').textContent='Generating 300 DPI artwork…';await new Promise(r=>setTimeout(r,30));let p=produce(w,h,v);currentProduction=p;return p}
 function imageCanvas(p,key){let c=document.createElement('canvas');c.width=p.w;c.height=p.h;c.getContext('2d').putImageData(new ImageData(p[key],p.w,p.h),0,0);return c}
 function mirroredArtwork(p){let orig=imageCanvas(p,'color'),c=document.createElement('canvas');c.width=p.w;c.height=p.h;let ctx=c.getContext('2d');ctx.translate(p.w,0);ctx.scale(-1,1);ctx.drawImage(orig,0,0);return c;}
 function printNotes(v){let p=profiles[v.material];return 'SKILLED CRAFTING UV STUDIO 0.3 — MATERIAL EXPERIMENTAL PREPRESS PACK\n\nSELECTED MATERIAL: '+p.name+' / '+(p.variants.find(x=>x[0]===v.variant)?.[1]||v.variant)+'\nINK ADVISORY: '+p.ink+'\nDESIGN-ONLY MAXIMUM HEIGHT TARGET: '+v.depth.toFixed(2)+' mm\n\n'+p.safety+'\n\nCHECKLIST:\n'+p.steps.map((x,i)=>(i+1)+'. '+x).join('\n')+'\n\nMAIN FILES: color-artwork.png (artwork to trial in xTool Studio); height-map-grayscale.png (experimental relative relief concept); white-underbase.png and varnish-highlights.png (intent maps); layer-masks/ (conceptual thresholds, NOT printing passes). '+(v.material==='film'&&v.mirror?'mirrored-color-REFERENCE.png is a separate reference ONLY — check workflow orientation before use. ':'')+'\n\nPhysical layering, white/varnish channels, real ink height, and mirroring are handled by manufacturer processing in xTool Studio. Verify the Studio workflow rather than assuming PNG mask layers become independently registered passes.\n\nRecord material supplier, batch, equipment, primer, xTool Studio settings, finish, height, adhesion, bend/wash test and operator. All images are 300-DPI PNGs.\n';}
@@ -558,7 +558,7 @@ async function exportV03Zip(layoutOnly=false){if(busy)return;busy=true;try{
  const cut=scCutPath(v);
  if(!cut.d)throw Error('No cut contour found. Load visible artwork or lower the opacity threshold.');
  if(pl.capacity)validateBatchCut(v,pl,cut);
- const p=await prod(),files=[],addTxt=(name,s)=>files.push({name,data:textBytes(s)});
+ const p=await prod(v),files=[],addTxt=(name,s)=>files.push({name,data:textBytes(s)});
  if(!layoutOnly){
  for(let [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],['white','white-underbase.png'],['varnish','varnish-highlights.png']]){ $('status').textContent='Encoding '+name+'…';files.push({name,data:await pngBytes(imageCanvas(p,key))});}
  for(let i=1;i<=v.layers;i++){files.push({name:`layer-masks/threshold-${String(i).padStart(2,'0')}-of-${v.layers}.png`,data:await pngBytes(makeMaskPNG(p.w,p.h,p.mask,v.layers,i))})}
@@ -777,8 +777,7 @@ $('downloadRosterSheet').onclick=async()=>{
 };
 ['cleanupWhite','cleanThreshold','effectStyle'].forEach(id=>$(id).addEventListener('input',renderSoon));
 
-/* Same-origin bridge to Skilled Crafting application: transfers recipe metadata only.
-   Original art is not uploaded. Operators must preserve the local source and exported production files. */
+/* Same-origin bridge for editable artwork, production references and proofs. */
 async function scUvCloudPacket(type){
  if(type==='SC_UV_EXPORT_EDITABLE'){
   if(!imageDataURL)throw Error('Import artwork before saving the cloud-editable project.');
@@ -790,18 +789,26 @@ async function scUvCloudPacket(type){
  }
  if(type==='SC_UV_EXPORT_PACK'){
   if(!imageDataURL)throw Error('Upload source artwork before generating a production pack.');
-  const p=await prod(),files=[],v=values();
+  if(busy)throw Error('Wait for the current export to finish.');
+  busy=true;
+  try {
+  const v=values(),outline=patchOutlineSVG(v),p=await prod(v),files=[];
   for(const [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],
     ['white','white-underbase.png'],['varnish','varnish-highlights.png']]){
    files.push({name,data:await pngBytes(imageCanvas(p,key))});
   }
-  files.push({name:'outline-cutline.svg',data:textBytes(patchOutlineSVG(v))});
-  files.push({name:'manifest.json',data:textBytes(JSON.stringify(manifest(v,p),null,2))});
+  files.push({name:'outline-cutline.svg',data:textBytes(outline)});
+  files.push({name:'manifest.json',data:textBytes(JSON.stringify(extendedManifest(v,p),null,2))});
   files.push({name:'print-notes.txt',data:textBytes(printNotes(v))});
+  files.push({name:'XTOOL-STUDIO-PRINT-GUIDE.txt',data:textBytes(scOmniPrintGuide(v))});
   const zip=zipStore(files);
   if(zip.byteLength>52428800)throw Error('Cloud print pack exceeds 50 MB; export locally instead.');
   return {type:'SC_UV_EXPORT_RESULT',mime_type:'application/zip',asset_kind:'production_zip',
     file_name:filename()+'-production.zip',buffer:zip.buffer.slice(zip.byteOffset,zip.byteOffset+zip.byteLength)};
+  } finally {
+   busy=false;
+   currentProduction=null;
+  }
  }
  if(type==='SC_UV_EXPORT_PROOF'){
   scProductProof();
@@ -828,7 +835,9 @@ window.addEventListener('message', async(event)=>{
      $('material').value=p.settings.material;loadVariants(p.settings.variant);
    }
    if(p.settings?.preset)settings.preset=p.settings.preset;
-   if(p.regionOverrides&&typeof p.regionOverrides==='object')regionOverrides=p.regionOverrides;
+   const overrides=p.settings?.regionOverrides??p.regionOverrides;
+   regionOverrides=overrides&&typeof overrides==='object'&&!Array.isArray(overrides)?{...overrides}:{};
+   selectedCalibrationId=p.settings?.selectedCalibrationId??null;
    if(Array.isArray(p.calibrationRecords)){calibrationRecords=p.calibrationRecords.slice(-400);renderCalRecords();}
    await useImage(p.artworkDataURL);renderSoon();
    window.parent.postMessage({type:'SC_UV_IMPORT_ACCEPTED',requestId:msg.requestId},event.origin);
