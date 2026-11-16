@@ -70,7 +70,7 @@
 <div class="small">Layer count creates grayscale threshold masks for testing; it does not set real printer passes. xTool Studio determines ink buildup.</div>
 <label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
 <label for="edgeStyle">Patch perimeter</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">None</option></select>
-<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px">
+<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><label class="checkbox"><input id="contourSmooth" type="checkbox"> Smooth raster cut corners</label><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px">
 <label class="checkbox"><input id="varnish" type="checkbox" checked> Generate highlight / varnish mask</label>
 <label class="checkbox" id="mirrorBox" style="display:none"><input id="mirror" type="checkbox"> Include mirrored artwork reference (film only)</label>
 <div class="small" id="mirrorNote" style="display:none">Mirroring depends on the film's print-side and xTool Studio workflow. Never mirror automatically without confirming the transfer orientation.</div>
@@ -244,7 +244,7 @@ values=function(){let v=oldValues();return {...v,
  paletteSize:Math.min(10,Math.max(2,Number($('paletteSize').value)||6)),
  autoAngles:$('autoAngles').checked, gloss:+$('gloss').value,
  reliefContrast:+$('reliefContrast').value,edgeStyle:$('edgeStyle').value,
- edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),patchShape:$('patchShape').value,
+ edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),contourSmooth:$('contourSmooth').checked,patchShape:$('patchShape').value,
  sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
  margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
  regionOverrides:{...regionOverrides},selectedCalibrationId
@@ -264,7 +264,7 @@ function outlinePath(w,h,shape,inset=0){
 // The SVG origin is padded by the requested offset. Registration must be verified manually.
 let contourCache;
 function graphicContour(v,wIn=v.width,hIn=v.height){
- const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.cleanupWhite,v.cleanThreshold]);
+ const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.cleanupWhite,v.cleanThreshold]);
  if(contourCache?.artwork===image && contourCache?.key===key)return contourCache.result;
  const result=traceGraphicContour(v,wIn,hIn);
  contourCache={artwork:image,key,result};
@@ -322,6 +322,20 @@ function hasThinMaterialBridge(mask,w,h,widthPixels){
  }
  return false;
 }
+function contourPath(points,scale,smooth){
+ const point=([x,y])=>(x/scale).toFixed(3)+','+(y/scale).toFixed(3);
+ if(!smooth)return 'M'+points.map(point).join('L')+'Z';
+ function toward(corner,neighbor){
+  const dx=neighbor[0]-corner[0],dy=neighbor[1]-corner[1];
+  const ratio=.25/Math.hypot(dx,dy);
+  return [corner[0]+dx*ratio,corner[1]+dy*ratio];
+ }
+ return points.map((corner,i)=>{
+  const before=toward(corner,points[(i+points.length-1)%points.length]);
+  const after=toward(corner,points[(i+1)%points.length]);
+  return (i===0?'M':'L')+point(before)+'Q'+point(corner)+' '+point(after);
+ }).join('')+'Z';
+}
 function traceGraphicContour(v,wIn,hIn){
  const scale=4, cw=Math.max(1,Math.round(wIn*25.4*scale)),ch=Math.max(1,Math.round(hIn*25.4*scale));
  const pad=Math.ceil((v.contourOffset+1)*scale),w=cw+2*pad,h=ch+2*pad;
@@ -356,7 +370,7 @@ function traceGraphicContour(v,wIn,hIn){
   }
   if(keep.length<3)continue;
   for(const [x,y] of keep){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}
-  paths.push('M'+keep.map(p=>(p[0]/scale).toFixed(2)+','+(p[1]/scale).toFixed(2)).join('L')+'Z');
+  paths.push(contourPath(keep,scale,v.contourSmooth));
  }
  return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,thinBridge,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
 }
@@ -555,7 +569,7 @@ function renderCalRecords(){const div=$('calRecords');div.innerHTML='';if(!calib
 function csvQuote(s){return '"'+String(s??'').replace(/"/g,'""')+'"'}
 function calibrationCSV(){const cols=['date','id','material','variant','supplier_lot','studio_mode','studio_height_mm','actual_measured_height_mm','primer','result','notes'];return [cols.map(csvQuote).join(','),...calibrationRecords.map(r=>[r.date,r.id,r.material,r.variant,r.name,r.mode,r.studioHeight,r.measured,r.primer,r.result,r.notes].map(csvQuote).join(','))].join('\r\n')+'\r\n'}
 function calRef(v){const candidates=calibrationRecords.filter(r=>r.material===v.material&&r.variant===v.variant&&r.result==='pass'&&Number(r.measured)>0&&Number(r.studioHeight)>0);return candidates.find(x=>x.id===v.selectedCalibrationId)||candidates.at(-1)||null}
-function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,minimum_material_bridge_mm:v.contourBridgeWidth,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
+function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,minimum_material_bridge_mm:v.contourBridgeWidth,smooth_cut_corners:v.contourSmooth,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
 function exportProjectJSON(){return JSON.stringify({type:'SC_UV_STUDIO_PROJECT',version:MODULE_VERSION,settings:values(),artworkDataURL:imageDataURL,calibrationRecords},null,2)}
 const oldPrintNotes=printNotes;
 printNotes=function(v){return oldPrintNotes(v)+'\nNEW v0.3 FEATURES: k-means/connected-component stitch regions, customizable angles, thread highlights, merrow/satin patch perimeter, template SVG, batch layouts, locally recorded print tests.\n\nHEIGHT CALIBRATION: calibrated records only yield a LINEAR ESTIMATE of the xTool Studio height setting. They do NOT establish that a grayscale pixel commands a physical pass or varnish/white channels. These generated masks and outlines are prepress references, not machine control.\n\nBATCH: separate color sheet PNG and reference cut SVG share document origin; align using a physical registration test before cutting.\n'};
@@ -649,7 +663,7 @@ function applyProductPreset(){const p=productPresets[$('productPreset').value];i
  if($('material').value!==p.material){$('material').value=p.material;applyMaterialProfile()}
  renderSoon();}
 function applySheetChoice(){let sheet=$('sheet').value,size=sheetSize(values());if(sheet!=='custom'){$('sheetW').value=size[0];$('sheetH').value=size[1]}for(let key of ['sheetW','sheetH'])$(key).disabled=sheet!=='custom';renderSoon()}
-for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','autoAngles','patchShape','sheetW','sheetH','margin','gap','quantity']){
+for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','autoAngles','patchShape','sheetW','sheetH','margin','gap','quantity']){
  let el=$(key);el.addEventListener('input',()=>renderSoon());el.addEventListener('change',()=>renderSoon());
 }
 $('sheet').addEventListener('change',applySheetChoice);
@@ -909,6 +923,7 @@ const scUvTips={
  edgeStyle:'Changes how the patch edge looks AND the exported cut reference. Merrow and satin keep the selected geometric patch; None follows the outer silhouette of opaque artwork. A cutline is not printed as color ink.',
  contourOffset:'Moves the proposed cutter edge outward from visible artwork. More offset gives a wider protective margin but can join nearby graphic elements or exceed the blank. Check physical registration before cutting.',
  contourIslandArea:'Suppresses small disconnected artwork regions before offsetting the cutter path. This changes the cut reference only. Keep this at zero to retain intentional small pieces.',
+ contourSmooth:'Rounds the raster corners slightly (less than 0.1 mm) in the cut reference. Inspect very small details on a scrap sample before cutting.',
  contourBridgeWidth:'Blocks cutting exports when the estimated interior of a piece is too narrow or splits at a thin connection. Enter the minimum for your stock and cutter. Zero turns off this check. Verify on a scrap sample.',
  contourHoleArea:'Fills small enclosed holes in the cut reference after the cut offset. The graphics and ink masks are preserved. Set this to zero to retain all traceable holes.',
  contourAlpha:'Treats pixels above this opacity as part of the design. Raise to ignore faint antialiasing/noise; lower to preserve soft edges. Transparent stray pixels can create separate cut loops.',
