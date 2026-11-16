@@ -1,0 +1,29 @@
+name: UV Studio verification
+
+on:
+  push:
+    branches: [feature/uv-studio-contours-guides-20261116]
+    paths:
+      - public/uv-studio/**
+      - scripts/tests/uv-studio-contours.test.cjs
+      - scripts/e2e/uv-studio.spec.mjs
+      - .github/workflows/uv-studio-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test scripts/tests/uv-studio-contours.test.cjs
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test scripts/e2e/uv-studio.spec.mjs --workers=1
