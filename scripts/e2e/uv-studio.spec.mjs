@@ -105,3 +105,17 @@ test('embedded cloud pack carries print guidance and the cleanup manifest', asyn
   expect(manifest.patch).toMatchObject({ suppress_islands_below_mm2: 1 });
   expect(errors).toEqual([]);
 });
+
+test.describe('touch settings help', () => {
+  test.use({ isMobile: true, hasTouch: true, viewport: { width: 390, height: 844 } });
+  test('tap opens and dismisses help', async ({ page }) => {
+    await openStudio(page);
+    const help = page.getByRole('button', { name: 'Help: Patch perimeter' });
+    await help.tap();
+    await expect(help).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#sc-tip-edgeStyle')).toBeVisible();
+    await help.tap();
+    await expect(help).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#sc-tip-edgeStyle')).toBeHidden();
+  });
+});
