@@ -2,6 +2,7 @@
   {
     "AllowedOrigins": [
       "https://inventory.skilledcrafting.com",
+      "https://app.skilledcrafting.com",
       "http://localhost:5173"
     ],
     "AllowedMethods": [
@@ -18,4 +19,3 @@
     "MaxAgeSeconds": 3600
   }
 ]
-
