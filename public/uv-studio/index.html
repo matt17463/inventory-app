@@ -71,7 +71,21 @@
 <label for="layers">Nominal buildup separations <strong id="layersV">6</strong></label><input id="layers" type="range" min="2" max="12" step="1" value="6">
 <div class="small">Layer count creates grayscale threshold masks for testing; it does not set real printer passes. xTool Studio determines ink buildup.</div>
 <label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
-<label for="edgeStyle">Patch perimeter</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">None</option></select>
+<label for="edgeStyle">Patch perimeter style</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">No geometric perimeter (artwork silhouette)</option></select><div id="geometricPatchControls">
+<label for="patchShape">Patch outline shape</label><select id="patchShape"><option value="rounded">Rounded rectangle</option><option value="rectangle">Rectangle</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="capsule">Capsule / stadium</option><option value="octagon">Octagon (8 sides)</option><option value="hexagon">Hexagon (6 sides)</option><option value="pentagon">Pentagon (5 sides)</option><option value="diamond">Diamond</option><option value="shield">Shield</option></select>
+<div class="small">The shape controls the physical patch outline and the decorative Merrow/satin edge. Circle uses the smaller patch dimension as its diameter.</div>
+</div>
+<div class="module" id="artworkPlacementControls" style="padding:12px;margin:10px 0;border:1px solid #426375">
+<strong>Artwork size &amp; placement (separate from patch)</strong>
+<label for="artworkWidth">Artwork width in inches <strong id="artworkWidthV">Auto fit</strong></label>
+<input id="artworkWidth" type="number" min="0" max="6" step=".05" value="0">
+<div class="small">Enter 0 for automatic fit. Otherwise, artwork keeps its original proportions. Changing the patch size will not change a manually selected artwork width.</div>
+<label for="artworkX">Move artwork horizontally <strong id="artworkXV">Centered</strong></label>
+<input id="artworkX" type="range" min="-40" max="40" step="1" value="0">
+<label for="artworkY">Move artwork vertically <strong id="artworkYV">Centered</strong></label>
+<input id="artworkY" type="range" min="-40" max="40" step="1" value="0">
+<div class="small" id="artworkDimensions" role="status" aria-live="polite">Artwork preview dimensions update when the image loads.</div>
+</div>
 <div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><label class="checkbox"><input id="contourSmooth" type="checkbox"> Smooth raster cut corners</label><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px">
 <label class="checkbox"><input id="varnish" type="checkbox" checked> Generate highlight / varnish mask</label>
 <label class="checkbox" id="mirrorBox" style="display:none"><input id="mirror" type="checkbox"> Include mirrored artwork reference (film only)</label>
@@ -81,7 +95,7 @@
 <section class="middle"><div class="projectbar"><div><h1>Raised Stitch Designer</h1><div class="subtle">Procedurally create stitch shading and a matched grayscale height map from a logo.</div></div><div class="busy" id="status" aria-live="polite">Ready</div></div>
 <div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Stitch artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
 <div class="modulegrid"><div class="module"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
-<div class="module"><h2>Patch format &amp; production layout</h2><label for="productPreset">Quick product template</label><select id="productPreset"><option value="custom">Custom dimensions / geometry</option><option value="hat-leather" selected>Hat leather patch · 3.5 × 2.5 in</option><option value="hat-oval">Hat oval patch · 3.5 × 2.25 in</option><option value="garment-square">Apparel badge · 3 × 3 in</option><option value="chest-small">Left-chest patch · 2.5 × 2.5 in</option><option value="heat-transfer">Raised transfer motif · 3.5 × 2.5 in</option><option value="metal-tag">Metal badge · 4 × 3 in</option></select><div class="form-row"><div><label for="patchShape">Outline / patch template</label><select id="patchShape"><option value="rounded">Rounded rectangle / hat patch</option><option value="rectangle">Rectangle / apparel</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="hexagon">Hexagon</option><option value="shield">Shield</option></select></div><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
+<div class="module"><h2>Patch format &amp; production layout</h2><label for="productPreset">Quick product template</label><select id="productPreset"><option value="custom">Custom dimensions / geometry</option><option value="hat-leather" selected>Hat leather patch · 3.5 × 2.5 in</option><option value="hat-oval">Hat oval patch · 3.5 × 2.25 in</option><option value="garment-square">Apparel badge · 3 × 3 in</option><option value="chest-small">Left-chest patch · 2.5 × 2.5 in</option><option value="heat-transfer">Raised transfer motif · 3.5 × 2.5 in</option><option value="metal-tag">Metal badge · 4 × 3 in</option></select><div class="form-row"><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
 <div class="form-row">
 <div><label for="jigX">First blank X from sheet left (in)</label><input type="number" min="0" max="12" step=".01" id="jigX" value=".25"></div>
 <div><label for="jigY">First blank Y from sheet top (in)</label><input type="number" min="0" max="16" step=".01" id="jigY" value=".25"></div>
@@ -142,7 +156,20 @@ async function useImage(src){image=await loadImg(src);imageDataURL=src;renderSoo
 function values(){return {width:Math.max(.75,Math.min(6,Number($('width').value)||3.5)),height:Math.max(.75,Math.min(6,Number($('height').value)||2.5)),spacing:+$('spacing').value,stitchLength:+$('stitchLength').value,angle:+$('angle').value,contrast:+$('contrast').value,borderSize:+$('borderSize').value,depth:+$('depth').value,layers:+$('layers').value,border:$('border').checked,varnish:$('varnish').checked,preset:settings.preset,job:$('job').value||'Faux Embroidery Patch',material:$('material').value,variant:$('variant').value,mirror:$('mirror').checked};}
 function UI(){const v=values();['spacing','stitchLength','borderSize','depth'].forEach(k=>$(k+'V').textContent=v[k].toFixed(k==='depth'?2:k==='spacing'?2:1)+' mm');$('angleV').textContent=v.angle+'°';$('contrastV').textContent=v.contrast+'%';$('layersV').textContent=v.layers;$('summarySize').textContent=`${v.width} × ${v.height} in`;$('summaryPixels').textContent=`${Math.round(v.width*DPI)} × ${Math.round(v.height*DPI)} pixels at 300 DPI`;$('summaryHeight').textContent=`0–${v.depth.toFixed(2)} mm`;$('summaryLayers').textContent=v.layers;$('dimensions').textContent=`${v.width} × ${v.height} in · 300 DPI`;materialUI(v);}
 function renderSoon(){UI();clearTimeout(debounce);debounce=setTimeout(()=>renderPreview(),120)}
-function paintBase(w,h){let c=document.createElement('canvas');c.width=w;c.height=h;let ctx=c.getContext('2d',{willReadFrequently:true});ctx.clearRect(0,0,w,h);let pad=Math.min(w,h)*.04;if(image){let scale=Math.min((w-pad*2)/image.width,(h-pad*2)/image.height);let dw=image.width*scale,dh=image.height*scale;ctx.drawImage(image,(w-dw)/2,(h-dh)/2,dw,dh)}return ctx.getImageData(0,0,w,h)}
+function artworkGeometry(w,h,v){
+ if(!image)return null;
+ const pad=Math.min(w,h)*.04;
+ const scale=(v.artworkWidth>0?v.artworkWidth*(w/v.width)/image.width:Math.min((w-pad*2)/image.width,(h-pad*2)/image.height));
+ const dw=image.width*scale,dh=image.height*scale;
+ return {dw,dh,x:(w-dw)/2+(v.artworkX/100)*w,y:(h-dh)/2+(v.artworkY/100)*h};
+}
+function paintBase(w,h,v=values()){
+ const c=document.createElement('canvas');c.width=w;c.height=h;
+ const ctx=c.getContext('2d',{willReadFrequently:true});ctx.clearRect(0,0,w,h);
+ const g=artworkGeometry(w,h,v);
+ if(g)ctx.drawImage(image,g.x,g.y,g.dw,g.dh);
+ return ctx.getImageData(0,0,w,h);
+}
 function distanceField(mask,w,h,fromForeground=false){
  const d=new Float32Array(w*h),diag=Math.SQRT2,far=1e6;
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;const inside=mask[i];d[i]=fromForeground?(inside?0:far):(!inside||x===0||y===0||x===w-1||y===h-1||!mask[i-1]||!mask[i-w]||(x<w-1&&!mask[i+1])||(y<h-1&&!mask[i+w]))?0:far;}
@@ -153,7 +180,7 @@ function cap(x,min,max){return Math.max(min,Math.min(max,x))}
 function frac(n){return n-Math.floor(n)}
 function colorClamped(z){return cap(Math.round(z),0,255)}
 function produce(w,h,v){
- let src=paintBase(w,h).data;let mask=new Uint8Array(w*h);for(let i=0;i<w*h;i++)mask[i]=src[i*4+3]>90?1:0;
+ let src=paintBase(w,h,v).data;let mask=new Uint8Array(w*h);for(let i=0;i<w*h;i++)mask[i]=src[i*4+3]>90?1:0;
  let dist=distanceField(mask,w,h), pxPerMM=w/(v.width*25.4);
  let pitch=Math.max(1.5,v.spacing*pxPerMM), length=Math.max(3,v.stitchLength*pxPerMM), borderWidth=Math.max(1,v.borderSize*pxPerMM);
  const a=v.angle*Math.PI/180,cos=Math.cos(a),sin=Math.sin(a),strength=v.contrast/100;
@@ -276,6 +303,7 @@ values=function(){let v=oldValues();return {...v,
  autoAngles:$('autoAngles').checked, gloss:+$('gloss').value,
  reliefContrast:+$('reliefContrast').value,edgeStyle:$('edgeStyle').value,
  edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),contourSmooth:$('contourSmooth').checked,patchShape:$('patchShape').value,
+ artworkWidth:cap(Number($('artworkWidth').value)||0,0,6),artworkX:cap(Number($('artworkX').value)||0,-40,40),artworkY:cap(Number($('artworkY').value)||0,-40,40),
  sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
  margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
  regionOverrides:{...regionOverrides},selectedCalibrationId
@@ -286,6 +314,10 @@ function outlinePath(w,h,shape,inset=0){
  const p=(a,b)=>`${(a).toFixed(3)} ${(b).toFixed(3)}`;
  if(shape==='rectangle')return `M${p(x,y)}H${(x+W).toFixed(3)}V${(y+H).toFixed(3)}H${x.toFixed(3)}Z`;
  if(shape==='oval'||shape==='circle') {let rx=shape==='circle'?Math.min(W,H)/2:W/2,ry=shape==='circle'?rx:H/2,cx=x+W/2,cy=y+H/2;return `M ${p(cx-rx,cy)} A ${rx} ${ry} 0 1 0 ${p(cx+rx,cy)} A ${rx} ${ry} 0 1 0 ${p(cx-rx,cy)} Z`}
+ if(shape==='capsule'){const rr=Math.min(W,H)/2;return `M ${p(x+rr,y)} H ${(x+W-rr).toFixed(3)} A ${rr} ${rr} 0 0 1 ${p(x+W-rr,y+H)} H ${(x+rr).toFixed(3)} A ${rr} ${rr} 0 0 1 ${p(x+rr,y)} Z`;}
+ if(shape==='octagon'){const t=Math.min(W,H)*.29;return `M${p(x+t,y)} L${p(x+W-t,y)} L${p(x+W,y+t)} L${p(x+W,y+H-t)} L${p(x+W-t,y+H)} L${p(x+t,y+H)} L${p(x,y+H-t)} L${p(x,y+t)}Z`;}
+ if(shape==='pentagon')return `M${p(x+W*.5,y)} L${p(x+W,y+H*.38)} L${p(x+W*.8,y+H)} L${p(x+W*.2,y+H)} L${p(x,y+H*.38)}Z`;
+ if(shape==='diamond')return `M${p(x+W*.5,y)} L${p(x+W,y+H*.5)} L${p(x+W*.5,y+H)} L${p(x,y+H*.5)}Z`;
  if(shape==='hexagon')return `M${p(x+W*.23,y)} L${p(x+W*.77,y)} L${p(x+W,y+H/2)} L${p(x+W*.77,y+H)} L${p(x+W*.23,y+H)} L${p(x,y+H/2)}Z`;
  if(shape==='shield')return `M${p(x+W*.06,y)} L${p(x+W*.94,y)} L${p(x+W*.91,y+H*.60)} Q${p(x+W*.8,y+H*.80)} ${p(x+W*.5,y+H)} Q${p(x+W*.20,y+H*.80)} ${p(x+W*.09,y+H*.60)}Z`;
  return `M ${p(x+r,y)} H ${(x+W-r).toFixed(3)} Q${p(x+W,y)} ${p(x+W,y+r)} V${(y+H-r).toFixed(3)} Q${p(x+W,y+H)} ${p(x+W-r,y+H)} H${(x+r).toFixed(3)} Q${p(x,y+H)} ${p(x,y+H-r)} V${(y+r).toFixed(3)} Q${p(x,y)} ${p(x+r,y)}Z`;
@@ -295,7 +327,7 @@ function outlinePath(w,h,shape,inset=0){
 // The SVG origin is padded by the requested offset. Registration must be verified manually.
 let contourCache;
 function graphicContour(v,wIn=v.width,hIn=v.height){
- const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.cleanupWhite,v.cleanThreshold]);
+ const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.cleanupWhite,v.cleanThreshold,v.artworkWidth,v.artworkX,v.artworkY]);
  if(contourCache?.artwork===image && contourCache?.key===key)return contourCache.result;
  const result=traceGraphicContour(v,wIn,hIn);
  contourCache={artwork:image,key,result};
@@ -370,7 +402,7 @@ function contourPath(points,scale,smooth){
 function traceGraphicContour(v,wIn,hIn){
  const scale=4, cw=Math.max(1,Math.round(wIn*25.4*scale)),ch=Math.max(1,Math.round(hIn*25.4*scale));
  const pad=Math.ceil((v.contourOffset+1)*scale),w=cw+2*pad,h=ch+2*pad;
- const source=paintBase(cw,ch).data,mask=new Uint8Array(w*h);
+ const source=paintBase(cw,ch,v).data,mask=new Uint8Array(w*h);
  const a=Math.round(v.contourAlpha*2.55);
  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++)if(source[(y*cw+x)*4+3]>=a)mask[(y+pad)*w+x+pad]=1;
  suppressSmallRegions(mask,w,h,1,v.contourIslandArea*scale**2);
@@ -447,7 +479,7 @@ function segmentColors(src,mask,w,h,k){
 }
 const oldProduce=produce;
 produce=function(w,h,v){
- let res=oldProduce(w,h,v),N=w*h,src=paintBase(w,h).data, seg=segmentColors(src,res.mask,w,h,v.paletteSize);
+ let res=oldProduce(w,h,v),N=w*h,src=paintBase(w,h,v).data, seg=segmentColors(src,res.mask,w,h,v.paletteSize);
  const mm=w/(v.width*25.4),slen=Math.max(2,v.stitchLength*mm),pitch=Math.max(1.5,v.spacing*mm);
  const vmap=new Uint8ClampedArray(N*4);const attrs=seg.components;
  for(let i=0;i<N;i++){
@@ -524,7 +556,10 @@ function layoutPlan(v){const [sw,sh]=sheetSize(v),m=cap(v.margin,0,1),g=cap(v.ga
  return {sw,sh,margin:m,gap:g,cols,rows,capacity,quantity:q,sheets,fullSheets:capacity?Math.floor(q/capacity):0,remainder:capacity?q%capacity:0};
 }
 function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Patch + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
-const oldUI=UI;UI=function(){oldUI();$('contourControls').hidden=values().edgeStyle!=='none';$('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
+const oldUI=UI;UI=function(){oldUI();$('contourControls').hidden=values().edgeStyle!=='none';$('geometricPatchControls').hidden=values().edgeStyle==='none';
+ const art=values(),g=artworkGeometry(art.width*300,art.height*300,art);$('artworkWidthV').textContent=art.artworkWidth?art.artworkWidth.toFixed(2)+' in':'Auto fit';$('artworkXV').textContent=art.artworkX?art.artworkX+'%':'Centered';$('artworkYV').textContent=art.artworkY?art.artworkY+'%':'Centered';
+ if(g){const out=g.x<0||g.y<0||g.x+g.dw>art.width*300||g.y+g.dh>art.height*300;const label=$('artworkDimensions');label.textContent='Artwork: '+(g.dw/300).toFixed(2)+' × '+(g.dh/300).toFixed(2)+' in within '+art.width.toFixed(2)+' × '+art.height.toFixed(2)+' in patch.'+(out?' Warning: image extends beyond the rectangular patch bounds; reduce width or reposition.':' Check curved/polygon edges in Cutline proof before printing.');label.style.color=out?'#f0ad83':'var(--muted)';}
+$('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
 function sheetPosition(v,plan,i){
  return [
   (plan.originX+(i%plan.cols)*(v.width+plan.gapX))*25.4,
@@ -600,7 +635,7 @@ function renderCalRecords(){const div=$('calRecords');div.innerHTML='';if(!calib
 function csvQuote(s){return '"'+String(s??'').replace(/"/g,'""')+'"'}
 function calibrationCSV(){const cols=['date','id','material','variant','supplier_lot','studio_mode','studio_height_mm','actual_measured_height_mm','primer','result','notes'];return [cols.map(csvQuote).join(','),...calibrationRecords.map(r=>[r.date,r.id,r.material,r.variant,r.name,r.mode,r.studioHeight,r.measured,r.primer,r.result,r.notes].map(csvQuote).join(','))].join('\r\n')+'\r\n'}
 function calRef(v){const candidates=calibrationRecords.filter(r=>r.material===v.material&&r.variant===v.variant&&r.result==='pass'&&Number(r.measured)>0&&Number(r.studioHeight)>0);return candidates.find(x=>x.id===v.selectedCalibrationId)||candidates.at(-1)||null}
-function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,minimum_material_bridge_mm:v.contourBridgeWidth,smooth_cut_corners:v.contourSmooth,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
+function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,artwork_width_in:v.artworkWidth||'automatic fit',artwork_offset_x_percent:v.artworkX,artwork_offset_y_percent:v.artworkY,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,minimum_material_bridge_mm:v.contourBridgeWidth,smooth_cut_corners:v.contourSmooth,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
 function exportProjectJSON(){return JSON.stringify({type:'SC_UV_STUDIO_PROJECT',version:MODULE_VERSION,settings:values(),artworkDataURL:imageDataURL,calibrationRecords},null,2)}
 const oldPrintNotes=printNotes;
 printNotes=function(v){return oldPrintNotes(v)+'\nNEW v0.3 FEATURES: k-means/connected-component stitch regions, customizable angles, thread highlights, merrow/satin patch perimeter, template SVG, batch layouts, locally recorded print tests.\n\nHEIGHT CALIBRATION: calibrated records only yield a LINEAR ESTIMATE of the xTool Studio height setting. They do NOT establish that a grayscale pixel commands a physical pass or varnish/white channels. These generated masks and outlines are prepress references, not machine control.\n\nBATCH: separate color sheet PNG and reference cut SVG share document origin; align using a physical registration test before cutting.\n'};
@@ -694,7 +729,7 @@ function applyProductPreset(){const p=productPresets[$('productPreset').value];i
  if($('material').value!==p.material){$('material').value=p.material;applyMaterialProfile()}
  renderSoon();}
 function applySheetChoice(){let sheet=$('sheet').value,size=sheetSize(values());if(sheet!=='custom'){$('sheetW').value=size[0];$('sheetH').value=size[1]}for(let key of ['sheetW','sheetH'])$(key).disabled=sheet!=='custom';renderSoon()}
-for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','autoAngles','patchShape','sheetW','sheetH','margin','gap','quantity']){
+for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','autoAngles','patchShape','artworkWidth','artworkX','artworkY','sheetW','sheetH','margin','gap','quantity']){
  let el=$(key);el.addEventListener('input',()=>renderSoon());el.addEventListener('change',()=>renderSoon());
 }
 $('sheet').addEventListener('change',applySheetChoice);
@@ -961,7 +996,8 @@ const scUvTips={
  edgeColor:'Sets the simulated decorative thread color when Merrow or satin is selected; it does not change the actual thread or patch material.',
  depth:'Artist target for perceived raised texture. Actual deposited thickness depends on xTool Studio and needs physical calibration; never assume the grayscale PNG is a direct printer pass command.',
  layers:'Produces threshold reference masks for artwork planning; it does not set xTool Studio ink-layer count.',
- patchShape:'Selects geometric cutter outline when the patch perimeter is Merrow or satin; None uses graphic silhouette instead.',
+ patchShape:'Choose the physical geometric patch outline for Merrow or satin borders. Circle uses the smaller dimension as its diameter. Review actual cut alignment.',
+ artworkWidth:'Set the artwork width in inches without changing the patch size; 0 fits automatically. Original artwork proportions are preserved.',artworkX:'Move the artwork left or right within the patch. Inspect curved and angled edges for overlap.',artworkY:'Move the artwork up or down within the patch. Inspect the cutline proof.',
  material:'Select substrate and ink guidance. Leather/PU requires flexible-white trials; metal typically needs rigid chemistry and substrate-specific preparation.',
  variant:'Select the actual substrate construction. Changing leather, film or metal variant changes compatibility assumptions and should trigger new sample approval.',
  varnish:'Generates a transparent highlight reference mask. Actual varnish placement/passes must be configured and checked in xTool Studio.',
