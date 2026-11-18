@@ -300,7 +300,7 @@ function parseJdsIndustries(pages) {
       const description = joinedCells(cells.filter((cell) => cell.x >= 240 && cell.x < 390
         && cell.y <= anchor.y + 15 && cell.y >= anchor.y - 23
         && !/free freight|customer service|products|resources/i.test(cell.str)));
-      if (!ordered || costText === undefined || totalText === undefined) continue;
+      if (!ordered || shipped <= 0 || costText === undefined || totalText === undefined) continue;
       // Promotional catalog is not an inventory item; never receive it.
       if (unitCost === 0 && lineTotal === 0 && /catalog|^GIFT/i.test(description + ' ' + anchor.str)) continue;
       const color = /Black\/Black/i.test(description) ? 'Black/Black'
