@@ -155,3 +155,39 @@ test('live proof stays docked and synchronizes into the read-only pop-out window
   await expect(page.locator('#popoutPreview')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('geometric octagon and independent physical artwork width persist without resizing patch', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await page.locator('#edgeStyle').selectOption('merrow');
+  await page.locator('#width').fill('3.5');
+  await page.locator('#height').fill('2.5');
+  await page.locator('#patchShape').selectOption('octagon');
+  await page.locator('#artworkWidth').fill('1.25');
+  await page.locator('#artworkX').fill('10');
+  await page.locator('#artworkY').fill('-5');
+  await expect(page.locator('#artworkDimensions')).toContainText('Artwork: 1.25 × 1.25 in');
+  await expect(page.locator('#width')).toHaveValue('3.5');
+  await expect(page.locator('#height')).toHaveValue('2.5');
+  const octagon = await readDownload(page, '#outlineSvg');
+  expect(octagon.toString()).toContain('Geometric patch perimeter');
+  expect(octagon.toString()).toMatch(/L[\d.]+ [\d.]+/);
+  await page.locator('#patchShape').selectOption('circle');
+  const circle = await readDownload(page, '#outlineSvg');
+  expect(circle.toString()).toMatch(/ A [\d.]+ [\d.]+ 0 1 0 /);
+  expect(circle.toString()).not.toEqual(octagon.toString());
+  await page.locator('#patchShape').selectOption('octagon');
+  await page.locator('#width').fill('4');
+  await expect(page.locator('#artworkDimensions')).toContainText('Artwork: 1.25 × 1.25 in');
+  const saved = await readDownload(page, '#save');
+  expect(JSON.parse(saved.toString()).settings).toMatchObject({
+    width: 4, height: 2.5, edgeStyle: 'merrow', patchShape: 'octagon',
+    artworkWidth: 1.25, artworkX: 10, artworkY: -5,
+  });
+  await page.locator('#artworkWidth').fill('0');
+  await page.locator('#projectInput').setInputFiles({ name: 'saved.json', mimeType: 'application/json', buffer: saved });
+  await expect(page.locator('#artworkWidth')).toHaveValue('1.25');
+  await expect(page.locator('#artworkX')).toHaveValue('10');
+  await expect(page.locator('#artworkY')).toHaveValue('-5');
+  expect(errors).toEqual([]);
+});
