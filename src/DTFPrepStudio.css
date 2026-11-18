@@ -33,3 +33,15 @@
 .dtf-before-overlay{position:absolute!important;width:94%;height:94%;object-fit:contain;pointer-events:none}
 .dtf-source img{touch-action:none;user-select:none}
 .dtf-point-overlay{position:absolute;left:0;top:0;pointer-events:none;max-width:none;max-height:none}
+
+/* Keep the editable controls on the left and the live artwork proof visible on the right. */
+@media (min-width: 1100px) {
+  .dtf-workspace { grid-template-columns: minmax(285px, 340px) minmax(0, 1fr); }
+  .dtf-sidebar { grid-column: 1; grid-row: 1; max-height: none; overflow: visible; }
+  .dtf-viewer { grid-column: 2; grid-row: 1; position: sticky; top: 84px; align-self: start; max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; }
+  .dtf-canvas { height: clamp(230px, 23vw, 430px); }
+}
+@media (max-width: 1099px) { .dtf-viewer { position: static; } }
+
+.dtf-studio .artwork-popout-button{border:1px solid #4a94a8;border-radius:8px;background:#1d3c50;color:#eaffff;padding:7px 10px;cursor:pointer;font-size:.75rem;letter-spacing:normal;font-weight:700;min-height:34px}
+.dtf-studio .artwork-popout-button:focus-visible{outline:2px solid #72dafa;outline-offset:2px}

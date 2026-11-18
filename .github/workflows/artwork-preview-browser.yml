@@ -1,0 +1,29 @@
+name: Artwork preview browser regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/DTFPrepStudio*'
+      - 'src/MockupStudio*'
+      - 'src/components/ArtworkPopoutPreview.jsx'
+      - 'public/uv-studio/index.html'
+      - 'scripts/e2e/uv-studio.spec.mjs'
+      - 'scripts/e2e/dtf-studio.spec.mjs'
+      - 'playwright.dtf.config.mjs'
+      - '.github/workflows/artwork-preview-browser.yml'
+  workflow_dispatch:
+
+jobs:
+  browser-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test scripts/e2e/uv-studio.spec.mjs --browser chromium --workers 1 --reporter list
+      - run: npx playwright test --config playwright.dtf.config.mjs --workers 1 --reporter list

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ArtworkPopoutPreview from './components/ArtworkPopoutPreview';
 import { supabase } from './supabaseClient';
 import {
   ActionButton,
@@ -697,6 +698,7 @@ function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBus
     finally { setBusy(false); }
   }
 
+  const placementPopoutRef = useRef(null);
   if (!blanks.length || !artwork.length) return <EmptyState title="Blank photos and artwork are required" description="Add both before creating placements." />;
   return (
     <>
@@ -719,7 +721,7 @@ function PlacementsTab({ projectId, blanks, artwork, rows, urls, refresh, setBus
             </FieldGrid>
             <div className="sc-button-row"><ActionButton type="submit" tone="primary">{form.id ? 'Update Placement' : 'Save Placement'}</ActionButton>{form.id ? <ActionButton onClick={() => setForm(empty)}>Cancel Edit</ActionButton> : null}</div>
           </form>
-          <PlacementPreview blankUrl={urls[blank?.id]} artworkUrl={urls[art?.id]} placement={form} blankAsset={blank} />
+          <div className="mockup-placement-preview-dock"><div className="mockup-preview-actions"><ArtworkPopoutPreview targetRef={placementPopoutRef} rootClass="mockup-studio-page" title="Mockup placement proof" /></div><div ref={placementPopoutRef}><PlacementPreview blankUrl={urls[blank?.id]} artworkUrl={urls[art?.id]} placement={form} blankAsset={blank} /></div></div>
         </div>
       </SectionCard>
       <SectionCard title={`Saved placements (${rows.length})`}>

@@ -109,3 +109,11 @@
 .mockup-project-filters label > span {color:var(--sc-muted);}
 .mockup-project-filters :is(input,select) { width:100%; min-height:42px; border-radius:9px; padding:.6rem; color:var(--sc-text); background:var(--sc-panel); border:1px solid var(--sc-control-border); }
 .mockup-project-filters button {min-height:42px;}
+
+/* Artwork placement proof remains visible while editing long placement forms. */
+@media (min-width: 1100px) {
+  .mockup-editor-layout > .mockup-placement-preview { position: sticky; top: 84px; align-self: start; max-height: calc(100dvh - 100px); overflow: auto; }
+}
+
+.mockup-placement-preview-dock{position:relative;min-width:0}.mockup-preview-actions{display:flex;justify-content:flex-end;margin-bottom:.5rem}.mockup-preview-actions button{min-height:36px;cursor:pointer;border:1px solid var(--sc-border,#64748b);border-radius:8px;padding:7px 12px;background:var(--sc-panel,#fff);color:var(--sc-text,#1f2937)}
+@media(min-width:1100px){.mockup-editor-layout>.mockup-placement-preview-dock{position:sticky;top:84px;align-self:start;max-height:calc(100dvh - 100px);overflow:auto}}
