@@ -743,7 +743,7 @@ $('calImport').addEventListener('change',async e=>{let f=e.target.files?.[0];if(
 $('layoutZip').onclick=()=>exportV03Zip(true);
 $('all').onclick=()=>exportV03Zip(false);
 $('outlineSvg').onclick=()=>{
- try{saveBytes(filename()+'-patch-outline.svg',textBytes(patchOutlineSVG(values())),'image/svg+xml')}
+ try{saveBytes(filename()+'-patch-outline.svg',textBytes(patchOutlineSVG(values())),'application/octet-stream');$('status').textContent='✓ Cutline SVG ready'}
  catch(error){$('status').textContent='Export error: '+error.message}
 };
 $('save').onclick=()=>saveBytes(filename()+'-project-v03.json',textBytes(exportProjectJSON()),'application/json');
