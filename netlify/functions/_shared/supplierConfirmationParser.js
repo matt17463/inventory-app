@@ -94,26 +94,27 @@ function parseSsActivewear(pages) {
   for (const page of pages) {
     const cells = pageCells(page);
     const anchors = cells
-      .filter((cell) => cell.x < 65 && /^[0-9A-F]{8}$/i.test(cell.str))
+      .filter((cell) => cell.x < 65 && /^[0-9A-F]{8}\*?$/i.test(cell.str))
       .sort((left, right) => right.y - left.y);
 
     anchors.forEach((anchor) => {
       // S&S prints each item on one visual row. Keeping the region tight prevents
       // page headers/footers from being attached to the first or last item.
       const region = cells.filter((cell) => near(cell.y, anchor.y, 8));
+      const continuation = cells.filter((cell) => cell.y < anchor.y - 7 && cell.y >= anchor.y - 16);
       const sizeCell = nearest(region, anchor, (cell) => cell.x >= 420 && cell.x < 480 && near(cell.y, anchor.y, 8));
       const quantityCell = nearest(region, anchor, (cell) => cell.x >= 480 && cell.x < 520 && /^\d+$/.test(cell.str) && near(cell.y, anchor.y, 8));
       const priceCell = nearest(region, anchor, (cell) => cell.x >= 520 && cell.x < 560 && /^\d+[.,]\d{2}$/.test(cell.str) && near(cell.y, anchor.y, 8));
       const totalCell = nearest(region, anchor, (cell) => cell.x >= 560 && /^\d+[.,]\d{2}$/.test(cell.str) && near(cell.y, anchor.y, 8));
-      const description = joinedCells(region.filter((cell) => cell.x >= 70 && cell.x < 335));
-      const color = joinedCells(region.filter((cell) => cell.x >= 335 && cell.x < 420));
+      const description = joinedCells([...region, ...continuation].filter((cell) => cell.x >= 70 && cell.x < 335));
+      const color = joinedCells([...region, ...continuation].filter((cell) => cell.x >= 335 && cell.x < 420));
       const size = clean(sizeCell?.str);
       const quantity = integer(quantityCell?.str);
       if (!size || quantity <= 0) return;
 
       lines.push({
-        supplier_line_key: anchor.str,
-        supplier_sku: anchor.str,
+        supplier_line_key: anchor.str.replace(/\*$/, ''),
+        supplier_sku: anchor.str.replace(/\*$/, ''),
         description,
         brand: inferredBrand(description),
         style: inferredStyle(description),
@@ -260,6 +261,81 @@ function parseMomentec(pages) {
   };
 }
 
+
+function parseJdsIndustries(pages) {
+  const allCells = pages.flatMap(pageCells);
+  const fullText = allCells.map((cell) => cell.str).join(' ');
+  const orderNumber = fullText.match(/Order Number:\s*(\d{5,})/i)?.[1]
+    || findHeaderValue(pages, /Order Number:/i, /^\d{5,}$/);
+  const orderDate = fullText.match(/Placed Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)?.[1]
+    || sameRowValue(pages, /Placed Date:/i, /^\d{1,2}\/\d{1,2}\/\d{4}$/);
+  const poNumber = fullText.match(/P\.O\.:\s*([A-Z0-9-]+)/i)?.[1] || '';
+  const lines = [];
+  const parseAmount = (value) => money(String(value ?? '').replace(/^\./, '0.'));
+  const isMoney = (value) => /^\$?(?:\d+)?\.\d{2,3}$/.test(clean(value));
+
+  for (const page of pages) {
+    const cells = pageCells(page);
+    const anchors = cells
+      .filter((cell) => cell.x >= 155 && cell.x < 240 && /^[A-Z][A-Z0-9-]{3,}$/i.test(cell.str)
+        && cells.some((candidate) => candidate.x >= 450 && candidate.x < 480
+          && near(candidate.y, cell.y, 5) && /^\d{1,3}$/.test(candidate.str)))
+      .sort((a, b) => b.y - a.y);
+
+    for (const anchor of anchors) {
+      const row = cells.filter((cell) => near(cell.y, anchor.y, 5));
+      const numberAt = (minX, maxX) => row
+        .filter((cell) => cell.x >= minX && cell.x < maxX && /^\d+$/.test(cell.str))
+        .sort((a, b) => a.x - b.x)[0]?.str;
+      const moneyAt = (minX, maxX) => row
+        .filter((cell) => cell.x >= minX && cell.x < maxX && isMoney(cell.str))
+        .sort((a, b) => a.x - b.x)[0]?.str;
+      const ordered = integer(numberAt(50, 95));
+      const shipped = integer(numberAt(95, 130));
+      const backordered = integer(numberAt(130, 165));
+      const costText = moneyAt(480, 530);
+      const totalText = moneyAt(530, 575);
+      const unitCost = parseAmount(costText);
+      const lineTotal = parseAmount(totalText);
+      const description = joinedCells(cells.filter((cell) => cell.x >= 240 && cell.x < 390
+        && cell.y <= anchor.y + 15 && cell.y >= anchor.y - 23
+        && !/free freight|customer service|products|resources/i.test(cell.str)));
+      if (!ordered || shipped <= 0 || costText === undefined || totalText === undefined) continue;
+      // Promotional catalog is not an inventory item; never receive it.
+      if (unitCost === 0 && lineTotal === 0 && /catalog|^GIFT/i.test(description + ' ' + anchor.str)) continue;
+      const color = /Black\/Black/i.test(description) ? 'Black/Black'
+        : /Ultra White/i.test(description) ? 'Ultra White'
+          : /\bWhite\b/i.test(description) ? 'White' : '';
+      lines.push({
+        supplier_line_key: anchor.str,
+        supplier_sku: anchor.str,
+        description,
+        brand: 'JDS Industries',
+        style: anchor.str,
+        color,
+        size: 'One Size',
+        audience: '',
+        ordered_quantity: shipped,
+        source_ordered_quantity: ordered,
+        shipped_quantity: shipped,
+        backordered_quantity: backordered,
+        unit_cost: unitCost,
+        line_total: lineTotal,
+        source_page: Number(page.pageNumber || 1),
+      });
+    }
+  }
+  return {
+    supplier_key: 'jds_industries',
+    supplier_name: 'JDS Industries',
+    order_number: clean(orderNumber),
+    po_number: clean(poNumber),
+    order_date: clean(orderDate),
+    document_type: 'proforma_receipt',
+    lines,
+  };
+}
+
 export function parseSupplierConfirmationPages(pages) {
   const allText = pages.flatMap(pageCells).map((cell) => cell.str).join(' ');
   let parsed;
@@ -270,7 +346,8 @@ export function parseSupplierConfirmationPages(pages) {
 
   if (isSsOrderConfirmation || isSsInvoice) parsed = parseSsActivewear(pages);
   else if (/momentecbrands\.com|PO Box 14939/i.test(allText) && /ORDER CONFIRMATION/i.test(allText)) parsed = parseMomentec(pages);
-  else throw new Error('This PDF is not a recognized S&S Activewear order confirmation/invoice or Momentec order confirmation.');
+  else if (/Proforma Receipt\s*-\s*DO NOT PAY/i.test(allText) && /Order Number:/i.test(allText) && /Order Details/i.test(allText)) parsed = parseJdsIndustries(pages);
+  else throw new Error('This PDF is not a recognized S&S Activewear, Momentec, or JDS Industries supplier document.');
 
   if (!parsed.order_number) throw new Error('The supplier order number could not be read from this supplier document.');
   if (!parsed.lines.length) throw new Error('No receiving line items could be read from this supplier document.');

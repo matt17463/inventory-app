@@ -383,7 +383,7 @@ export default function SupplierConfirmationReceiving({ lookups, defaultBinId, r
       <div className="sc-panel-header">
         <div>
           <h3>Import Supplier Order Confirmation</h3>
-          <p>Upload an S&amp;S Activewear or Momentec PDF, or a SanMar Excel receipt (.xls/.xlsx), review its matches, enter actual quantities received, and then add them to inventory. Supplier colors are matched to the existing WooCommerce color list and active color-pairing rules.</p>
+          <p>Upload an S&amp;S Activewear, Momentec, or JDS Industries PDF, or a SanMar Excel receipt (.xls/.xlsx). JDS proforma receipts use shipped quantities and exclude free catalogs. Review matches and actual quantities before adding stock to inventory. Supplier colors are matched to the existing WooCommerce color list and active color-pairing rules.</p>
         </div>
       </div>
       <div className="supplier-upload-row">

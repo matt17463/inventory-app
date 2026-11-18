@@ -63,7 +63,7 @@ function parseUploadedSupplierFile(body, bytes) {
     };
   }
 
-  throw new Error('Choose a supported supplier file: S&S/Momentec PDF or SanMar Excel (.xls/.xlsx).');
+  throw new Error('Choose a supported supplier file: S&S/Momentec/JDS PDF or SanMar Excel (.xls/.xlsx).');
 }
 
 function normalizedSupplier(value) {
