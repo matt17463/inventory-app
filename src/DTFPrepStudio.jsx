@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ArtworkPopoutPreview from './components/ArtworkPopoutPreview';
 import {
   DTF_DEFAULTS, DTF_DPI, validatePrintDimensions, alphaBounds,
   processDtfPixels, qualityReport, exportDtfPng, vectorSilhouette, cmykToRgb,
@@ -111,7 +112,7 @@ export default function DTFPrepStudio(){
   const [channelView,setChannelView]=useState('composite');
   const [garmentScale,setGarmentScale]=useState(45),[garmentTop,setGarmentTop]=useState(38);
   const [sourceMeta,setSourceMeta]=useState(null),[vectorColor,setVectorColor]=useState('#ffffff');
-  const imgRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
+  const imgRef=useRef(null),proofPopoutRef=useRef(null),currentRef=useRef(0),reportRef=useRef(null);
   const maskDraggingRef=useRef(false),maskLastRef=useRef(null);
   const change=(k,v)=>{if(!['maskTool','maskBrushSize'].includes(k)){setHistory(h=>[...h.slice(-49),opts]);setFuture([]);}revisionRef.current++;setOpts(o=>({...o,[k]:v,maskReviewed:false}));setSavedPrepared('');};
   const changeChannel=(section,channel,value)=>{
@@ -323,8 +324,8 @@ export default function DTFPrepStudio(){
         <div className="dtf-canvas dtf-source" style={{overflow:'auto',display:'block'}}>
           {sourceUrl?<><img ref={imgRef} alt="Original source artwork; click background to remove when Pick mode is selected" src={sourceUrl} style={{maxWidth:'none',maxHeight:'none',width:zoom*100+'%',height:zoom*100+'%',flexShrink:0}} draggable={false} className={opts.background==='pick'||opts.maskTool!=='none'?'dtf-source-picker':''} title={opts.maskTool!=='none'?'Drag on Source to paint the working mask':opts.background==='pick'?'Click the background color to remove':'Original unchanged'} onClick={pickBackground} onPointerDown={startMask} onPointerMove={e=>{if(panRef.current){const p=panRef.current;e.currentTarget.parentElement.scrollLeft=p.left+p.x-e.clientX;e.currentTarget.parentElement.scrollTop=p.top+p.y-e.clientY;}if(maskDraggingRef.current&&(e.buttons||e.pointerType==='touch'))paintMask(e);}} onPointerUp={finishMask} onPointerCancel={finishMask} onLostPointerCapture={finishMask}/><svg className="dtf-point-overlay" style={{width:zoom*100+'%',height:zoom*100+'%'}} viewBox={'0 0 '+(sourceMeta?.width||1)+' '+(sourceMeta?.height||1)} aria-label="Red points remove regions; green points protect regions">{[...(opts.background==='ai'?(opts.aiGuidance?.points||[]).map(p=>({...p,x:p.x*(sourceMeta?.width||1),y:p.y*(sourceMeta?.height||1)})):[]),...(opts.regionPoints||[])].map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={Math.max(sourceMeta?.width||1,sourceMeta?.height||1)/80} fill={p.kind==='keep'?'#20df99':'#ff4155'} stroke="white" strokeWidth={Math.max(sourceMeta?.width||1,sourceMeta?.height||1)/400}/>)}</svg></>:<label className="dtf-empty">Drop in a customer's artwork<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseSource(e.target.files?.[0]||null)}/></label>}
         </div>
-        <div className="dtf-canvasbar"><strong>02 / LIVE PROOF</strong><span>{target?target.width+' × '+target.height+' px':'No canvas'} · 300 PPI</span></div>
-        <div className={'dtf-canvas dtf-proof '+(proofMode==='checker'?'dtf-checker':'')}
+        <div className="dtf-canvasbar"><strong>02 / LIVE PROOF</strong><span>{target?target.width+' × '+target.height+' px':'No canvas'} · 300 PPI</span><ArtworkPopoutPreview targetRef={proofPopoutRef} rootClass="dtf-studio" title="DTF live proof" /></div>
+        <div ref={proofPopoutRef} className={'dtf-canvas dtf-proof '+(proofMode==='checker'?'dtf-checker':'')}
           style={proofMode==='color'?{background:bgValue}:{}}>
           {proofMode==='garment'&&garmentUrls[garmentId]&&<img className="dtf-garment" src={garmentUrls[garmentId]} alt={garment?.asset_name||'Garment blank'}/>}
           {proofUrl&&<img className={proofMode==='garment'?'dtf-garment-art':'dtf-proof-art'} style={proofMode==='garment'?{width:garmentScale+'%',top:garmentTop+'%'}:{}} src={proofUrl} alt="Processed artwork proof; not a production approval"/>}
