@@ -164,8 +164,8 @@ test('geometric octagon and independent physical artwork width persist without r
   await page.locator('#height').fill('2.5');
   await page.locator('#patchShape').selectOption('octagon');
   await page.locator('#artworkWidth').fill('1.25');
-  await page.locator('#artworkX').fill('10');
-  await page.locator('#artworkY').fill('-5');
+  await page.locator('#artworkX').evaluate(el => { el.value = '10'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('#artworkY').evaluate(el => { el.value = '-5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await expect(page.locator('#artworkDimensions')).toContainText('Artwork: 1.25 × 1.25 in');
   await expect(page.locator('#width')).toHaveValue('3.5');
   await expect(page.locator('#height')).toHaveValue('2.5');
