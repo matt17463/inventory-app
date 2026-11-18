@@ -433,3 +433,52 @@ test('supplier receiving reconciles partial receipts and blocks unresolved retry
   assert.match(server, /effectiveReceived \+ item\.quantity/);
   assert.match(receivingPage, /receiveBlockedReason/);
 });
+
+
+test('parses JDS proforma merchandise and excludes its free catalog', () => {
+  const cells = [
+    { x: 80, y: 650, str: 'Proforma Receipt - DO NOT PAY - Additional Shipping & Handling May Apply' },
+    { x: 80, y: 610, str: 'Order Number:' }, { x: 150, y: 610, str: '1266256' },
+    { x: 80, y: 590, str: 'Placed Date:' }, { x: 160, y: 590, str: '11/14/2026' },
+    { x: 280, y: 540, str: 'Order Details' },
+    { x: 180, y: 450, str: 'GIFTDRINK26' }, { x: 80, y: 450, str: '1' },
+    { x: 115, y: 450, str: '1' }, { x: 150, y: 450, str: '0' },
+    { x: 260, y: 450, str: '2026-2027 Drinkware and Gifts Catalog' },
+    { x: 465, y: 450, str: '1' }, { x: 495, y: 450, str: '.000' }, { x: 540, y: 450, str: '.00' },
+    { x: 180, y: 405, str: 'LLA602' }, { x: 80, y: 405, str: '1' },
+    { x: 115, y: 405, str: '1' }, { x: 150, y: 405, str: '0' },
+    { x: 260, y: 411, str: '12" x 24" Black/Black Smooth Finish Laserable Leatherette' },
+    { x: 465, y: 405, str: '2' }, { x: 495, y: 405, str: '13.050' }, { x: 540, y: 405, str: '13.05' },
+    { x: 180, y: 355, str: 'UVM206W' }, { x: 80, y: 355, str: '14' },
+    { x: 115, y: 355, str: '14' }, { x: 150, y: 355, str: '0' },
+    { x: 260, y: 360, str: '3" x 2" Kota Pro White UV Print Magnet' },
+    { x: 465, y: 355, str: '3' }, { x: 495, y: 355, str: '.490' }, { x: 540, y: 355, str: '6.86' },
+  ];
+  const result = parseSupplierConfirmationPages([{ pageNumber: 1, cells }]);
+  assert.equal(result.supplier_key, 'jds_industries');
+  assert.equal(result.order_number, '1266256');
+  assert.equal(result.total_lines, 2);
+  assert.equal(result.total_units, 15);
+  assert.equal(result.subtotal, 19.91);
+  assert.equal(result.lines[0].color, 'Black/Black');
+  assert.equal(result.lines[1].supplier_sku, 'UVM206W');
+});
+
+test('normalizes nonreturnable S&S starred supplier SKU', () => {
+  const pages = [{ pageNumber: 1, cells: [
+    { x: 100, y: 760, str: 'S&S Activewear' },
+    { x: 340, y: 750, str: 'Order Confirmation: 77995687' },
+    { x: 370, y: 700, str: '11/18/2026' },
+    { x: 32, y: 568, str: '96795070*' },
+    { x: 80, y: 568, str: 'Infinity Her - Cap - CASSIE' },
+    { x: 355, y: 568, str: 'Violet/ Floral' },
+    { x: 435, y: 568, str: 'Adjustable' },
+    { x: 505, y: 568, str: '2' },
+    { x: 530, y: 568, str: '6.18' },
+    { x: 570, y: 568, str: '12.36' },
+  ] }];
+  const result = parseSupplierConfirmationPages(pages);
+  assert.equal(result.total_lines, 1);
+  assert.equal(result.lines[0].supplier_sku, '96795070');
+  assert.equal(result.total_units, 2);
+});
