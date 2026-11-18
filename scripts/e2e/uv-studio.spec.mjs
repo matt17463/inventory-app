@@ -138,3 +138,20 @@ test('maximum-size artwork exports at 300 DPI with a batch proof', async ({ page
   expect(errors).toEqual([]);
   console.log(`6×6 inch export at 300 DPI (Chromium): ${elapsed} ms`);
 });
+
+test('live proof stays docked and synchronizes into the read-only pop-out window', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await expect(page.locator('#status')).toContainText('Preview ready');
+  const popupPromise = page.waitForEvent('popup');
+  await page.locator('#popoutPreview').click();
+  const popup = await popupPromise;
+  await expect(popup.locator('header')).toContainText('Live, read-only preview');
+  await expect(popup.locator('#sc-popout-canvas')).toBeVisible();
+  await page.locator('[data-tab="height"]').click();
+  await expect.poll(async () => popup.locator('#sc-popout-caption').textContent()).toContain('height');
+  await expect(popup.locator('input,select,textarea')).toHaveCount(0);
+  await popup.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('#popoutPreview')).toBeVisible();
+  expect(errors).toEqual([]);
+});
