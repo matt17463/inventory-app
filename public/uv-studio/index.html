@@ -451,18 +451,43 @@ function hasThinMaterialBridge(mask,w,h,widthPixels){
  }
  return false;
 }
-function contourPath(points,scale,smooth){
- const point=([x,y])=>(x/scale).toFixed(3)+','+(y/scale).toFixed(3);
- if(!smooth)return 'M'+points.map(point).join('L')+'Z';
- function toward(corner,neighbor){
-  const dx=neighbor[0]-corner[0],dy=neighbor[1]-corner[1];
-  const ratio=.25/Math.hypot(dx,dy);
-  return [corner[0]+dx*ratio,corner[1]+dy*ratio];
+// Closed-loop RDP simplification in physical units. It preserves winding and loop count.
+// Only enabled by the operator; unmodified artwork cutlines remain available.
+function simplifyContourLoop(points,tolerance){
+ if(!(tolerance>0)||points.length<6)return points;
+ let opposite=1,best=-1;const first=points[0];
+ for(let i=1;i<points.length;i++){const d=(points[i][0]-first[0])**2+(points[i][1]-first[1])**2;if(d>best){best=d;opposite=i}}
+ function simplifyLine(line){
+  const keep=new Uint8Array(line.length),stack=[[0,line.length-1]];keep[0]=keep[line.length-1]=1;
+  while(stack.length){
+   const [a,b]=stack.pop(),p=line[a],q=line[b],dx=q[0]-p[0],dy=q[1]-p[1],den=dx*dx+dy*dy;
+   let greatest=0,where=-1;
+   for(let i=a+1;i<b;i++){
+    const r=line[i],t=den?cap(((r[0]-p[0])*dx+(r[1]-p[1])*dy)/den,0,1):0;
+    const d=Math.hypot(r[0]-p[0]-t*dx,r[1]-p[1]-t*dy);
+    if(d>greatest){greatest=d;where=i}
+   }
+   if(greatest>tolerance&&where>a&&where<b){keep[where]=1;stack.push([a,where],[where,b])}
+  }
+  return line.filter((_,i)=>keep[i]);
  }
- return points.map((corner,i)=>{
-  const before=toward(corner,points[(i+points.length-1)%points.length]);
-  const after=toward(corner,points[(i+1)%points.length]);
-  return (i===0?'M':'L')+point(before)+'Q'+point(corner)+' '+point(after);
+ const a=simplifyLine(points.slice(0,opposite+1));
+ const b=simplifyLine(points.slice(opposite).concat([points[0]]));
+ const out=a.concat(b.slice(1,-1));
+ return out.length>=3?out:points;
+}
+function contourPath(points,scale,smooth,simplifyMM=0,roundMM=.35){
+ const loop=smooth?simplifyContourLoop(points,Math.max(0,simplifyMM)*scale):points;
+ const point=([x,y])=>(x/scale).toFixed(3)+','+(y/scale).toFixed(3);
+ if(!smooth||roundMM<=0||loop.length<4)return 'M'+loop.map(point).join('L')+'Z';
+ // Bounded per-corner quadratic fillets; avoid extending outside short adjacent edges.
+ const r=roundMM*scale;
+ const toward=(a,b,d)=>{const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1;return [a[0]+dx*d/len,a[1]+dy*d/len]};
+ return loop.map((corner,i)=>{
+  const prev=loop[(i+loop.length-1)%loop.length],next=loop[(i+1)%loop.length];
+  const d=Math.min(r,Math.hypot(prev[0]-corner[0])*.4,Math.hypot(next[0]-corner[0])*.4);
+  const before=toward(corner,prev,d),after=toward(corner,next,d);
+  return (i?'L':'M')+point(before)+'Q'+point(corner)+' '+point(after);
  }).join('')+'Z';
 }
 function traceGraphicContour(v,wIn,hIn){
@@ -484,7 +509,7 @@ function traceGraphicContour(v,wIn,hIn){
   if(y===h-1||!mask[(y+1)*w+x])edge(x+1,y+1,x,y+1);
   if(x===0||!mask[y*w+x-1])edge(x,y+1,x,y);
  }
- const paths=[];let total=0,minX=w,minY=h,maxX=0,maxY=0;
+ const paths=[];let total=0,minX=w,minY=h,maxX=0,maxY=0,rawVertices=0,outputVertices=0;
  while(edges.size&&total<2000000){
   const start=edges.keys().next().value;let cur=start,pts=[],guard=0;
   do{
@@ -499,13 +524,16 @@ function traceGraphicContour(v,wIn,hIn){
   }
   if(keep.length<3)continue;
   for(const [x,y] of keep){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}
-  paths.push(contourPath(keep,scale,v.contourSmooth));
+  rawVertices+=keep.length;
+  const simplified=v.contourSmooth?simplifyContourLoop(keep,v.contourSimplify*scale):keep;
+  outputVertices+=simplified.length;
+  paths.push(contourPath(keep,scale,v.contourSmooth,v.contourSimplify,v.contourRound));
  }
- return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,thinBridge,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
+ return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,rawVertices,outputVertices,thinBridge,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
 }
 function scCutPath(v,wIn=v.width,hIn=v.height){
  if(v.cutMode==='none')return {d:'',width:wIn*25.4,height:hIn*25.4,originOffset:0,components:0};
- if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018,v.cornerRadiusMm),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
+ if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018,v.cornerRadiusMm),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1,rawVertices:0,outputVertices:0};
  return graphicContour(v,wIn,hIn);
 }
 function patchOutlineSVG(v,wIn=v.width,hIn=v.height){
