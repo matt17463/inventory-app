@@ -18,6 +18,13 @@
 @media(max-width:1220px){.shell{grid-template-columns:280px minmax(0,1fr)}.right{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px}.right .panel{height:100%}}
 @media(max-width:760px){.shell{display:block;padding:10px}.panel{margin-bottom:14px}.right{display:block}.top{padding:12px;position:static}.projectbar h1{font-size:20px}.canvas-viewport{min-height:310px;padding:12px}}
 
+.sc-cut-proof-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding:8px 12px;border-bottom:1px solid #345269;font-size:12px}
+.sc-cut-proof-tools[hidden]{display:none!important}
+.sc-cut-proof-tools label{display:inline-flex;gap:6px;align-items:center;margin:0}
+.sc-cut-proof-tools input[type=range]{width:88px}
+.sc-cut-proof-tools select{width:auto;padding:5px;color:#ecf8ff;background:#142d3b}
+.sc-cut-proof-tools .small{flex-basis:100%;margin:0}
+@media(max-width:760px){.sc-cut-proof-tools{gap:8px}}
 /* Compact sticky preview leaves room to reach production settings and buttons on shorter displays. */
 @media(min-width:761px){
  .middle{scroll-padding-top:320px}
@@ -100,7 +107,10 @@
 <label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
 </div><div id="patchEdgeControls"><label for="edgeStyle">Patch perimeter style</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">No geometric perimeter (artwork silhouette)</option></select></div><div id="geometricPatchControls">
 <label for="patchShape">Blank / reference outline shape</label><select id="patchShape"><option value="rounded">Rounded rectangle</option><option value="rectangle">Rectangle</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="capsule">Capsule / stadium</option><option value="octagon">Octagon (8 sides)</option><option value="hexagon">Hexagon (6 sides)</option><option value="pentagon">Pentagon (5 sides)</option><option value="diamond">Diamond</option><option value="shield">Shield</option></select>
-<div class="small">The shape controls the physical patch outline and the decorative Merrow/satin edge. Circle uses the smaller patch dimension as its diameter.</div>
+<label for="cornerRadiusMm">Rounded rectangle corner radius (mm) <strong id="cornerRadiusMmV">Auto</strong></label>
+<input id="cornerRadiusMm" type="number" min="0" max="20" step=".5" value="0">
+<div class="small">0 uses the existing automatic rounded corners; enter a radius in millimeters for exact circular arcs. This changes the geometric cut path, not the artwork size.</div>
+<div class="small">Geometric outlines use smooth vector curves regardless of artwork pixels or silhouette smoothing.</div>
 </div>
 <div class="module" id="artworkPlacementControls" style="padding:12px;margin:10px 0;border:1px solid #426375">
 <strong>Artwork size &amp; placement (separate from patch)</strong>
@@ -113,14 +123,26 @@
 <input id="artworkY" type="range" min="-40" max="40" step="1" value="0">
 <div class="small" id="artworkDimensions" role="status" aria-live="polite">Artwork preview dimensions update when the image loads.</div>
 </div>
-<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><label class="checkbox"><input id="contourSmooth" type="checkbox"> Smooth raster cut corners</label><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><div id="patchEdgeColorControls"><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px"></div>
+<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><label class="checkbox"><input id="contourSmooth" type="checkbox"> Smooth artwork-following cutline</label>
+<label for="contourSimplify">Remove fine edge bumps (mm) <strong id="contourSimplifyV">0.30 mm</strong></label>
+<input id="contourSimplify" type="range" min="0" max="1.5" step=".05" value=".30">
+<label for="contourRound">Round silhouette corners (mm) <strong id="contourRoundV">0.35 mm</strong></label>
+<input id="contourRound" type="range" min="0" max="2" step=".05" value=".35">
+<div class="small">Smoothing reduces image-pixel stair steps. Strong settings may remove fine features; confirm all loops in the proof. This does not convert a logo silhouette into a rounded rectangle.</div><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><div id="patchEdgeColorControls"><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px"></div>
 <label class="checkbox"><input id="varnish" type="checkbox" checked> Generate highlight / varnish mask</label>
 <label class="checkbox" id="mirrorBox" style="display:none"><input id="mirror" type="checkbox"> Include mirrored artwork reference (film only)</label>
 <div class="small" id="mirrorNote" style="display:none">Mirroring depends on the film's print-side and xTool Studio workflow. Never mirror automatically without confirming the transfer orientation.</div>
 </section>
 </aside>
 <section class="middle"><div class="projectbar"><div><h1>UV Product Designer</h1><div class="subtle">Flat color, surface texture, raised relief and embroidery-style artwork for UV-printable blanks.</div></div><div class="busy" id="status" aria-live="polite">Ready</div></div>
-<div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="expandPreview" class="outline" aria-pressed="false">⤢ Enlarge proof</button><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Color artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
+<div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="expandPreview" class="outline" aria-pressed="false">⤢ Enlarge proof</button><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Color artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div id="cutProofTools" class="sc-cut-proof-tools" hidden>
+<label for="proofZoom">Inspect vector at <select id="proofZoom"><option value="1">Fit / 1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+<label for="proofFocusX">Horizontal focus <input type="range" id="proofFocusX" min="0" max="100" value="50" step="5"></label>
+<label for="proofFocusY">Vertical focus <input type="range" id="proofFocusY" min="0" max="100" value="50" step="5"></label>
+<label class="sc-proof-toggle"><input type="checkbox" id="proofShowArtwork" checked> Artwork</label>
+<label class="sc-proof-toggle"><input type="checkbox" id="proofShowBlank" checked> Blue blank guide</label>
+<div class="small" id="cutlineProofStatus" role="status" aria-live="polite">Red = exact exported cut path; blue dashed = physical blank boundary.</div>
+</div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
 <div class="modulegrid"><div class="module" id="stitchRegionModule"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
 <div class="module"><h2>Production layout</h2>
 <div class="form-row"><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
@@ -343,7 +365,7 @@ values=function(){let v=oldValues();return {...v,
  paletteSize:Math.min(10,Math.max(2,Number($('paletteSize').value)||6)),
  autoAngles:$('autoAngles').checked, gloss:+$('gloss').value,
  reliefContrast:+$('reliefContrast').value,edgeStyle:$('edgeStyle').value,
- edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),contourSmooth:$('contourSmooth').checked,patchShape:$('patchShape').value,
+ edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),contourSmooth:$('contourSmooth').checked,contourSimplify:cap(+$('contourSimplify').value,0,1.5),contourRound:cap(+$('contourRound').value,0,2),patchShape:$('patchShape').value,cornerRadiusMm:cap(+$('cornerRadiusMm').value,0,20),
  artworkWidth:cap(Number($('artworkWidth').value)||0,0,6),artworkX:cap(Number($('artworkX').value)||0,-40,40),artworkY:cap(Number($('artworkY').value)||0,-40,40),
  sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
  margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
@@ -351,7 +373,7 @@ values=function(){let v=oldValues();return {...v,
  regionOverrides:{...regionOverrides},selectedCalibrationId
 };};
 // Polygon/curve outline defined on the same physical dimensions as exported artwork.
-function outlinePath(w,h,shape,inset=0){
+function outlinePath(w,h,shape,inset=0,cornerRadiusMm=0){
  const x=inset,y=inset,W=Math.max(1,w-2*inset),H=Math.max(1,h-2*inset),r=Math.min(W,H)*.16;
  const p=(a,b)=>`${(a).toFixed(3)} ${(b).toFixed(3)}`;
  if(shape==='rectangle')return `M${p(x,y)}H${(x+W).toFixed(3)}V${(y+H).toFixed(3)}H${x.toFixed(3)}Z`;
@@ -362,14 +384,16 @@ function outlinePath(w,h,shape,inset=0){
  if(shape==='diamond')return `M${p(x+W*.5,y)} L${p(x+W,y+H*.5)} L${p(x+W*.5,y+H)} L${p(x,y+H*.5)}Z`;
  if(shape==='hexagon')return `M${p(x+W*.23,y)} L${p(x+W*.77,y)} L${p(x+W,y+H/2)} L${p(x+W*.77,y+H)} L${p(x+W*.23,y+H)} L${p(x,y+H/2)}Z`;
  if(shape==='shield')return `M${p(x+W*.06,y)} L${p(x+W*.94,y)} L${p(x+W*.91,y+H*.60)} Q${p(x+W*.8,y+H*.80)} ${p(x+W*.5,y+H)} Q${p(x+W*.20,y+H*.80)} ${p(x+W*.09,y+H*.60)}Z`;
- return `M ${p(x+r,y)} H ${(x+W-r).toFixed(3)} Q${p(x+W,y)} ${p(x+W,y+r)} V${(y+H-r).toFixed(3)} Q${p(x+W,y+H)} ${p(x+W-r,y+H)} H${(x+r).toFixed(3)} Q${p(x,y+H)} ${p(x,y+H-r)} V${(y+r).toFixed(3)} Q${p(x,y)} ${p(x+r,y)}Z`;
+ const radius=cap(cornerRadiusMm>0?cornerRadiusMm:r,0,Math.min(W,H)/2);
+ if(radius<.001)return `M${p(x,y)}H${(x+W).toFixed(3)}V${(y+H).toFixed(3)}H${x.toFixed(3)}Z`;
+ return `M ${p(x+radius,y)} H ${(x+W-radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x+W,y+radius)} V ${(y+H-radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x+W-radius,y+H)} H ${(x+radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x,y+H-radius)} V ${(y+radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x+radius,y)} Z`;
 }
 // An offset silhouette is a cutter reference, not a printer or cutter command.
 // Rasterize at approximately 4 samples/mm; trace all closed loops, preserving holes/islands.
 // The SVG origin is padded by the requested offset. Registration must be verified manually.
 let contourCache;
 function graphicContour(v,wIn=v.width,hIn=v.height){
- const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.cleanupWhite,v.cleanThreshold,v.artworkWidth,v.artworkX,v.artworkY]);
+ const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.contourSimplify,v.contourRound,v.cleanupWhite,v.cleanThreshold,v.artworkWidth,v.artworkX,v.artworkY]);
  if(contourCache?.artwork===image && contourCache?.key===key)return contourCache.result;
  const result=traceGraphicContour(v,wIn,hIn);
  contourCache={artwork:image,key,result};
@@ -481,7 +505,7 @@ function traceGraphicContour(v,wIn,hIn){
 }
 function scCutPath(v,wIn=v.width,hIn=v.height){
  if(v.cutMode==='none')return {d:'',width:wIn*25.4,height:hIn*25.4,originOffset:0,components:0};
- if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
+ if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018,v.cornerRadiusMm),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
  return graphicContour(v,wIn,hIn);
 }
 function patchOutlineSVG(v,wIn=v.width,hIn=v.height){
