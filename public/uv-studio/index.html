@@ -324,6 +324,7 @@ values=function(){let v=oldValues();return {...v,
  artworkWidth:cap(Number($('artworkWidth').value)||0,0,6),artworkX:cap(Number($('artworkX').value)||0,-40,40),artworkY:cap(Number($('artworkY').value)||0,-40,40),
  sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
  margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
+ productKind:$('productKind').value,printEffect:$('printEffect').value,cutMode:$('cutMode').value,productPreset:$('productPreset').value,
  regionOverrides:{...regionOverrides},selectedCalibrationId
 };};
 // Polygon/curve outline defined on the same physical dimensions as exported artwork.
@@ -456,7 +457,8 @@ function traceGraphicContour(v,wIn,hIn){
  return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,thinBridge,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
 }
 function scCutPath(v,wIn=v.width,hIn=v.height){
- if(v.edgeStyle!=='none')return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
+ if(v.cutMode==='none')return {d:'',width:wIn*25.4,height:hIn*25.4,originOffset:0,components:0};
+ if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
  return graphicContour(v,wIn,hIn);
 }
 function patchOutlineSVG(v,wIn=v.width,hIn=v.height){
@@ -464,7 +466,7 @@ function patchOutlineSVG(v,wIn=v.width,hIn=v.height){
  if(!cut.d)throw Error('No cut contour found. Load visible artwork or lower the opacity threshold.');
  if(cut.thinBridge)throw Error('A cut piece is too narrow or has a bridge below the chosen minimum. Increase offset or adjust the artwork.');
  const W=cut.width.toFixed(3),H=cut.height.toFixed(3);
- const detail=v.edgeStyle==='none'?'Artwork silhouette with user offset':'Geometric patch perimeter';
+ const detail=v.cutMode==='artwork'||(v.cutMode!=='geometric'&&v.edgeStyle==='none')?'Artwork silhouette with user offset':'Geometric patch perimeter';
  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}"><title>${detail} — physical registration unverified</title><path d="${cut.d}" fill="none" stroke="red" stroke-width="0.1" fill-rule="evenodd"/></svg>`;
 }
 function rgbHex(r,g,b){return '#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('')}
@@ -498,6 +500,33 @@ function segmentColors(src,mask,w,h,k){
 const oldProduce=produce;
 produce=function(w,h,v){
  let res=oldProduce(w,h,v),N=w*h,src=paintBase(w,h,v).data, seg=segmentColors(src,res.mask,w,h,v.paletteSize);
+ if(v.printEffect&&v.printEffect!=='embroidery'){
+  // No thread simulation on ordinary magnets, coasters, signs or nameplates.
+  // Preserve original pixel colors/alpha; masks are reference only.
+  res.color.set(src);
+  res.gray.fill(0);res.mask.fill(0);res.white.fill(0);res.varnish.fill(0);res.height.fill(0);
+  for(let i=0;i<N;i++){
+   const z=i*4,alpha=src[z+3],active=alpha>0;
+   res.height[z+3]=255;
+   if(!active)continue;
+   res.mask[i]=1;
+   res.white[z]=res.white[z+1]=res.white[z+2]=255;res.white[z+3]=alpha;
+   let level=0;
+   if(v.printEffect==='relief'){
+    const lum=(src[z]*.2126+src[z+1]*.7152+src[z+2]*.0722)/255;
+    level=Math.round(255*cap(.32+.55*lum*(v.reliefContrast/100),0,1));
+   }else if(v.printEffect==='texture'){
+    const x=i%w,y=Math.floor(i/w),wave=(Math.sin(x*.25+y*.14)+1)/2;
+    level=Math.round(255*cap(.25+.35*wave*(v.reliefContrast/100),0,1));
+   }
+   res.gray[i]=level;res.height[z]=res.height[z+1]=res.height[z+2]=level;
+   const varnishAlpha=v.varnish&&v.printEffect!=='flat'?Math.round(alpha*.33):0;
+   res.varnish[z]=res.varnish[z+1]=res.varnish[z+2]=255;res.varnish[z+3]=varnishAlpha;
+  }
+  res.regionViz=new Uint8ClampedArray(src);res.segmentation=seg;
+  return res;
+ }
+
  const mm=w/(v.width*25.4),slen=Math.max(2,v.stitchLength*mm),pitch=Math.max(1.5,v.spacing*mm);
  const vmap=new Uint8ClampedArray(N*4);const attrs=seg.components;
  for(let i=0;i<N;i++){
@@ -526,7 +555,7 @@ produce=function(w,h,v){
  const col=seg.palette[seg.clusters[i]]||[255,255,255];for(let c=0;c<3;c++)vmap[z+c]=Math.round(col[c]);vmap[z+3]=src[z+3];
  }
  // Simulate stitches on the actual patch perimeter; transparent interior remains transparent.
- if(v.edgeStyle!=='none'){
+ if(v.edgeStyle!=='none'&&v.printEffect==='embroidery'){
  let c=document.createElement('canvas');c.width=w;c.height=h;let cx=c.getContext('2d',{willReadFrequently:true});cx.fill(new Path2D(outlinePath(w,h,v.patchShape,Math.min(w,h)*.022)));
  let pd=cx.getImageData(0,0,w,h).data,shapeMask=new Uint8Array(N);for(let i=0;i<N;i++)shapeMask[i]=pd[i*4+3]>120?1:0;
  const shapeDist=distanceField(shapeMask,w,h),edgePx=Math.max(1,v.borderSize*mm),cr=hexRgb(v.edgeColor);
@@ -549,7 +578,7 @@ produce=function(w,h,v){
 };
 canvases.regions=document.createElement('canvas');canvases.proof=document.createElement('canvas');
 function previewProof(res,v){const c=document.createElement('canvas');c.width=res.w;c.height=res.h;let cx=c.getContext('2d');cx.putImageData(new ImageData(res.color,res.w,res.h),0,0);
- cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(1,res.w/(v.width*300));if(v.edgeStyle==='none'){const cut=graphicContour(v);cx.save();cx.scale(res.w/(v.width*25.4),res.h/(v.height*25.4));cx.translate(-cut.originOffset,-cut.originOffset);cx.stroke(new Path2D(cut.d));cx.restore()}else cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,res.w*.018)));
+ cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(1,res.w/(v.width*300));if(v.cutMode!=='none'){const cut=scCutPath(v);if(v.cutMode==='artwork'||(v.cutMode!=='geometric'&&v.edgeStyle==='none')){cx.save();cx.scale(res.w/(v.width*25.4),res.h/(v.height*25.4));cx.translate(-cut.originOffset,-cut.originOffset);cx.stroke(new Path2D(cut.d));cx.restore()}else cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,res.w*.018)));}
  cx.strokeStyle='#57baff';cx.setLineDash([7,6]);cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,Math.min(res.w,res.h)*.085)));cx.setLineDash([]);return c;}
 const oldRenderPreview=renderPreview;
 renderPreview=async function(){await oldRenderPreview();if(!output)return;let res=output,v=values();
@@ -574,7 +603,14 @@ function layoutPlan(v){const [sw,sh]=sheetSize(v),m=cap(v.margin,0,1),g=cap(v.ga
  return {sw,sh,margin:m,gap:g,cols,rows,capacity,quantity:q,sheets,fullSheets:capacity?Math.floor(q/capacity):0,remainder:capacity?q%capacity:0};
 }
 function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Patch + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
-const oldUI=UI;UI=function(){oldUI();$('contourControls').hidden=values().edgeStyle!=='none';$('geometricPatchControls').hidden=values().edgeStyle==='none';
+const oldUI=UI;UI=function(){oldUI();
+ const kind=$('productKind').value,mode=$('printEffect').value,cutMode=$('cutMode').value;
+ $('cutModeNotice').textContent=cutMode==='none'?'Finished blank: no cut SVG is exported. Register artwork on the actual blank in xTool Studio.':'Cut references are visual guides only. Cutting requires separately verified hardware and registration.';
+ $('outlineSvg').disabled=cutMode==='none';
+ $('outlineSvg').title=cutMode==='none'?'Finished blank has no cutter reference; select a cutline mode to export':'Export uncalibrated cutline reference';
+ document.querySelectorAll('[data-preset]').forEach(btn=>btn.closest('.section')?.classList.toggle('uv-print-nonstitch',mode!=='embroidery'));
+ $('geometricPatchControls').hidden=cutMode==='none'||(cutMode==='legacy'&&values().edgeStyle==='none');
+ $('contourControls').hidden=values().edgeStyle!=='none';$('geometricPatchControls').hidden=values().edgeStyle==='none';
  const art=values(),g=artworkGeometry(art.width*300,art.height*300,art);$('artworkWidthV').textContent=art.artworkWidth?art.artworkWidth.toFixed(2)+' in':'Auto fit';$('artworkXV').textContent=art.artworkX?art.artworkX+'%':'Centered';$('artworkYV').textContent=art.artworkY?art.artworkY+'%':'Centered';
  if(g){const out=g.x<0||g.y<0||g.x+g.dw>art.width*300||g.y+g.dh>art.height*300;const label=$('artworkDimensions');label.textContent='Artwork: '+(g.dw/300).toFixed(2)+' × '+(g.dh/300).toFixed(2)+' in within '+art.width.toFixed(2)+' × '+art.height.toFixed(2)+' in patch.'+(out?' Warning: image extends beyond the rectangular patch bounds; reduce width or reposition.':' Check curved/polygon edges in Cutline proof before printing.');label.style.color=out?'#f0ad83':'var(--muted)';}
 $('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
