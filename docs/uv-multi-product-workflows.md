@@ -17,6 +17,9 @@ Go to **UV Studio → Faux embroidery & UV texture editor**. In **Product & mate
 
 The **Quick product template** sets approximate face dimensions, shape, material, finish and cutline policy. These values are examples only: **measure your purchased blank before production.** Adjust the width/height and **Artwork width / position** as needed.
 
+## Preview while editing
+The right-hand proof stays visible in a compact mode while you scroll to layout and export tools. Use **Enlarge proof** for close inspection or **Pop out preview** to move a read-only live proof to another display. Restore compact mode to reach lower controls on small desktop screens.
+
 ## Choose the appearance
 - **Flat full-color artwork** preserves the source artwork colors and alpha. UV Studio outputs a flat color PNG and visual white/varnish guidance; the height map is neutral, and no buildup threshold masks are created.
 - **Surface texture** creates a tonal surface-pattern reference; xTool Studio must determine real texture settings.
@@ -30,7 +33,7 @@ Most finished magnets, ceramic coasters, metal blanks and purchased acrylic piec
 
 If you are printing onto a larger sheet to cut later, choose **Geometric outline reference** or **Artwork silhouette reference**. The SVG provides a registration *reference* only. Set up the actual cutter, registration, tool compensation and test scrap manually. Always keep required safe margins for odd or circular shapes.
 
-The older patch mode continues to follow the existing geometric Merrow/satin versus artwork-silhouette logic, and keeps its legacy individual-patch-outline SVG filename.
+The older patch mode continues to follow the existing geometric Merrow/satin versus artwork-silhouette logic, and keeps its legacy individual-patch-outline SVG filename. If a browser blocks a stand-alone SVG download, use **Cutline SVG ZIP (reliable alternative)**, extract the SVG from the archive, and open the extracted file in your cutter software.
 
 ## Example: a 2.5-inch acrylic fridge magnet
 1. Choose **Printed magnet**, then **Round printed magnet**.
