@@ -155,3 +155,106 @@ test('live proof stays docked and synchronizes into the read-only pop-out window
   await expect(page.locator('#popoutPreview')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('geometric octagon and independent physical artwork width persist without resizing patch', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await page.locator('#edgeStyle').selectOption('merrow');
+  await page.locator('#width').fill('3.5');
+  await page.locator('#height').fill('2.5');
+  await page.locator('#patchShape').selectOption('octagon');
+  await page.locator('#artworkWidth').fill('1.25');
+  await page.locator('#artworkX').evaluate(el => { el.value = '10'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('#artworkY').evaluate(el => { el.value = '-5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await expect(page.locator('#artworkDimensions')).toContainText('Artwork: 1.25 × 1.25 in');
+  await expect(page.locator('#width')).toHaveValue('3.5');
+  await expect(page.locator('#height')).toHaveValue('2.5');
+  const octagonDownload = page.waitForEvent('download', { timeout: 6000 });
+  await page.locator('#outlineZip').click();
+  await expect(page.locator('#status')).toContainText('Cutline ZIP ready', { timeout: 2000 });
+  const octagonPack = zipEntries(await readFile(await (await octagonDownload).path()));
+  const octagon = octagonPack.get('fixture-patch-outline.svg');
+  expect(octagon).toBeDefined();
+  await expect(page.locator('#status')).toContainText('Cutline ZIP ready');
+  expect(octagon.toString()).toContain('Geometric patch perimeter');
+  expect(octagon.toString()).toMatch(/L[\d.]+ [\d.]+/);
+  await page.locator('#patchShape').selectOption('circle');
+  const circleDownload = page.waitForEvent('download', { timeout: 6000 });
+  await page.locator('#outlineZip').click();
+  await expect(page.locator('#status')).toContainText('Cutline ZIP ready', { timeout: 2000 });
+  const circlePack = zipEntries(await readFile(await (await circleDownload).path()));
+  const circle = circlePack.get('fixture-patch-outline.svg');
+  expect(circle).toBeDefined();
+  await expect(page.locator('#status')).toContainText('Cutline ZIP ready');
+  expect(circle.toString()).toMatch(/ A [\d.]+ [\d.]+ 0 1 0 /);
+  expect(circle.toString()).not.toEqual(octagon.toString());
+  await page.locator('#patchShape').selectOption('octagon');
+  await page.locator('#width').fill('4');
+  await expect(page.locator('#artworkDimensions')).toContainText('Artwork: 1.25 × 1.25 in');
+  const saved = await readDownload(page, '#save');
+  expect(JSON.parse(saved.toString()).settings).toMatchObject({
+    width: 4, height: 2.5, edgeStyle: 'merrow', patchShape: 'octagon',
+    artworkWidth: 1.25, artworkX: 10, artworkY: -5,
+  });
+  await page.locator('#artworkWidth').fill('0');
+  await page.locator('#projectInput').setInputFiles({ name: 'saved.json', mimeType: 'application/json', buffer: saved });
+  await expect(page.locator('#artworkWidth')).toHaveValue('1.25');
+  await expect(page.locator('#artworkX')).toHaveValue('10');
+  await expect(page.locator('#artworkY')).toHaveValue('-5');
+  expect(errors).toEqual([]);
+});
+
+test('UV magnet uses flat original-color proof and exports a no-cut production pack', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await page.locator('#productKind').selectOption('magnet');
+  await expect(page.locator('#productPreset')).toHaveValue('magnet-round');
+  await expect(page.locator('#material')).toHaveValue('acrylic');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  await expect(page.locator('#stitchControls')).toBeHidden();
+  await expect(page.locator('#outlineSvg')).toBeDisabled();
+  await expect(page.locator('#outlineZip')).toBeDisabled();
+  await expect(page.locator('#summaryHeight')).toContainText('Flat color');
+  const zip = zipEntries(await readDownload(page, '#all'));
+  expect(zip.has('color-artwork.png')).toBe(true);
+  expect(zip.has('cutting/NO-CUT-REQUIRED.txt')).toBe(true);
+  expect(zip.has('cutting/individual-patch-outline.svg')).toBe(false);
+  expect(zip.has('batch/full-cutlines.svg')).toBe(false);
+  expect([...zip.keys()].some(name => name.startsWith('layer-masks/'))).toBe(false);
+  const manifest = JSON.parse(zip.get('manifest.json').toString());
+  expect(manifest.product).toMatchObject({
+    kind:'magnet',preset:'magnet-round',appearance:'flat',cutline_mode:'none',cutline_required:false
+  });
+  expect(zip.get('XTOOL-STUDIO-PRINT-GUIDE.txt').toString()).toContain('Flat');
+  const saved = await readDownload(page, '#save');
+  await page.locator('#productKind').selectOption('coaster');
+  await expect(page.locator('#productKind')).toHaveValue('coaster');
+  await page.locator('#projectInput').setInputFiles({ name:'saved.json',mimeType:'application/json',buffer:saved });
+  await expect(page.locator('#productKind')).toHaveValue('magnet');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  expect(errors).toEqual([]);
+});
+
+test('coaster, metal coin and custom item presets select appropriate UV effects and no-cut default', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#productKind').selectOption('coaster');
+  await expect(page.locator('#productPreset')).toHaveValue('coaster-round');
+  await expect(page.locator('#material')).toHaveValue('ceramic');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await page.locator('#productKind').selectOption('coin');
+  await expect(page.locator('#printEffect')).toHaveValue('relief');
+  await expect(page.locator('#material')).toHaveValue('metal');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  await expect(page.locator('#heightDesignControls')).toBeVisible();
+  await page.locator('#productKind').selectOption('custom');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  await page.locator('#cutMode').selectOption('geometric');
+  await expect(page.locator('#outlineSvg')).toBeEnabled();
+  await expect(page.locator('#geometricPatchControls')).toBeVisible();
+  await page.locator('#cutMode').selectOption('artwork');
+  await expect(page.locator('#contourControls')).toBeVisible();
+  expect(errors).toEqual([]);
+});
