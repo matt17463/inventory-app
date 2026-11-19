@@ -625,7 +625,7 @@ function layoutPlan(v){const [sw,sh]=sheetSize(v),m=cap(v.margin,0,1),g=cap(v.ga
  const capacity=cols*rows,q=cap(Math.round(v.quantity),1,250),sheets=capacity?Math.ceil(q/capacity):0;
  return {sw,sh,margin:m,gap:g,cols,rows,capacity,quantity:q,sheets,fullSheets:capacity?Math.floor(q/capacity):0,remainder:capacity?q%capacity:0};
 }
-function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Patch + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
+function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Blank + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
 const oldUI=UI;UI=function(){oldUI();
  const kind=$('productKind').value,mode=$('printEffect').value,cutMode=$('cutMode').value;
  $('summaryHeight').textContent=mode==='flat'?'Flat color — no relief':mode==='texture'?'Texture reference · 0–'+values().depth.toFixed(2)+' mm':mode==='relief'?'Relief reference · 0–'+values().depth.toFixed(2)+' mm':'Embroidery reference · 0–'+values().depth.toFixed(2)+' mm';
@@ -639,13 +639,14 @@ const oldUI=UI;UI=function(){oldUI();
  $('cutModeNotice').textContent=cutMode==='none'?'Finished blank: no cut SVG is exported. Register artwork on the actual blank in xTool Studio.':'Cut references are visual guides only. Cutting requires separately verified hardware and registration.';
  $('outlineSvg').disabled=cutMode==='none';
  $('outlineZip').disabled=cutMode==='none';
+ const proofTab=document.querySelector('[data-tab="proof"]');if(proofTab)proofTab.textContent=cutMode==='none'?'Blank boundary proof':'Cutline proof';
  $('outlineSvg').title=cutMode==='none'?'Finished blank has no cutter reference; select a cutline mode to export':'Export uncalibrated cutline reference';
  const geometric=cutMode==='geometric'||(cutMode==='legacy'&&values().edgeStyle!=='none');
  const silhouette=cutMode==='artwork'||(cutMode==='legacy'&&values().edgeStyle==='none');
  $('contourControls').hidden=!silhouette;
  $('geometricPatchControls').hidden=!geometric;
  const art=values(),g=artworkGeometry(art.width*300,art.height*300,art);$('artworkWidthV').textContent=art.artworkWidth?art.artworkWidth.toFixed(2)+' in':'Auto fit';$('artworkXV').textContent=art.artworkX?art.artworkX+'%':'Centered';$('artworkYV').textContent=art.artworkY?art.artworkY+'%':'Centered';
- if(g){const out=g.x<0||g.y<0||g.x+g.dw>art.width*300||g.y+g.dh>art.height*300;const label=$('artworkDimensions');label.textContent='Artwork: '+(g.dw/300).toFixed(2)+' × '+(g.dh/300).toFixed(2)+' in within '+art.width.toFixed(2)+' × '+art.height.toFixed(2)+' in patch.'+(out?' Warning: image extends beyond the rectangular patch bounds; reduce width or reposition.':' Check curved/polygon edges in Cutline proof before printing.');label.style.color=out?'#f0ad83':'var(--muted)';}
+ if(g){const out=g.x<0||g.y<0||g.x+g.dw>art.width*300||g.y+g.dh>art.height*300;const label=$('artworkDimensions');label.textContent='Artwork: '+(g.dw/300).toFixed(2)+' × '+(g.dh/300).toFixed(2)+' in within '+art.width.toFixed(2)+' × '+art.height.toFixed(2)+' in blank.'+(out?' Warning: image extends beyond the rectangular patch bounds; reduce width or reposition.':' Check curved/polygon edges in Cutline proof before printing.');label.style.color=out?'#f0ad83':'var(--muted)';}
 $('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
 function sheetPosition(v,plan,i){
  return [
