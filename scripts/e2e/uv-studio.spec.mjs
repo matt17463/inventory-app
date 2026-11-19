@@ -258,3 +258,55 @@ test('coaster, metal coin and custom item presets select appropriate UV effects 
   await expect(page.locator('#contourControls')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('rounded rectangle SVG has true smooth arcs and matches the inspected proof settings', async ({page}) => {
+  const errors=await openStudio(page);
+  await page.locator('#file').setInputFiles({ name:'fixture.svg',mimeType:'image/svg+xml',buffer:artwork });
+  await page.locator('#cutMode').selectOption('geometric');
+  await page.locator('#patchShape').selectOption('rounded');
+  await page.locator('#cornerRadiusMm').fill('5.5');
+  await page.locator('[data-tab="proof"]').click();
+  await expect(page.locator('#cutProofTools')).toBeVisible();
+  await expect(page.locator('#cutlineProofStatus')).toContainText('Geometric rounded');
+  await expect(page.locator('#cornerRadiusMmV')).toContainText('5.5 mm');
+  const pack=zipEntries(await readDownload(page,'#outlineZip'));
+  const svg=pack.get('fixture-patch-outline.svg')?.toString()||'';
+  expect(svg).toContain('Geometric patch perimeter');
+  const path=svg.match(/<path d="([^"]+)"/)?.[1]||'';
+  expect((path.match(/ A 5\.500 5\.500 /g)||[]).length).toBe(4);
+  expect(path).not.toContain('Q');
+  expect(path.length).toBeLessThan(600);
+  await page.locator('#proofZoom').selectOption('4');
+  await page.locator('#proofFocusX').fill('0');
+  await page.locator('#proofFocusY').fill('100');
+  await page.locator('#proofShowArtwork').uncheck();
+  await expect(page.locator('#cutlineProofStatus')).toContainText('Red: exact SVG cut path');
+  const saved=JSON.parse((await readDownload(page,'#save')).toString());
+  expect(saved.settings).toMatchObject({cutMode:'geometric',patchShape:'rounded',cornerRadiusMm:5.5});
+  expect(errors).toEqual([]);
+});
+
+test('silhouette smoothing removes pixel steps without changing selected cut mode or loops', async ({page}) => {
+  test.setTimeout(60000);
+  const errors=await openStudio(page);
+  await page.locator('#file').setInputFiles({ name:'fixture.svg',mimeType:'image/svg+xml',buffer:artwork });
+  await page.locator('#width').fill('1');
+  await page.locator('#height').fill('1');
+  await page.locator('#cutMode').selectOption('artwork');
+  await page.locator('[data-tab="proof"]').click();
+  await expect(page.locator('#cutlineProofStatus')).toContainText('Artwork silhouette');
+  const rawPack=zipEntries(await readDownload(page,'#outlineZip'));
+  const raw=rawPack.get('fixture-patch-outline.svg')?.toString()||'';
+  await page.locator('#contourSmooth').check();
+  await page.locator('#contourSimplify').fill('0.65');
+  await page.locator('#contourRound').fill('0.6');
+  await expect(page.locator('#cutlineProofStatus')).toContainText('contour corners retained');
+  const smoothPack=zipEntries(await readDownload(page,'#outlineZip'));
+  const smooth=smoothPack.get('fixture-patch-outline.svg')?.toString()||'';
+  expect(smooth).toContain('Artwork silhouette');
+  expect(smooth).toContain('Q');
+  expect(smooth.length).toBeLessThan(raw.length);
+  const state=JSON.parse((await readDownload(page,'#save')).toString()).settings;
+  expect(state).toMatchObject({cutMode:'artwork',contourSmooth:true,contourSimplify:.65,contourRound:.6});
+  expect(errors).toEqual([]);
+});
