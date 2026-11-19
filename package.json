@@ -40,7 +40,7 @@
     "check": "npm run functions:esm && npm run test && npm run lint && npm run build && npm run test:product-center",
     "build:vite": "node scripts/build_vite.mjs",
     "build:verify": "node scripts/verify_build_features.mjs",
-    "test:artwork-preview": "node --test scripts/tests/artwork-sticky-popout.test.mjs scripts/tests/uv-patch-perimeter-sizing.test.mjs",
+    "test:artwork-preview": "node --test scripts/tests/artwork-sticky-popout.test.mjs scripts/tests/uv-patch-perimeter-sizing.test.mjs scripts/tests/uv-multi-product.test.mjs",
     "test:artwork-r2": "node --test scripts/tests/artwork-r2-storage.test.mjs",
     "test:product-types": "node --test scripts/tests/product-type-manager.test.mjs",
     "test:pullsheet-purchasing-integrity": "node --test scripts/tests/pullsheet-purchasing-integrity.test.mjs",
