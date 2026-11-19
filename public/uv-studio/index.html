@@ -126,7 +126,7 @@
 <div><label class="checkbox"><input type="checkbox" id="cleanupWhite"> Remove near-white photo background (preview and export)</label><div class="small">Enable only when white is NOT part of the logo. Alpha cleanup is approximate; inspect fine edges.</div></div>
 <div><label for="cleanThreshold">White cutoff (RGB)</label><input id="cleanThreshold" type="range" min="220" max="254" value="245"><div class="small">Higher numbers remove fewer off-white pixels.</div></div>
 <div><label for="effectStyle">Dimensional effect family</label><select id="effectStyle"><option value="embroidery">Thread embroidery</option><option value="chenille">Chenille pile</option><option value="molded">Molded rubber / PVC-look</option><option value="embossed">Embossed leather-look</option><option value="metallic">Brushed metal-look</option><option value="gloss">High-gloss spot relief</option></select></div>
-<div><label for="proofSurface">Illustrative customer mockup</label><select id="proofSurface"><option value="hat">Baseball cap</option><option value="hoodie">Garment / hoodie</option><option value="leather">Flat leather patch</option><option value="metal">Brushed metal panel</option></select></div>
+<div><label for="proofSurface">Illustrative customer mockup</label><select id="proofSurface"><option value="hat">Baseball cap</option><option value="hoodie">Garment / hoodie</option><option value="leather">Flat leather patch</option><option value="metal">Brushed metal panel</option><option value="magnet">Round magnet</option><option value="coaster">Coaster</option><option value="acrylic">Acrylic sign / keychain</option><option value="wood">Wood plaque</option><option value="ceramic">Ceramic tile</option></select></div>
 </div>
 <div class="mini-tools"><button id="generateProductProof">Generate stylized proof</button><button id="downloadProductProof">↓ Customer proof PNG</button></div>
 <canvas id="productProofCanvas" width="860" height="480" style="width:100%;max-width:860px;border:1px solid #345269;border-radius:12px;background:#0d1721;margin-top:10px"></canvas>
@@ -140,8 +140,8 @@
 <div class="callout"><strong>Omni compatibility notice:</strong> xTool currently requires its official software for printing. These files are <strong>design assets and experimental separations</strong>, not a machine-ready RIP job. The relationship between an imported grayscale map and actual deposited ink height needs physical calibration on the Omni.</div>
 <div class="steps"><h2>Material-specific first-print checklist</h2><div id="printChecklist" class="material-note"></div></div></section>
 <aside class="right">
-<div class="panel"><section class="section"><h2>Production summary</h2><div class="metric"><div class="key">Selected material</div><div class="value" id="summaryMaterial" style="font-size:15px">Leather / synthetic</div><div class="note" id="summaryInk">Flexible white</div></div><div class="metric"><div class="key">Artwork size</div><div class="value" id="summarySize">3.5 × 2.5 in</div><div class="note" id="summaryPixels">1050 × 750 pixels at 300 DPI</div></div><div class="metric"><div class="key">Height-map encoding</div><div class="value" id="summaryHeight">0–0.60 mm</div><div class="note">8-bit grayscale, maximum height = 255</div></div><div class="metric"><div class="key">Threshold mask count</div><div class="value" id="summaryLayers">6</div><div class="note">Conceptual separations — not RIP passes</div></div><div class="metric"><div class="key">Pixel output</div><div class="value green">300 DPI</div><div class="note">True-size PNG exports</div></div></section></div>
-<div class="panel"><section class="section"><h2>Exports</h2><button class="download" id="all">↓ Download production ZIP</button><button class="outline" data-export="color">Stitch color artwork <span>PNG</span></button><button class="outline" data-export="height">Grayscale height map <span>PNG</span></button><button class="outline" data-export="white">White underbase mask <span>PNG</span></button><button class="outline" data-export="varnish">Highlight / varnish mask <span>PNG</span></button><button class="outline" id="save">Save editable project <span>JSON</span></button><button class="outline" id="log">Print test record template <span>CSV</span></button><div class="fine" style="margin-top:12px">ZIP includes region metadata, aligned artwork, height/white/varnish maps, threshold intent masks, a 300 DPI layout proof reference, and calibration notes. Direct xTool print passes remain controlled in xTool Studio.</div></section></div>
+<div class="panel"><section class="section"><h2>Production summary</h2><div class="metric"><div class="key">Selected material</div><div class="value" id="summaryMaterial" style="font-size:15px">Leather / synthetic</div><div class="note" id="summaryInk">Flexible white</div></div><div class="metric"><div class="key">Printable blank / canvas size</div><div class="value" id="summarySize">3.5 × 2.5 in</div><div class="note" id="summaryPixels">1050 × 750 pixels at 300 DPI</div></div><div class="metric"><div class="key">Surface effect / height intent</div><div class="value" id="summaryHeight">0–0.60 mm</div><div class="note">8-bit grayscale, maximum height = 255</div></div><div class="metric"><div class="key">Buildup reference masks</div><div class="value" id="summaryLayers">6</div><div class="note">Conceptual separations — not RIP passes</div></div><div class="metric"><div class="key">Pixel output</div><div class="value green">300 DPI</div><div class="note">True-size PNG exports</div></div></section></div>
+<div class="panel"><section class="section"><h2>Exports</h2><button class="download" id="all">↓ Download production ZIP</button><button class="outline" data-export="color">Color artwork <span>PNG</span></button><button class="outline" data-export="height">Grayscale height map <span>PNG</span></button><button class="outline" data-export="white">White underbase mask <span>PNG</span></button><button class="outline" data-export="varnish">Highlight / varnish mask <span>PNG</span></button><button class="outline" id="save">Save editable project <span>JSON</span></button><button class="outline" id="log">Print test record template <span>CSV</span></button><div class="fine" style="margin-top:12px">ZIP contains product metadata, 300 DPI color artwork, white/varnish reference maps, applicable relief/texture references, layout proofs, material-specific instructions and calibration notes. Direct xTool print passes remain controlled in xTool Studio.</div></section></div>
 </aside>
 </main>
 <script>
@@ -606,6 +606,8 @@ function layoutPlan(v){const [sw,sh]=sheetSize(v),m=cap(v.margin,0,1),g=cap(v.ga
 function layoutUI(){const v=values(),pl=layoutPlan(v);$('layoutResult').textContent=pl.capacity?`${pl.cols} × ${pl.rows} = ${pl.capacity}/sheet · ${pl.sheets} sheet(s) for ${pl.quantity}`:'Patch + margins do not fit the selected sheet';$('layoutResult').style.color=pl.capacity?'#73ead1':'#f0ad83';}
 const oldUI=UI;UI=function(){oldUI();
  const kind=$('productKind').value,mode=$('printEffect').value,cutMode=$('cutMode').value;
+ $('summaryHeight').textContent=mode==='flat'?'Flat color — no relief':mode==='texture'?'Texture reference · 0–'+values().depth.toFixed(2)+' mm':mode==='relief'?'Relief reference · 0–'+values().depth.toFixed(2)+' mm':'Embroidery reference · 0–'+values().depth.toFixed(2)+' mm';
+ $('summaryLayers').textContent=mode==='flat'?'None — flat print':String(values().layers);
  $('stitchControls').hidden=mode!=='embroidery';
  $('stitchRegionControls').hidden=mode!=='embroidery';
  $('heightDesignControls').hidden=mode==='flat';
@@ -708,10 +710,10 @@ function scOmniPrintGuide(v){
  'STATUS: TEST RECIPE ONLY. Not a machine-ready print job or validated customer-production recipe.',
  '',
  '1. Check product '+v.productKind+' and blank construction: '+v.material+' / '+v.variant+'. Confirm the blank/film is intended for UV ink; secure flat, inspect thickness and keep printheads clear.',
- '2. Review color-artwork.png (appearance), white-underbase.png (suggested white area), height-map-grayscale.png (relative height), and varnish-highlights.png (spot-gloss intent). They are SEPARATE DESIGN REFERENCES, not a RIP-ready job.',
+ '2. Selected appearance: '+v.printEffect+'. Review color-artwork.png, white-underbase.png, varnish-highlights.png and the grayscale reference if not flat. These are SEPARATE DESIGN REFERENCES, not a RIP-ready job.',
  '3. Launch the CURRENT xTool Studio release, select the connected O1 Omni model, choose the specific stock material, position the physical blank and confirm print face '+v.width+' × '+v.height+' inches and safe thickness / head clearance. Never select a preset solely because a filename contains white/varnish.',
  '4. Import color-artwork.png and scale to the exact physical printable area. Position once and lock artwork/registration. If multiple assets are imported, keep IDENTICAL position, scale, orientation, and canvas origin. DO NOT print the white/varnish/height PNGs as independent full-color images.',
- '5. Use xTool Studio native white underbase, varnish and Texture/Relief controls if the installed software exposes them. These prepress mask files are for matching artistic intent; confirm whether your xTool Studio version supports spot channels or grayscale height import. If it does NOT, recreate using its native controls. DO NOT claim the number of threshold PNG files represents printer passes.',
+ '5. Select the matching xTool Studio appearance mode ('+(v.printEffect==='flat'?'Flat':v.printEffect==='texture'?'Texture':v.printEffect==='relief'?'Relief':'Texture/Relief test for embroidery simulation')+'). Use xTool Studio native white underbase, varnish and Texture/Relief controls if the installed software exposes them. These prepress mask files are for matching artistic intent; confirm whether your xTool Studio version supports spot channels or grayscale height import. If it does NOT, recreate using its native controls. DO NOT claim the number of threshold PNG files represents printer passes.',
  onLeather?'6. LEATHER/PU: xTool published a comparison using flexible white ink, Texture mode, 0.3 mm print height and 30 minutes of rest before fold/crumple testing. This is a FIRST-ARTICLE trial point, NOT a proven patch production preset. Do not substitute rigid white.':onFilm?'6. FILM: identify exact TPU 3D film manufacturer and approved application/press process. Conventional HTV is NOT validated for UV printing. Mirror only when supplier orientation instructions require it.':onMetal?'6. METAL: choose rigid ink and a compatible cleaning/primer workflow for the precise alloy and coating. No universal height/white count is established.':'6. Verify the exact material, white ink chemistry, printed relief height, and varnish. No universal white or varnish pass count is verified.',
  '7. White layers: UNKNOWN for this exact material/finish. Start with xTool material preset, make a small white-opacity test strip, compare 1–3 settings where supported, and record the outcome. White ink should not automatically be treated as multiple separated imported image layers.',
  '8. Color layers: UNKNOWN. Start with native xTool material default; test a single color pass versus its permitted alternatives for opacity, color fidelity, bleed and cure.',
@@ -808,6 +810,8 @@ function applyProductPreset(){
  $('printEffect').value=p.mode;$('cutMode').value=p.cut;$('edgeStyle').value=p.edge;
  if($('material').value!==p.material){$('material').value=p.material;applyMaterialProfile();}
  if(p.mode==='flat')$('varnish').checked=false;
+ const proofByKind={magnet:'magnet',coaster:'coaster',keychain:'acrylic',sign:'acrylic',nameplate:'metal',ornament:'acrylic',coin:'metal',tile:'ceramic',patch:'hat'};
+ if($('proofSurface'))$('proofSurface').value=proofByKind[p.kind]||'metal';
  renderSoon();
 }
 function applyProductKind(){
@@ -929,7 +933,14 @@ function scProductProof(){
  const mode=$('proofSurface').value;ctx.clearRect(0,0,w,h);
  const bg=ctx.createLinearGradient(0,0,w,h);bg.addColorStop(0,'#0d2030');bg.addColorStop(1,'#10161c');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
  ctx.save();ctx.translate(w/2,h/2);
- if(mode==='hat'){
+ if(mode==='magnet'||mode==='coaster'||mode==='ceramic'){
+  ctx.fillStyle=mode==='magnet'?'#c7ced2':mode==='coaster'?'#b5a38c':'#eee7df';
+  ctx.strokeStyle='#70808a';ctx.lineWidth=7;ctx.beginPath();ctx.arc(0,0,190,0,Math.PI*2);ctx.fill();ctx.stroke();
+ }else if(mode==='acrylic'){
+  ctx.fillStyle='rgba(190,223,234,.24)';ctx.strokeStyle='#7fb9ce';ctx.lineWidth=9;ctx.beginPath();ctx.roundRect(-300,-160,600,320,22);ctx.fill();ctx.stroke();
+ }else if(mode==='wood'){
+  const wood=ctx.createLinearGradient(-290,-150,290,150);wood.addColorStop(0,'#d4ae73');wood.addColorStop(.5,'#ac8250');wood.addColorStop(1,'#d1ac72');ctx.fillStyle=wood;ctx.beginPath();ctx.roundRect(-300,-160,600,320,22);ctx.fill();
+ }else if(mode==='hat'){
   ctx.fillStyle='#181d24';ctx.beginPath();ctx.ellipse(0,82,345,95,0,0,Math.PI*2);ctx.fill();
   const crown=ctx.createLinearGradient(0,-180,0,170);crown.addColorStop(0,'#4d5562');crown.addColorStop(1,'#111821');ctx.fillStyle=crown;
   ctx.beginPath();ctx.moveTo(-265,80);ctx.quadraticCurveTo(-240,-188,0,-203);ctx.quadraticCurveTo(240,-188,265,80);ctx.quadraticCurveTo(0,168,-265,80);ctx.fill();
@@ -945,9 +956,14 @@ function scProductProof(){
  const art=canvases.color;
  const ratio=Math.min(420/art.width,230/art.height),dw=art.width*ratio,dh=art.height*ratio;
  ctx.shadowColor='#000a';ctx.shadowBlur=20;ctx.shadowOffsetY=10;
- ctx.fillStyle=mode==='metal'?'#161e28':'#6b4d37';
- ctx.beginPath();ctx.roundRect(-dw/2-18,-dh/2-18,dw+36,dh+36,16);ctx.fill();
- ctx.shadowColor='transparent';ctx.drawImage(art,-dw/2,-dh/2,dw,dh);
+ if(['magnet','coaster','ceramic'].includes(mode)){
+  ctx.beginPath();ctx.arc(0,0,184,0,Math.PI*2);ctx.clip();
+  ctx.shadowColor='transparent';ctx.drawImage(art,-dw/2,-dh/2,dw,dh);
+ }else{
+  ctx.fillStyle=mode==='metal'?'#161e28':mode==='acrylic'?'#a3d8e122':'#6b4d37';
+  ctx.beginPath();ctx.roundRect(-dw/2-18,-dh/2-18,dw+36,dh+36,16);ctx.fill();
+  ctx.shadowColor='transparent';ctx.drawImage(art,-dw/2,-dh/2,dw,dh);
+ }
  ctx.restore();
  ctx.fillStyle='#d9e8ed';ctx.font='16px system-ui';ctx.fillText('SKILLED CRAFTING · STYLIZED CONCEPT PROOF',22,h-22);
  ctx.font='13px system-ui';ctx.fillText('Not a photograph or calibrated representation of ink buildup',22,27);
