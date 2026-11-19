@@ -3,7 +3,7 @@
 UV Studio now supports ordinary full-color UV printing in addition to dimensional embroidery-style patches. The common artwork engine is used across product templates, printable materials and export workflows.
 
 ## Choose your product
-Go to **UV Studio → Faux embroidery & UV texture editor**. In **Product & material**, select **What are you making?**:
+Go to **UV Studio → UV Product Designer**. In **Product & material**, select **What are you making?**:
 - Apparel / hat patches (existing behavior)
 - Printed magnets: acrylic or ceramic, round and rectangular presets
 - Coasters: round and square ceramic/stone
