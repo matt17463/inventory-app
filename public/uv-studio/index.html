@@ -118,7 +118,7 @@
 </div>
 <label class="checkbox"><input type="checkbox" id="registrationMarks" checked> Include printable registration crosshairs in proof / cutline</label>
 <div class="small">Fixture positions must be measured and tested against the physical jig. This output does not control a laser/cutter or define alignment accuracy automatically.</div>
-</fieldset><div class="metric-row"><span id="layoutResult">Calculating layout…</span></div><div class="mini-tools"><button id="layoutZip">↓ Layout + cutlines ZIP</button><button id="outlineSvg">↓ Cutline SVG</button></div><div class="small">Cutlines are uncalibrated geometric references, not registration-verified cutter commands.</div></div></div>
+</fieldset><div class="metric-row"><span id="layoutResult">Calculating layout…</span></div><div class="mini-tools"><button id="layoutZip">↓ Layout + cutlines ZIP</button><button id="outlineSvg">↓ Cutline SVG</button><button id="outlineZip">↓ Cutline SVG ZIP (reliable alternative)</button></div><div class="small">Cutlines are uncalibrated geometric references, not registration-verified cutter commands.</div></div></div>
 
 <div class="module" style="margin-top:14px" id="scDesignPro">
 <h2>Design Pro — preflight, special effects and team personalization</h2>
@@ -615,6 +615,7 @@ const oldUI=UI;UI=function(){oldUI();
  $('patchEdgeColorControls').hidden=kind!=='patch'||mode!=='embroidery';
  $('cutModeNotice').textContent=cutMode==='none'?'Finished blank: no cut SVG is exported. Register artwork on the actual blank in xTool Studio.':'Cut references are visual guides only. Cutting requires separately verified hardware and registration.';
  $('outlineSvg').disabled=cutMode==='none';
+ $('outlineZip').disabled=cutMode==='none';
  $('outlineSvg').title=cutMode==='none'?'Finished blank has no cutter reference; select a cutline mode to export':'Export uncalibrated cutline reference';
  const geometric=cutMode==='geometric'||(cutMode==='legacy'&&values().edgeStyle!=='none');
  const silhouette=cutMode==='artwork'||(cutMode==='legacy'&&values().edgeStyle==='none');
@@ -837,8 +838,18 @@ $('calImport').addEventListener('change',async e=>{let f=e.target.files?.[0];if(
 $('layoutZip').onclick=()=>exportV03Zip(true);
 $('all').onclick=()=>exportV03Zip(false);
 $('outlineSvg').onclick=()=>{
- try{saveBytes(filename()+'-patch-outline.svg',textBytes(patchOutlineSVG(values())),'application/octet-stream');$('status').textContent='✓ Cutline SVG ready'}
+ try{saveBytes(filename()+'-item-outline.svg',textBytes(patchOutlineSVG(values())),'application/octet-stream');$('status').textContent='✓ Cutline SVG ready'}
  catch(error){$('status').textContent='Export error: '+error.message}
+};
+$('outlineZip').onclick=()=>{
+ try{
+  const v=values();
+  if(v.cutMode==='none')throw Error('Finished blanks do not require cutline export.');
+  const name=filename()+(v.productKind==='patch'?'-patch-outline.svg':'-item-outline.svg');
+  const bytes=zipStore([{name,data:textBytes(patchOutlineSVG(v))},{name:'READ-ME.txt',data:textBytes('Reference cutline only. Extract the SVG from this ZIP before opening in xTool Studio or your cutter software. Verify physical registration and tool compensation on scrap before cutting.')}]);
+  saveBytes(filename()+'-cutline-reference.zip',bytes,'application/zip');
+  $('status').textContent='✓ Cutline ZIP ready';
+ }catch(error){$('status').textContent='Export error: '+error.message}
 };
 $('save').onclick=()=>saveBytes(filename()+'-project-v03.json',textBytes(exportProjectJSON()),'application/json');
 // Load both old v0.2 projects and new v0.3 projects.
