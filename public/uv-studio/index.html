@@ -305,7 +305,23 @@ function openUvPreview(){
 }
 $('popoutPreview').addEventListener('click',openUvPreview);
 window.addEventListener('pagehide',()=>{if(popoutWindow&&!popoutWindow.closed)popoutWindow.close()});
-function showTab(){const p=$('preview');let ctx=p.getContext('2d');if(!output)return;const w=output.w,h=output.h;p.width=w;p.height=h;ctx.clearRect(0,0,w,h);ctx.drawImage(canvases[settings.tab],0,0);syncPopoutPreview();}
+function showTab(){
+ const p=$('preview');if(!output)return;
+ const source=canvases[settings.tab],proof=settings.tab==='proof';
+ if(!source)return;
+ const w=proof?source.width:output.w,h=proof?source.height:output.h;
+ if(!w||!h)return;
+ p.width=w;p.height=h;
+ const ctx=p.getContext('2d');
+ if(proof){
+  const zoom=cap(Number($('proofZoom').value)||1,1,4),sw=w/zoom,sh=h/zoom;
+  const fx=cap(Number($('proofFocusX').value)||50,0,100)/100;
+  const fy=cap(Number($('proofFocusY').value)||50,0,100)/100;
+  ctx.drawImage(source,(w-sw)*fx,(h-sh)*fy,sw,sh,0,0,w,h);
+ }else ctx.drawImage(source,0,0);
+ $('cutProofTools').hidden=!proof;
+ syncPopoutPreview();
+}
 async function renderPreview(){if(!image)return;const my=++token,v=values();const max=680,ratio=v.width/v.height;let w=Math.round(Math.min(max,max*ratio)),h=Math.round(w/ratio);if(h>max){h=max;w=Math.round(h*ratio)};
  $('status').textContent='Rendering preview…';await new Promise(r=>setTimeout(r,12));if(my!==token)return;
  try{const res=produce(w,h,v);if(my!==token)return;output=res;for(let key of ['color','height','white','varnish'])toCanvas(key,res[key],w,h);showTab();$('status').textContent='✓ Preview ready';}catch(e){$('status').textContent='Render failed';console.error(e)}
@@ -485,7 +501,7 @@ function contourPath(points,scale,smooth,simplifyMM=0,roundMM=.35){
  const toward=(a,b,d)=>{const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1;return [a[0]+dx*d/len,a[1]+dy*d/len]};
  return loop.map((corner,i)=>{
   const prev=loop[(i+loop.length-1)%loop.length],next=loop[(i+1)%loop.length];
-  const d=Math.min(r,Math.hypot(prev[0]-corner[0])*.4,Math.hypot(next[0]-corner[0])*.4);
+  const d=Math.min(r,Math.hypot(prev[0]-corner[0],prev[1]-corner[1])*.4,Math.hypot(next[0]-corner[0],next[1]-corner[1])*.4);
   const before=toward(corner,prev,d),after=toward(corner,next,d);
   return (i?'L':'M')+point(before)+'Q'+point(corner)+' '+point(after);
  }).join('')+'Z';
@@ -652,9 +668,44 @@ produce=function(w,h,v){
  res.regionViz=vmap;res.segmentation=seg;return res;
 };
 canvases.regions=document.createElement('canvas');canvases.proof=document.createElement('canvas');
-function previewProof(res,v){const c=document.createElement('canvas');c.width=res.w;c.height=res.h;let cx=c.getContext('2d');cx.putImageData(new ImageData(res.color,res.w,res.h),0,0);
- cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(1,res.w/(v.width*300));if(v.cutMode!=='none'){const cut=scCutPath(v);if(v.cutMode==='artwork'||(v.cutMode!=='geometric'&&v.edgeStyle==='none')){cx.save();cx.scale(res.w/(v.width*25.4),res.h/(v.height*25.4));cx.translate(-cut.originOffset,-cut.originOffset);cx.stroke(new Path2D(cut.d));cx.restore()}else cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,res.w*.018)));}
- cx.strokeStyle='#57baff';cx.setLineDash([7,6]);cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,Math.min(res.w,res.h)*.085)));cx.setLineDash([]);return c;}
+// Proof and all SVG/ZIP exports use the same physical-mm scCutPath result.
+let latestCutProof=null;
+function previewProof(res,v){
+ const cut=scCutPath(v),scale=res.w/(v.width*25.4);
+ const c=document.createElement('canvas');
+ c.width=Math.max(1,Math.round(cut.width*scale));c.height=Math.max(1,Math.round(cut.height*scale));
+ const cx=c.getContext('2d'),shift=cut.originOffset*scale;
+ if($('proofShowArtwork').checked){
+  const art=document.createElement('canvas');art.width=res.w;art.height=res.h;
+  art.getContext('2d').putImageData(new ImageData(res.color,res.w,res.h),0,0);
+  cx.drawImage(art,shift,shift);
+ }
+ cx.save();cx.scale(scale,scale);
+ // Dashed blue is the actual unpadded physical blank outline, NOT an inset mock cut.
+ if($('proofShowBlank').checked){
+  cx.save();cx.translate(cut.originOffset,cut.originOffset);
+  cx.strokeStyle='#57baff';cx.lineWidth=Math.max(.12,1.2/scale);
+  cx.setLineDash([1.2,.9]);
+  cx.stroke(new Path2D(outlinePath(v.width*25.4,v.height*25.4,v.patchShape,0,v.cornerRadiusMm)));
+  cx.restore();
+ }
+ if(cut.d){
+  cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(.12,1.5/scale);
+  cx.setLineDash([]);cx.stroke(new Path2D(cut.d));
+ }
+ cx.restore();
+ latestCutProof={d:cut.d,width:cut.width,height:cut.height,originOffset:cut.originOffset};
+ const status=$('cutlineProofStatus'),shapeLabel=v.cutMode==='geometric'||(v.cutMode==='legacy'&&v.edgeStyle!=='none')?'Geometric '+v.patchShape:
+  v.cutMode==='none'?'No cutline (finished blank)':'Artwork silhouette';
+ const counts=(cut.components||0)+' closed loop'+(cut.components===1?'':'s');
+ const detail=cut.rawVertices?' · '+cut.outputVertices+'/'+cut.rawVertices+' contour corners retained':'';
+ const warning=cut.thinBridge?' WARNING: material bridge too narrow.':
+  cut.components>1?' Warning: separate loops/islands; check all pieces.':
+  (shapeLabel==='Artwork silhouette'&&v.patchShape==='rounded')?' For a smooth rounded rectangle select Geometric outline reference.':'';
+ status.textContent='Red: exact SVG cut path · Blue: physical blank · '+shapeLabel+' · '+counts+detail+'.'+warning;
+ status.style.color=cut.thinBridge||cut.components>1?'#ffc78e':'#c5d9e4';
+ return c;
+}
 const oldRenderPreview=renderPreview;
 renderPreview=async function(){await oldRenderPreview();if(!output)return;let res=output,v=values();
  toCanvas('regions',res.regionViz,res.w,res.h);
@@ -693,6 +744,9 @@ const oldUI=UI;UI=function(){oldUI();
  $('outlineZip').disabled=cutMode==='none';
  const proofTab=document.querySelector('[data-tab="proof"]');if(proofTab)proofTab.textContent=cutMode==='none'?'Blank boundary proof':'Cutline proof';
  $('outlineSvg').title=cutMode==='none'?'Finished blank has no cutter reference; select a cutline mode to export':'Export uncalibrated cutline reference';
+ $('cornerRadiusMmV').textContent=values().cornerRadiusMm?values().cornerRadiusMm.toFixed(1)+' mm':'Auto';
+ $('contourSimplifyV').textContent=values().contourSimplify.toFixed(2)+' mm';
+ $('contourRoundV').textContent=values().contourRound.toFixed(2)+' mm';
  const geometric=cutMode==='geometric'||(cutMode==='legacy'&&values().edgeStyle!=='none');
  const silhouette=cutMode==='artwork'||(cutMode==='legacy'&&values().edgeStyle==='none');
  $('contourControls').hidden=!silhouette;
@@ -898,13 +952,15 @@ function applyProductKind(){
  else{$('productPreset').value='custom';$('printEffect').value='flat';$('edgeStyle').value='none';$('cutMode').value='none';$('varnish').checked=false;renderSoon();}
 }
 function applySheetChoice(){let sheet=$('sheet').value,size=sheetSize(values());if(sheet!=='custom'){$('sheetW').value=size[0];$('sheetH').value=size[1]}for(let key of ['sheetW','sheetH'])$(key).disabled=sheet!=='custom';renderSoon()}
-for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','autoAngles','patchShape','artworkWidth','artworkX','artworkY','sheetW','sheetH','margin','gap','quantity']){
+for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','contourSimplify','contourRound','cornerRadiusMm','autoAngles','patchShape','artworkWidth','artworkX','artworkY','sheetW','sheetH','margin','gap','quantity']){
  let el=$(key);el.addEventListener('input',()=>renderSoon());el.addEventListener('change',()=>renderSoon());
 }
 $('sheet').addEventListener('change',applySheetChoice);
 $('productPreset').addEventListener('change',applyProductPreset);
 $('productKind').addEventListener('change',applyProductKind);
 for(const key of ['printEffect','cutMode']){$(key).addEventListener('change',renderSoon);}
+for(const id of ['proofShowArtwork','proofShowBlank'])$(id).addEventListener('change',()=>{if(output){const c=previewProof(output,values());canvases.proof.width=c.width;canvases.proof.height=c.height;canvases.proof.getContext('2d').drawImage(c,0,0);showTab();}});
+for(const id of ['proofZoom','proofFocusX','proofFocusY'])$(id).addEventListener('input',showTab);
 $('recordCalibration').onclick=addCalibrationRecord;
 $('exportCalibrationJSON').onclick=()=>saveBytes('skilledcrafting-uv-calibrations.json',textBytes(JSON.stringify(calibrationRecords,null,2)),'application/json');
 $('coupon').onclick=exportCoupon;
