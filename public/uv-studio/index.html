@@ -107,9 +107,9 @@
 <label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
 </div><div id="patchEdgeControls"><label for="edgeStyle">Patch perimeter style</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">No geometric perimeter (artwork silhouette)</option></select></div><div id="geometricPatchControls">
 <label for="patchShape">Blank / reference outline shape</label><select id="patchShape"><option value="rounded">Rounded rectangle</option><option value="rectangle">Rectangle</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="capsule">Capsule / stadium</option><option value="octagon">Octagon (8 sides)</option><option value="hexagon">Hexagon (6 sides)</option><option value="pentagon">Pentagon (5 sides)</option><option value="diamond">Diamond</option><option value="shield">Shield</option></select>
-<label for="cornerRadiusMm">Rounded rectangle corner radius (mm) <strong id="cornerRadiusMmV">Auto</strong></label>
+<div id="roundedCornerControls"><label for="cornerRadiusMm">Rounded rectangle corner radius (mm) <strong id="cornerRadiusMmV">Auto</strong></label>
 <input id="cornerRadiusMm" type="number" min="0" max="20" step=".5" value="0">
-<div class="small">0 uses the existing automatic rounded corners; enter a radius in millimeters for exact circular arcs. This changes the geometric cut path, not the artwork size.</div>
+<div class="small">0 uses the existing automatic rounded corners; enter a radius in millimeters for exact circular arcs. This changes the geometric cut path, not the artwork size.</div></div>
 <div class="small">Geometric outlines use smooth vector curves regardless of artwork pixels or silhouette smoothing.</div>
 </div>
 <div class="module" id="artworkPlacementControls" style="padding:12px;margin:10px 0;border:1px solid #426375">
@@ -315,8 +315,8 @@ function showTab(){
  const ctx=p.getContext('2d');
  if(proof){
   const zoom=cap(Number($('proofZoom').value)||1,1,4),sw=w/zoom,sh=h/zoom;
-  const fx=cap(Number($('proofFocusX').value)||50,0,100)/100;
-  const fy=cap(Number($('proofFocusY').value)||50,0,100)/100;
+  const fx=cap(Number($('proofFocusX').value),0,100)/100;
+  const fy=cap(Number($('proofFocusY').value),0,100)/100;
   ctx.drawImage(source,(w-sw)*fx,(h-sh)*fy,sw,sh,0,0,w,h);
  }else ctx.drawImage(source,0,0);
  $('cutProofTools').hidden=!proof;
@@ -647,7 +647,7 @@ produce=function(w,h,v){
  }
  // Simulate stitches on the actual patch perimeter; transparent interior remains transparent.
  if(v.edgeStyle!=='none'&&v.printEffect==='embroidery'){
- let c=document.createElement('canvas');c.width=w;c.height=h;let cx=c.getContext('2d',{willReadFrequently:true});cx.fill(new Path2D(outlinePath(w,h,v.patchShape,Math.min(w,h)*.022)));
+ let c=document.createElement('canvas');c.width=w;c.height=h;let cx=c.getContext('2d',{willReadFrequently:true});cx.fill(new Path2D(outlinePath(w,h,v.patchShape,Math.min(w,h)*.022,v.cornerRadiusMm*(w/(v.width*25.4)))));
  let pd=cx.getImageData(0,0,w,h).data,shapeMask=new Uint8Array(N);for(let i=0;i<N;i++)shapeMask[i]=pd[i*4+3]>120?1:0;
  const shapeDist=distanceField(shapeMask,w,h),edgePx=Math.max(1,v.borderSize*mm),cr=hexRgb(v.edgeColor);
  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){let i=y*w+x,d=shapeDist[i];if(!shapeMask[i]||d>=edgePx)continue;let z=i*4;
@@ -754,6 +754,7 @@ const oldUI=UI;UI=function(){oldUI();
  const silhouette=cutMode==='artwork'||(cutMode==='legacy'&&values().edgeStyle==='none');
  $('contourControls').hidden=!silhouette;
  $('geometricPatchControls').hidden=!geometric;
+ $('roundedCornerControls').hidden=!geometric||values().patchShape!=='rounded';
  const art=values(),g=artworkGeometry(art.width*300,art.height*300,art);$('artworkWidthV').textContent=art.artworkWidth?art.artworkWidth.toFixed(2)+' in':'Auto fit';$('artworkXV').textContent=art.artworkX?art.artworkX+'%':'Centered';$('artworkYV').textContent=art.artworkY?art.artworkY+'%':'Centered';
  if(g){const out=g.x<0||g.y<0||g.x+g.dw>art.width*300||g.y+g.dh>art.height*300;const label=$('artworkDimensions');label.textContent='Artwork: '+(g.dw/300).toFixed(2)+' × '+(g.dh/300).toFixed(2)+' in within '+art.width.toFixed(2)+' × '+art.height.toFixed(2)+' in blank.'+(out?' Warning: image extends beyond the rectangular patch bounds; reduce width or reposition.':' Check curved/polygon edges in Cutline proof before printing.');label.style.color=out?'#f0ad83':'var(--muted)';}
 $('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
@@ -1160,12 +1161,13 @@ async function scUvCloudPacket(type){
   if(busy)throw Error('Wait for the current export to finish.');
   busy=true;
   try {
-  const v=values(),outline=patchOutlineSVG(v),p=await prod(v),files=[];
+  const v=values(),p=await prod(v),files=[];
   for(const [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],
     ['white','white-underbase.png'],['varnish','varnish-highlights.png']]){
    files.push({name,data:await pngBytes(imageCanvas(p,key))});
   }
-  files.push({name:'outline-cutline.svg',data:textBytes(outline)});
+  if(v.cutMode!=='none')files.push({name:'outline-cutline.svg',data:textBytes(patchOutlineSVG(v))});
+  else files.push({name:'NO-CUT-REQUIRED.txt',data:textBytes('Preformed blank: no cutter operation requested. Verify print registration and dimensions in xTool Studio.')});
   files.push({name:'manifest.json',data:textBytes(JSON.stringify(extendedManifest(v,p),null,2))});
   files.push({name:'print-notes.txt',data:textBytes(printNotes(v))});
   files.push({name:'XTOOL-STUDIO-PRINT-GUIDE.txt',data:textBytes(scOmniPrintGuide(v))});
