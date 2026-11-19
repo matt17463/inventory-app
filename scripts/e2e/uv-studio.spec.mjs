@@ -277,8 +277,8 @@ test('rounded rectangle SVG has true smooth arcs and matches the inspected proof
   expect(path).not.toContain('Q');
   expect(path.length).toBeLessThan(600);
   await page.locator('#proofZoom').selectOption('4');
-  await page.locator('#proofFocusX').fill('0');
-  await page.locator('#proofFocusY').fill('100');
+  await page.locator('#proofFocusX').evaluate(el=>{el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.locator('#proofFocusY').evaluate(el=>{el.value='100';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.locator('#proofShowArtwork').uncheck();
   await expect(page.locator('#cutlineProofStatus')).toContainText('Red: exact SVG cut path');
   const saved=JSON.parse((await readDownload(page,'#save')).toString());
@@ -298,8 +298,8 @@ test('silhouette smoothing removes pixel steps without changing selected cut mod
   const rawPack=zipEntries(await readDownload(page,'#outlineZip'));
   const raw=rawPack.get('fixture-patch-outline.svg')?.toString()||'';
   await page.locator('#contourSmooth').check();
-  await page.locator('#contourSimplify').fill('0.65');
-  await page.locator('#contourRound').fill('0.6');
+  await page.locator('#contourSimplify').evaluate(el=>{el.value='.65';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.locator('#contourRound').evaluate(el=>{el.value='.6';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await expect(page.locator('#cutlineProofStatus')).toContainText('contour corners retained');
   const smoothPack=zipEntries(await readDownload(page,'#outlineZip'));
   const smooth=smoothPack.get('fixture-patch-outline.svg')?.toString()||'';
