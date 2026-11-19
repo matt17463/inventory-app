@@ -10,7 +10,7 @@ test('UV patch shape choices include circle, oval and octagon with a shared outl
   }
   assert.match(src, /if\(shape==='octagon'\)/);
   assert.match(src, /if\(shape==='circle'|shape==='oval'\|\|shape==='circle'/);
-  assert.match(src, /if\(v.edgeStyle!=='none'\)return \{d:outlinePath/);
+  assert.match(src, /v\.cutMode==='geometric'\|\|\(v\.cutMode!=='artwork'&&v\.edgeStyle!=='none'\)/);
 });
 
 test('independent artwork dimensions drive preview, print separation and cut silhouette', () => {
