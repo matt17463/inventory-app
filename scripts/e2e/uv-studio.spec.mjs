@@ -197,3 +197,57 @@ test('geometric octagon and independent physical artwork width persist without r
   await expect(page.locator('#artworkY')).toHaveValue('-5');
   expect(errors).toEqual([]);
 });
+
+test('UV magnet uses flat original-color proof and exports a no-cut production pack', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#file').setInputFiles({ name: 'fixture.svg', mimeType: 'image/svg+xml', buffer: artwork });
+  await page.locator('#productKind').selectOption('magnet');
+  await expect(page.locator('#productPreset')).toHaveValue('magnet-round');
+  await expect(page.locator('#material')).toHaveValue('acrylic');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  await expect(page.locator('#stitchControls')).toBeHidden();
+  await expect(page.locator('#outlineSvg')).toBeDisabled();
+  await expect(page.locator('#summaryHeight')).toContainText('Flat color');
+  const zip = zipEntries(await readDownload(page, '#all'));
+  expect(zip.has('color-artwork.png')).toBe(true);
+  expect(zip.has('cutting/NO-CUT-REQUIRED.txt')).toBe(true);
+  expect(zip.has('cutting/individual-patch-outline.svg')).toBe(false);
+  expect(zip.has('batch/full-cutlines.svg')).toBe(false);
+  expect([...zip.keys()].some(name => name.startsWith('layer-masks/'))).toBe(false);
+  const manifest = JSON.parse(zip.get('manifest.json').toString());
+  expect(manifest.product).toMatchObject({
+    kind:'magnet',preset:'magnet-round',appearance:'flat',cutline_mode:'none',cutline_required:false
+  });
+  expect(zip.get('XTOOL-STUDIO-PRINT-GUIDE.txt').toString()).toContain('Flat');
+  const saved = await readDownload(page, '#save');
+  await page.locator('#productKind').selectOption('coaster');
+  await expect(page.locator('#productKind')).toHaveValue('coaster');
+  await page.locator('#projectInput').setInputFiles({ name:'saved.json',mimeType:'application/json',buffer:saved });
+  await expect(page.locator('#productKind')).toHaveValue('magnet');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  expect(errors).toEqual([]);
+});
+
+test('coaster, metal coin and custom item presets select appropriate UV effects and no-cut default', async ({ page }) => {
+  const errors = await openStudio(page);
+  await page.locator('#productKind').selectOption('coaster');
+  await expect(page.locator('#productPreset')).toHaveValue('coaster-round');
+  await expect(page.locator('#material')).toHaveValue('ceramic');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await page.locator('#productKind').selectOption('coin');
+  await expect(page.locator('#printEffect')).toHaveValue('relief');
+  await expect(page.locator('#material')).toHaveValue('metal');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  await expect(page.locator('#heightDesignControls')).toBeVisible();
+  await page.locator('#productKind').selectOption('custom');
+  await expect(page.locator('#printEffect')).toHaveValue('flat');
+  await expect(page.locator('#cutMode')).toHaveValue('none');
+  await page.locator('#cutMode').selectOption('geometric');
+  await expect(page.locator('#outlineSvg')).toBeEnabled();
+  await expect(page.locator('#geometricPatchControls')).toBeVisible();
+  await page.locator('#cutMode').selectOption('artwork');
+  await expect(page.locator('#contourControls')).toBeVisible();
+  expect(errors).toEqual([]);
+});
