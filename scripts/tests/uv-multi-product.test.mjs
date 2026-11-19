@@ -22,7 +22,7 @@ test('finished blanks do not export cutter paths or raised layer thresholds in f
   assert.match(html,/v\.cutMode!=='none'\?scCutPath\(v\):null/);
 });
 test('legacy patch workflows retain perimeter and cutter exports',()=>{
-  assert.match(html,/cut:'legacy',edge:'merrow'/);
+  assert.match(html,/cut:'geometric',edge:'merrow'/);
   assert.match(html,/individual-patch-outline\.svg/);
   assert.match(html,/function patchOutlineSVG\(v/);
   assert.match(html,/function exportProjectJSON\(\)/);
