@@ -18,6 +18,20 @@
 @media(max-width:1220px){.shell{grid-template-columns:280px minmax(0,1fr)}.right{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px}.right .panel{height:100%}}
 @media(max-width:760px){.shell{display:block;padding:10px}.panel{margin-bottom:14px}.right{display:block}.top{padding:12px;position:static}.projectbar h1{font-size:20px}.canvas-viewport{min-height:310px;padding:12px}}
 
+/* Compact sticky preview leaves room to reach production settings and buttons on shorter displays. */
+@media(min-width:761px){
+ .middle{scroll-padding-top:320px}
+ .middle .preview-wrap .canvas-viewport{min-height:0;height:clamp(150px,calc(100dvh - 540px),380px);padding:8px}
+ .middle .preview-wrap .canvas-viewport canvas{max-height:100%;max-width:100%}
+ .middle .preview-wrap .sc-preview-actions{padding:3px 8px;gap:6px}
+ .middle .preview-wrap .sc-preview-actions button{padding:5px 8px;width:auto}
+ .middle .preview-wrap .tabs{padding:5px;gap:2px}
+ .middle .preview-wrap .tab{padding:6px 8px}
+ .middle .preview-wrap .preview-foot{padding:5px 8px}
+ .middle .modulegrid button,.middle .mini-tools button{scroll-margin-top:320px}
+ body.sc-uv-preview-expanded .middle .preview-wrap .canvas-viewport{height:clamp(270px,54dvh,520px)}
+}
+
 /* v0.3 build additions */
 .modulegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:15px}
 .module{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:15px}
@@ -106,8 +120,8 @@
 </section>
 </aside>
 <section class="middle"><div class="projectbar"><div><h1>UV Product Designer</h1><div class="subtle">Flat color, surface texture, raised relief and embroidery-style artwork for UV-printable blanks.</div></div><div class="busy" id="status" aria-live="polite">Ready</div></div>
-<div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Stitch artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
-<div class="modulegrid"><div class="module"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
+<div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="expandPreview" class="outline" aria-pressed="false">⤢ Enlarge proof</button><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Color artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
+<div class="modulegrid"><div class="module" id="stitchRegionModule"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
 <div class="module"><h2>Production layout</h2>
 <div class="form-row"><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
 <div class="form-row">
@@ -149,6 +163,14 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const settings={preset:'tatami',tab:'color'};
+window.addEventListener('DOMContentLoaded',()=>{
+ const btn=document.getElementById('expandPreview');
+ if(btn)btn.addEventListener('click',()=>{
+  const expanded=document.body.classList.toggle('sc-uv-preview-expanded');
+  btn.setAttribute('aria-pressed',String(expanded));
+  btn.textContent=expanded?'⤡ Compact proof for editing':'⤢ Enlarge proof';
+ });
+});
 const controls=['spacing','stitchLength','angle','contrast','borderSize','depth','layers','width','height','border','varnish','mirror','job'];
 const DPI=300;
 const profiles={
@@ -610,6 +632,7 @@ const oldUI=UI;UI=function(){oldUI();
  $('summaryLayers').textContent=mode==='flat'?'None — flat print':String(values().layers);
  $('stitchControls').hidden=mode!=='embroidery';
  $('stitchRegionControls').hidden=mode!=='embroidery';
+ $('stitchRegionModule').hidden=mode!=='embroidery';
  $('heightDesignControls').hidden=mode==='flat';
  $('patchEdgeControls').hidden=kind!=='patch';
  $('patchEdgeColorControls').hidden=kind!=='patch'||mode!=='embroidery';
