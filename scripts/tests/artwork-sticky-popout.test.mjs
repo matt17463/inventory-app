@@ -14,7 +14,7 @@ test('all three artwork studios expose a pop-out proof control', () => {
   assert.match(mockup, /ref={placementPopoutRef}/);
   assert.match(uv, /id="popoutPreview"/);
   assert.match(uv, /function syncPopoutPreview\(\)/);
-  assert.match(uv, /syncPopoutPreview\(\);\}/);
+  assert.match(uv, /function showTab\(\)\{[\s\S]*?syncPopoutPreview\(\);/);
 });
 
 test('popout uses read-only DOM replication and local browser window', () => {

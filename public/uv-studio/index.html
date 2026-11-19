@@ -18,6 +18,13 @@
 @media(max-width:1220px){.shell{grid-template-columns:280px minmax(0,1fr)}.right{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px}.right .panel{height:100%}}
 @media(max-width:760px){.shell{display:block;padding:10px}.panel{margin-bottom:14px}.right{display:block}.top{padding:12px;position:static}.projectbar h1{font-size:20px}.canvas-viewport{min-height:310px;padding:12px}}
 
+.sc-cut-proof-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding:8px 12px;border-bottom:1px solid #345269;font-size:12px}
+.sc-cut-proof-tools[hidden]{display:none!important}
+.sc-cut-proof-tools label{display:inline-flex;gap:6px;align-items:center;margin:0}
+.sc-cut-proof-tools input[type=range]{width:88px}
+.sc-cut-proof-tools select{width:auto;padding:5px;color:#ecf8ff;background:#142d3b}
+.sc-cut-proof-tools .small{flex-basis:100%;margin:0}
+@media(max-width:760px){.sc-cut-proof-tools{gap:8px}}
 /* Compact sticky preview leaves room to reach production settings and buttons on shorter displays. */
 @media(min-width:761px){
  .middle{scroll-padding-top:320px}
@@ -100,7 +107,10 @@
 <label for="reliefContrast">Variable relief contrast <strong id="reliefContrastV">65%</strong></label><input id="reliefContrast" type="range" min="0" max="100" step="5" value="65">
 </div><div id="patchEdgeControls"><label for="edgeStyle">Patch perimeter style</label><select id="edgeStyle"><option value="merrow">Merrow-style rope border</option><option value="satin">Satin border</option><option value="none">No geometric perimeter (artwork silhouette)</option></select></div><div id="geometricPatchControls">
 <label for="patchShape">Blank / reference outline shape</label><select id="patchShape"><option value="rounded">Rounded rectangle</option><option value="rectangle">Rectangle</option><option value="oval">Oval</option><option value="circle">Circle</option><option value="capsule">Capsule / stadium</option><option value="octagon">Octagon (8 sides)</option><option value="hexagon">Hexagon (6 sides)</option><option value="pentagon">Pentagon (5 sides)</option><option value="diamond">Diamond</option><option value="shield">Shield</option></select>
-<div class="small">The shape controls the physical patch outline and the decorative Merrow/satin edge. Circle uses the smaller patch dimension as its diameter.</div>
+<div id="roundedCornerControls"><label for="cornerRadiusMm">Rounded rectangle corner radius (mm) <strong id="cornerRadiusMmV">Auto</strong></label>
+<input id="cornerRadiusMm" type="number" min="0" max="20" step=".5" value="0">
+<div class="small">0 uses the existing automatic rounded corners; enter a radius in millimeters for exact circular arcs. This changes the geometric cut path, not the artwork size.</div></div>
+<div class="small">Geometric outlines use smooth vector curves regardless of artwork pixels or silhouette smoothing.</div>
 </div>
 <div class="module" id="artworkPlacementControls" style="padding:12px;margin:10px 0;border:1px solid #426375">
 <strong>Artwork size &amp; placement (separate from patch)</strong>
@@ -113,14 +123,26 @@
 <input id="artworkY" type="range" min="-40" max="40" step="1" value="0">
 <div class="small" id="artworkDimensions" role="status" aria-live="polite">Artwork preview dimensions update when the image loads.</div>
 </div>
-<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><label class="checkbox"><input id="contourSmooth" type="checkbox"> Smooth raster cut corners</label><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><div id="patchEdgeColorControls"><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px"></div>
+<div id="contourControls" class="module" hidden style="padding:10px;margin:10px 0;border:1px solid #426375"><strong>Graphic-following cut</strong><label for="contourOffset">Cut offset <strong id="contourOffsetV">1.5 mm</strong></label><input id="contourOffset" type="range" min="0.5" max="5" step="0.25" value="1.5"><label for="contourAlpha">Artwork opacity threshold <strong id="contourAlphaV">45%</strong></label><input id="contourAlpha" type="range" min="10" max="95" step="5" value="45"><label for="contourIslandArea">Suppress artwork islands smaller than (mm²)</label><input id="contourIslandArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourHoleArea">Fill cut holes smaller than (mm²)</label><input id="contourHoleArea" type="number" min="0" max="25" step="0.25" value="0"><label for="contourBridgeWidth">Minimum material bridge (mm)</label><input id="contourBridgeWidth" type="number" min="0" max="5" step="0.25" value="0"><label class="checkbox"><input id="contourSmooth" type="checkbox"> Smooth artwork-following cutline</label>
+<label for="contourSimplify">Remove fine edge bumps (mm) <strong id="contourSimplifyV">0.30 mm</strong></label>
+<input id="contourSimplify" type="range" min="0" max="1.5" step=".05" value=".30">
+<label for="contourRound">Round silhouette corners (mm) <strong id="contourRoundV">0.35 mm</strong></label>
+<input id="contourRound" type="range" min="0" max="2" step=".05" value=".35">
+<div class="small">Smoothing reduces image-pixel stair steps. Strong settings may remove fine features; confirm all loops in the proof. This does not convert a logo silhouette into a rounded rectangle.</div><div class="small">Cut reference follows the outside silhouette of visible artwork, including any disconnected islands. Increase offset to leave a safer material edge. Remove stray background pixels and inspect holes before cutting. Validate physical registration on a scrap blank.</div></div><div id="patchEdgeColorControls"><label for="edgeColor">Perimeter thread color</label><input id="edgeColor" type="color" value="#e7c276" style="width:100%;height:34px;background:#182330;border:1px solid #426375;border-radius:6px"></div>
 <label class="checkbox"><input id="varnish" type="checkbox" checked> Generate highlight / varnish mask</label>
 <label class="checkbox" id="mirrorBox" style="display:none"><input id="mirror" type="checkbox"> Include mirrored artwork reference (film only)</label>
 <div class="small" id="mirrorNote" style="display:none">Mirroring depends on the film's print-side and xTool Studio workflow. Never mirror automatically without confirming the transfer orientation.</div>
 </section>
 </aside>
 <section class="middle"><div class="projectbar"><div><h1>UV Product Designer</h1><div class="subtle">Flat color, surface texture, raised relief and embroidery-style artwork for UV-printable blanks.</div></div><div class="busy" id="status" aria-live="polite">Ready</div></div>
-<div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="expandPreview" class="outline" aria-pressed="false">⤢ Enlarge proof</button><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Color artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
+<div class="preview-wrap"><div class="sc-preview-actions"><button type="button" id="expandPreview" class="outline" aria-pressed="false">⤢ Enlarge proof</button><button type="button" id="popoutPreview" class="outline" aria-label="Pop out artwork preview window">↗ Pop out preview</button><span id="popoutStatus" class="subtle" aria-live="polite"></span></div><div class="tabs"><button class="tab active" data-tab="color">Color artwork</button><button class="tab" data-tab="height">Height map</button><button class="tab" data-tab="white">White underbase</button><button class="tab" data-tab="varnish">Highlights</button><button class="tab" data-tab="regions">Color regions</button><button class="tab" data-tab="proof">Cutline proof</button></div><div id="cutProofTools" class="sc-cut-proof-tools" hidden>
+<label for="proofZoom">Inspect vector at <select id="proofZoom"><option value="1">Fit / 1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+<label for="proofFocusX">Horizontal focus <input type="range" id="proofFocusX" min="0" max="100" value="50" step="5"></label>
+<label for="proofFocusY">Vertical focus <input type="range" id="proofFocusY" min="0" max="100" value="50" step="5"></label>
+<label class="sc-proof-toggle"><input type="checkbox" id="proofShowArtwork" checked> Artwork</label>
+<label class="sc-proof-toggle"><input type="checkbox" id="proofShowBlank" checked> Blue blank guide</label>
+<div class="small" id="cutlineProofStatus" role="status" aria-live="polite">Red = exact exported cut path; blue dashed = physical blank boundary.</div>
+</div><div class="canvas-viewport"><canvas id="preview" width="700" height="500"></canvas></div><div class="preview-foot"><span id="dimensions">3.5 × 2.5 in · 300 DPI</span><span>Visual preview, not an actual physical print simulation</span></div></div>
 <div class="modulegrid"><div class="module" id="stitchRegionModule"><h2>Detected color / stitch regions</h2><div id="regionsList" class="subtle">Upload a logo to identify regions.</div><div id="canvasLegend">Edit an angle to override the automatically chosen direction for that region.</div></div>
 <div class="module"><h2>Production layout</h2>
 <div class="form-row"><div><label for="sheet">Blank / sheet size</label><select id="sheet"><option value="standard">Omni standard: 13 × 16.5 in</option><option value="mini">Omni mini: 13 × 4.8 in</option><option value="letter" selected>Letter: 8.5 × 11 in</option><option value="custom">Custom</option></select></div><div><label for="sheetW">Sheet width (in)</label><input id="sheetW" type="number" min="1" max="13" step="0.1" value="8.5"></div><div><label for="sheetH">Sheet height (in)</label><input id="sheetH" type="number" min="1" max="16.5" step="0.1" value="11"></div><div><label for="margin">Sheet margin (in)</label><input id="margin" type="number" min="0" max="1" step="0.05" value="0.25"></div><div><label for="gap">Between patches (in)</label><input id="gap" type="number" min="0.05" max="1" step="0.05" value="0.2"></div><div><label for="quantity">Desired quantity</label><input id="quantity" type="number" min="1" max="250" step="1" value="12"></div></div><fieldset style="border:1px solid #426375;border-radius:9px;margin:12px 0;padding:10px"><legend>Production jig alignment (measure on machine)</legend>
@@ -283,7 +305,23 @@ function openUvPreview(){
 }
 $('popoutPreview').addEventListener('click',openUvPreview);
 window.addEventListener('pagehide',()=>{if(popoutWindow&&!popoutWindow.closed)popoutWindow.close()});
-function showTab(){const p=$('preview');let ctx=p.getContext('2d');if(!output)return;const w=output.w,h=output.h;p.width=w;p.height=h;ctx.clearRect(0,0,w,h);ctx.drawImage(canvases[settings.tab],0,0);syncPopoutPreview();}
+function showTab(){
+ const p=$('preview');if(!output)return;
+ const source=canvases[settings.tab],proof=settings.tab==='proof';
+ if(!source)return;
+ const w=proof?source.width:output.w,h=proof?source.height:output.h;
+ if(!w||!h)return;
+ p.width=w;p.height=h;
+ const ctx=p.getContext('2d');
+ if(proof){
+  const zoom=cap(Number($('proofZoom').value)||1,1,4),sw=w/zoom,sh=h/zoom;
+  const fx=cap(Number($('proofFocusX').value),0,100)/100;
+  const fy=cap(Number($('proofFocusY').value),0,100)/100;
+  ctx.drawImage(source,(w-sw)*fx,(h-sh)*fy,sw,sh,0,0,w,h);
+ }else ctx.drawImage(source,0,0);
+ $('cutProofTools').hidden=!proof;
+ syncPopoutPreview();
+}
 async function renderPreview(){if(!image)return;const my=++token,v=values();const max=680,ratio=v.width/v.height;let w=Math.round(Math.min(max,max*ratio)),h=Math.round(w/ratio);if(h>max){h=max;w=Math.round(h*ratio)};
  $('status').textContent='Rendering preview…';await new Promise(r=>setTimeout(r,12));if(my!==token)return;
  try{const res=produce(w,h,v);if(my!==token)return;output=res;for(let key of ['color','height','white','varnish'])toCanvas(key,res[key],w,h);showTab();$('status').textContent='✓ Preview ready';}catch(e){$('status').textContent='Render failed';console.error(e)}
@@ -343,7 +381,7 @@ values=function(){let v=oldValues();return {...v,
  paletteSize:Math.min(10,Math.max(2,Number($('paletteSize').value)||6)),
  autoAngles:$('autoAngles').checked, gloss:+$('gloss').value,
  reliefContrast:+$('reliefContrast').value,edgeStyle:$('edgeStyle').value,
- edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),contourSmooth:$('contourSmooth').checked,patchShape:$('patchShape').value,
+ edgeColor:$('edgeColor').value,contourOffset:+$('contourOffset').value,contourAlpha:+$('contourAlpha').value,contourIslandArea:cap(+$('contourIslandArea').value,0,25),contourHoleArea:cap(+$('contourHoleArea').value,0,25),contourBridgeWidth:cap(+$('contourBridgeWidth').value,0,5),contourSmooth:$('contourSmooth').checked,contourSimplify:cap(+$('contourSimplify').value,0,1.5),contourRound:cap(+$('contourRound').value,0,2),patchShape:$('patchShape').value,cornerRadiusMm:cap(+$('cornerRadiusMm').value,0,20),
  artworkWidth:cap(Number($('artworkWidth').value)||0,0,6),artworkX:cap(Number($('artworkX').value)||0,-40,40),artworkY:cap(Number($('artworkY').value)||0,-40,40),
  sheet:$('sheet').value,sheetW:+$('sheetW').value,sheetH:+$('sheetH').value,
  margin:+$('margin').value,gap:+$('gap').value,quantity:+$('quantity').value,
@@ -351,7 +389,7 @@ values=function(){let v=oldValues();return {...v,
  regionOverrides:{...regionOverrides},selectedCalibrationId
 };};
 // Polygon/curve outline defined on the same physical dimensions as exported artwork.
-function outlinePath(w,h,shape,inset=0){
+function outlinePath(w,h,shape,inset=0,cornerRadiusMm=0){
  const x=inset,y=inset,W=Math.max(1,w-2*inset),H=Math.max(1,h-2*inset),r=Math.min(W,H)*.16;
  const p=(a,b)=>`${(a).toFixed(3)} ${(b).toFixed(3)}`;
  if(shape==='rectangle')return `M${p(x,y)}H${(x+W).toFixed(3)}V${(y+H).toFixed(3)}H${x.toFixed(3)}Z`;
@@ -362,14 +400,16 @@ function outlinePath(w,h,shape,inset=0){
  if(shape==='diamond')return `M${p(x+W*.5,y)} L${p(x+W,y+H*.5)} L${p(x+W*.5,y+H)} L${p(x,y+H*.5)}Z`;
  if(shape==='hexagon')return `M${p(x+W*.23,y)} L${p(x+W*.77,y)} L${p(x+W,y+H/2)} L${p(x+W*.77,y+H)} L${p(x+W*.23,y+H)} L${p(x,y+H/2)}Z`;
  if(shape==='shield')return `M${p(x+W*.06,y)} L${p(x+W*.94,y)} L${p(x+W*.91,y+H*.60)} Q${p(x+W*.8,y+H*.80)} ${p(x+W*.5,y+H)} Q${p(x+W*.20,y+H*.80)} ${p(x+W*.09,y+H*.60)}Z`;
- return `M ${p(x+r,y)} H ${(x+W-r).toFixed(3)} Q${p(x+W,y)} ${p(x+W,y+r)} V${(y+H-r).toFixed(3)} Q${p(x+W,y+H)} ${p(x+W-r,y+H)} H${(x+r).toFixed(3)} Q${p(x,y+H)} ${p(x,y+H-r)} V${(y+r).toFixed(3)} Q${p(x,y)} ${p(x+r,y)}Z`;
+ const radius=cap(cornerRadiusMm>0?cornerRadiusMm:r,0,Math.min(W,H)/2);
+ if(radius<.001)return `M${p(x,y)}H${(x+W).toFixed(3)}V${(y+H).toFixed(3)}H${x.toFixed(3)}Z`;
+ return `M ${p(x+radius,y)} H ${(x+W-radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x+W,y+radius)} V ${(y+H-radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x+W-radius,y+H)} H ${(x+radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x,y+H-radius)} V ${(y+radius).toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 0 1 ${p(x+radius,y)} Z`;
 }
 // An offset silhouette is a cutter reference, not a printer or cutter command.
 // Rasterize at approximately 4 samples/mm; trace all closed loops, preserving holes/islands.
 // The SVG origin is padded by the requested offset. Registration must be verified manually.
 let contourCache;
 function graphicContour(v,wIn=v.width,hIn=v.height){
- const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.cleanupWhite,v.cleanThreshold,v.artworkWidth,v.artworkX,v.artworkY]);
+ const key=JSON.stringify([wIn,hIn,v.contourOffset,v.contourAlpha,v.contourIslandArea,v.contourHoleArea,v.contourBridgeWidth,v.contourSmooth,v.contourSimplify,v.contourRound,v.cleanupWhite,v.cleanThreshold,v.artworkWidth,v.artworkX,v.artworkY]);
  if(contourCache?.artwork===image && contourCache?.key===key)return contourCache.result;
  const result=traceGraphicContour(v,wIn,hIn);
  contourCache={artwork:image,key,result};
@@ -427,18 +467,43 @@ function hasThinMaterialBridge(mask,w,h,widthPixels){
  }
  return false;
 }
-function contourPath(points,scale,smooth){
- const point=([x,y])=>(x/scale).toFixed(3)+','+(y/scale).toFixed(3);
- if(!smooth)return 'M'+points.map(point).join('L')+'Z';
- function toward(corner,neighbor){
-  const dx=neighbor[0]-corner[0],dy=neighbor[1]-corner[1];
-  const ratio=.25/Math.hypot(dx,dy);
-  return [corner[0]+dx*ratio,corner[1]+dy*ratio];
+// Closed-loop RDP simplification in physical units. It preserves winding and loop count.
+// Only enabled by the operator; unmodified artwork cutlines remain available.
+function simplifyContourLoop(points,tolerance){
+ if(!(tolerance>0)||points.length<6)return points;
+ let opposite=1,best=-1;const first=points[0];
+ for(let i=1;i<points.length;i++){const d=(points[i][0]-first[0])**2+(points[i][1]-first[1])**2;if(d>best){best=d;opposite=i}}
+ function simplifyLine(line){
+  const keep=new Uint8Array(line.length),stack=[[0,line.length-1]];keep[0]=keep[line.length-1]=1;
+  while(stack.length){
+   const [a,b]=stack.pop(),p=line[a],q=line[b],dx=q[0]-p[0],dy=q[1]-p[1],den=dx*dx+dy*dy;
+   let greatest=0,where=-1;
+   for(let i=a+1;i<b;i++){
+    const r=line[i],t=den?cap(((r[0]-p[0])*dx+(r[1]-p[1])*dy)/den,0,1):0;
+    const d=Math.hypot(r[0]-p[0]-t*dx,r[1]-p[1]-t*dy);
+    if(d>greatest){greatest=d;where=i}
+   }
+   if(greatest>tolerance&&where>a&&where<b){keep[where]=1;stack.push([a,where],[where,b])}
+  }
+  return line.filter((_,i)=>keep[i]);
  }
- return points.map((corner,i)=>{
-  const before=toward(corner,points[(i+points.length-1)%points.length]);
-  const after=toward(corner,points[(i+1)%points.length]);
-  return (i===0?'M':'L')+point(before)+'Q'+point(corner)+' '+point(after);
+ const a=simplifyLine(points.slice(0,opposite+1));
+ const b=simplifyLine(points.slice(opposite).concat([points[0]]));
+ const out=a.concat(b.slice(1,-1));
+ return out.length>=3?out:points;
+}
+function contourPath(points,scale,smooth,simplifyMM=0,roundMM=.35){
+ const loop=smooth?simplifyContourLoop(points,Math.max(0,simplifyMM)*scale):points;
+ const point=([x,y])=>(x/scale).toFixed(3)+','+(y/scale).toFixed(3);
+ if(!smooth||roundMM<=0||loop.length<4)return 'M'+loop.map(point).join('L')+'Z';
+ // Bounded per-corner quadratic fillets; avoid extending outside short adjacent edges.
+ const r=roundMM*scale;
+ const toward=(a,b,d)=>{const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1;return [a[0]+dx*d/len,a[1]+dy*d/len]};
+ return loop.map((corner,i)=>{
+  const prev=loop[(i+loop.length-1)%loop.length],next=loop[(i+1)%loop.length];
+  const d=Math.min(r,Math.hypot(prev[0]-corner[0],prev[1]-corner[1])*.4,Math.hypot(next[0]-corner[0],next[1]-corner[1])*.4);
+  const before=toward(corner,prev,d),after=toward(corner,next,d);
+  return (i?'L':'M')+point(before)+'Q'+point(corner)+' '+point(after);
  }).join('')+'Z';
 }
 function traceGraphicContour(v,wIn,hIn){
@@ -460,7 +525,7 @@ function traceGraphicContour(v,wIn,hIn){
   if(y===h-1||!mask[(y+1)*w+x])edge(x+1,y+1,x,y+1);
   if(x===0||!mask[y*w+x-1])edge(x,y+1,x,y);
  }
- const paths=[];let total=0,minX=w,minY=h,maxX=0,maxY=0;
+ const paths=[];let total=0,minX=w,minY=h,maxX=0,maxY=0,rawVertices=0,outputVertices=0;
  while(edges.size&&total<2000000){
   const start=edges.keys().next().value;let cur=start,pts=[],guard=0;
   do{
@@ -475,13 +540,16 @@ function traceGraphicContour(v,wIn,hIn){
   }
   if(keep.length<3)continue;
   for(const [x,y] of keep){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}
-  paths.push(contourPath(keep,scale,v.contourSmooth));
+  rawVertices+=keep.length;
+  const simplified=v.contourSmooth?simplifyContourLoop(keep,v.contourSimplify*scale):keep;
+  outputVertices+=simplified.length;
+  paths.push(contourPath(keep,scale,v.contourSmooth,v.contourSimplify,v.contourRound));
  }
- return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,thinBridge,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
+ return {d:paths.join(' '),width:w/scale,height:h/scale,originOffset:pad/scale,components:paths.length,rawVertices,outputVertices,thinBridge,bounds:[minX,minY,maxX,maxY].map(n=>(n-pad)/scale)};
 }
 function scCutPath(v,wIn=v.width,hIn=v.height){
  if(v.cutMode==='none')return {d:'',width:wIn*25.4,height:hIn*25.4,originOffset:0,components:0};
- if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1};
+ if(v.cutMode==='geometric'||(v.cutMode!=='artwork'&&v.edgeStyle!=='none'))return {d:outlinePath(wIn*25.4,hIn*25.4,v.patchShape,Math.min(wIn,hIn)*25.4*.018,v.cornerRadiusMm),width:wIn*25.4,height:hIn*25.4,originOffset:0,components:1,rawVertices:0,outputVertices:0};
  return graphicContour(v,wIn,hIn);
 }
 function patchOutlineSVG(v,wIn=v.width,hIn=v.height){
@@ -579,7 +647,7 @@ produce=function(w,h,v){
  }
  // Simulate stitches on the actual patch perimeter; transparent interior remains transparent.
  if(v.edgeStyle!=='none'&&v.printEffect==='embroidery'){
- let c=document.createElement('canvas');c.width=w;c.height=h;let cx=c.getContext('2d',{willReadFrequently:true});cx.fill(new Path2D(outlinePath(w,h,v.patchShape,Math.min(w,h)*.022)));
+ let c=document.createElement('canvas');c.width=w;c.height=h;let cx=c.getContext('2d',{willReadFrequently:true});cx.fill(new Path2D(outlinePath(w,h,v.patchShape,Math.min(w,h)*.022,v.cornerRadiusMm*(w/(v.width*25.4)))));
  let pd=cx.getImageData(0,0,w,h).data,shapeMask=new Uint8Array(N);for(let i=0;i<N;i++)shapeMask[i]=pd[i*4+3]>120?1:0;
  const shapeDist=distanceField(shapeMask,w,h),edgePx=Math.max(1,v.borderSize*mm),cr=hexRgb(v.edgeColor);
  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){let i=y*w+x,d=shapeDist[i];if(!shapeMask[i]||d>=edgePx)continue;let z=i*4;
@@ -600,9 +668,44 @@ produce=function(w,h,v){
  res.regionViz=vmap;res.segmentation=seg;return res;
 };
 canvases.regions=document.createElement('canvas');canvases.proof=document.createElement('canvas');
-function previewProof(res,v){const c=document.createElement('canvas');c.width=res.w;c.height=res.h;let cx=c.getContext('2d');cx.putImageData(new ImageData(res.color,res.w,res.h),0,0);
- cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(1,res.w/(v.width*300));if(v.cutMode!=='none'){const cut=scCutPath(v);if(v.cutMode==='artwork'||(v.cutMode!=='geometric'&&v.edgeStyle==='none')){cx.save();cx.scale(res.w/(v.width*25.4),res.h/(v.height*25.4));cx.translate(-cut.originOffset,-cut.originOffset);cx.stroke(new Path2D(cut.d));cx.restore()}else cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,res.w*.018)));}
- cx.strokeStyle='#57baff';cx.setLineDash([7,6]);cx.stroke(new Path2D(outlinePath(res.w,res.h,v.patchShape,Math.min(res.w,res.h)*.085)));cx.setLineDash([]);return c;}
+// Proof and all SVG/ZIP exports use the same physical-mm scCutPath result.
+let latestCutProof=null;
+function previewProof(res,v){
+ const cut=scCutPath(v),scale=res.w/(v.width*25.4);
+ const c=document.createElement('canvas');
+ c.width=Math.max(1,Math.round(cut.width*scale));c.height=Math.max(1,Math.round(cut.height*scale));
+ const cx=c.getContext('2d'),shift=cut.originOffset*scale;
+ if($('proofShowArtwork').checked){
+  const art=document.createElement('canvas');art.width=res.w;art.height=res.h;
+  art.getContext('2d').putImageData(new ImageData(res.color,res.w,res.h),0,0);
+  cx.drawImage(art,shift,shift);
+ }
+ cx.save();cx.scale(scale,scale);
+ // Dashed blue is the actual unpadded physical blank outline, NOT an inset mock cut.
+ if($('proofShowBlank').checked){
+  cx.save();cx.translate(cut.originOffset,cut.originOffset);
+  cx.strokeStyle='#57baff';cx.lineWidth=Math.max(.12,1.2/scale);
+  cx.setLineDash([1.2,.9]);
+  cx.stroke(new Path2D(outlinePath(v.width*25.4,v.height*25.4,v.patchShape,0,v.cornerRadiusMm)));
+  cx.restore();
+ }
+ if(cut.d){
+  cx.strokeStyle='#ff655e';cx.lineWidth=Math.max(.12,1.5/scale);
+  cx.setLineDash([]);cx.stroke(new Path2D(cut.d));
+ }
+ cx.restore();
+ latestCutProof={d:cut.d,width:cut.width,height:cut.height,originOffset:cut.originOffset};
+ const status=$('cutlineProofStatus'),shapeLabel=v.cutMode==='geometric'||(v.cutMode==='legacy'&&v.edgeStyle!=='none')?'Geometric '+v.patchShape:
+  v.cutMode==='none'?'No cutline (finished blank)':'Artwork silhouette';
+ const counts=(cut.components||0)+' closed loop'+(cut.components===1?'':'s');
+ const detail=cut.rawVertices?' · '+cut.outputVertices+'/'+cut.rawVertices+' contour corners retained':'';
+ const warning=cut.thinBridge?' WARNING: material bridge too narrow.':
+  cut.components>1?' Warning: separate loops/islands; check all pieces.':
+  (shapeLabel==='Artwork silhouette'&&v.patchShape==='rounded')?' For a smooth rounded rectangle select Geometric outline reference.':'';
+ status.textContent='Red: exact SVG cut path · Blue: physical blank · '+shapeLabel+' · '+counts+detail+'.'+warning;
+ status.style.color=cut.thinBridge||cut.components>1?'#ffc78e':'#c5d9e4';
+ return c;
+}
 const oldRenderPreview=renderPreview;
 renderPreview=async function(){await oldRenderPreview();if(!output)return;let res=output,v=values();
  toCanvas('regions',res.regionViz,res.w,res.h);
@@ -636,15 +739,22 @@ const oldUI=UI;UI=function(){oldUI();
  $('heightDesignControls').hidden=mode==='flat';
  $('patchEdgeControls').hidden=kind!=='patch';
  $('patchEdgeColorControls').hidden=kind!=='patch'||mode!=='embroidery';
- $('cutModeNotice').textContent=cutMode==='none'?'Finished blank: no cut SVG is exported. Register artwork on the actual blank in xTool Studio.':'Cut references are visual guides only. Cutting requires separately verified hardware and registration.';
+ $('cutModeNotice').textContent=cutMode==='none'?'Finished blank: no cut SVG is exported. Register artwork on the actual blank in xTool Studio.':
+ cutMode==='artwork'||(cutMode==='legacy'&&values().edgeStyle==='none')?
+ 'Artwork silhouette follows the source pixels. For a clean rounded rectangle choose Geometric outline reference, then Rounded rectangle and adjust the corner radius.':
+ 'Geometric cut path uses exact smooth vectors and is independent of logo pixel edges. Confirm the proposed path in Cutline proof.';
  $('outlineSvg').disabled=cutMode==='none';
  $('outlineZip').disabled=cutMode==='none';
  const proofTab=document.querySelector('[data-tab="proof"]');if(proofTab)proofTab.textContent=cutMode==='none'?'Blank boundary proof':'Cutline proof';
  $('outlineSvg').title=cutMode==='none'?'Finished blank has no cutter reference; select a cutline mode to export':'Export uncalibrated cutline reference';
+ $('cornerRadiusMmV').textContent=values().cornerRadiusMm?values().cornerRadiusMm.toFixed(1)+' mm':'Auto';
+ $('contourSimplifyV').textContent=values().contourSimplify.toFixed(2)+' mm';
+ $('contourRoundV').textContent=values().contourRound.toFixed(2)+' mm';
  const geometric=cutMode==='geometric'||(cutMode==='legacy'&&values().edgeStyle!=='none');
  const silhouette=cutMode==='artwork'||(cutMode==='legacy'&&values().edgeStyle==='none');
  $('contourControls').hidden=!silhouette;
  $('geometricPatchControls').hidden=!geometric;
+ $('roundedCornerControls').hidden=!geometric||values().patchShape!=='rounded';
  const art=values(),g=artworkGeometry(art.width*300,art.height*300,art);$('artworkWidthV').textContent=art.artworkWidth?art.artworkWidth.toFixed(2)+' in':'Auto fit';$('artworkXV').textContent=art.artworkX?art.artworkX+'%':'Centered';$('artworkYV').textContent=art.artworkY?art.artworkY+'%':'Centered';
  if(g){const out=g.x<0||g.y<0||g.x+g.dw>art.width*300||g.y+g.dh>art.height*300;const label=$('artworkDimensions');label.textContent='Artwork: '+(g.dw/300).toFixed(2)+' × '+(g.dh/300).toFixed(2)+' in within '+art.width.toFixed(2)+' × '+art.height.toFixed(2)+' in blank.'+(out?' Warning: image extends beyond the rectangular patch bounds; reduce width or reposition.':' Check curved/polygon edges in Cutline proof before printing.');label.style.color=out?'#f0ad83':'var(--muted)';}
 $('contourOffsetV').textContent=values().contourOffset.toFixed(2)+' mm';$('contourAlphaV').textContent=values().contourAlpha+'%';const v=values();for(let k of ['paletteSize','gloss','reliefContrast'])$(k+'V').textContent=v[k]+(k==='paletteSize'?'':'%');layoutUI();updateCalibrationGuide()};
@@ -723,7 +833,7 @@ function renderCalRecords(){const div=$('calRecords');div.innerHTML='';if(!calib
 function csvQuote(s){return '"'+String(s??'').replace(/"/g,'""')+'"'}
 function calibrationCSV(){const cols=['date','id','material','variant','supplier_lot','studio_mode','studio_height_mm','actual_measured_height_mm','primer','result','notes'];return [cols.map(csvQuote).join(','),...calibrationRecords.map(r=>[r.date,r.id,r.material,r.variant,r.name,r.mode,r.studioHeight,r.measured,r.primer,r.result,r.notes].map(csvQuote).join(','))].join('\r\n')+'\r\n'}
 function calRef(v){const candidates=calibrationRecords.filter(r=>r.material===v.material&&r.variant===v.variant&&r.result==='pass'&&Number(r.measured)>0&&Number(r.studioHeight)>0);return candidates.find(x=>x.id===v.selectedCalibrationId)||candidates.at(-1)||null}
-function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,product:{kind:v.productKind,preset:v.productPreset,appearance:v.printEffect,cutline_mode:v.cutMode,blank_width_in:v.width,blank_height_in:v.height,cutline_required:v.cutMode!=='none',note:'All ink layers and printer modes must be configured and verified in xTool Studio'},embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,artwork_width_in:v.artworkWidth||'automatic fit',artwork_offset_x_percent:v.artworkX,artwork_offset_y_percent:v.artworkY,cut_mode:v.edgeStyle==='none'?'artwork silhouette with offset':'geometric patch outline',cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,minimum_material_bridge_mm:v.contourBridgeWidth,smooth_cut_corners:v.contourSmooth,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
+function extendedManifest(v,p){let base=manifest(v,p),cl=calRef(v);return {...base,version:MODULE_VERSION,product:{kind:v.productKind,preset:v.productPreset,appearance:v.printEffect,cutline_mode:v.cutMode,blank_width_in:v.width,blank_height_in:v.height,cutline_required:v.cutMode!=='none',note:'All ink layers and printer modes must be configured and verified in xTool Studio'},embroidery:{auto_color_separation:'k-means RGB nearest-palette',region_analysis:'4-connected components; top 14 editable',palette_requested:v.paletteSize,regions:p.segmentation.components.map(r=>({id:'r'+r.rank,color:r.hex,area_fraction:r.count/(p.w*p.h),angle_degrees:(v.regionOverrides['r'+r.rank]??(v.autoAngles?r.angle:v.angle))})),thread_highlight_pct:v.gloss,relief_contrast_pct:v.reliefContrast,edge_style:v.edgeStyle},patch:{shape:v.patchShape,artwork_width_in:v.artworkWidth||'automatic fit',artwork_offset_x_percent:v.artworkX,artwork_offset_y_percent:v.artworkY,cut_mode:v.cutMode==='none'?'no cutting':v.cutMode==='artwork'||(v.cutMode==='legacy'&&v.edgeStyle==='none')?'artwork silhouette with offset':'geometric patch outline',corner_radius_mm:v.cornerRadiusMm||'automatic',contour_simplify_mm:v.contourSmooth?v.contourSimplify:0,contour_rounding_mm:v.contourSmooth?v.contourRound:0,cut_offset_mm:v.edgeStyle==='none'?v.contourOffset:null,alpha_threshold_percent:v.contourAlpha,suppress_islands_below_mm2:v.contourIslandArea,fill_cut_holes_below_mm2:v.contourHoleArea,minimum_material_bridge_mm:v.contourBridgeWidth,smooth_cut_corners:v.contourSmooth,cutlines:'SVG reference; cutter and print registration not verified'},batch_layout:layoutPlan(v),calibration:{status:cl?'passed sample used for linear estimate only':'uncalibrated',reference:cl||null,suggested_Studio_height_mm:cl?+(v.depth*cl.studioHeight/cl.measured).toFixed(3):null,mapping_warning:'Height-map PNG is a proportional grayscale DESIGN asset. Physical height cannot be directly controlled from this map without validating its xTool Studio interpretation.'},production_status:'PREPRESS PROTOTYPE — separate printing, cutter setup and material durability verification required'};}
 function exportProjectJSON(){return JSON.stringify({type:'SC_UV_STUDIO_PROJECT',version:MODULE_VERSION,settings:values(),artworkDataURL:imageDataURL,calibrationRecords},null,2)}
 const oldPrintNotes=printNotes;
 printNotes=function(v){return oldPrintNotes(v)+'\nPRODUCT: '+v.productKind+' · '+v.printEffect+' appearance · cut policy '+v.cutMode+'. Finished blanks do not require cutting; always verify actual dimensions, UV compatibility, fixture clearance and xTool Studio mode.\nNEW v0.3 FEATURES: k-means/connected-component stitch regions, customizable angles, thread highlights, merrow/satin patch perimeter, template SVG, batch layouts, locally recorded print tests.\n\nHEIGHT CALIBRATION: calibrated records only yield a LINEAR ESTIMATE of the xTool Studio height setting. They do NOT establish that a grayscale pixel commands a physical pass or varnish/white channels. These generated masks and outlines are prepress references, not machine control.\n\nBATCH: separate color sheet PNG and reference cut SVG share document origin; align using a physical registration test before cutting.\n'};
@@ -808,11 +918,11 @@ function addCalibrationRecord(){let v=values(),name=$('calName').value.trim(),st
  if(res==='pass'&&(!(meas>0)||meas>7)){alert('A passed test requires an actual measured positive height.');return}
  const entry={id:`${Date.now()}-${Math.floor(Math.random()*10000)}`,date:new Date().toISOString().slice(0,10),material:v.material,variant:v.variant,name,mode:$('calMode').value,studioHeight:studio,measured:meas,primer:$('calPrimer').value.trim(),result:res,notes:$('calNotes').value.trim()};calibrationRecords.push(entry);calSave();renderCalRecords();updateCalibrationGuide();$('status').textContent='✓ Print test saved locally';}
 const productPresets={
- 'hat-leather':{kind:'patch',w:3.5,h:2.5,shape:'rounded',material:'leather',mode:'embroidery',cut:'legacy',edge:'merrow'},
- 'hat-oval':{kind:'patch',w:3.5,h:2.25,shape:'oval',material:'leather',mode:'embroidery',cut:'legacy',edge:'merrow'},
- 'garment-square':{kind:'patch',w:3,h:3,shape:'rounded',material:'leather',mode:'embroidery',cut:'legacy',edge:'merrow'},
- 'chest-small':{kind:'patch',w:2.5,h:2.5,shape:'circle',material:'leather',mode:'embroidery',cut:'legacy',edge:'merrow'},
- 'heat-transfer':{kind:'patch',w:3.5,h:2.5,shape:'rounded',material:'film',mode:'embroidery',cut:'legacy',edge:'merrow'},
+ 'hat-leather':{kind:'patch',w:3.5,h:2.5,shape:'rounded',material:'leather',mode:'embroidery',cut:'geometric',edge:'merrow'},
+ 'hat-oval':{kind:'patch',w:3.5,h:2.25,shape:'oval',material:'leather',mode:'embroidery',cut:'geometric',edge:'merrow'},
+ 'garment-square':{kind:'patch',w:3,h:3,shape:'rounded',material:'leather',mode:'embroidery',cut:'geometric',edge:'merrow'},
+ 'chest-small':{kind:'patch',w:2.5,h:2.5,shape:'circle',material:'leather',mode:'embroidery',cut:'geometric',edge:'merrow'},
+ 'heat-transfer':{kind:'patch',w:3.5,h:2.5,shape:'rounded',material:'film',mode:'embroidery',cut:'geometric',edge:'merrow'},
  'metal-tag':{kind:'nameplate',w:4,h:3,shape:'rectangle',material:'metal',mode:'flat',cut:'none',edge:'none'},
  'magnet-round':{kind:'magnet',w:2.5,h:2.5,shape:'circle',material:'acrylic',mode:'flat',cut:'none',edge:'none'},
  'magnet-rectangle':{kind:'magnet',w:3,h:2,shape:'rounded',material:'acrylic',mode:'flat',cut:'none',edge:'none'},
@@ -846,13 +956,15 @@ function applyProductKind(){
  else{$('productPreset').value='custom';$('printEffect').value='flat';$('edgeStyle').value='none';$('cutMode').value='none';$('varnish').checked=false;renderSoon();}
 }
 function applySheetChoice(){let sheet=$('sheet').value,size=sheetSize(values());if(sheet!=='custom'){$('sheetW').value=size[0];$('sheetH').value=size[1]}for(let key of ['sheetW','sheetH'])$(key).disabled=sheet!=='custom';renderSoon()}
-for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','autoAngles','patchShape','artworkWidth','artworkX','artworkY','sheetW','sheetH','margin','gap','quantity']){
+for(const key of ['paletteSize','gloss','reliefContrast','edgeStyle','edgeColor','contourOffset','contourAlpha','contourIslandArea','contourHoleArea','contourBridgeWidth','contourSmooth','contourSimplify','contourRound','cornerRadiusMm','autoAngles','patchShape','artworkWidth','artworkX','artworkY','sheetW','sheetH','margin','gap','quantity']){
  let el=$(key);el.addEventListener('input',()=>renderSoon());el.addEventListener('change',()=>renderSoon());
 }
 $('sheet').addEventListener('change',applySheetChoice);
 $('productPreset').addEventListener('change',applyProductPreset);
 $('productKind').addEventListener('change',applyProductKind);
 for(const key of ['printEffect','cutMode']){$(key).addEventListener('change',renderSoon);}
+for(const id of ['proofShowArtwork','proofShowBlank'])$(id).addEventListener('change',()=>{if(output){const c=previewProof(output,values());canvases.proof.width=c.width;canvases.proof.height=c.height;canvases.proof.getContext('2d').drawImage(c,0,0);showTab();}});
+for(const id of ['proofZoom','proofFocusX','proofFocusY'])$(id).addEventListener('input',showTab);
 $('recordCalibration').onclick=addCalibrationRecord;
 $('exportCalibrationJSON').onclick=()=>saveBytes('skilledcrafting-uv-calibrations.json',textBytes(JSON.stringify(calibrationRecords,null,2)),'application/json');
 $('coupon').onclick=exportCoupon;
@@ -1049,12 +1161,13 @@ async function scUvCloudPacket(type){
   if(busy)throw Error('Wait for the current export to finish.');
   busy=true;
   try {
-  const v=values(),outline=patchOutlineSVG(v),p=await prod(v),files=[];
+  const v=values(),p=await prod(v),files=[];
   for(const [key,name] of [['color','color-artwork.png'],['height','height-map-grayscale.png'],
     ['white','white-underbase.png'],['varnish','varnish-highlights.png']]){
    files.push({name,data:await pngBytes(imageCanvas(p,key))});
   }
-  files.push({name:'outline-cutline.svg',data:textBytes(outline)});
+  if(v.cutMode!=='none')files.push({name:'outline-cutline.svg',data:textBytes(patchOutlineSVG(v))});
+  else files.push({name:'NO-CUT-REQUIRED.txt',data:textBytes('Preformed blank: no cutter operation requested. Verify print registration and dimensions in xTool Studio.')});
   files.push({name:'manifest.json',data:textBytes(JSON.stringify(extendedManifest(v,p),null,2))});
   files.push({name:'print-notes.txt',data:textBytes(printNotes(v))});
   files.push({name:'XTOOL-STUDIO-PRINT-GUIDE.txt',data:textBytes(scOmniPrintGuide(v))});
@@ -1131,17 +1244,17 @@ const scUvTips={
  productPreset:'Select a starting geometry and finish for patches, magnets, coasters, signs, coins, keychains and other UV blanks. Verify your real purchased blank measurements.',
  printEffect:'Flat preserves original art; Texture creates a conceptual surface pattern; Relief creates a tonal height-map reference. Embroidery simulation is appropriate for patches and select novelty effects only.',
  cutMode:'Finished preformed blanks do not need cutting. Geometric and artwork silhouette modes export SVG references for a separately verified cutter; never assume the printer performs the cut.',
- edgeStyle:'Changes how the patch edge looks AND the exported cut reference. Merrow and satin keep the selected geometric patch; None follows the outer silhouette of opaque artwork. A cutline is not printed as color ink.',
+ edgeStyle:'Controls decorative Merrow/satin appearance. In legacy mode it can select an artwork silhouette cut; for a clean rounded-rectangle perimeter choose Geometric outline reference. Geometric cutting keeps the selected vector shape regardless of decorative edging.',
  contourOffset:'Moves the proposed cutter edge outward from visible artwork. More offset gives a wider protective margin but can join nearby graphic elements or exceed the blank. Check physical registration before cutting.',
  contourIslandArea:'Suppresses small disconnected artwork regions before offsetting the cutter path. This changes the cut reference only. Keep this at zero to retain intentional small pieces.',
- contourSmooth:'Rounds the raster corners slightly (less than 0.1 mm) in the cut reference. Inspect very small details on a scrap sample before cutting.',
+ contourSmooth:'Enable adjustable simplification and curve rounding of artwork silhouette paths. Use Geometric mode for an exact rounded rectangle.',contourSimplify:'Tolerance in millimeters used to remove tiny pixel bumps from artwork-following cut paths. Larger values can erase fine details; inspect separate loops.',contourRound:'Round remaining silhouette corners in millimeters. This is only for artwork-following cuts and does not affect exact geometric shapes.',cornerRadiusMm:'Corner radius in millimeters for a rounded rectangular geometric cutter outline. Enter 0 for the original automatic radius. The SVG and live proof use identical arcs.',proofZoom:'Visual magnification for checking exact SVG line smoothness; the exported dimensions are not affected.',
  contourBridgeWidth:'Blocks cutting exports when the estimated interior of a piece is too narrow or splits at a thin connection. Enter the minimum for your stock and cutter. Zero turns off this check. Verify on a scrap sample.',
  contourHoleArea:'Fills small enclosed holes in the cut reference after the cut offset. The graphics and ink masks are preserved. Set this to zero to retain all traceable holes.',
  contourAlpha:'Treats pixels above this opacity as part of the design. Raise to ignore faint antialiasing/noise; lower to preserve soft edges. Transparent stray pixels can create separate cut loops.',
  edgeColor:'Sets the simulated decorative thread color when Merrow or satin is selected; it does not change the actual thread or patch material.',
  depth:'Artist target for perceived raised texture. Actual deposited thickness depends on xTool Studio and needs physical calibration; never assume the grayscale PNG is a direct printer pass command.',
  layers:'Produces threshold reference masks for artwork planning; it does not set xTool Studio ink-layer count.',
- patchShape:'Select the geometric reference outline for a patch or a separately cut blank. Circle uses the smaller canvas dimension as its diameter. This does not command a cutter.',
+ patchShape:'Use Rounded rectangle to get a smooth vector perimeter regardless of artwork pixels. Circle uses the shorter canvas dimension; no cut path is a machine command.',
  artworkWidth:'Set artwork width in inches independently from the physical printable blank; 0 fits automatically. The source image proportions stay unchanged.',artworkX:'Move artwork horizontally within the printable blank. Watch for clipping near circular edges.',artworkY:'Move artwork vertically within the printable blank. Check the cutline proof.',
  material:'Select substrate and ink guidance. Leather/PU requires flexible-white trials; metal typically needs rigid chemistry and substrate-specific preparation.',
  variant:'Select the actual substrate construction. Changing leather, film or metal variant changes compatibility assumptions and should trigger new sample approval.',
