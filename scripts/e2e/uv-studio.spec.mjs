@@ -171,14 +171,14 @@ test('geometric octagon and independent physical artwork width persist without r
   await expect(page.locator('#height')).toHaveValue('2.5');
   const octagonPromise = page.waitForEvent('download', { timeout: 10000 });
   await page.locator('#outlineSvg').click();
-  await expect(page.locator('#status')).not.toContainText('Export error');
+  await expect(page.locator('#status')).toContainText('Cutline SVG ready', { timeout: 3000 });
   const octagon = await readFile(await (await octagonPromise).path());
   expect(octagon.toString()).toContain('Geometric patch perimeter');
   expect(octagon.toString()).toMatch(/L[\d.]+ [\d.]+/);
   await page.locator('#patchShape').selectOption('circle');
   const circlePromise = page.waitForEvent('download', { timeout: 10000 });
   await page.locator('#outlineSvg').click();
-  await expect(page.locator('#status')).not.toContainText('Export error');
+  await expect(page.locator('#status')).toContainText('Cutline SVG ready', { timeout: 3000 });
   const circle = await readFile(await (await circlePromise).path());
   expect(circle.toString()).toMatch(/ A [\d.]+ [\d.]+ 0 1 0 /);
   expect(circle.toString()).not.toEqual(octagon.toString());
